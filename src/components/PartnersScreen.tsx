@@ -63,6 +63,7 @@ interface PortalPartner {
   contributions: number;
   reliability: number;
   eligibility: boolean;
+  isDemo?: boolean;
 }
 
 interface Inquiry {
@@ -91,8 +92,55 @@ interface Inquiry {
   releaseReason?: string;
 }
 
-// Initial Controlled Ecosystem Partner Structure (10 Guides, 3 Medical, 10 Transport, 7 Open)
+// Initial Controlled Ecosystem Partner Structure (10 Guides, 3 Medical, 10 Transport, 7 Open, 2 Demonstration)
 const INITIAL_PORTAL_PARTNERS: PortalPartner[] = [
+  // Demonstration Partner Accounts (Seeded Dataset for Tester Validation)
+  {
+    id: 'UNO1',
+    pin: '3001',
+    name: 'UNO1',
+    category: 'Tourist Guide',
+    status: 'Trusted',
+    capabilities: [
+      'Historical Walk', 'Gardoš Explorer', 'Architectural Walks', 'Roman Archaeological Tours', 'Belgrade Architecture Heritage',
+      'Private Tours', 'Taste Tasting', 'River Boating', 'Wildlife Photography', 'Culinary Tours', 'Vineyard Visits', 'Bespoke Tastings', 'Canyon Kayaking', 'Spritual Hikes', 'Rakija Pairing',
+      'EV Airport Pickups', 'VIP Executive Transfers', 'Private Driver Service', 'Long-Distance Chauffeuring', 'Multi-Passenger Luxury Vans', 'Bespoke Danube Tours', 'Old-Town Retro Shuttle', '4x4 Mountain Express', 'Central Valley Transfers', 'Bespoke Winery Tours', 'Airport transfers', 'Expo Multi-Lingual VIP Rides', 'Hotel-Expo Loop', 'Terminal Gate Greetings', 'Luggage Valet Transfers',
+      'Licensed Tourist Guide', 'First Aid Certified', 'Luxury Fleet License', 'Professional Chauffeur', 'EXPO Certified Host', 'Multi-lingual Nanny Guides', 'Dental Orientation', 'Orthodontic Liaison', 'Skin Consultation Liaison', 'Spa Wellness Liaison'
+    ],
+    languages: ['English', 'Serbian'],
+    geography: 'Belgrade & National',
+    channels: ['WhatsApp', 'Viber'],
+    contactPhone: '+381621873260',
+    instagram: '@uno1_concierge',
+    assignedRecs: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'],
+    contributions: 50,
+    reliability: 99,
+    eligibility: true,
+    isDemo: true
+  },
+  {
+    id: 'UNO2',
+    pin: '3002',
+    name: 'UNO2',
+    category: 'Tourist Guide',
+    status: 'Active',
+    capabilities: [
+      'Historical Walk', 'Architectural Walks', 'Belgrade Architecture Heritage', 'Wine District Terroir',
+      'Private Tours', 'Taste Tasting', 'Culinary Tours', 'Vineyard Visits', 'Bespoke Tastings', 'Rakija Pairing',
+      'EV Airport Pickups', 'VIP Executive Transfers', 'Private Driver Service', 'Old-Town Retro Shuttle', 'Central Valley Transfers', 'Bespoke Winery Tours', 'Airport transfers', 'Hotel-Expo Loop', 'Terminal Gate Greetings', 'Luggage Valet Transfers', 'Savamala Escorts', 'All-Terrain SUV',
+      'Licensed Tourist Guide', 'First Aid Certified', 'Professional Chauffeur', 'EXPO Certified Host', 'Dental Orientation', 'Orthodontic Liaison', 'Skin Consultation Liaison', 'Spa Wellness Liaison'
+    ],
+    languages: ['English'],
+    geography: 'Belgrade',
+    channels: ['WhatsApp'],
+    contactPhone: '+381621869850',
+    instagram: '@uno2_concierge',
+    assignedRecs: ['7'],
+    contributions: 20,
+    reliability: 92,
+    eligibility: true,
+    isDemo: true
+  },
   // 10 Tourist Guides
   { id: 'p-tg-1', pin: '3001', name: 'Belgrade Undercover Walking', category: 'Tourist Guide', status: 'Trusted', capabilities: ['Private Tours', 'Historical Walk', 'Taste Tasting'], languages: ['English', 'Serbian', 'German'], geography: 'Belgrade & Zemun', channels: ['WhatsApp', 'Viber'], contactPhone: '+381631112001', instagram: '@belgrade_undercover', assignedRecs: ['7', '10'], contributions: 48, reliability: 99, eligibility: true },
   { id: 'p-tg-2', pin: '3002', name: 'Danube Delta Sailing Guides', category: 'Tourist Guide', status: 'Active', capabilities: ['River Boating', 'Wildlife Photography'], languages: ['English', 'Serbian'], geography: 'Djerdap Gorge & Eastern Serbia', channels: ['Viber', 'Instagram'], contactPhone: '+381631112002', instagram: '@danube_sailing', assignedRecs: ['5'], contributions: 22, reliability: 96, eligibility: true },
@@ -1484,6 +1532,12 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                 <button onClick={() => { triggerHaptic(10); setPortalRole('concierge'); }} className={`px-2.5 py-1 rounded-lg text-[8px] font-mono font-black uppercase ${portalRole === 'concierge' ? 'bg-amber-600 text-white' : 'bg-white border text-brand-charcoal/60'}`}>
                   [CONCIERGE]
                 </button>
+                <button onClick={() => { triggerHaptic(10); setPortalRole('partner'); setActivePartnerId('UNO1'); }} className={`px-2.5 py-1 rounded-lg text-[8px] font-mono font-black uppercase ${portalRole === 'partner' && activePartnerId === 'UNO1' ? 'bg-amber-600 text-white' : 'bg-white border text-brand-charcoal/60'}`}>
+                  [PARTNER: UNO1]
+                </button>
+                <button onClick={() => { triggerHaptic(10); setPortalRole('partner'); setActivePartnerId('UNO2'); }} className={`px-2.5 py-1 rounded-lg text-[8px] font-mono font-black uppercase ${portalRole === 'partner' && activePartnerId === 'UNO2' ? 'bg-amber-600 text-white' : 'bg-white border text-brand-charcoal/60'}`}>
+                  [PARTNER: UNO2]
+                </button>
                 <button onClick={() => { triggerHaptic(10); setPortalRole('partner'); setActivePartnerId('p-tg-1'); }} className={`px-2.5 py-1 rounded-lg text-[8px] font-mono font-black uppercase ${portalRole === 'partner' && activePartnerId === 'p-tg-1' ? 'bg-amber-600 text-white' : 'bg-white border text-brand-charcoal/60'}`}>
                   [PARTNER: TG]
                 </button>
@@ -2241,7 +2295,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                           <p className="text-[8.5px] uppercase font-mono font-black text-brand-charcoal/40">Prepare Dispatch & Deep Links:</p>
                           <div className="grid grid-cols-3 gap-1.5 text-[8.5px] font-mono font-black">
                             <a 
-                              href={`https://wa.me/${matchedPartner.contactPhone}?text=${encodeURIComponent(getOutboundCopyText(inq, matchedPartner))}`} 
+                              href={`https://wa.me/${matchedPartner.contactPhone.replace(/\D/g, '')}?text=${encodeURIComponent(getOutboundCopyText(inq, matchedPartner))}`} 
                               target="_blank" 
                               referrerPolicy="no-referrer"
                               rel="noreferrer"
@@ -2428,12 +2482,20 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                 {/* HEADER */}
                 <div className="flex justify-between items-center bg-brand-charcoal px-6 py-4 rounded-[24px] text-white">
                   <div className="space-y-0.5 text-left">
-                    <span className="text-[8px] uppercase tracking-widest font-mono text-amber-400 font-bold block">PARTNER PASSPORT WORKSPACE</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[8px] uppercase tracking-widest font-mono text-amber-400 font-bold block">PARTNER PASSPORT WORKSPACE</span>
+                      {(currentSimulatedPartner.isDemo || currentSimulatedPartner.id === 'UNO1' || currentSimulatedPartner.id === 'UNO2') && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[8.5px] font-mono tracking-wider font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          <Sparkles className="w-2.5 h-2.5 shrink-0" />
+                          DEMONSTRATION ACCOUNT
+                        </span>
+                      )}
+                    </div>
                     <h2 className="text-sm font-serif font-black">{currentSimulatedPartner.name}</h2>
                   </div>
                   <button 
                     onClick={handlePartnerLogout} 
-                    className="px-3.5 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-[9px] font-black uppercase tracking-wider cursor-pointer transition-colors"
+                    className="px-3.5 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-[9px] font-black uppercase tracking-wider cursor-pointer transition-colors shrink-0"
                   >
                     Exit Session
                   </button>

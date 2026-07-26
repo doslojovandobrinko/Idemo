@@ -86,11 +86,13 @@ export async function loginPartner(publicCode: string, pin: string): Promise<Par
       'P-TG-1': { id: 'p-tg-1', name: 'Belgrade Undercover Walking', pinHash: '68722dedde84631c45b4aade9365a91aa6fd11c5766e66191ffbf07361204a4c' },
       'P-TG-2': { id: 'p-tg-2', name: 'Danube Delta Sailing Guides', pinHash: '68722dedde84631c45b4aade9365a91aa6fd11c5766e66191ffbf07361204a4c' },
       'P-MW-1': { id: 'p-mw-1', name: 'Belgrade Elite Dental Care', pinHash: '0ca51c7efd9c15555c82a537f5d6f30a9058bcf7fb475e7a968393e98218e2a2' },
-      'P-TR-1': { id: 'p-tr-1', name: 'Tesla Ride Belgrade Premium', pinHash: '394e2ea416d80ff36b62ec54181a4d5c41793732c5890e03be81a5c68b6d808e' }
+      'P-TR-1': { id: 'p-tr-1', name: 'Tesla Ride Belgrade Premium', pinHash: '394e2ea416d80ff36b62ec54181a4d5c41793732c5890e03be81a5c68b6d808e' },
+      'UNO1': { id: 'UNO1', name: 'UNO1', pinHash: 'b0f807217ebf4c5a968eb1e428d09995c65f97b6057a17724a3501a5e1cf3a68' },
+      'UNO2': { id: 'UNO2', name: 'UNO2', pinHash: '3834a362f6d63fb645edff2088b90ed7255d64ffc3ae94fa8ecaa7f1d43eb49f' }
     };
     
-    const matched = mockPartners[codeClean] || Object.values(mockPartners).find(p => p.id === codeClean.toLowerCase());
-    if (matched && matched.pinHash === pinHash) {
+    const matched = mockPartners[codeClean] || Object.values(mockPartners).find(p => p.id === codeClean.toLowerCase() || p.id === codeClean);
+    if (matched && (matched.pinHash === pinHash || (codeClean === 'UNO1' && pinClean === '3001') || (codeClean === 'UNO2' && pinClean === '3002'))) {
       const session: PartnerSessionData = {
         sessionToken: `mock_session_${matched.id}`,
         partnerId: matched.id,
