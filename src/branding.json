@@ -1,0 +1,24 @@
+{
+  "appName": "IDEMO",
+  "tagline": "Private by design. No accounts. No tracking. No digital noise.",
+  "description": "IDEMO is a premium, privacy-first Belgrade concierge app created for international visitors during EXPO 2027. It offers carefully curated recommendations, personalized Vibe Match suggestions, offline-friendly planning, and a calm, elegant way to discover Belgrade beyond generic tourist lists.",
+  "shortDescription": "A premium, privacy-first Belgrade concierge for EXPO 2027 visitors.",
+  "usp": "Hyper-curated Belgrade experiences matched to each visitor’s style, without registration, tracking, or interface noise.",
+  "targetAudience": [
+    "international delegates",
+    "business visitors",
+    "high-value leisure travelers",
+    "digital nomads",
+    "culture seekers"
+  ],
+  "coreFeatures": [
+    "curated Belgrade recommendations",
+    "Vibe Match personalization",
+    "offline-friendly itinerary planning",
+    "premium minimalist interface",
+    "anonymous-first usage",
+    "multilingual experience"
+  ],
+  "positioning": "A boutique cultural-concierge platform and soft-power showcase for modern Belgrade.",
+  "notAffiliatedDisclaimer": "IDEMO is an independent travel concierge and is not affiliated with, endorsed by, or officially connected to EXPO 2027 organizers."
+}
