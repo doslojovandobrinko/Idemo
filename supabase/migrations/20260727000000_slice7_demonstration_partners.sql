@@ -5,34 +5,34 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 INSERT INTO public.partners (
-    id, 
-    name, 
-    public_code, 
-    passport_pin_hash, 
-    must_change_pin, 
-    status, 
-    is_open_for_inquiries, 
+    id,
+    name,
+    public_code,
+    passport_pin_hash,
+    must_change_pin,
+    status,
+    is_open_for_inquiries,
     contact_preference
 )
 VALUES
     (
-        'a0000000-0000-0000-0000-000000000091', 
-        'UNO1', 
-        'UNO1', 
-        crypt('3001', gen_salt('bf')), 
-        false, 
-        'active', 
-        true, 
+        'a0000000-0000-0000-0000-000000000091',
+        'UNO1',
+        'UNO1',
+        extensions.crypt('3001', extensions.gen_salt('bf')),
+        false,
+        'active',
+        true,
         'WhatsApp'
     ),
     (
-        'a0000000-0000-0000-0000-000000000092', 
-        'UNO2', 
-        'UNO2', 
-        crypt('3002', gen_salt('bf')), 
-        false, 
-        'active', 
-        true, 
+        'a0000000-0000-0000-0000-000000000092',
+        'UNO2',
+        'UNO2',
+        extensions.crypt('3002', extensions.gen_salt('bf')),
+        false,
+        'active',
+        true,
         'WhatsApp'
     )
 ON CONFLICT (id) DO UPDATE SET

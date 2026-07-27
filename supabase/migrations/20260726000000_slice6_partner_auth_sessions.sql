@@ -59,15 +59,15 @@ END $$;
 
 INSERT INTO public.partners (id, name, public_code, passport_pin_hash, must_change_pin, status, is_open_for_inquiries, contact_preference)
 VALUES
-    ('a0000000-0000-0000-0000-000000000001', 'Belgrade Undercover Walking', 'P-TG-01', crypt('1611', gen_salt('bf')), true, 'active', true, 'WhatsApp'),
-    ('a0000000-0000-0000-0000-000000000002', 'Danube Delta Sailing Guides', 'P-TG-02', crypt('1612', gen_salt('bf')), true, 'active', true, 'Viber'),
-    ('a0000000-0000-0000-0000-000000000003', 'Hotel Moskva', 'P-HO-01', crypt('2001', gen_salt('bf')), true, 'active', true, 'WhatsApp'),
-    ('a0000000-0000-0000-0000-000000000004', 'Salon 1905', 'P-WB-01', crypt('2002', gen_salt('bf')), true, 'active', true, 'WhatsApp'),
-    ('a0000000-0000-0000-0000-000000000005', 'Square Nine Hotel', 'P-HO-02', crypt('2003', gen_salt('bf')), true, 'active', true, 'WhatsApp'),
-    ('a0000000-0000-0000-0000-000000000006', 'Zemun Heritage Guild', 'P-TG-03', crypt('3003', gen_salt('bf')), true, 'active', true, 'WhatsApp'),
-    ('a0000000-0000-0000-0000-000000000007', 'Tara Peak Outdoors Guild', 'P-TG-04', crypt('3004', gen_salt('bf')), true, 'active', true, 'WhatsApp'),
-    ('a0000000-0000-0000-0000-000000000008', 'Belgrade Elite Dental Care', 'P-HC-01', crypt('4001', gen_salt('bf')), true, 'active', true, 'WhatsApp'),
-    ('a0000000-0000-0000-0000-000000000009', 'Tesla Ride Belgrade Premium', 'P-TR-01', crypt('5001', gen_salt('bf')), true, 'active', true, 'WhatsApp')
+    ('a0000000-0000-0000-0000-000000000001', 'Belgrade Undercover Walking', 'P-TG-01', extensions.crypt('1611', extensions.gen_salt('bf')), true, 'active', true, 'WhatsApp'),
+    ('a0000000-0000-0000-0000-000000000002', 'Danube Delta Sailing Guides', 'P-TG-02', extensions.crypt('1612', extensions.gen_salt('bf')), true, 'active', true, 'Viber'),
+    ('a0000000-0000-0000-0000-000000000003', 'Hotel Moskva', 'P-HO-01', extensions.crypt('2001', extensions.gen_salt('bf')), true, 'active', true, 'WhatsApp'),
+    ('a0000000-0000-0000-0000-000000000004', 'Salon 1905', 'P-WB-01', extensions.crypt('2002', extensions.gen_salt('bf')), true, 'active', true, 'WhatsApp'),
+    ('a0000000-0000-0000-0000-000000000005', 'Square Nine Hotel', 'P-HO-02', extensions.crypt('2003', extensions.gen_salt('bf')), true, 'active', true, 'WhatsApp'),
+    ('a0000000-0000-0000-0000-000000000006', 'Zemun Heritage Guild', 'P-TG-03', extensions.crypt('3003', extensions.gen_salt('bf')), true, 'active', true, 'WhatsApp'),
+    ('a0000000-0000-0000-0000-000000000007', 'Tara Peak Outdoors Guild', 'P-TG-04', extensions.crypt('3004', extensions.gen_salt('bf')), true, 'active', true, 'WhatsApp'),
+    ('a0000000-0000-0000-0000-000000000008', 'Belgrade Elite Dental Care', 'P-HC-01', extensions.crypt('4001', extensions.gen_salt('bf')), true, 'active', true, 'WhatsApp'),
+    ('a0000000-0000-0000-0000-000000000009', 'Tesla Ride Belgrade Premium', 'P-TR-01', extensions.crypt('5001', extensions.gen_salt('bf')), true, 'active', true, 'WhatsApp')
 ON CONFLICT (id) DO UPDATE SET
     public_code = EXCLUDED.public_code,
     passport_pin_hash = EXCLUDED.passport_pin_hash,
@@ -178,7 +178,7 @@ BEGIN
     END IF;
 
     -- 3. Verify PIN
-    v_pin_valid := (v_partner_rec.passport_pin_hash = crypt(p_pin, v_partner_rec.passport_pin_hash));
+    v_pin_valid := (v_partner_rec.passport_pin_hash = extensions.crypt(p_pin, v_partner_rec.passport_pin_hash));
 
     IF NOT v_pin_valid THEN
         INSERT INTO public.partner_login_attempts (partner_code_hash, source_hash, success)
@@ -328,7 +328,7 @@ BEGIN
     END IF;
 
     -- 1. Verify current PIN
-    IF v_partner_rec.passport_pin_hash != crypt(p_current_pin, v_partner_rec.passport_pin_hash) THEN
+    IF v_partner_rec.passport_pin_hash != extensions.crypt(p_current_pin, v_partner_rec.passport_pin_hash) THEN
         RETURN pg_catalog.jsonb_build_object('success', false, 'error_code', 'INVALID_CURRENT_PIN', 'message', 'Nevažeći trenutni PIN.');
     END IF;
 
@@ -361,7 +361,7 @@ BEGIN
 
     -- Update partner record
     UPDATE public.partners
-    SET passport_pin_hash = crypt(trim(p_new_pin), gen_salt('bf')),
+    SET passport_pin_hash = extensions.crypt(trim(p_new_pin), extensions.gen_salt('bf')),
         must_change_pin = false,
         pin_changed_at = timezone('utc'::text, now()),
         credential_version = credential_version + 1
@@ -387,7 +387,7 @@ CREATE OR REPLACE FUNCTION public.admin_reset_partner_pin(
 RETURNS JSONB AS $$
 BEGIN
     UPDATE public.partners
-    SET passport_pin_hash = crypt(trim(p_temp_pin), gen_salt('bf')),
+    SET passport_pin_hash = extensions.crypt(trim(p_temp_pin), extensions.gen_salt('bf')),
         must_change_pin = true,
         pin_reset_at = timezone('utc'::text, now()),
         credential_version = credential_version + 1

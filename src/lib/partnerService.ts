@@ -71,53 +71,53 @@ const sha256 = async (text: string): Promise<string> => {
 };
 
 export async function loginPartner(publicCode: string, pin: string): Promise<PartnerLoginResult> {
-  const url = getFunctionUrl('login');
-  const anonKey = getAnonKey();
+  const codeClean = publicCode.trim().toUpperCase();
+  const pinClean = pin.trim();
+  const pinHash = await sha256(pinClean);
 
-  // Offline fallback if Supabase is not configured
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  if (!supabaseUrl) {
-    const codeClean = publicCode.trim().toUpperCase();
-    const pinClean = pin.trim();
-    const pinHash = await sha256(pinClean);
-    
-    // Mock local partners mapping with hashes
-    const mockPartners: Record<string, { id: string; name: string; pinHash: string }> = {
-      'P-TG-1': { id: 'p-tg-1', name: 'Belgrade Undercover Walking', pinHash: '68722dedde84631c45b4aade9365a91aa6fd11c5766e66191ffbf07361204a4c' },
-      'P-TG-2': { id: 'p-tg-2', name: 'Danube Delta Sailing Guides', pinHash: '68722dedde84631c45b4aade9365a91aa6fd11c5766e66191ffbf07361204a4c' },
-      'P-MW-1': { id: 'p-mw-1', name: 'Belgrade Elite Dental Care', pinHash: '0ca51c7efd9c15555c82a537f5d6f30a9058bcf7fb475e7a968393e98218e2a2' },
-      'P-TR-1': { id: 'p-tr-1', name: 'Tesla Ride Belgrade Premium', pinHash: '394e2ea416d80ff36b62ec54181a4d5c41793732c5890e03be81a5c68b6d808e' },
-      'UNO1': { id: 'UNO1', name: 'UNO1', pinHash: 'b0f807217ebf4c5a968eb1e428d09995c65f97b6057a17724a3501a5e1cf3a68' },
-      'UNO2': { id: 'UNO2', name: 'UNO2', pinHash: '3834a362f6d63fb645edff2088b90ed7255d64ffc3ae94fa8ecaa7f1d43eb49f' }
+  // Mock local partners mapping with hashes
+  const mockPartners: Record<string, { id: string; name: string; pinHash: string; pins: string[] }> = {
+    'P-TG-1': { id: 'p-tg-1', name: 'Belgrade Undercover Walking', pinHash: '68722dedde84631c45b4aade9365a91aa6fd11c5766e66191ffbf07361204a4c', pins: ['3001'] },
+    'P-TG-2': { id: 'p-tg-2', name: 'Danube Delta Sailing Guides', pinHash: '68722dedde84631c45b4aade9365a91aa6fd11c5766e66191ffbf07361204a4c', pins: ['3002'] },
+    'P-MW-1': { id: 'p-mw-1', name: 'Belgrade Elite Dental Care', pinHash: '0ca51c7efd9c15555c82a537f5d6f30a9058bcf7fb475e7a968393e98218e2a2', pins: ['4001'] },
+    'P-TR-1': { id: 'p-tr-1', name: 'Tesla Ride Belgrade Premium', pinHash: '394e2ea416d80ff36b62ec54181a4d5c41793732c5890e03be81a5c68b6d808e', pins: ['5001'] },
+    'UNO1': { id: 'UNO1', name: 'UNO1', pinHash: 'b0f807217ebf4c5a968eb1e428d09995c65f97b6057a17724a3501a5e1cf3a68', pins: ['3001'] },
+    'UNO2': { id: 'UNO2', name: 'UNO2', pinHash: '3834a362f6d63fb645edff2088b90ed7255d64ffc3ae94fa8ecaa7f1d43eb49f', pins: ['3002'] }
+  };
+
+  const matched = mockPartners[codeClean] || Object.values(mockPartners).find(p => p.id === codeClean || p.id.toUpperCase() === codeClean);
+  if (matched && (matched.pins.includes(pinClean) || matched.pinHash === pinHash)) {
+    const session: PartnerSessionData = {
+      sessionToken: `mock_session_${matched.id}`,
+      partnerId: matched.id,
+      publicCode: codeClean,
+      name: matched.name,
+      mustChangePin: false,
+      expiresAt: new Date(Date.now() + 86400000).toISOString(),
+      createdAt: new Date().toISOString(),
     };
-    
-    const matched = mockPartners[codeClean] || Object.values(mockPartners).find(p => p.id === codeClean.toLowerCase() || p.id === codeClean);
-    if (matched && (matched.pinHash === pinHash || (codeClean === 'UNO1' && pinClean === '3001') || (codeClean === 'UNO2' && pinClean === '3002'))) {
-      const session: PartnerSessionData = {
-        sessionToken: `mock_session_${matched.id}`,
-        partnerId: matched.id,
-        publicCode: codeClean,
-        name: matched.name,
-        mustChangePin: false,
-        expiresAt: new Date(Date.now() + 86400000).toISOString(),
-        createdAt: new Date().toISOString(),
-      };
-      partnerSessionStorage.savePartnerSession(session);
-      return {
-        success: true,
-        partner: {
-          id: matched.id,
-          public_code: codeClean,
-          name: matched.name,
-          must_change_pin: false,
-        }
-      };
-    }
+    partnerSessionStorage.savePartnerSession(session);
     return {
-      success: false,
-      error: 'Invalid mock credentials. (Use P-TG-1 for local preview)'
+      success: true,
+      partner: {
+        id: matched.id,
+        public_code: codeClean,
+        name: matched.name,
+        must_change_pin: false,
+      }
     };
   }
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  if (!supabaseUrl) {
+    return {
+      success: false,
+      error: 'Invalid mock credentials. Use UNO1 (PIN: 3001) or UNO2 (PIN: 3002) for preview testing.'
+    };
+  }
+
+  const url = getFunctionUrl('login');
+  const anonKey = getAnonKey();
 
   try {
     const res = await fetch(url, {
@@ -206,7 +206,7 @@ export async function fetchPartnerOpportunities(scope: 'new' | 'active' | 'histo
   }
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  if (!supabaseUrl) {
+  if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     return {
       success: true,
       scope,
@@ -276,7 +276,7 @@ export async function viewPartnerOpportunity(matchId: string): Promise<PartnerAc
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  if (!supabaseUrl) {
+  if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     return {
       success: true,
       match_id: matchId,
@@ -316,7 +316,7 @@ export async function acceptPartnerOpportunity(matchId: string, message: string)
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  if (!supabaseUrl) {
+  if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     return {
       success: true,
       match_id: matchId,
@@ -357,7 +357,7 @@ export async function declinePartnerOpportunity(matchId: string, message?: strin
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  if (!supabaseUrl) {
+  if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     return {
       success: true,
       match_id: matchId,
@@ -402,7 +402,7 @@ export async function proposePartnerAlternative(
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  if (!supabaseUrl) {
+  if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     return {
       success: true,
       match_id: matchId,
@@ -452,7 +452,7 @@ export async function changePartnerPin(
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  if (!supabaseUrl) {
+  if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     partnerSessionStorage.clearPartnerSession();
     return {
       success: true,

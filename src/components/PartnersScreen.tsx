@@ -98,21 +98,21 @@ const INITIAL_PORTAL_PARTNERS: PortalPartner[] = [
   {
     id: 'UNO1',
     pin: '3001',
-    name: 'UNO1',
+    name: 'UNO1 (60% Portfolio Scope)',
     category: 'Tourist Guide',
     status: 'Trusted',
     capabilities: [
       'Historical Walk', 'Gardoš Explorer', 'Architectural Walks', 'Roman Archaeological Tours', 'Belgrade Architecture Heritage',
-      'Private Tours', 'Taste Tasting', 'River Boating', 'Wildlife Photography', 'Culinary Tours', 'Vineyard Visits', 'Bespoke Tastings', 'Canyon Kayaking', 'Spritual Hikes', 'Rakija Pairing',
-      'EV Airport Pickups', 'VIP Executive Transfers', 'Private Driver Service', 'Long-Distance Chauffeuring', 'Multi-Passenger Luxury Vans', 'Bespoke Danube Tours', 'Old-Town Retro Shuttle', '4x4 Mountain Express', 'Central Valley Transfers', 'Bespoke Winery Tours', 'Airport transfers', 'Expo Multi-Lingual VIP Rides', 'Hotel-Expo Loop', 'Terminal Gate Greetings', 'Luggage Valet Transfers',
-      'Licensed Tourist Guide', 'First Aid Certified', 'Luxury Fleet License', 'Professional Chauffeur', 'EXPO Certified Host', 'Multi-lingual Nanny Guides', 'Dental Orientation', 'Orthodontic Liaison', 'Skin Consultation Liaison', 'Spa Wellness Liaison'
+      'Private Tours', 'Taste Tasting', 'River Boating', 'Wildlife Photography', 'Culinary Tours', 'Vineyard Visits', 'Bespoke Tastings',
+      'EV Airport Pickups', 'VIP Executive Transfers', 'Private Driver Service', 'Long-Distance Chauffeuring', 'Multi-Passenger Luxury Vans',
+      'Licensed Tourist Guide', 'First Aid Certified', 'Professional Chauffeur', 'EXPO Certified Host'
     ],
     languages: ['English', 'Serbian'],
     geography: 'Belgrade & National',
     channels: ['WhatsApp', 'Viber'],
     contactPhone: '+381621873260',
     instagram: '@uno1_concierge',
-    assignedRecs: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'],
+    assignedRecs: ['1', '2', '3', '4', '5', '6', '7'],
     contributions: 50,
     reliability: 99,
     eligibility: true,
@@ -121,23 +121,23 @@ const INITIAL_PORTAL_PARTNERS: PortalPartner[] = [
   {
     id: 'UNO2',
     pin: '3002',
-    name: 'UNO2',
+    name: 'UNO2 (75% Portfolio Scope)',
     category: 'Tourist Guide',
-    status: 'Active',
+    status: 'Trusted',
     capabilities: [
-      'Historical Walk', 'Architectural Walks', 'Belgrade Architecture Heritage', 'Wine District Terroir',
-      'Private Tours', 'Taste Tasting', 'Culinary Tours', 'Vineyard Visits', 'Bespoke Tastings', 'Rakija Pairing',
-      'EV Airport Pickups', 'VIP Executive Transfers', 'Private Driver Service', 'Old-Town Retro Shuttle', 'Central Valley Transfers', 'Bespoke Winery Tours', 'Airport transfers', 'Hotel-Expo Loop', 'Terminal Gate Greetings', 'Luggage Valet Transfers', 'Savamala Escorts', 'All-Terrain SUV',
-      'Licensed Tourist Guide', 'First Aid Certified', 'Professional Chauffeur', 'EXPO Certified Host', 'Dental Orientation', 'Orthodontic Liaison', 'Skin Consultation Liaison', 'Spa Wellness Liaison'
+      'Historical Walk', 'Gardoš Explorer', 'Architectural Walks', 'Roman Archaeological Tours', 'Belgrade Architecture Heritage',
+      'Private Tours', 'Taste Tasting', 'River Boating', 'Wildlife Photography', 'Culinary Tours', 'Vineyard Visits', 'Bespoke Tastings', 'Canyon Kayaking', 'Spritual Hikes', 'Rakija Pairing',
+      'EV Airport Pickups', 'VIP Executive Transfers', 'Private Driver Service', 'Long-Distance Chauffeuring', 'Multi-Passenger Luxury Vans', 'Bespoke Danube Tours', 'Old-Town Retro Shuttle', '4x4 Mountain Express',
+      'Licensed Tourist Guide', 'First Aid Certified', 'Professional Chauffeur', 'EXPO Certified Host', 'Dental Orientation', 'Orthodontic Liaison', 'Skin Consultation Liaison'
     ],
-    languages: ['English'],
-    geography: 'Belgrade',
-    channels: ['WhatsApp'],
+    languages: ['English', 'Serbian', 'German'],
+    geography: 'Belgrade & National',
+    channels: ['WhatsApp', 'Viber'],
     contactPhone: '+381621869850',
     instagram: '@uno2_concierge',
-    assignedRecs: ['7'],
-    contributions: 20,
-    reliability: 92,
+    assignedRecs: ['1', '2', '3', '4', '5', '6', '7', '8', '9'],
+    contributions: 35,
+    reliability: 98,
     eligibility: true,
     isDemo: true
   },
@@ -603,6 +603,71 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   const isSr = portalLang === 'sr';
   const isZh = portalLang === 'zh';
 
+  // Level 0 Card Language Translations (Always strictly uses visitor's selected app language)
+  const tL0 = (key: string) => {
+    const code = (language || 'en').toLowerCase();
+    const dict: Record<string, Record<string, string>> = {
+      gatewayTag: {
+        sr: 'PRIVATNI PRISTUP',
+        ru: 'ПРИВАТНЫЙ ДОСТУП',
+        zh: '私密入口',
+        de: 'PRIVATER ZUGANG',
+        en: 'PRIVATE GATEWAY'
+      },
+      gatewayTitle: {
+        sr: 'Privatni pristup za partnere',
+        ru: 'Частный доступ для партнеров',
+        zh: '合作伙伴私密入口',
+        de: 'Privater Partnerzugang',
+        en: 'Private Partner Access'
+      },
+      welcomeHead: {
+        sr: 'Dobrodošli u IDEMO partnersku mrežu.',
+        ru: 'Добро пожаловать в партнерскую сеть IDEMO.',
+        zh: '欢迎来到 IDEMO 合作伙伴网络。',
+        de: 'Willkommen im IDEMO Partnernetzwerk.',
+        en: 'Welcome to the IDEMO Partner Network.'
+      },
+      welcomeDesc: {
+        sr: 'Ovo je bezbedan, privatni radni prostor za pozvane IDEMO partnere i pružaoce usluga. Pristup zahteva autorizaciju mreže.',
+        ru: 'Это защищенное частное рабочее пространство для приглашенных партнеров и поставщиков услуг IDEMO. Доступ требует авторизации в сети.',
+        zh: '这是面向受邀 IDEMO 合作伙伴和服务提供商的安全私密工作区。访问需要网络授权。',
+        de: 'Dies ist ein sicherer, privater Arbeitsbereich für eingeladene IDEMO-Partner und Dienstleister. Der Zugriff erfordert eine Netzwerkautorisierung.',
+        en: 'This is a secure, private workspace for invited IDEMO partners and service providers. Access requires network verification.'
+      },
+      pinLabel: {
+        sr: 'UNESITE MREŽNI PIN PARTNERA',
+        ru: 'ВВЕДИТЕ ПИН-КОД СЕТИ ПАРТНЕРА',
+        zh: '输入合作伙伴网络 PIN 码',
+        de: 'PARTNER-NETZWERK-PIN EINGEBEN',
+        en: 'ENTER PARTNER NETWORK PIN'
+      },
+      verifyBtn: {
+        sr: 'Verifikuj autorizaciju mreže',
+        ru: 'Проверить авторизацию сети',
+        zh: '验证网络授权',
+        de: 'Netzwerkautorisierung überprüfen',
+        en: 'Verify Network Authorization'
+      },
+      exitBtn: {
+        sr: '← Nazad na aplikaciju za posetioce',
+        ru: '← Назад в приложение для гостей',
+        zh: '← 退出至游客应用',
+        de: '← Zurück zur Besucher-App',
+        en: '← Exit to Visitor App'
+      },
+      invalidPin: {
+        sr: 'Nevažeći mrežni PIN.',
+        ru: 'Неверный сетевой ПИН.',
+        zh: '网络验证码无效，请重试',
+        de: 'Falsche Netzwerk-PIN.',
+        en: 'Invalid Network PIN.'
+      }
+    };
+    const langKey = dict[key] ? (dict[key][code] ? code : 'en') : 'en';
+    return dict[key]?.[langKey] || key;
+  };
+
   // Obfuscate standard PINs to prevent minifier constant folding
   const pin1611 = [49, 54, 49, 49].map(c => String.fromCharCode(c)).join('');
   const pin4001 = [52, 48, 48, 49].map(c => String.fromCharCode(c)).join('');
@@ -614,18 +679,13 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   const [currentTab, setCurrentTab] = useState<'privileges' | 'portal'>('portal');
   const [portalRole, setPortalRole] = useState<'guest' | 'admin' | 'concierge' | 'partner'>('guest');
   const [restorationState, setRestorationState] = useState<'idle' | 'checking' | 'guest' | 'partner'>('idle');
-  const [networkUnlocked, setNetworkUnlocked] = useState<boolean>(() => {
-    try {
-      return safeStorage.getItem('idemo_generic_partner_unlocked') === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [networkUnlocked, setNetworkUnlocked] = useState<boolean>(false);
 
   const performSessionValidation = (session: any) => {
     setRestorationState('checking');
     fetchPartnerOpportunities('new').then(res => {
       if (res.success) {
+        setNetworkUnlocked(true);
         if (session.mustChangePin) {
           setMustChangePinMode(true);
           setPortalRole('guest');
@@ -666,7 +726,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   const [partnerPassedInquiries, setPartnerPassedInquiries] = useState<Record<string, string[]>>({});
 
   // Selection state for logged-in Partner
-  const [activePartnerId, setActivePartnerId] = useState<string>('p-tg-1');
+  const [activePartnerId, setActivePartnerId] = useState<string | null>(null);
 
   // Active Partner tabs: 'new' | 'mine' | 'history' | 'profile'
   const [partnerActiveTab, setPartnerActiveTab] = useState<'new' | 'mine' | 'history' | 'profile'>('new');
@@ -825,16 +885,14 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
   // Initialize and Sync safeStorage
   useEffect(() => {
-    // 0. Session restoration if network is unlocked
-    const isUnlocked = safeStorage.getItem('idemo_generic_partner_unlocked') === 'true';
-    if (isUnlocked) {
-      const session = partnerSessionStorage.getPartnerSession();
-      if (session) {
-        performSessionValidation(session);
-      } else {
-        setRestorationState('guest');
-      }
+    // 0. Check active session from storage
+    const activeSession = partnerSessionStorage.getPartnerSession();
+
+    if (activeSession) {
+      performSessionValidation(activeSession);
     } else {
+      setNetworkUnlocked(false);
+      setPortalRole('guest');
       setRestorationState('guest');
     }
 
@@ -861,12 +919,16 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     if (savedPartners) {
       try {
         const parsed = JSON.parse(savedPartners);
-        const upgraded = parsed.map((p: any) => {
-          if (p.id === 'p-tg-1' && p.pin === '3001') return { ...p, pin: '3001' };
-          if (p.id === 'p-tg-2' && p.pin === '3002') return { ...p, pin: '3002' };
-          return p;
-        });
-        loadedPartners = upgraded;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const upgraded = parsed.map((p: any) => {
+            if (p.id === 'p-tg-1' && p.pin === '3001') return { ...p, pin: '3001' };
+            if (p.id === 'p-tg-2' && p.pin === '3002') return { ...p, pin: '3002' };
+            return p;
+          });
+          const existingIds = new Set(upgraded.map((p: any) => p.id));
+          const missingDefaults = INITIAL_PORTAL_PARTNERS.filter(p => !existingIds.has(p.id));
+          loadedPartners = [...upgraded, ...missingDefaults];
+        }
       } catch (e) {
         loadedPartners = INITIAL_PORTAL_PARTNERS;
       }
@@ -945,6 +1007,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       triggerHaptic([30, 20, 40]);
       setNetworkUnlocked(true);
       setPinInput('');
+      setPartnerCodeInput('');
+      setActivePartnerId(null);
       try {
         safeStorage.setItem('idemo_generic_partner_unlocked', 'true');
       } catch (e) {
@@ -954,27 +1018,21 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       if (session) {
         performSessionValidation(session);
       } else {
+        setPortalRole('guest');
         setRestorationState('guest');
       }
     } else {
       triggerHaptic([60, 40]);
-      setPinError(isSr ? 'Nevažeći mrežni PIN.' : isZh ? '网络验证码无效，请重试' : 'Invalid Network PIN.');
+      setPinError(tL0('invalidPin'));
     }
   };
 
   const handlePortalLogin = async () => {
-    let code = partnerCodeInput.trim().toUpperCase();
+    const code = partnerCodeInput.trim().toUpperCase();
     const pin = pinInput.trim();
     setPinError('');
     setChangePinError('');
     setChangePinSuccess('');
-
-    // Auto-fill codes for easy testing/review if empty
-    if (!code) {
-      if (pin === pin1611) code = 'P-TG-1';
-      else if (pin === pin4001) code = 'P-MW-1';
-      else if (pin === pin5001) code = 'P-TR-1';
-    }
 
     if (!code) {
       setPinError(isSr ? 'Unesite kod partnera.' : 'Please enter partner code.');
@@ -1045,6 +1103,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       setChangePinSuccess(isSr ? 'PIN uspešno promenjen. Molimo prijavite se ponovo sa novim PIN-om.' : 'PIN changed successfully. Please log in again with your new PIN.');
       setMustChangePinMode(false);
       setPortalRole('guest');
+      setActivePartnerId(null);
       setChangePinCurrent('');
       setChangePinNew('');
       setChangePinConfirm('');
@@ -1058,16 +1117,21 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   const handlePartnerLogout = async () => {
     triggerHaptic(10);
     await logoutPartner();
+    setActivePartnerId(null);
     setPortalRole('guest');
     setMustChangePinMode(false);
     setChangePinCurrent('');
     setChangePinNew('');
     setChangePinConfirm('');
+    setPartnerCodeInput('');
+    setPinInput('');
+    setPinError('');
   };
 
   const handleLockNetwork = async () => {
     triggerHaptic(10);
     await logoutPartner();
+    setActivePartnerId(null);
     setNetworkUnlocked(false);
     setPortalRole('guest');
     setMustChangePinMode(false);
@@ -1350,7 +1414,13 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
   // Simulated active partner selected for Partner view
   const currentSimulatedPartner = useMemo(() => {
-    return partnersList.find(p => p.id === activePartnerId) || partnersList[0];
+    if (!activePartnerId) return null;
+    const matchId = activePartnerId.trim().toUpperCase();
+    return (
+      partnersList.find(p => p.id === activePartnerId || p.id.toUpperCase() === matchId) ||
+      INITIAL_PORTAL_PARTNERS.find(p => p.id === activePartnerId || p.id.toUpperCase() === matchId) ||
+      null
+    );
   }, [partnersList, activePartnerId]);
 
   // Filtered inquiries for partner active views
@@ -1491,18 +1561,26 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     <div className="w-full min-h-screen bg-brand-bg pt-6 pb-28 px-4 font-sans select-none overflow-x-hidden text-brand-charcoal">
       {/* ================= PARTNER PORTAL VIEW (THREE ROLE CORES) ================= */}
       <div className="max-w-[480px] mx-auto space-y-6">
-        <div className="flex justify-end pr-2">
-          <button 
-            onClick={() => {
-              setPortalLang(prev => prev === 'sr' ? 'en' : 'sr');
-              triggerHaptic(5);
-            }}
-            className="text-[9px] font-mono font-black uppercase tracking-wider px-2.5 py-1 bg-[#2D3025]/5 hover:bg-[#2D3025]/10 rounded-md text-[#2D3025]/65 cursor-pointer leading-none flex items-center gap-1 border border-[#2D3025]/5"
-            title="Promeni jezik / Change language"
-          >
-            🌐 {portalLang.toUpperCase()}
-          </button>
-        </div>
+        {networkUnlocked && (
+          <div className="flex justify-end pr-2">
+            <div className="flex items-center gap-1 bg-[#2D3025]/5 p-1 rounded-xl text-[10px] font-mono font-bold border border-[#2D3025]/5">
+              <button 
+                type="button"
+                onClick={() => { setPortalLang('sr'); triggerHaptic(5); }}
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${isSr ? 'bg-brand-charcoal text-white shadow-xs font-black' : 'text-brand-charcoal/60 hover:text-brand-charcoal'}`}
+              >
+                SR
+              </button>
+              <button 
+                type="button"
+                onClick={() => { setPortalLang('en'); triggerHaptic(5); }}
+                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${!isSr ? 'bg-brand-charcoal text-white shadow-xs font-black' : 'text-brand-charcoal/60 hover:text-brand-charcoal'}`}
+              >
+                EN
+              </button>
+            </div>
+          </div>
+        )}
           
           {/* MEDICAL SAFETY DISCLAIMER BOUNDARY (STRICT PROTOCOL) */}
           {portalRole !== 'guest' && (
@@ -1666,22 +1744,20 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                     {/* HEADINGS */}
                     <div className="text-center space-y-2">
                       <span className="text-[9px] font-mono font-bold tracking-[0.25em] text-[#8A1F1F] block uppercase">
-                        {isSr ? 'PRIVATNI PRISTUP' : 'PRIVATE GATEWAY'}
+                        {tL0('gatewayTag')}
                       </span>
                       <h2 className="text-xl font-serif font-black text-brand-charcoal tracking-tight">
-                        {isSr ? 'Privatni pristup za partnere' : 'Private Partner Access'}
+                        {tL0('gatewayTitle')}
                       </h2>
                     </div>
 
                     {/* WELCOME & EXPLANATION */}
                     <div className="text-center space-y-3 px-1 text-[#2D3025]/70 text-[11px] leading-relaxed">
                       <p className="font-bold text-brand-charcoal">
-                        {isSr ? 'Dobrodošli u IDEMO partnersku mrežu.' : 'Welcome to the IDEMO Partner Network.'}
+                        {tL0('welcomeHead')}
                       </p>
                       <p>
-                        {isSr 
-                          ? 'Ovo je bezbedan, privatni radni prostor za pozvane IDEMO partnere i pružaoce usluga. Pristup zahteva autorizaciju mreže.' 
-                          : 'This is a secure, private workspace for invited IDEMO partners and service providers. Access requires network verification.'}
+                        {tL0('welcomeDesc')}
                       </p>
                     </div>
 
@@ -1689,7 +1765,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                     <div className="space-y-4 pt-4 border-t border-[#2D3025]/5">
                       <div className="space-y-2">
                         <label className="text-[9px] uppercase tracking-widest font-black text-brand-charcoal/40 block text-center">
-                          {isSr ? 'UNESITE MREŽNI PIN PARTNERA' : 'ENTER PARTNER NETWORK PIN'}
+                          {tL0('pinLabel')}
                         </label>
                         <input 
                           type="password" 
@@ -1715,14 +1791,14 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             pinInput.length === 4 ? 'bg-brand-charcoal text-white hover:bg-brand-charcoal/90 shadow-sm' : 'bg-[#2D3025]/5 text-brand-charcoal/25 cursor-not-allowed'
                           }`}
                         >
-                          <KeyRound size={13} /> {isSr ? 'Verifikuj autorizaciju mreže' : 'Verify Network Authorization'}
+                          <KeyRound size={13} /> {tL0('verifyBtn')}
                         </button>
 
                         <button 
                           onClick={() => onNavigate && onNavigate('home')}
                           className="w-full h-9 border border-[#2D3025]/15 text-brand-charcoal/60 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 hover:bg-[#2D3025]/5 transition-all cursor-pointer"
                         >
-                          ← {isSr ? 'Nazad na aplikaciju za posetioce' : 'Exit to Visitor App'}
+                          {tL0('exitBtn')}
                         </button>
                       </div>
                     </div>
@@ -1738,7 +1814,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                   </div>
                 </div>
               ) : (
-                /* LEVEL 2: IDEMO PARTNER NETWORK (Exactly THREE Cards) */
+                /* LEVEL 1: IDEMO PARTNER NETWORK (COMMON AREA) */
                 <div className="space-y-6">
                   {/* HEADER */}
                   <div className="text-center space-y-2 py-2">
@@ -1758,7 +1834,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                       </span>
                       <div className="space-y-0.5">
                         <span className="text-[8px] uppercase tracking-widest font-mono text-brand-charcoal/40 font-bold block">
-                          {isSr ? 'UREDNIČKA OBAVEŠTENJA' : 'EDITORIAL NOTICES'}
+                          {isSr ? 'UREĐIVAČKA OBAVEŠTENJA' : 'EDITORIAL NOTICES'}
                         </span>
                         <h3 className="text-xs uppercase tracking-wide font-black text-brand-charcoal">
                           {isSr ? 'ŠTA JE NOVO' : 'WHAT\'S NEW'}
@@ -1792,7 +1868,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                         <span className="text-[#8A1F1F] font-bold select-none">•</span>
                         <p>
                           <strong>{isSr ? 'Sezonsko obaveštenje:' : 'Seasonal notice:'}</strong>
-                          {isSr ? ' Zlatibor 4x4 of-roud tranziti privremeno zaustavljeni radi letnjeg održavanja.' : ' Zlatibor 4x4 off-road transits temporarily paused for summer maintenance.'}
+                          {isSr ? ' Zlatibor 4x4 off-road tranziti privremeno zaustavljeni radi letnjeg održavanja.' : ' Zlatibor 4x4 off-road transits temporarily paused for summer maintenance.'}
                         </p>
                       </div>
                     </div>
@@ -1859,7 +1935,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                         </label>
                         <input 
                           type="text" 
-                          placeholder="npr. P-TG-1"
+                          placeholder="npr. UNO1"
                           value={partnerCodeInput}
                           onChange={e => { setPartnerCodeInput(e.target.value.toUpperCase()); triggerHaptic(8); }}
                           className="w-full text-center tracking-widest text-sm font-mono font-bold h-11 bg-[#FAF9F5] border border-[#2D3025]/15 rounded-xl text-brand-charcoal focus:ring-1 focus:ring-brand-charcoal/20 focus:outline-none uppercase"
@@ -1891,17 +1967,11 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                           onClick={handlePortalLogin}
                           disabled={!((partnerCodeInput.trim().length > 0 && pinInput.length === 4) || 
                             pinInput === pin9999 || 
-                            pinInput === pin8888 || 
-                            pinInput === pin1611 || 
-                            pinInput === pin4001 || 
-                            pinInput === pin5001)}
+                            pinInput === pin8888)}
                           className={`w-full h-11 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all cursor-pointer ${
                             (partnerCodeInput.trim().length > 0 && pinInput.length === 4) || 
                             pinInput === pin9999 || 
-                            pinInput === pin8888 || 
-                            pinInput === pin1611 || 
-                            pinInput === pin4001 || 
-                            pinInput === pin5001 ? 'bg-[#8A1F1F] text-white hover:bg-[#8A1F1F]/95 shadow-sm' : 'bg-[#2D3025]/5 text-brand-charcoal/25 cursor-not-allowed'
+                            pinInput === pin8888 ? 'bg-[#8A1F1F] text-white hover:bg-[#8A1F1F]/95 shadow-sm' : 'bg-[#2D3025]/5 text-brand-charcoal/25 cursor-not-allowed'
                           }`}
                         >
                           <Unlock size={13} /> {isSr ? 'Otvori lični radni prostor' : 'Open Personal Workspace'}
@@ -2421,6 +2491,28 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           {/* ========================= 3. PARTNER RESTRICTED VIEW ===================== */}
           {/* ========================================================================= */}
           {portalRole === 'partner' && (() => {
+            if (!currentSimulatedPartner) {
+              return (
+                <div className="bg-white border border-[#2D3025]/10 rounded-[32px] p-8 text-center space-y-4 max-w-md mx-auto my-6 animate-fade-in text-left">
+                  <div className="flex items-center gap-2 text-amber-800">
+                    <AlertCircle size={18} />
+                    <span className="text-xs font-mono font-bold uppercase tracking-wider">
+                      {isSr ? 'Profil partnera nije pronađen' : 'Partner Profile Not Found'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-brand-charcoal/70 leading-relaxed">
+                    {isSr ? 'Profil za izabrani nalog nije učitan. Molimo prijavite se ponovo.' : 'Profile data for this account could not be located. Please sign in again.'}
+                  </p>
+                  <button 
+                    onClick={handlePartnerLogout}
+                    className="w-full h-10 bg-brand-charcoal text-white text-[10px] font-black uppercase tracking-widest rounded-xl cursor-pointer"
+                  >
+                    {isSr ? 'Nazad na prijavu' : 'Return to Login'}
+                  </button>
+                </div>
+              );
+            }
+
             const capabilityCards = [
               {
                 key: 'languages',
