@@ -1,11 +1,6 @@
 {
-  "name": "IDEMO - Serbia Concierge & Planner",
+  "name": "IDEMO Serbia Concierge & Planner",
   "description": "Ultra-compact, minimalistic premium concierge planner for EXPO 2027 visitors exploring the offbeat wonders of Serbia.\n\n## How IDEMO Works\n\nIDEMO is a private travel concierge designed to help you make the most of your time in Serbia.\n\n### Configure Once\n\nSet your available time, budget, interests and language in Profile.\n\nIDEMO continuously adapts recommendations to these preferences, eliminating the need for repetitive searching and filtering.\n\n### Discover Effortlessly\n\nBrowse carefully curated experiences matched to your schedule, interests and location.\n\nEach recommendation includes practical planning information such as duration, travel time, estimated cost and local insights.\n\n### Private by Design\n\nNo registration is required.\n\nYour preferences and saved experiences remain stored locally on your device.\n\n### Travel Pass\n\nUse your Travel Pass to transfer preferences and saved experiences between devices without creating an account.\n\n### Human Assistance\n\nNeed additional guidance?\n\nAsk IDEMO about any experience directly from within the app.\n\nResponses are typically provided within a few hours.\n",
-  "requestFramePermissions": [
-    "camera",
-    "geolocation"
-  ],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

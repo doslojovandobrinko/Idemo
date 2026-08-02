@@ -3,36 +3,51 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
-import { motion } from 'framer-motion';
-import { Recommendation } from '../types';
-import { getTruthCurationForRecommendation } from '../lib/antiAdviceEngine';
-import { Compass, ShieldAlert, CheckCircle2, Lightbulb, UserCheck, UserX, BookOpen, Quote } from 'lucide-react';
+import React from "react";
+import { motion } from "framer-motion";
+import { Recommendation } from "../types";
+import { getTruthCurationForRecommendation } from "../lib/antiAdviceEngine";
+import {
+  Compass,
+  ShieldAlert,
+  CheckCircle2,
+  Lightbulb,
+  UserCheck,
+  UserX,
+  BookOpen,
+  Quote,
+} from "lucide-react";
 
 interface AntiAdviceSectionProps {
   recommendation: Recommendation;
   language: string;
 }
 
-export function AntiAdviceSection({ recommendation, language }: AntiAdviceSectionProps) {
+export function AntiAdviceSection({
+  recommendation,
+  language,
+}: AntiAdviceSectionProps) {
   const data = React.useMemo(() => {
     return getTruthCurationForRecommendation(recommendation, language);
   }, [recommendation, language]);
 
-  const lKey = language === 'sr' ? 'sr' : language === 'zh' ? 'zh' : 'en';
+  const lKey = language === "sr" ? "sr" : language === "zh" ? "zh" : "en";
 
-  const labels: Record<string, {
-    curationHeader: string;
-    shortRecLabel: string;
-    worthTimeLabel: string;
-    unlearnLabel: string;
-    unlearnSubtitle: string;
-    worthKnowingLabel: string;
-    worthKnowingSubtitle: string;
-    idealForLabel: string;
-    notIdealForLabel: string;
-    titleSuffix: string;
-  }> = {
+  const labels: Record<
+    string,
+    {
+      curationHeader: string;
+      shortRecLabel: string;
+      worthTimeLabel: string;
+      unlearnLabel: string;
+      unlearnSubtitle: string;
+      worthKnowingLabel: string;
+      worthKnowingSubtitle: string;
+      idealForLabel: string;
+      notIdealForLabel: string;
+      titleSuffix: string;
+    }
+  > = {
     en: {
       curationHeader: "MASTER CURATION REPORT",
       shortRecLabel: "The Curation",
@@ -40,22 +55,25 @@ export function AntiAdviceSection({ recommendation, language }: AntiAdviceSectio
       unlearnLabel: "What to Unlearn",
       unlearnSubtitle: "Challenge your assumptions to shift your perspective.",
       worthKnowingLabel: "To Get the Most From This Experience",
-      worthKnowingSubtitle: "Actionable local wisdom to protect your investment of presence.",
+      worthKnowingSubtitle:
+        "Actionable local wisdom to protect your investment of presence.",
       idealForLabel: "Ideal For",
       notIdealForLabel: "Not Ideal For",
-      titleSuffix: "Truth Curation"
+      titleSuffix: "Truth Curation",
     },
     sr: {
       curationHeader: "PREMIJUM KUSTOSKI IZVEŠTAJ",
       shortRecLabel: "Kustoska srž",
       worthTimeLabel: "Zašto je ovo vredno vašeg vremena",
       unlearnLabel: "Zablude koje treba odbaciti",
-      unlearnSubtitle: "Preispitajte uobičajene pretpostavke i promenite perspektivu.",
+      unlearnSubtitle:
+        "Preispitajte uobičajene pretpostavke i promenite perspektivu.",
       worthKnowingLabel: "Kako da izvučete maksimum iz ovog iskustva",
-      worthKnowingSubtitle: "Praktični saveti lokalnih čuvara koji štite kvalitet vašeg doživljaja.",
+      worthKnowingSubtitle:
+        "Praktični saveti lokalnih čuvara koji štite kvalitet vašeg doživljaja.",
       idealForLabel: "Idealno za",
       notIdealForLabel: "Nije idealno za",
-      titleSuffix: "Kustoska analiza"
+      titleSuffix: "Kustoska analiza",
     },
     zh: {
       curationHeader: "大师甄选特调报告",
@@ -67,17 +85,20 @@ export function AntiAdviceSection({ recommendation, language }: AntiAdviceSectio
       worthKnowingSubtitle: "本地管家守望之核心诫律，旨在捍卫您的专注力投资。",
       idealForLabel: "完美匹配主人群",
       notIdealForLabel: "不建议涉足之人群",
-      titleSuffix: "真实本原甄选"
-    }
+      titleSuffix: "真实本原甄选",
+    },
   };
 
   const l = labels[lKey];
 
   // Resolve recommendation title
-  let recTitle = '';
+  let recTitle = "";
   if (recommendation && recommendation.title) {
-    if (typeof recommendation.title === 'object') {
-      recTitle = (recommendation.title as any)[lKey] || (recommendation.title as any)['en'] || '';
+    if (typeof recommendation.title === "object") {
+      recTitle =
+        (recommendation.title as any)[lKey] ||
+        (recommendation.title as any)["en"] ||
+        "";
     } else {
       recTitle = String(recommendation.title);
     }
@@ -150,7 +171,6 @@ export function AntiAdviceSection({ recommendation, language }: AntiAdviceSectio
 
       {/* 4. Twin Towers of Actionable Advice: UNLEARN & WORTH KNOWING */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-2 relative z-10">
-        
         {/* Pillar A: UNLEARN */}
         {data.unlearn && data.unlearn.length > 0 && (
           <div className="bg-brand-pearl/10 border border-border-main/40 rounded-3xl p-6 space-y-5">
@@ -167,7 +187,7 @@ export function AntiAdviceSection({ recommendation, language }: AntiAdviceSectio
                 </p>
               </div>
             </div>
-            
+
             <div className="space-y-4">
               {data.unlearn.map((pt, idx) => (
                 <div key={idx} className="flex items-start gap-4 group">
@@ -214,12 +234,10 @@ export function AntiAdviceSection({ recommendation, language }: AntiAdviceSectio
             </div>
           </div>
         )}
-
       </div>
 
       {/* 5. The Demographic Alignment Quadrant: IDEAL FOR & NOT IDEAL FOR */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-border-main/40 relative z-10">
-        
         {/* Alignment Left: Ideal For */}
         {data.idealFor && (
           <div className="flex items-start gap-4 bg-brand-pearl/5 border border-border-main/30 p-5 rounded-2xl">
@@ -253,7 +271,6 @@ export function AntiAdviceSection({ recommendation, language }: AntiAdviceSectio
             </div>
           </div>
         )}
-
       </div>
     </motion.div>
   );

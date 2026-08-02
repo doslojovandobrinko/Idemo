@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { InquiryRecordV2 } from '../types';
-import { safeStorage } from './safeStorage';
+import { InquiryRecordV2 } from "../types";
+import { safeStorage } from "./safeStorage";
 
-const STORAGE_KEY_V2 = 'idemo_inquiries_v2';
-const STORAGE_KEY_V1 = 'idemo_inquiries_v1';
+const STORAGE_KEY_V2 = "idemo_inquiries_v2";
+const STORAGE_KEY_V1 = "idemo_inquiries_v1";
 
 export function getAllInquiriesV2(): InquiryRecordV2[] {
   try {
@@ -27,7 +27,9 @@ export function getAllInquiriesV2(): InquiryRecordV2[] {
 
           // Check if this recommendation already has a corresponding record in V2
           const exists = inquiriesV2.some(
-            (i) => i.recommendation_id === recId || i.public_reference_code === v1Item.referenceCode
+            (i) =>
+              i.recommendation_id === recId ||
+              i.public_reference_code === v1Item.referenceCode,
           );
 
           if (!exists) {
@@ -35,14 +37,15 @@ export function getAllInquiriesV2(): InquiryRecordV2[] {
               local_queue_id: `legacy_${recId}_${Date.now()}`,
               recommendation_id: recId,
               recommendation_title: `Recommendation ${recId}`,
-              visitor_name: 'Visitor',
-              visitor_notes: v1Item.notes || '',
+              visitor_name: "Visitor",
+              visitor_notes: v1Item.notes || "",
               requested_start_at: v1Item.timestamp || new Date().toISOString(),
               requested_end_at: v1Item.timestamp || new Date().toISOString(),
-              preferred_date: '',
-              preferred_time: v1Item.preferredTime || '',
-              status: 'submitted',
-              public_reference_code: v1Item.referenceCode || `IDEMO-LEGACY-${recId}`,
+              preferred_date: "",
+              preferred_time: v1Item.preferredTime || "",
+              status: "submitted",
+              public_reference_code:
+                v1Item.referenceCode || `IDEMO-LEGACY-${recId}`,
               is_server_authoritative: false,
               created_at: v1Item.timestamp || new Date().toISOString(),
               submitted_at: v1Item.timestamp || new Date().toISOString(),
@@ -57,21 +60,28 @@ export function getAllInquiriesV2(): InquiryRecordV2[] {
           safeStorage.setItem(STORAGE_KEY_V2, JSON.stringify(inquiriesV2));
         }
       } catch (e) {
-        console.warn('Non-destructive V1 migration encountered malformed V1 data:', e);
+        console.warn(
+          "Non-destructive V1 migration encountered malformed V1 data:",
+          e,
+        );
       }
     }
 
     return inquiriesV2;
   } catch (err) {
-    console.error('Failed to read inquiry storage V2:', err);
+    console.error("Failed to read inquiry storage V2:", err);
     return [];
   }
 }
 
-export function getInquiryByRecommendationId(recId: string): InquiryRecordV2 | null {
+export function getInquiryByRecommendationId(
+  recId: string,
+): InquiryRecordV2 | null {
   const all = getAllInquiriesV2();
   // Return the most recent inquiry for this recommendation
-  const matches = all.filter((i) => i.recommendation_id === recId || i.recommendation_db_id === recId);
+  const matches = all.filter(
+    (i) => i.recommendation_id === recId || i.recommendation_db_id === recId,
+  );
   if (matches.length === 0) return null;
   return matches[matches.length - 1];
 }
@@ -79,7 +89,9 @@ export function getInquiryByRecommendationId(recId: string): InquiryRecordV2 | n
 export function saveInquiryRecordV2(record: InquiryRecordV2): void {
   try {
     const all = getAllInquiriesV2();
-    const existingIndex = all.findIndex((i) => i.local_queue_id === record.local_queue_id);
+    const existingIndex = all.findIndex(
+      (i) => i.local_queue_id === record.local_queue_id,
+    );
 
     // Sanitize to guarantee raw_recovery_token is NEVER stored
     const sanitizedRecord: InquiryRecordV2 = { ...record };
@@ -92,7 +104,7 @@ export function saveInquiryRecordV2(record: InquiryRecordV2): void {
 
     safeStorage.setItem(STORAGE_KEY_V2, JSON.stringify(all));
   } catch (err) {
-    console.error('Failed to save inquiry record to V2 storage:', err);
+    console.error("Failed to save inquiry record to V2 storage:", err);
   }
 }
 
@@ -100,17 +112,22 @@ export function clearInquiryHistory(): void {
   try {
     safeStorage.setItem(STORAGE_KEY_V2, JSON.stringify([]));
   } catch (err) {
-    console.error('Failed to clear inquiry history:', err);
+    console.error("Failed to clear inquiry history:", err);
   }
 }
 
 export function removeInquiryRecordV2(id: string): void {
   try {
     const all = getAllInquiriesV2();
-    const filtered = all.filter((i) => i.local_queue_id !== id && i.server_inquiry_id !== id && i.recommendation_id !== id);
+    const filtered = all.filter(
+      (i) =>
+        i.local_queue_id !== id &&
+        i.server_inquiry_id !== id &&
+        i.recommendation_id !== id,
+    );
     safeStorage.setItem(STORAGE_KEY_V2, JSON.stringify(filtered));
   } catch (err) {
-    console.error('Failed to remove inquiry record:', err);
+    console.error("Failed to remove inquiry record:", err);
   }
 }
 
@@ -121,7 +138,7 @@ export function removeInquiryRecordV2(id: string): void {
  * Completely isolated from InquiryRecordV2 / idemo_inquiries_v2
  * ============================================================================ */
 
-const VISITOR_CREDENTIALS_KEY = 'idemo_visitor_credentials_v1';
+const VISITOR_CREDENTIALS_KEY = "idemo_visitor_credentials_v1";
 
 export function saveVisitorCredential(inquiryId: string, token: string): void {
   if (!inquiryId || !token) return;
@@ -136,7 +153,7 @@ export function saveVisitorCredential(inquiryId: string, token: string): void {
     store[inquiryId] = token;
     safeStorage.setItem(VISITOR_CREDENTIALS_KEY, JSON.stringify(store));
   } catch (err) {
-    console.error('Failed to save visitor credential:', err);
+    console.error("Failed to save visitor credential:", err);
   }
 }
 
@@ -152,7 +169,7 @@ export function getVisitorCredential(inquiryId: string): string | null {
     }
     return null;
   } catch (err) {
-    console.error('Failed to read visitor credential:', err);
+    console.error("Failed to read visitor credential:", err);
     return null;
   }
 }
@@ -168,11 +185,13 @@ export function removeVisitorCredential(inquiryId: string): void {
       safeStorage.setItem(VISITOR_CREDENTIALS_KEY, JSON.stringify(store));
     }
   } catch (err) {
-    console.error('Failed to remove visitor credential:', err);
+    console.error("Failed to remove visitor credential:", err);
   }
 }
 
-export function clearExpiredVisitorCredentials(activeInquiryIds?: string[]): void {
+export function clearExpiredVisitorCredentials(
+  activeInquiryIds?: string[],
+): void {
   try {
     const raw = safeStorage.getItem(VISITOR_CREDENTIALS_KEY);
     if (!raw) return;
@@ -192,7 +211,6 @@ export function clearExpiredVisitorCredentials(activeInquiryIds?: string[]): voi
       safeStorage.setItem(VISITOR_CREDENTIALS_KEY, JSON.stringify(store));
     }
   } catch (err) {
-    console.error('Failed to clear expired visitor credentials:', err);
+    console.error("Failed to clear expired visitor credentials:", err);
   }
 }
-

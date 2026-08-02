@@ -3,18 +3,25 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Sliders, Sparkles, ShieldAlert, Award, Compass, HeartCrack } from 'lucide-react';
-import { Recommendation, Category } from '../types';
-import { triggerHaptic } from '../App';
+import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import {
+  Sliders,
+  Sparkles,
+  ShieldAlert,
+  Award,
+  Compass,
+  HeartCrack,
+} from "lucide-react";
+import { Recommendation, Category } from "../types";
+import { triggerHaptic } from "../App";
 
 export interface VibeSettings {
   heritageVSmodern: number; // 1 (Heritage) to 5 (Modern)
-  gourmetVSmuseum: number;   // 1 (Gourmet) to 5 (Museum)
+  gourmetVSmuseum: number; // 1 (Gourmet) to 5 (Museum)
   natureVSnightlife: number; // 1 (Nature) to 5 (Nightlife)
   classicsVSsecrets: number; // 1 (Classics) to 5 (Secrets)
-  activeVSrelaxed: number;   // 1 (Active) to 5 (Relaxed)
+  activeVSrelaxed: number; // 1 (Active) to 5 (Relaxed)
 }
 
 export const DEFAULT_VIBE_SETTINGS: VibeSettings = {
@@ -22,17 +29,21 @@ export const DEFAULT_VIBE_SETTINGS: VibeSettings = {
   gourmetVSmuseum: 3,
   natureVSnightlife: 3,
   classicsVSsecrets: 4, // default to secret curations!
-  activeVSrelaxed: 3
+  activeVSrelaxed: 3,
 };
 
 /**
  * Calculates a dynamic percentage match (50% - 99%) for a recommendation against user vibe sliders.
  * Employs deterministic and weighted comparison of categories & tags.
  */
-export function calculateVibeMatch(rec: Recommendation, vibe: VibeSettings, ratings: Record<string, any> = {}): number {
+export function calculateVibeMatch(
+  rec: Recommendation,
+  vibe: VibeSettings,
+  ratings: Record<string, any> = {},
+): number {
   // Read calibrated coordinates directly from the curation
-  const recX = typeof rec.coordinateX === 'number' ? rec.coordinateX : 0;
-  const recY = typeof rec.coordinateY === 'number' ? rec.coordinateY : 0;
+  const recX = typeof rec.coordinateX === "number" ? rec.coordinateX : 0;
+  const recY = typeof rec.coordinateY === "number" ? rec.coordinateY : 0;
 
   // Convert VibeSettings sliders (range 1-5) to a target (X, Y) coordinate in range [-5, 5]
   // 1. X Axis (Emotional Preference): Relaxed vs Active, Nightlife vs Nature
@@ -58,9 +69,9 @@ export function calculateVibeMatch(rec: Recommendation, vibe: VibeSettings, rati
   // Adjust score based on positive/negative device feelings (ratings)
   if (ratings && ratings[rec.id]) {
     const r = ratings[rec.id];
-    if (r.vibe === 'like') score += 12;
-    if (r.vibe === 'intrigue') score += 6;
-    if (r.vibe === 'dislike') score -= 35;
+    if (r.vibe === "like") score += 12;
+    if (r.vibe === "intrigue") score += 6;
+    if (r.vibe === "dislike") score -= 35;
   }
 
   // Cap value between 54% and 99% for high-fidelity premium realism
@@ -71,7 +82,7 @@ export function VibeCalibrationDashboard({
   language,
   vibeSettings,
   onChangeVibeSettings,
-  ratingsList = {}
+  ratingsList = {},
 }: {
   language: string;
   vibeSettings: VibeSettings;
@@ -85,26 +96,68 @@ export function VibeCalibrationDashboard({
   };
 
   const hasRatings = Object.keys(ratingsList).length > 0;
-  const totalLikes = Object.values(ratingsList).filter(r => r.vibe === 'like').length;
-  const totalIntrigues = Object.values(ratingsList).filter(r => r.vibe === 'intrigue').length;
-  const totalSkips = Object.values(ratingsList).filter(r => r.vibe === 'dislike').length;
+  const totalLikes = Object.values(ratingsList).filter(
+    (r) => r.vibe === "like",
+  ).length;
+  const totalIntrigues = Object.values(ratingsList).filter(
+    (r) => r.vibe === "intrigue",
+  ).length;
+  const totalSkips = Object.values(ratingsList).filter(
+    (r) => r.vibe === "dislike",
+  ).length;
 
   // Compute overall match profile
-  let dominantProfile = { en: "Discerning Wanderer", sr: "Istraživač skrivenih čari", es: "Explorador Curioso", de: "Aufmerksamer Wanderer", ru: "Пытливый странник", zh: "深行探索者" };
+  let dominantProfile = {
+    en: "Discerning Wanderer",
+    sr: "Istraživač skrivenih čari",
+    es: "Explorador Curioso",
+    de: "Aufmerksamer Wanderer",
+    ru: "Пытливый странник",
+    zh: "深行探索者",
+  };
   if (vibeSettings.natureVSnightlife > 3.8) {
-    dominantProfile = { en: "Electric Hedonist", sr: "Energični hedonista", es: "Hedonista Eléctrico", de: "Dynamischer Genießer", ru: "Активный тусовщик", zh: "摩登享乐家" };
+    dominantProfile = {
+      en: "Electric Hedonist",
+      sr: "Energični hedonista",
+      es: "Hedonista Eléctrico",
+      de: "Dynamischer Genießer",
+      ru: "Активный тусовщик",
+      zh: "摩登享乐家",
+    };
   } else if (vibeSettings.natureVSnightlife < 2.2) {
-    dominantProfile = { en: "Serene Ecocamp Wanderer", sr: "Spokojni čuvar prirode", es: "Buscador de Paz", de: "Stiller Naturfreund", ru: "Ценитель покоя", zh: "静谧寻绿客" };
+    dominantProfile = {
+      en: "Serene Ecocamp Wanderer",
+      sr: "Spokojni čuvar prirode",
+      es: "Buscador de Paz",
+      de: "Stiller Naturfreund",
+      ru: "Ценитель покоя",
+      zh: "静谧寻绿客",
+    };
   } else if (vibeSettings.gourmetVSmuseum < 2.2) {
-    dominantProfile = { en: "Gastronomic Curator", sr: "Gurmanski kustos", es: "Curador Gastronómico", de: "Feinschmecker-Profi", ru: "Гастро-кулинар", zh: "美食鉴赏家" };
+    dominantProfile = {
+      en: "Gastronomic Curator",
+      sr: "Gurmanski kustos",
+      es: "Curador Gastronómico",
+      de: "Feinschmecker-Profi",
+      ru: "Гастро-кулинар",
+      zh: "美食鉴赏家",
+    };
   } else if (vibeSettings.heritageVSmodern < 2.2) {
-    dominantProfile = { en: "Byzantine Antiquarian", sr: "Tragač vizantijske baštine", es: "Anticuario Bizantino", de: "Byzantinischer Antiquar", ru: "Византийский антиквар", zh: "拜占庭文史家" };
+    dominantProfile = {
+      en: "Byzantine Antiquarian",
+      sr: "Tragač vizantijske baštine",
+      es: "Anticuario Bizantino",
+      de: "Byzantinischer Antiquar",
+      ru: "Византийский антиквар",
+      zh: "拜占庭文史家",
+    };
   }
 
   const translations: Record<string, any> = {
     en: {
       title: "Concierge Vibe Calibration",
-      subtitle: "Fine-tune Belgrade's response to your inner style. Changes recalculate list affinity instantly.",
+      subtitle:
+        "Fine-tune Belgrade's response to your inner style. Changes recalculate list affinity instantly.",
       heritage: "Historic Heritage",
       modern: "Modern Waterfront",
       gourmet: "Gourmet / Tastings",
@@ -125,11 +178,12 @@ export function VibeCalibrationDashboard({
       choose_preset: "Vibe Calibration Presets",
       preset_exec: "Executive Profile",
       preset_explorer: "Explorer Profile",
-      preset_leisure: "Leisure Profile"
+      preset_leisure: "Leisure Profile",
     },
     sr: {
       title: "Kalibracija stila i vibracije",
-      subtitle: "Prilagodite odgovor Beograda vašem ličnom stilu. Promene trenutno menjaju afinitet preporuka.",
+      subtitle:
+        "Prilagodite odgovor Beograda vašem ličnom stilu. Promene trenutno menjaju afinitet preporuka.",
       heritage: "Istorijsko nasleđe",
       modern: "Moderna arhitektura",
       gourmet: "Gurmanluk i gastronomija",
@@ -150,11 +204,12 @@ export function VibeCalibrationDashboard({
       choose_preset: "Brzi kalibracioni profili",
       preset_exec: "Poslovni delegat",
       preset_explorer: "Aktivni istraživač",
-      preset_leisure: "Opušteni odmor"
+      preset_leisure: "Opušteni odmor",
     },
     es: {
       title: "Calibración de Estilo",
-      subtitle: "Adapta la respuesta de Belgrado a tu ritmo. Cambios recalculan afinidades de inmediato.",
+      subtitle:
+        "Adapta la respuesta de Belgrado a tu ritmo. Cambios recalculan afinidades de inmediato.",
       heritage: "Patrimonio Histórico",
       modern: "Vanguardia Moderna",
       gourmet: "Gastronomía Exquisita",
@@ -175,11 +230,12 @@ export function VibeCalibrationDashboard({
       choose_preset: "Ajustes rápidos de perfil",
       preset_exec: "Perfil Ejecutivo",
       preset_explorer: "Perfil Explorador",
-      preset_leisure: "Paseo y Relax"
+      preset_leisure: "Paseo y Relax",
     },
     de: {
       title: "Präferenz-Feineinstellung",
-      subtitle: "Stimmen Sie Belgrad auf Ihren Reisetyp ab. Schieberegler berechnen die Listenaffinität neu.",
+      subtitle:
+        "Stimmen Sie Belgrad auf Ihren Reisetyp ab. Schieberegler berechnen die Listenaffinität neu.",
       heritage: "Kupfer & Tradition",
       modern: "Moderne Uferpromenade",
       gourmet: "Kulinarik & Genuss",
@@ -200,11 +256,12 @@ export function VibeCalibrationDashboard({
       choose_preset: "Präferenz-Schnellwahl",
       preset_exec: "Business-Delegat",
       preset_explorer: "Aktiv-Entdecker",
-      preset_leisure: "Genuss & Muße"
+      preset_leisure: "Genuss & Muße",
     },
     ru: {
       title: "Калибровка ваших предпочтений",
-      subtitle: "Настройте ответ Белграда на ваш стиль путешествия. Изменения сразу меняют соответствие рекомендаций.",
+      subtitle:
+        "Настройте ответ Белграда на ваш стиль путешествия. Изменения сразу меняют соответствие рекомендаций.",
       heritage: "Историческая самобытность",
       modern: "Современный мегаполис",
       gourmet: "Гастрономия и дегустации",
@@ -225,11 +282,12 @@ export function VibeCalibrationDashboard({
       choose_preset: "Быстрые профили настройки",
       preset_exec: "Бизнес-делегат",
       preset_explorer: "Активный исследователь",
-      preset_leisure: "Спокойный отдых"
+      preset_leisure: "Спокойный отдых",
     },
     zh: {
       title: "管家专属特质校准",
-      subtitle: "微调贝尔格莱德行程，使其完美贴合您的风范。调整滑杆即可实时重新计算偏好契合度。",
+      subtitle:
+        "微调贝尔格莱德行程，使其完美贴合您的风范。调整滑杆即可实时重新计算偏好契合度。",
       heritage: "古老历史遗产",
       modern: "摩登时尚水岸",
       gourmet: "地道美食品鉴",
@@ -250,25 +308,48 @@ export function VibeCalibrationDashboard({
       choose_preset: "管家定制快速画像",
       preset_exec: "高端商务贵宾",
       preset_explorer: "极客深度探索",
-      preset_leisure: "舒缓慢活闲趣"
-    }
+      preset_leisure: "舒缓慢活闲趣",
+    },
   };
 
-  const l = translations[language] || translations['en'];
+  const l = translations[language] || translations["en"];
 
   // Calculate Calibration Progress percentage
   let ratingsWeight = Math.min(40, Object.keys(ratingsList).length * 8);
   // Calculate slider drift from center
-  const drifts = Object.values(vibeSettings).map(v => Math.abs(v - 3));
-  const sliderWeight = Math.min(60, drifts.reduce((acc, current) => acc + current * 4, 20));
+  const drifts = Object.values(vibeSettings).map((v) => Math.abs(v - 3));
+  const sliderWeight = Math.min(
+    60,
+    drifts.reduce((acc, current) => acc + current * 4, 20),
+  );
   const calibrationLevel = Math.round(ratingsWeight + sliderWeight);
 
   const slidersMeta = [
-    { key: 'heritageVSmodern' as keyof VibeSettings, left: l.heritage, right: l.modern },
-    { key: 'gourmetVSmuseum' as keyof VibeSettings, left: l.gourmet, right: l.intellectual },
-    { key: 'natureVSnightlife' as keyof VibeSettings, left: l.nature, right: l.nightlife },
-    { key: 'classicsVSsecrets' as keyof VibeSettings, left: l.classics, right: l.secrets },
-    { key: 'activeVSrelaxed' as keyof VibeSettings, left: l.active, right: l.relaxed }
+    {
+      key: "heritageVSmodern" as keyof VibeSettings,
+      left: l.heritage,
+      right: l.modern,
+    },
+    {
+      key: "gourmetVSmuseum" as keyof VibeSettings,
+      left: l.gourmet,
+      right: l.intellectual,
+    },
+    {
+      key: "natureVSnightlife" as keyof VibeSettings,
+      left: l.nature,
+      right: l.nightlife,
+    },
+    {
+      key: "classicsVSsecrets" as keyof VibeSettings,
+      left: l.classics,
+      right: l.secrets,
+    },
+    {
+      key: "activeVSrelaxed" as keyof VibeSettings,
+      left: l.active,
+      right: l.relaxed,
+    },
   ];
 
   return (
@@ -276,7 +357,9 @@ export function VibeCalibrationDashboard({
       <div className="bg-[#FAF9F5] border border-border-main/50 rounded-[28px] p-6 space-y-4 shadow-sm">
         <div className="flex items-center gap-2">
           <Sliders size={16} className="text-accent-red" />
-          <h4 className="text-[13.5px] uppercase tracking-[0.25em] text-brand-charcoal font-black">{l.title}</h4>
+          <h4 className="text-[13.5px] uppercase tracking-[0.25em] text-brand-charcoal font-black">
+            {l.title}
+          </h4>
         </div>
 
         <p className="text-sm text-[#4C4E44] leading-relaxed font-sans italic font-medium">
@@ -290,12 +373,47 @@ export function VibeCalibrationDashboard({
           </span>
           <div className="grid grid-cols-3 gap-2">
             {[
-              { id: 'exec', label: l.preset_exec, emoji: '💼', settings: { heritageVSmodern: 3, gourmetVSmuseum: 1, natureVSnightlife: 4, classicsVSsecrets: 3, activeVSrelaxed: 4 } },
-              { id: 'explorer', label: l.preset_explorer, emoji: '🧭', settings: { heritageVSmodern: 2, gourmetVSmuseum: 5, natureVSnightlife: 1, classicsVSsecrets: 5, activeVSrelaxed: 1 } },
-              { id: 'leisure', label: l.preset_leisure, emoji: '🍹', settings: { heritageVSmodern: 4, gourmetVSmuseum: 2, natureVSnightlife: 2, classicsVSsecrets: 4, activeVSrelaxed: 5 } }
-            ].map(preset => {
+              {
+                id: "exec",
+                label: l.preset_exec,
+                emoji: "💼",
+                settings: {
+                  heritageVSmodern: 3,
+                  gourmetVSmuseum: 1,
+                  natureVSnightlife: 4,
+                  classicsVSsecrets: 3,
+                  activeVSrelaxed: 4,
+                },
+              },
+              {
+                id: "explorer",
+                label: l.preset_explorer,
+                emoji: "🧭",
+                settings: {
+                  heritageVSmodern: 2,
+                  gourmetVSmuseum: 5,
+                  natureVSnightlife: 1,
+                  classicsVSsecrets: 5,
+                  activeVSrelaxed: 1,
+                },
+              },
+              {
+                id: "leisure",
+                label: l.preset_leisure,
+                emoji: "🍹",
+                settings: {
+                  heritageVSmodern: 4,
+                  gourmetVSmuseum: 2,
+                  natureVSnightlife: 2,
+                  classicsVSsecrets: 4,
+                  activeVSrelaxed: 5,
+                },
+              },
+            ].map((preset) => {
               const isActive = Object.keys(preset.settings).every(
-                key => vibeSettings[key as keyof VibeSettings] === preset.settings[key as keyof VibeSettings]
+                (key) =>
+                  vibeSettings[key as keyof VibeSettings] ===
+                  preset.settings[key as keyof VibeSettings],
               );
               return (
                 <button
@@ -305,9 +423,9 @@ export function VibeCalibrationDashboard({
                     triggerHaptic(15);
                   }}
                   className={`flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition-all cursor-pointer min-h-[50px] ${
-                    isActive 
-                      ? 'bg-brand-charcoal text-white border-brand-charcoal font-black scale-102 shadow-sm'
-                      : 'bg-white hover:bg-brand-pearl text-brand-charcoal border-[#E7E4DB] hover:border-brand-charcoal/30'
+                    isActive
+                      ? "bg-brand-charcoal text-white border-brand-charcoal font-black scale-102 shadow-sm"
+                      : "bg-white hover:bg-brand-pearl text-brand-charcoal border-[#E7E4DB] hover:border-brand-charcoal/30"
                   }`}
                 >
                   <span className="text-lg mb-1">{preset.emoji}</span>
@@ -326,8 +444,20 @@ export function VibeCalibrationDashboard({
             return (
               <div key={slide.key} className="space-y-2.5">
                 <div className="flex justify-between text-[13px] uppercase font-black tracking-widest text-[#4A4B37]">
-                  <span className={currentVal <= 2 ? 'text-accent-red font-black' : ''}>{slide.left}</span>
-                  <span className={currentVal >= 4 ? 'text-accent-red font-black' : ''}>{slide.right}</span>
+                  <span
+                    className={
+                      currentVal <= 2 ? "text-accent-red font-black" : ""
+                    }
+                  >
+                    {slide.left}
+                  </span>
+                  <span
+                    className={
+                      currentVal >= 4 ? "text-accent-red font-black" : ""
+                    }
+                  >
+                    {slide.right}
+                  </span>
                 </div>
                 <div className="relative flex items-center py-2">
                   <input
@@ -336,7 +466,9 @@ export function VibeCalibrationDashboard({
                     max="5"
                     step="1"
                     value={currentVal}
-                    onChange={(e) => handleSliderChange(slide.key, parseInt(e.target.value))}
+                    onChange={(e) =>
+                      handleSliderChange(slide.key, parseInt(e.target.value))
+                    }
                     className="w-full h-2 bg-brand-pearl rounded-lg appearance-none cursor-pointer accent-brand-charcoal min-h-[44px]"
                   />
                   {/* Visual ticks */}
@@ -345,7 +477,9 @@ export function VibeCalibrationDashboard({
                       <div
                         key={tick}
                         className={`w-1.5 h-1.5 rounded-full ${
-                          tick === currentVal ? 'bg-brand-charcoal' : 'bg-brand-charcoal/20'
+                          tick === currentVal
+                            ? "bg-brand-charcoal"
+                            : "bg-brand-charcoal/20"
                         }`}
                       />
                     ))}
@@ -360,12 +494,16 @@ export function VibeCalibrationDashboard({
       <div className="bg-white border border-[#DDDCCF] rounded-[28px] p-6 space-y-4 shadow-tactile">
         <div className="flex items-center gap-2">
           <Sparkles size={16} className="text-accent-teal" />
-          <h4 className="text-[13px] uppercase tracking-[0.2em] text-[#4C4B3D] font-black">{l.status_card}</h4>
+          <h4 className="text-[13px] uppercase tracking-[0.2em] text-[#4C4B3D] font-black">
+            {l.status_card}
+          </h4>
         </div>
 
         <div className="space-y-4 pt-1">
           <div className="flex justify-between items-center text-base">
-            <span className="font-bold text-brand-charcoal/70">{l.calibration_level}</span>
+            <span className="font-bold text-brand-charcoal/70">
+              {l.calibration_level}
+            </span>
             <span className="font-serif font-black text-brand-charcoal flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-accent-teal animate-pulse" />
               {calibrationLevel}% {l.high_calibration}
@@ -375,23 +513,28 @@ export function VibeCalibrationDashboard({
           <div className="w-full bg-brand-pearl h-2.5 rounded-full overflow-hidden">
             <motion.div
               layout
-              initial={{ width: '0%' }}
+              initial={{ width: "0%" }}
               animate={{ width: `${calibrationLevel}%` }}
               className="bg-accent-teal h-full rounded-full"
-              transition={{ ease: 'easeOut', duration: 0.6 }}
+              transition={{ ease: "easeOut", duration: 0.6 }}
             />
           </div>
 
           <div className="text-base flex flex-col gap-2.5 border-t border-border-main/10 pt-4">
             <div className="flex justify-between items-start">
-              <span className="font-bold text-brand-charcoal/70">{l.profile_match}</span>
+              <span className="font-bold text-brand-charcoal/70">
+                {l.profile_match}
+              </span>
               <span className="font-black text-accent-red text-right max-w-[200px] font-serif">
-                {dominantProfile[language as keyof typeof dominantProfile] || dominantProfile.en}
+                {dominantProfile[language as keyof typeof dominantProfile] ||
+                  dominantProfile.en}
               </span>
             </div>
 
             <div className="flex justify-between items-center pt-1">
-              <span className="font-bold text-brand-charcoal/70">{l.device_memories}</span>
+              <span className="font-bold text-brand-charcoal/70">
+                {l.device_memories}
+              </span>
               <span className="font-mono text-xs font-bold text-brand-charcoal/80">
                 {hasRatings ? l.feedback_stat : l.ideal_calibration}
               </span>

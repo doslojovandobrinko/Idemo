@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { safeStorage } from './safeStorage';
+import { safeStorage } from "./safeStorage";
 
-const PARTNER_SESSION_STORAGE_KEY = 'idemo_partner_session_v1';
+const PARTNER_SESSION_STORAGE_KEY = "idemo_partner_session_v1";
 
 export interface PartnerSessionData {
   sessionToken: string;
@@ -37,7 +37,10 @@ export const partnerSessionStorage = {
     try {
       safeStorage.setItem(PARTNER_SESSION_STORAGE_KEY, JSON.stringify(session));
     } catch (err) {
-      console.warn('[IDEMO Partner Session] Failed to save partner session:', err);
+      console.warn(
+        "[IDEMO Partner Session] Failed to save partner session:",
+        err,
+      );
     }
   },
 

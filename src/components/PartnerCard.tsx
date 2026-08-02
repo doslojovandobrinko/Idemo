@@ -3,32 +3,33 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { 
-  KeyRound, 
-  CheckCircle2, 
-  Globe, 
-  Phone, 
-  MapPin, 
-  Sparkles, 
-  Lock, 
-  Unlock, 
-  ArrowRight, 
-  X, 
-  ChevronRight, 
+import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import {
+  KeyRound,
+  CheckCircle2,
+  Globe,
+  Phone,
+  MapPin,
+  Sparkles,
+  Lock,
+  Unlock,
+  ArrowRight,
+  X,
+  ChevronRight,
   HelpCircle,
-  AlertCircle
-} from 'lucide-react';
-import { Partner, PARTNERS } from '../data/partners';
-import { safeStorage } from '../lib/safeStorage';
-import { triggerHaptic } from '../App';
+  AlertCircle,
+} from "lucide-react";
+import { PARTNERS } from "../data/partners";
+import { Partner } from "../types";
+import { safeStorage } from "../lib/safeStorage";
+import { triggerHaptic } from "../App";
 
 const sha256 = async (text: string): Promise<string> => {
   const msgUint8 = new TextEncoder().encode(text);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgUint8);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 };
 
 interface PartnerCardProps {
@@ -36,45 +37,72 @@ interface PartnerCardProps {
 }
 
 export function PartnerCard({ language }: PartnerCardProps) {
-  const [portalLang, setPortalLang] = useState<string>('sr');
-  const isSr = portalLang === 'sr';
-  const isZh = portalLang === 'zh';
+  const [portalLang, setPortalLang] = useState<string>("sr");
+  const isSr = portalLang === "sr";
+  const isZh = portalLang === "zh";
 
   // Guest-facing translations for the Profile screen trigger button
   const tg = {
-    portalTitle: language === 'sr' ? 'PARTNERSKI PORTAL' : language === 'zh' ? '合作伙伴尊享通道' : 'PARTNER PORTAL',
-    triggerButton: language === 'sr' ? 'Pristup za partnere' : language === 'zh' ? '合作伙伴验证' : 'Partner Access',
-    triggerSubtitle: language === 'sr' ? 'Unesite PIN za otključavanje privilegija' : language === 'zh' ? '输入专属 PIN 码解锁特定商户贵宾卡片' : 'Enter PIN to unlock bespoke venue cards'
+    portalTitle:
+      language === "sr"
+        ? "PARTNERSKI PORTAL"
+        : language === "zh"
+          ? "合作伙伴尊享通道"
+          : "PARTNER PORTAL",
+    triggerButton:
+      language === "sr"
+        ? "Pristup za partnere"
+        : language === "zh"
+          ? "合作伙伴验证"
+          : "Partner Access",
+    triggerSubtitle:
+      language === "sr"
+        ? "Unesite PIN za otključavanje privilegija"
+        : language === "zh"
+          ? "输入专属 PIN 码解锁特定商户贵宾卡片"
+          : "Enter PIN to unlock bespoke venue cards",
   };
 
-  const [pinInput, setPinInput] = useState('');
+  const [pinInput, setPinInput] = useState("");
   const [activePartner, setActivePartner] = useState<Partner | null>(null);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isVoucherRedeemed, setIsVoucherRedeemed] = useState(false);
-  const [redemptionCode, setRedemptionCode] = useState('');
-  const [redemptionTime, setRedemptionTime] = useState('');
+  const [redemptionCode, setRedemptionCode] = useState("");
+  const [redemptionTime, setRedemptionTime] = useState("");
 
-  const [newPasscode, setNewPasscode] = useState('');
-  const [passcodeSuccess, setPasscodeSuccess] = useState('');
-  const [passcodeError, setPasscodeError] = useState('');
+  const [newPasscode, setNewPasscode] = useState("");
+  const [passcodeSuccess, setPasscodeSuccess] = useState("");
+  const [passcodeError, setPasscodeError] = useState("");
 
   const handleUpdatePasscode = async () => {
-    setPasscodeError('');
-    setPasscodeSuccess('');
+    setPasscodeError("");
+    setPasscodeSuccess("");
     const trimmed = newPasscode.trim();
     if (!/^\d{4}$/.test(trimmed)) {
-      setPasscodeError(portalLang === 'sr' ? 'PIN mora biti tačno 4 cifre.' : portalLang === 'zh' ? '密码必须为 4 位数字。' : 'PIN must be exactly 4 digits.');
+      setPasscodeError(
+        portalLang === "sr"
+          ? "PIN mora biti tačno 4 cifre."
+          : portalLang === "zh"
+            ? "密码必须为 4 位数字。"
+            : "PIN must be exactly 4 digits.",
+      );
       triggerHaptic(6);
       return;
     }
-    
+
     if (activePartner) {
       const hashed = await sha256(trimmed);
       activePartner.pinHash = hashed;
-      safeStorage.setItem('idemo_active_partner_pinhash_v2', hashed);
-      setPasscodeSuccess(portalLang === 'sr' ? 'PIN uspešno promenjen!' : portalLang === 'zh' ? '验证码修改成功！' : 'Passcode successfully updated!');
-      setNewPasscode('');
+      safeStorage.setItem("idemo_active_partner_pinhash_v2", hashed);
+      setPasscodeSuccess(
+        portalLang === "sr"
+          ? "PIN uspešno promenjen!"
+          : portalLang === "zh"
+            ? "验证码修改成功！"
+            : "Passcode successfully updated!",
+      );
+      setNewPasscode("");
       triggerHaptic([30, 20, 30]);
       setActivePartner({ ...activePartner, pinHash: hashed });
     }
@@ -82,45 +110,115 @@ export function PartnerCard({ language }: PartnerCardProps) {
 
   // Translations for the Partner Portal
   const t = {
-    portalTitle: isSr ? 'PARTNERSKI PORTAL' : isZh ? '合作伙伴尊享通道' : 'PARTNER PORTAL',
-    portalDesc: isSr 
-      ? 'Ekskluzivni pristup za IDEMO zvanične kustoske partnere i privilegovane klijente.' 
-      : isZh 
-      ? 'IDEMO 官方签约合作伙伴与特权贵宾的专属验证通道。' 
-      : 'Exclusive access for IDEMO official curation partners and privileged guests.',
-    enterPin: isSr ? 'UNESITE VAŠ PIN' : isZh ? '输入 4 位验证码' : 'ENTER ACCESS PIN',
-    pinPlaceholder: '••••',
-    verifyBtn: isSr ? 'AUTENTIFIKUJ SE' : isZh ? '验证并激活' : 'AUTHENTICATE',
-    wrongPin: isSr ? 'Nevažeći PIN. Pokušajte ponovo.' : isZh ? '验证码不正确，请重试。' : 'Invalid PIN. Please try again.',
-    activeBadge: isSr ? 'AKTIVAN PARTNER' : isZh ? '已验证合作伙伴' : 'ACTIVE PARTNER',
-    partnerCuration: isSr ? 'IDEMO ZVANIČNA KUSTOSKA SELEKCIJA' : isZh ? 'IDEMO 官方特约精选' : 'OFFICIAL IDEMO CURATED VENUE',
-    vipBenefit: isSr ? 'EKSKLUZIVNA PRIVILEGIJA' : isZh ? '独家贵宾礼遇' : 'EXCLUSIVE VIP BENEFIT',
-    redeemBtn: isSr ? 'VALIDIRAJ & AKTIVIRAJ VAUČER' : isZh ? '核销并启用贵宾凭证' : 'VALIDATE & REDEEM VOUCHER',
-    redeemedStatus: isSr ? 'VAUČER USPEŠNO ISKORIŠĆEN' : isZh ? '凭证核销成功' : 'VOUCHER REDEEMED',
-    redemptionLabel: isSr ? 'KOD VALIDACIJE' : isZh ? '核销验证码' : 'VALIDATION CODE',
-    timeLabel: isSr ? 'VREME TRANSAKCIJE' : isZh ? '操作时间' : 'TRANSACTION TIME',
-    websiteLabel: isSr ? 'Posetite sajt' : isZh ? '访问官方网站' : 'Official Website',
-    phoneLabel: isSr ? 'Pozovite konsijerža' : isZh ? '联络客服热线' : 'Concierge Phone',
-    disconnectBtn: isSr ? 'ODJAVI PARTNERA' : isZh ? '退出伙伴安全会话' : 'DISCONNECT SESSION',
-    closeBtn: isSr ? 'ZATVORI' : isZh ? '关闭' : 'CLOSE',
-    triggerButton: isSr ? 'Pristup za partnere' : isZh ? '合作伙伴验证' : 'Partner Access',
-    triggerSubtitle: isSr ? 'Unesite PIN za otključavanje privilegija' : isZh ? '输入专属 PIN 码解锁特定商户贵宾卡片' : 'Enter PIN to unlock bespoke venue cards',
-    secWarning: isSr ? 'Zaštićena sesija' : isZh ? '安全防伪保护中' : 'Secure Device Session'
+    portalTitle: isSr
+      ? "PARTNERSKI PORTAL"
+      : isZh
+        ? "合作伙伴尊享通道"
+        : "PARTNER PORTAL",
+    portalDesc: isSr
+      ? "Ekskluzivni pristup za IDEMO zvanične kustoske partnere i privilegovane klijente."
+      : isZh
+        ? "IDEMO 官方签约合作伙伴与特权贵宾的专属验证通道。"
+        : "Exclusive access for IDEMO official curation partners and privileged guests.",
+    enterPin: isSr
+      ? "UNESITE VAŠ PIN"
+      : isZh
+        ? "输入 4 位验证码"
+        : "ENTER ACCESS PIN",
+    pinPlaceholder: "••••",
+    verifyBtn: isSr ? "AUTENTIFIKUJ SE" : isZh ? "验证并激活" : "AUTHENTICATE",
+    wrongPin: isSr
+      ? "Nevažeći PIN. Pokušajte ponovo."
+      : isZh
+        ? "验证码不正确，请重试。"
+        : "Invalid PIN. Please try again.",
+    activeBadge: isSr
+      ? "AKTIVAN PARTNER"
+      : isZh
+        ? "已验证合作伙伴"
+        : "ACTIVE PARTNER",
+    partnerCuration: isSr
+      ? "IDEMO ZVANIČNA KUSTOSKA SELEKCIJA"
+      : isZh
+        ? "IDEMO 官方特约精选"
+        : "OFFICIAL IDEMO CURATED VENUE",
+    vipBenefit: isSr
+      ? "EKSKLUZIVNA PRIVILEGIJA"
+      : isZh
+        ? "独家贵宾礼遇"
+        : "EXCLUSIVE VIP BENEFIT",
+    redeemBtn: isSr
+      ? "VALIDIRAJ & AKTIVIRAJ VAUČER"
+      : isZh
+        ? "核销并启用贵宾凭证"
+        : "VALIDATE & REDEEM VOUCHER",
+    redeemedStatus: isSr
+      ? "VAUČER USPEŠNO ISKORIŠĆEN"
+      : isZh
+        ? "凭证核销成功"
+        : "VOUCHER REDEEMED",
+    redemptionLabel: isSr
+      ? "KOD VALIDACIJE"
+      : isZh
+        ? "核销验证码"
+        : "VALIDATION CODE",
+    timeLabel: isSr
+      ? "VREME TRANSAKCIJE"
+      : isZh
+        ? "操作时间"
+        : "TRANSACTION TIME",
+    websiteLabel: isSr
+      ? "Posetite sajt"
+      : isZh
+        ? "访问官方网站"
+        : "Official Website",
+    phoneLabel: isSr
+      ? "Pozovite konsijerža"
+      : isZh
+        ? "联络客服热线"
+        : "Concierge Phone",
+    disconnectBtn: isSr
+      ? "ODJAVI PARTNERA"
+      : isZh
+        ? "退出伙伴安全会话"
+        : "DISCONNECT SESSION",
+    closeBtn: isSr ? "ZATVORI" : isZh ? "关闭" : "CLOSE",
+    triggerButton: isSr
+      ? "Pristup za partnere"
+      : isZh
+        ? "合作伙伴验证"
+        : "Partner Access",
+    triggerSubtitle: isSr
+      ? "Unesite PIN za otključavanje privilegija"
+      : isZh
+        ? "输入专属 PIN 码解锁特定商户贵宾卡片"
+        : "Enter PIN to unlock bespoke venue cards",
+    secWarning: isSr
+      ? "Zaštićena sesija"
+      : isZh
+        ? "安全防伪保护中"
+        : "Secure Device Session",
   };
 
   useEffect(() => {
     // Load existing active partner from safe storage
-    const savedHash = safeStorage.getItem('idemo_active_partner_pinhash_v2');
+    const savedHash = safeStorage.getItem("idemo_active_partner_pinhash_v2");
     if (savedHash) {
-      const match = PARTNERS.find(p => p.pinHash === savedHash);
+      const match = PARTNERS.find((p) => p.pinHash === savedHash);
       if (match) {
         setActivePartner(match);
         // Load redemption state if any
-        const redeemed = safeStorage.getItem(`idemo_partner_redeemed_${match.id}`);
+        const redeemed = safeStorage.getItem(
+          `idemo_partner_redeemed_${match.id}`,
+        );
         if (redeemed) {
           setIsVoucherRedeemed(true);
-          setRedemptionCode(safeStorage.getItem(`idemo_partner_redeem_code_${match.id}`) || '');
-          setRedemptionTime(safeStorage.getItem(`idemo_partner_redeem_time_${match.id}`) || '');
+          setRedemptionCode(
+            safeStorage.getItem(`idemo_partner_redeem_code_${match.id}`) || "",
+          );
+          setRedemptionTime(
+            safeStorage.getItem(`idemo_partner_redeem_time_${match.id}`) || "",
+          );
         }
       }
     }
@@ -129,24 +227,30 @@ export function PartnerCard({ language }: PartnerCardProps) {
   const handleVerify = async () => {
     const trimmed = pinInput.trim();
     const hashed = await sha256(trimmed);
-    const match = PARTNERS.find(p => p.pinHash === hashed);
+    const match = PARTNERS.find((p) => p.pinHash === hashed);
     if (match) {
       triggerHaptic([30, 15, 45]);
       setActivePartner(match);
-      safeStorage.setItem('idemo_active_partner_pinhash_v2', match.pinHash);
-      setErrorMsg('');
-      setPinInput('');
-      
+      safeStorage.setItem("idemo_active_partner_pinhash_v2", match.pinHash);
+      setErrorMsg("");
+      setPinInput("");
+
       // Load redemption state for newly logged partner
-      const redeemed = safeStorage.getItem(`idemo_partner_redeemed_${match.id}`);
+      const redeemed = safeStorage.getItem(
+        `idemo_partner_redeemed_${match.id}`,
+      );
       if (redeemed) {
         setIsVoucherRedeemed(true);
-        setRedemptionCode(safeStorage.getItem(`idemo_partner_redeem_code_${match.id}`) || '');
-        setRedemptionTime(safeStorage.getItem(`idemo_partner_redeem_time_${match.id}`) || '');
+        setRedemptionCode(
+          safeStorage.getItem(`idemo_partner_redeem_code_${match.id}`) || "",
+        );
+        setRedemptionTime(
+          safeStorage.getItem(`idemo_partner_redeem_time_${match.id}`) || "",
+        );
       } else {
         setIsVoucherRedeemed(false);
-        setRedemptionCode('');
-        setRedemptionTime('');
+        setRedemptionCode("");
+        setRedemptionTime("");
       }
     } else {
       triggerHaptic([60, 40]);
@@ -157,32 +261,43 @@ export function PartnerCard({ language }: PartnerCardProps) {
   const handleRedeem = () => {
     if (!activePartner) return;
     triggerHaptic([40, 20, 80]);
-    
+
     // Generate organic confirmation code and timestamp
     const randCode = `IDM-${activePartner.pinHash.substring(0, 4)}-${Math.floor(1000 + Math.random() * 9000)}`;
-    const nowStr = new Date().toLocaleTimeString(portalLang === 'sr' ? 'sr-RS' : portalLang === 'zh' ? 'zh-CN' : 'en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    }) + ` (${new Date().toLocaleDateString(portalLang === 'sr' ? 'sr-RS' : portalLang === 'zh' ? 'zh-CN' : 'en-US', { day: 'numeric', month: 'short' })})`;
+    const nowStr =
+      new Date().toLocaleTimeString(
+        portalLang === "sr" ? "sr-RS" : portalLang === "zh" ? "zh-CN" : "en-US",
+        {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        },
+      ) +
+      ` (${new Date().toLocaleDateString(portalLang === "sr" ? "sr-RS" : portalLang === "zh" ? "zh-CN" : "en-US", { day: "numeric", month: "short" })})`;
 
     setIsVoucherRedeemed(true);
     setRedemptionCode(randCode);
     setRedemptionTime(nowStr);
 
     // Save states
-    safeStorage.setItem(`idemo_partner_redeemed_${activePartner.id}`, 'true');
-    safeStorage.setItem(`idemo_partner_redeem_code_${activePartner.id}`, randCode);
-    safeStorage.setItem(`idemo_partner_redeem_time_${activePartner.id}`, nowStr);
+    safeStorage.setItem(`idemo_partner_redeemed_${activePartner.id}`, "true");
+    safeStorage.setItem(
+      `idemo_partner_redeem_code_${activePartner.id}`,
+      randCode,
+    );
+    safeStorage.setItem(
+      `idemo_partner_redeem_time_${activePartner.id}`,
+      nowStr,
+    );
   };
 
   const handleDisconnect = () => {
     triggerHaptic(50);
-    safeStorage.removeItem('idemo_active_partner_pinhash_v2');
+    safeStorage.removeItem("idemo_active_partner_pinhash_v2");
     setActivePartner(null);
     setIsVoucherRedeemed(false);
-    setRedemptionCode('');
-    setRedemptionTime('');
+    setRedemptionCode("");
+    setRedemptionTime("");
   };
 
   return (
@@ -204,11 +319,21 @@ export function PartnerCard({ language }: PartnerCardProps) {
               {tg.portalTitle}
             </span>
             <span className="text-xs font-extrabold text-brand-charcoal block">
-              {activePartner ? (language === 'sr' ? activePartner.nameSr : language === 'zh' ? activePartner.nameZh : activePartner.nameEn) : tg.triggerButton}
+              {activePartner
+                ? language === "sr"
+                  ? activePartner.nameSr
+                  : language === "zh"
+                    ? activePartner.nameZh
+                    : activePartner.nameEn
+                : tg.triggerButton}
             </span>
             <span className="text-[9px] text-[#2D3025]/50 block font-medium leading-none">
-              {activePartner 
-                ? (language === 'sr' ? 'Premium sesija je aktivna' : language === 'zh' ? '商户特权卡已激活' : 'Bespoke privileges unlocked')
+              {activePartner
+                ? language === "sr"
+                  ? "Premium sesija je aktivna"
+                  : language === "zh"
+                    ? "商户特权卡已激活"
+                    : "Bespoke privileges unlocked"
                 : tg.triggerSubtitle}
             </span>
           </div>
@@ -242,9 +367,11 @@ export function PartnerCard({ language }: PartnerCardProps) {
                     </span>
                   </div>
                   {/* Language Selector for the local Serbian partners */}
-                  <button 
+                  <button
                     onClick={() => {
-                      setPortalLang(prev => prev === 'sr' ? 'en' : prev === 'en' ? 'zh' : 'sr');
+                      setPortalLang((prev) =>
+                        prev === "sr" ? "en" : prev === "en" ? "zh" : "sr",
+                      );
                       triggerHaptic(5);
                     }}
                     className="text-[8px] font-mono font-black uppercase tracking-wider px-2.5 py-1 bg-brand-charcoal/5 hover:bg-brand-charcoal/10 rounded-md text-brand-charcoal/65 cursor-pointer leading-none flex items-center gap-1 border border-[#2D3025]/5"
@@ -274,7 +401,11 @@ export function PartnerCard({ language }: PartnerCardProps) {
                         <Lock size={20} />
                       </div>
                       <h3 className="text-sm uppercase tracking-widest font-black text-brand-charcoal pt-1">
-                        {isSr ? 'AUTENTIFIKACIJA' : isZh ? '合作伙伴验证' : 'VERIFICATION REQUIRED'}
+                        {isSr
+                          ? "AUTENTIFIKACIJA"
+                          : isZh
+                            ? "合作伙伴验证"
+                            : "VERIFICATION REQUIRED"}
                       </h3>
                       <p className="text-[11px] leading-relaxed text-[#2D3025]/60 px-2 font-medium">
                         {t.portalDesc}
@@ -292,7 +423,7 @@ export function PartnerCard({ language }: PartnerCardProps) {
                         placeholder={t.pinPlaceholder}
                         value={pinInput}
                         onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, '');
+                          const val = e.target.value.replace(/\D/g, "");
                           setPinInput(val);
                           if (val.length > 0) triggerHaptic(8);
                         }}
@@ -312,21 +443,21 @@ export function PartnerCard({ language }: PartnerCardProps) {
                       disabled={pinInput.length !== 4}
                       className={`w-full h-12 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all cursor-pointer ${
                         pinInput.length === 4
-                          ? 'bg-brand-charcoal text-white hover:bg-brand-charcoal/90 shadow-sm'
-                          : 'bg-brand-charcoal/10 text-brand-charcoal/30 cursor-not-allowed'
+                          ? "bg-brand-charcoal text-white hover:bg-brand-charcoal/90 shadow-sm"
+                          : "bg-brand-charcoal/10 text-brand-charcoal/30 cursor-not-allowed"
                       }`}
                     >
                       <Unlock size={14} />
                       <span>{t.verifyBtn}</span>
                     </button>
-                    
+
                     {/* User note on pins for testing */}
                     <p className="text-[8px] text-[#2D3025]/35 font-mono text-center pt-2">
-                      {isSr 
-                        ? 'Zvanični partnerski PIN-ovi su u opsegu 2001-2030' 
-                        : isZh 
-                        ? '官方测试 PIN 验证码范围为 2001 至 2030' 
-                        : 'Official curated partner PINs range from 2001 to 2030'}
+                      {isSr
+                        ? "Zvanični partnerski PIN-ovi su u opsegu 2001-2030"
+                        : isZh
+                          ? "官方测试 PIN 验证码范围为 2001 至 2030"
+                          : "Official curated partner PINs range from 2001 to 2030"}
                     </p>
                   </div>
                 ) : (
@@ -345,7 +476,6 @@ export function PartnerCard({ language }: PartnerCardProps) {
 
                     {/* THE EDITORIAL PRESTIGE CARD */}
                     <div className="relative border-2 border-amber-500/30 bg-radial from-[#FDFCF7] to-[#FAF8F2] rounded-[24px] p-5 shadow-[0_12px_32px_rgba(212,175,55,0.08)] overflow-hidden space-y-4">
-                      
                       {/* Subtle elegant background decoration */}
                       <div className="absolute right-[-10px] top-[-10px] opacity-5 pointer-events-none text-[#D4AF37]">
                         <Sparkles size={120} />
@@ -360,7 +490,11 @@ export function PartnerCard({ language }: PartnerCardProps) {
                           </span>
                         </div>
                         <h2 className="text-lg font-serif font-black text-brand-charcoal tracking-tight">
-                          {portalLang === 'sr' ? activePartner.nameSr : portalLang === 'zh' ? activePartner.nameZh : activePartner.nameEn}
+                          {portalLang === "sr"
+                            ? activePartner.nameSr
+                            : portalLang === "zh"
+                              ? activePartner.nameZh
+                              : activePartner.nameEn}
                         </h2>
                         <span className="inline-block text-[9px] uppercase tracking-widest font-black font-mono bg-amber-500/10 text-amber-800 px-2 py-0.5 rounded">
                           {activePartner.category}
@@ -369,7 +503,11 @@ export function PartnerCard({ language }: PartnerCardProps) {
 
                       {/* Curated Description */}
                       <p className="text-[11px] leading-relaxed text-[#2D3025]/75 font-medium border-t border-[#2D3025]/5 pt-3">
-                        {portalLang === 'sr' ? activePartner.descriptionSr : portalLang === 'zh' ? activePartner.descriptionZh : activePartner.descriptionEn}
+                        {portalLang === "sr"
+                          ? activePartner.descriptionSr
+                          : portalLang === "zh"
+                            ? activePartner.descriptionZh
+                            : activePartner.descriptionEn}
                       </p>
 
                       {/* VIP BENEFIT BOX */}
@@ -378,23 +516,44 @@ export function PartnerCard({ language }: PartnerCardProps) {
                           <span className="text-[8.5px] uppercase tracking-[0.15em] text-amber-700 font-black">
                             {t.vipBenefit}
                           </span>
-                          <span className="text-[8px] text-amber-500/70 font-mono font-bold">1X USE</span>
+                          <span className="text-[8px] text-amber-500/70 font-mono font-bold">
+                            1X USE
+                          </span>
                         </div>
                         <p className="text-[12px] font-black leading-snug text-brand-charcoal">
-                          {portalLang === 'sr' ? activePartner.specialOfferSr : portalLang === 'zh' ? activePartner.specialOfferZh : activePartner.specialOfferEn}
+                          {portalLang === "sr"
+                            ? activePartner.specialOfferSr
+                            : portalLang === "zh"
+                              ? activePartner.specialOfferZh
+                              : activePartner.specialOfferEn}
                         </p>
                       </div>
 
                       {/* Contacts and Location list */}
                       <div className="space-y-2 pt-1.5 text-[10.5px] font-medium text-[#2D3025]/75 border-t border-[#2D3025]/5">
                         <div className="flex items-start gap-2">
-                          <MapPin size={12} className="text-amber-600 mt-0.5 flex-shrink-0" />
-                          <span>{portalLang === 'sr' ? activePartner.locationSr : portalLang === 'zh' ? activePartner.locationZh : activePartner.locationEn}</span>
+                          <MapPin
+                            size={12}
+                            className="text-amber-600 mt-0.5 flex-shrink-0"
+                          />
+                          <span>
+                            {portalLang === "sr"
+                              ? activePartner.locationSr
+                              : portalLang === "zh"
+                                ? activePartner.locationZh
+                                : activePartner.locationEn}
+                          </span>
                         </div>
-                        
+
                         <div className="flex items-center gap-2">
-                          <Phone size={12} className="text-amber-600 flex-shrink-0" />
-                          <a href={`tel:${activePartner.phone}`} className="hover:underline text-brand-charcoal font-semibold">
+                          <Phone
+                            size={12}
+                            className="text-amber-600 flex-shrink-0"
+                          />
+                          <a
+                            href={`tel:${activePartner.phone}`}
+                            className="hover:underline text-brand-charcoal font-semibold"
+                          >
                             {activePartner.phone}
                           </a>
                         </div>
@@ -419,7 +578,7 @@ export function PartnerCard({ language }: PartnerCardProps) {
                               {t.redeemedStatus}
                             </span>
                           </div>
-                          
+
                           <div className="grid grid-cols-2 gap-3 border-t border-emerald-500/10 pt-3 text-[10px] font-mono">
                             <div className="space-y-0.5">
                               <span className="text-[8px] text-[#2D3025]/40 font-bold block uppercase">
@@ -469,14 +628,18 @@ export function PartnerCard({ language }: PartnerCardProps) {
                     <div className="bg-[#FAF9F5] border border-[#2D3025]/10 rounded-2xl p-4.5 space-y-3">
                       <div className="space-y-1">
                         <h4 className="text-[10px] font-mono uppercase tracking-widest font-black text-brand-charcoal">
-                          {portalLang === 'sr' ? 'PERSONALIZUJ PIN KOD' : portalLang === 'zh' ? '个性化密码设置' : 'PERSONALIZED PASSCODE'}
+                          {portalLang === "sr"
+                            ? "PERSONALIZUJ PIN KOD"
+                            : portalLang === "zh"
+                              ? "个性化密码设置"
+                              : "PERSONALIZED PASSCODE"}
                         </h4>
                         <p className="text-[9px] text-brand-charcoal/50 leading-normal">
-                          {portalLang === 'sr' 
-                            ? 'Zamenite podrazumevani PIN kod sa Vašim personalizovanim četvorocifrenim kodom.' 
-                            : portalLang === 'zh' 
-                            ? '将默认验证码替换为您自定义的 4 位数个性化安全密码。' 
-                            : 'Substitute the default passcode for this card with a personalized 4-digit PIN.'}
+                          {portalLang === "sr"
+                            ? "Zamenite podrazumevani PIN kod sa Vašim personalizovanim četvorocifrenim kodom."
+                            : portalLang === "zh"
+                              ? "将默认验证码替换为您自定义的 4 位数个性化安全密码。"
+                              : "Substitute the default passcode for this card with a personalized 4-digit PIN."}
                         </p>
                       </div>
 
@@ -488,9 +651,9 @@ export function PartnerCard({ language }: PartnerCardProps) {
                           maxLength={4}
                           value={newPasscode}
                           onChange={(e) => {
-                            setPasscodeError('');
-                            setPasscodeSuccess('');
-                            setNewPasscode(e.target.value.replace(/\D/g, ''));
+                            setPasscodeError("");
+                            setPasscodeSuccess("");
+                            setNewPasscode(e.target.value.replace(/\D/g, ""));
                           }}
                           placeholder="e.g. 1234"
                           className="flex-1 h-9 bg-white border border-[#2D3025]/10 rounded-xl px-3 text-xs font-mono text-center text-brand-charcoal placeholder-[#2D3025]/25 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
@@ -499,7 +662,11 @@ export function PartnerCard({ language }: PartnerCardProps) {
                           onClick={handleUpdatePasscode}
                           className="px-4 h-9 bg-[#2D3025] hover:bg-[#1A1C16] text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-colors cursor-pointer"
                         >
-                          {portalLang === 'sr' ? 'Ažuriraj' : portalLang === 'zh' ? '保存设置' : 'Update'}
+                          {portalLang === "sr"
+                            ? "Ažuriraj"
+                            : portalLang === "zh"
+                              ? "保存设置"
+                              : "Update"}
                         </button>
                       </div>
 

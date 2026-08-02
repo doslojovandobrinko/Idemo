@@ -1,8 +1,15 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, HelpCircle, Compass, Sliders, Info, Zap } from 'lucide-react';
-import { Category } from '../types';
-import { safeStorage } from '../lib/safeStorage';
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Sparkles,
+  HelpCircle,
+  Compass,
+  Sliders,
+  Info,
+  Zap,
+} from "lucide-react";
+import { Category } from "../types";
+import { safeStorage } from "../lib/safeStorage";
 
 interface MoodOrbitPanelProps {
   language: string;
@@ -17,11 +24,11 @@ interface MoodOrbitPanelProps {
 
 const CATEGORY_COORDS: Record<string, { x: number; y: number }> = {
   [Category.HISTORY]: { x: 0.55, y: 0.25 }, // Urban-leaning, slightly explorer
-  [Category.NATURE]: { x: 0.85, y: 0.85 },  // Nature-leaning, high adventure
+  [Category.NATURE]: { x: 0.85, y: 0.85 }, // Nature-leaning, high adventure
   [Category.GASTRONOMY]: { x: 0.15, y: 0.3 }, // Urban-leaning, high Hedonist
-  [Category.CLUBBING]: { x: 0.3, y: 0.15 },  // Urban-leaning, high Hedonist
+  [Category.CLUBBING]: { x: 0.3, y: 0.15 }, // Urban-leaning, high Hedonist
   [Category.WELLBEING]: { x: 0.2, y: 0.75 }, // Nature-leaning, high Hedonist
-  [Category.TRAVEL]: { x: 0.75, y: 0.55 },  // Nature-leaning, adventure
+  [Category.TRAVEL]: { x: 0.75, y: 0.55 }, // Nature-leaning, adventure
   [Category.MEDICAL]: { x: 0.45, y: 0.45 }, // Central, slightly urban/hedonist
 };
 
@@ -33,13 +40,13 @@ export function MoodOrbitPanel({
   setTime,
   selectedCats,
   setSelectedCats,
-  triggerHaptic
+  triggerHaptic,
 }: MoodOrbitPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [hintDismissed, setHintDismissed] = useState(() => {
     try {
-      return safeStorage.getItem('idemo_mood_orbit_hint_dismissed') === 'true';
+      return safeStorage.getItem("idemo_mood_orbit_hint_dismissed") === "true";
     } catch {
       return false;
     }
@@ -74,7 +81,7 @@ export function MoodOrbitPanel({
     // Constrain to bounds [0.05, 0.95] to prevent orb going outside boundaries
     return {
       x: Math.min(0.92, Math.max(0.08, x)),
-      y: Math.min(0.92, Math.max(0.08, y))
+      y: Math.min(0.92, Math.max(0.08, y)),
     };
   }, [selectedCats, budget, time]);
 
@@ -87,7 +94,7 @@ export function MoodOrbitPanel({
 
     if (!hintDismissed) {
       try {
-        safeStorage.setItem('idemo_mood_orbit_hint_dismissed', 'true');
+        safeStorage.setItem("idemo_mood_orbit_hint_dismissed", "true");
       } catch (err) {
         console.error(err);
       }
@@ -115,8 +122,8 @@ export function MoodOrbitPanel({
         setIsDragging(false);
       }
     };
-    window.addEventListener('pointerup', handleGlobalMouseUp);
-    return () => window.removeEventListener('pointerup', handleGlobalMouseUp);
+    window.addEventListener("pointerup", handleGlobalMouseUp);
+    return () => window.removeEventListener("pointerup", handleGlobalMouseUp);
   }, [isDragging]);
 
   const updateCoordsFromPointer = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -139,7 +146,8 @@ export function MoodOrbitPanel({
     // Map x to Budget (0 is Hedonist/Lux, 1 is Adventurer/Budget)
     // Left (x=0) -> €200. Right (x=1) -> €20.
     const rawBudget = 200 - x * 180;
-    const stepBudget = Math.round(Math.min(200, Math.max(10, rawBudget)) / 10) * 10;
+    const stepBudget =
+      Math.round(Math.min(200, Math.max(10, rawBudget)) / 10) * 10;
     if (stepBudget !== budget) {
       setBudget(stepBudget);
       triggerHaptic(6);
@@ -156,7 +164,7 @@ export function MoodOrbitPanel({
 
     // Map position to nearest 3 categories
     const categoriesByProximity = Object.keys(CATEGORY_COORDS)
-      .map(cat => {
+      .map((cat) => {
         const cCoords = CATEGORY_COORDS[cat];
         const dist = Math.hypot(cCoords.x - x, cCoords.y - y);
         return { cat: cat as Category, dist };
@@ -164,12 +172,12 @@ export function MoodOrbitPanel({
       .sort((a, b) => a.dist - b.dist);
 
     // Get closest categories
-    const topCats = categoriesByProximity.slice(0, 3).map(item => item.cat);
-    
+    const topCats = categoriesByProximity.slice(0, 3).map((item) => item.cat);
+
     // Check if categories changed
-    const isDifferent = 
+    const isDifferent =
       topCats.length !== selectedCats.length ||
-      topCats.some(c => !selectedCats.includes(c));
+      topCats.some((c) => !selectedCats.includes(c));
 
     if (isDifferent && topCats.length > 0) {
       setSelectedCats(topCats);
@@ -180,55 +188,122 @@ export function MoodOrbitPanel({
   // Interpretations based on position coordinates
   const styleInterpretation = useMemo(() => {
     const { x, y } = currentCoords;
-    const isSr = language === 'sr';
-    const isZh = language === 'zh';
+    const isSr = language === "sr";
+    const isZh = language === "zh";
 
     if (x <= 0.4 && y <= 0.4) {
       return {
-        style: isSr ? 'Premium gradski hedonista' : isZh ? '至臻都市探索者' : 'Premium Urban Hedonist',
-        description: isSr ? 'Prefinjena gastronomska i kulturna čuda.' : isZh ? '探索精致的米其林餐饮与高雅文化殿堂。' : 'Refined gastronomy and sophisticated cultural delights.',
-        archetype: isSr ? 'Biznis beg' : isZh ? '商务奢享客' : 'Business Escape'
+        style: isSr
+          ? "Premium gradski hedonista"
+          : isZh
+            ? "至臻都市探索者"
+            : "Premium Urban Hedonist",
+        description: isSr
+          ? "Prefinjena gastronomska i kulturna čuda."
+          : isZh
+            ? "探索精致的米其林餐饮与高雅文化殿堂。"
+            : "Refined gastronomy and sophisticated cultural delights.",
+        archetype: isSr
+          ? "Biznis beg"
+          : isZh
+            ? "商务奢享客"
+            : "Business Escape",
       };
     } else if (x > 0.6 && y <= 0.4) {
       return {
-        style: isSr ? 'Metropolitanski istraživač' : isZh ? '都市历史战略家' : 'Metropolitan Explorer',
-        description: isSr ? 'Istorijske rute i autentična arhitektura grada.' : isZh ? '深度品味贝尔格莱德的地道古迹与特色建筑。' : 'Historic paths and authentic city architecture.',
-        archetype: isSr ? 'Kulturni strateg' : isZh ? '文化思想家' : 'Cultural Strategist'
+        style: isSr
+          ? "Metropolitanski istraživač"
+          : isZh
+            ? "都市历史战略家"
+            : "Metropolitan Explorer",
+        description: isSr
+          ? "Istorijske rute i autentična arhitektura grada."
+          : isZh
+            ? "深度品味贝尔格莱德的地道古迹与特色建筑。"
+            : "Historic paths and authentic city architecture.",
+        archetype: isSr
+          ? "Kulturni strateg"
+          : isZh
+            ? "文化思想家"
+            : "Cultural Strategist",
       };
     } else if (x <= 0.4 && y > 0.6) {
       return {
-        style: isSr ? 'Velnes eskapista' : isZh ? '自然康养隐居客' : 'Wellness Escapist',
-        description: isSr ? 'Umirujući banjski rituali i spa utočišta.' : isZh ? '置身于大自然疗愈怀抱，悦享惬意的水疗服务。' : 'Calm sanctuary rituals and restorative spa escapes.',
-        archetype: isSr ? 'Spokojno utočište' : isZh ? '身心康养行' : 'Mindful Sanctuary'
+        style: isSr
+          ? "Velnes eskapista"
+          : isZh
+            ? "自然康养隐居客"
+            : "Wellness Escapist",
+        description: isSr
+          ? "Umirujući banjski rituali i spa utočišta."
+          : isZh
+            ? "置身于大自然疗愈怀抱，悦享惬意的水疗服务。"
+            : "Calm sanctuary rituals and restorative spa escapes.",
+        archetype: isSr
+          ? "Spokojno utočište"
+          : isZh
+            ? "身心康养行"
+            : "Mindful Sanctuary",
       };
     } else if (x > 0.6 && y > 0.6) {
       return {
-        style: isSr ? 'Aktivni avanturista' : isZh ? '户外探索家' : 'Active Adventurer',
-        description: isSr ? 'Biciklizam, kajak i uzbudljivi prirodni predeli.' : isZh ? '充满活力的野外健行、皮划艇与大自然骑行。' : 'Cycling, kayaking, and wild scenic explorations.',
-        archetype: isSr ? 'Sportski beg' : isZh ? '自然探索' : 'Wild Horizon'
+        style: isSr
+          ? "Aktivni avanturista"
+          : isZh
+            ? "户外探索家"
+            : "Active Adventurer",
+        description: isSr
+          ? "Biciklizam, kajak i uzbudljivi prirodni predeli."
+          : isZh
+            ? "充满活力的野外健行、皮划艇与大自然骑行。"
+            : "Cycling, kayaking, and wild scenic explorations.",
+        archetype: isSr ? "Sportski beg" : isZh ? "自然探索" : "Wild Horizon",
       };
     } else {
       return {
-        style: isSr ? 'Balansirani putnik' : isZh ? '全能漫游家' : 'Balanced Voyager',
-        description: isSr ? 'Usklađen spoj gradskog života i prirodnih lepota.' : isZh ? '平衡都市历史底蕴与郊野自然风光的臻选路线。' : 'A harmonized blend of urban culture and light nature.',
-        archetype: isSr ? 'Svestrani nomad' : isZh ? '全景旅行通票' : 'Curated Voyager'
+        style: isSr
+          ? "Balansirani putnik"
+          : isZh
+            ? "全能漫游家"
+            : "Balanced Voyager",
+        description: isSr
+          ? "Usklađen spoj gradskog života i prirodnih lepota."
+          : isZh
+            ? "平衡都市历史底蕴与郊野自然风光的臻选路线。"
+            : "A harmonized blend of urban culture and light nature.",
+        archetype: isSr
+          ? "Svestrani nomad"
+          : isZh
+            ? "全景旅行通票"
+            : "Curated Voyager",
       };
     }
   }, [currentCoords, language]);
 
   // Format budget label
   const budgetLabel = useMemo(() => {
-    if (budget >= 150) return language === 'sr' ? 'Premium / €' + budget : 'Premium / €' + budget;
-    if (budget >= 80) return language === 'sr' ? 'Umereno / €' + budget : 'Moderate / €' + budget;
-    return language === 'sr' ? 'Ekonomično / €' + budget : 'Affordable / €' + budget;
+    if (budget >= 150)
+      return language === "sr"
+        ? "Premium / €" + budget
+        : "Premium / €" + budget;
+    if (budget >= 80)
+      return language === "sr"
+        ? "Umereno / €" + budget
+        : "Moderate / €" + budget;
+    return language === "sr"
+      ? "Ekonomično / €" + budget
+      : "Affordable / €" + budget;
   }, [budget, language]);
 
   // Format time label
   const timeLabel = useMemo(() => {
-    const isSr = language === 'sr';
-    if (time <= 4) return isSr ? 'Kratak obilazak (2-4 sata)' : 'Brief stop (2-4 hours)';
-    if (time <= 12) return isSr ? `Pola dana (${time} sati)` : `Half-day (${time} hours)`;
-    if (time <= 24) return isSr ? `Ceo dan (${time} sata)` : `Full-day (${time} hours)`;
+    const isSr = language === "sr";
+    if (time <= 4)
+      return isSr ? "Kratak obilazak (2-4 sata)" : "Brief stop (2-4 hours)";
+    if (time <= 12)
+      return isSr ? `Pola dana (${time} sati)` : `Half-day (${time} hours)`;
+    if (time <= 24)
+      return isSr ? `Ceo dan (${time} sata)` : `Full-day (${time} hours)`;
     return isSr ? `Višednevno (${time} sati)` : `Multi-day (${time} hours)`;
   }, [time, language]);
 
@@ -258,7 +333,7 @@ export function MoodOrbitPanel({
       budget: "Budget Limit",
       available_time: "Available Time",
       explorer_style: "Discovery Profile",
-      hint: "Move the orb to match today's mood."
+      hint: "Move the orb to match today's mood.",
     },
     sr: {
       section_title: "Senzor raspoloženja",
@@ -271,11 +346,11 @@ export function MoodOrbitPanel({
       budget: "Budžet",
       available_time: "Raspoloživo vreme",
       explorer_style: "Profil istraživanja",
-      hint: "Pomeraj krug da prilagodiš današnje raspoloženje."
-    }
+      hint: "Pomeraj krug da prilagodiš današnje raspoloženje.",
+    },
   };
 
-  const t = text[language] || text['en'];
+  const t = text[language] || text["en"];
 
   return (
     <div className="bg-[#FAF9F5] border border-[#D5D3C8] rounded-[32px] p-5 shadow-tactile relative overflow-hidden flex flex-col gap-4">
@@ -288,9 +363,13 @@ export function MoodOrbitPanel({
         <div className="space-y-0.5">
           <div className="flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-accent-teal" />
-            <p className="text-[9px] uppercase tracking-[0.25em] text-[#5C5A4D] font-black">{t.section_subtitle}</p>
+            <p className="text-[9px] uppercase tracking-[0.25em] text-[#5C5A4D] font-black">
+              {t.section_subtitle}
+            </p>
           </div>
-          <h3 className="text-lg font-serif text-brand-charcoal font-bold">{t.section_title}</h3>
+          <h3 className="text-lg font-serif text-brand-charcoal font-bold">
+            {t.section_title}
+          </h3>
         </div>
         <div className="p-2 rounded-full bg-white border border-[#D5D3C8] text-accent-teal hover:bg-brand-pearl cursor-help transition-all">
           <Compass size={14} className="animate-spin-slow" />
@@ -298,13 +377,15 @@ export function MoodOrbitPanel({
       </div>
 
       {/* 2D Interaction Area */}
-      <div 
+      <div
         ref={containerRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         className={`w-full aspect-square relative bg-white border border-[#D5D3C8] rounded-[24px] overflow-hidden select-none touch-none cursor-crosshair z-10 transition-all ${
-          isDragging ? 'shadow-inner bg-[#FAF9F5]/40 border-accent-teal/40' : 'shadow-xs hover:border-[#BEBBB2]'
+          isDragging
+            ? "shadow-inner bg-[#FAF9F5]/40 border-accent-teal/40"
+            : "shadow-xs hover:border-[#BEBBB2]"
         }`}
       >
         {/* Grid lines and central crosshairs */}
@@ -333,7 +414,7 @@ export function MoodOrbitPanel({
         {/* Subtle First Launch Hint Overlay */}
         <AnimatePresence>
           {!hintDismissed && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -341,8 +422,8 @@ export function MoodOrbitPanel({
             >
               <div className="bg-white/95 border border-[#D5D3C8] rounded-2xl p-3 shadow-md space-y-1 max-w-[190px]">
                 <div className="flex justify-center">
-                  <motion.div 
-                    animate={{ scale: [1, 1.2, 1] }} 
+                  <motion.div
+                    animate={{ scale: [1, 1.2, 1] }}
                     transition={{ repeat: Infinity, duration: 1.5 }}
                     className="w-5 h-5 rounded-full bg-accent-teal/20 flex items-center justify-center text-accent-teal"
                   >
@@ -369,33 +450,35 @@ export function MoodOrbitPanel({
             type: "spring",
             stiffness: isDragging ? 400 : 150,
             damping: isDragging ? 35 : 20,
-            mass: 0.8
+            mass: 0.8,
           }}
           style={{
-            transform: 'translate(-50%, -50%)',
+            transform: "translate(-50%, -50%)",
           }}
           className={`absolute rounded-full shadow-lg border border-white/60 flex items-center justify-center cursor-pointer pointer-events-none transition-shadow ${
-            isDragging ? 'shadow-accent-teal/20 shadow-2xl scale-105' : ''
+            isDragging ? "shadow-accent-teal/20 shadow-2xl scale-105" : ""
           }`}
         >
           {/* Visual Conic Gradient representing Budget vs Time split */}
           {/* Black slice represent time. Rose red represents budget. */}
-          <div 
+          <div
             className="absolute inset-0 rounded-full transition-all duration-300 overflow-hidden"
             style={{
-              background: `conic-gradient(#090D16 0% ${timePercentage}%, #E11D48 ${timePercentage}% 100%)`
+              background: `conic-gradient(#090D16 0% ${timePercentage}%, #E11D48 ${timePercentage}% 100%)`,
             }}
           />
 
           {/* Premium Glassmorphic Overlay Gloss with white radial gradients */}
           <div className="absolute inset-[1px] rounded-full bg-gradient-to-tr from-transparent via-white/10 to-white/30 mix-blend-overlay" />
-          
+
           {/* Inner ambient glow ring */}
           <div className="absolute inset-[3px] rounded-full border border-white/15 pointer-events-none mix-blend-screen" />
-          
+
           {/* Active indicator dot at exact center */}
-          <div className={`w-2 h-2 rounded-full bg-white transition-all duration-300 shadow-sm ${isDragging ? 'scale-125' : 'scale-100'}`} />
-          
+          <div
+            className={`w-2 h-2 rounded-full bg-white transition-all duration-300 shadow-sm ${isDragging ? "scale-125" : "scale-100"}`}
+          />
+
           {/* Interactive feedback soft outer aura ring */}
           <AnimatePresence>
             {isDragging && (

@@ -1,4 +1,5 @@
 # IDEMO Systems Governance Charter
+
 **The Supreme Authority for Architectural Decision Ownership, System Evolution Protocols, and Product Integrity Protection**
 
 - **System Version:** v2.4.0-Canonical
@@ -10,15 +11,16 @@
 
 ## Revision History
 
-| Version | Date | Author | Description | Status |
-| :--- | :--- | :--- | :--- | :--- |
-| v1.0.0 | 2025-11-12 | Executive Board | Initial board structure for Belgrade pilot validation. | Superseded |
-| v2.0.0 | 2026-03-15 | Architecture Lead | Added EXPO 2027 VIP security and multi-country mandates. | Superseded |
-| v2.4.0 | 2026-07-02 | Lead AI Agent | Canonical expansion and integration of full documentation suite. | Active |
+| Version | Date       | Author            | Description                                                      | Status     |
+| :------ | :--------- | :---------------- | :--------------------------------------------------------------- | :--------- |
+| v1.0.0  | 2025-11-12 | Executive Board   | Initial board structure for Belgrade pilot validation.           | Superseded |
+| v2.0.0  | 2026-03-15 | Architecture Lead | Added EXPO 2027 VIP security and multi-country mandates.         | Superseded |
+| v2.4.0  | 2026-07-02 | Lead AI Agent     | Canonical expansion and integration of full documentation suite. | Active     |
 
 ---
 
 ## Table of Contents
+
 1. [Glossary & Definitions](#glossary--definitions)
 2. [Section 1: Mission Statement](#section-1-mission-statement)
 3. [Section 2: Governance Principles](#section-2-governance-principles)
@@ -124,7 +126,7 @@ The IDEMO system is defined by its engineering documents. In the event of confli
 └──────────────────────────────────────────────────────────────┘
 ```
 
-*Rule of Precedence: No lower-level document, code path, or database entry may contradict, override, or weaken a constraint defined in a higher-level document.*
+_Rule of Precedence: No lower-level document, code path, or database entry may contradict, override, or weaken a constraint defined in a higher-level document._
 
 ---
 
@@ -161,17 +163,17 @@ Flexible components may be updated, expanded, or optimized during normal develop
 
 The following matrix defines the mandatory roles, approval levels, and affected files for each type of modification:
 
-| Change Target | Level | Affected Files | Responsible Role | Required Approval |
-| :--- | :--- | :--- | :--- | :--- |
-| **New Recommendation** | Minor | `src/constants.ts` | Curation Lead | QA Lead & Curation Lead |
-| **Coordinate Change** | Minor | `src/constants.ts` | Calibrator | Curation Lead & Calibrator |
-| **Mood Orbit Change** | Major | `src/components/MoodOrbit.tsx` | UI Architect | Governance Board (GB) Unanimous |
-| **Algorithm Change** | Critical | `src/utils/scoring.ts` | Lead Mathematician | GB Unanimous & Lead Architect |
-| **Privacy Change** | Critical | Root Config & Server | Security Architect | GB Unanimous & External Auditor |
-| **Visual Design Change** | Major | `src/index.css` | Brand Designer | Design Lead & UI Lead |
-| **Country Addition** | Major | `src/data/recs.[code].json` | Expansion Director | Systems Architect & GB Signature |
-| **Documentation Update** | Minor | `docs/*` | Document Owner | Respective Document Owner |
-| **Architecture Change** | Critical | Entire System | Systems Architect | GB Unanimous, signed ADL |
+| Change Target            | Level    | Affected Files                 | Responsible Role   | Required Approval                |
+| :----------------------- | :------- | :----------------------------- | :----------------- | :------------------------------- |
+| **New Recommendation**   | Minor    | `src/constants.ts`             | Curation Lead      | QA Lead & Curation Lead          |
+| **Coordinate Change**    | Minor    | `src/constants.ts`             | Calibrator         | Curation Lead & Calibrator       |
+| **Mood Orbit Change**    | Major    | `src/components/MoodOrbit.tsx` | UI Architect       | Governance Board (GB) Unanimous  |
+| **Algorithm Change**     | Critical | `src/utils/scoring.ts`         | Lead Mathematician | GB Unanimous & Lead Architect    |
+| **Privacy Change**       | Critical | Root Config & Server           | Security Architect | GB Unanimous & External Auditor  |
+| **Visual Design Change** | Major    | `src/index.css`                | Brand Designer     | Design Lead & UI Lead            |
+| **Country Addition**     | Major    | `src/data/recs.[code].json`    | Expansion Director | Systems Architect & GB Signature |
+| **Documentation Update** | Minor    | `docs/*`                       | Document Owner     | Respective Document Owner        |
+| **Architecture Change**  | Critical | Entire System                  | Systems Architect  | GB Unanimous, signed ADL         |
 
 ---
 
@@ -316,56 +318,71 @@ IDEMO's architectural design guarantees global scalability with zero core engine
 This section establishes formal rules and processes to govern dataset modifications, recommendation versioning, spatial calibration shifts, asset hygiene, and release cycles.
 
 ### 13.1 Dataset Lifecycle Policy
+
 Every destination country dataset must progress through five structured stages:
+
 1. **Draft:** Active creation and local testing of recommendations. No public visibility.
 2. **Review:** Undergoing peer-review and AI diagnostics checklist evaluation.
 3. **Release Candidate (RC):** Staged for build verification; undergo final visual spot-checks.
-4. **Production:** Live and active in user-facing applications. 
+4. **Production:** Live and active in user-facing applications.
 5. **Archived:** Preserved for historic reference but excluded from active client index loads.
 
 ### 13.2 Recommendation Versioning Policy
+
 Every individual curation/recommendation is treated as an independent software asset:
+
 - **Identifier Stability:** Recommendation IDs must never be modified once in Production.
 - **Version Tracking:** Any modification to descriptions, badges, translations, or website links increments the recommendation’s patch version (e.g., `v1.0.1` -> `v1.0.2`).
 - **QA Auditing:** Modifications trigger a state reset of the item to `QA Status: Pending` and `Approval Status: Draft` until re-approved by a designated reviewer.
 
 ### 13.3 Coordinate Change Policy
+
 Coordinates (X, Y) dictate spatial recommendation placement in the Mood Orbit and must be protected:
+
 - **Historical Retention:** Any change in coordinates must append a history entry containing previous coordinates, new coordinates, modification date, modifying author, and dataset version.
 - **Calibrator Sign-off:** Coordinate changes must be accompanied by a structured explanation (e.g., "Adjusted spacing for beachside overcrowding relief").
 
 ### 13.4 Image Quality Policy
+
 All visual assets must comply with high-definition rendering standards:
+
 - **Resolution:** A minimum of `1920x1080` for landscape-wide banners is required.
 - **WebP Transition:** WebP formats are mandatory to optimize mobile load performance under poor network conditions.
 - **Copyright Compliance:** Direct attribution references (e.g., Unsplash, CC0, or partner-acquired assets) must be declared and checked during audit sweeps.
 - **Seasonal Parity:** Curations styled with heavy snow details must not be showcased in "Summer Alternative" slots unless matching the user's calibration profile.
 
 ### 13.5 Recommendation Relationship Policy
+
 To support high-dimensional matching, recommendations must declare precise logical links:
+
 - Curators must provide links for `Similar To`, `Alternative To`, and seasonal dependencies.
 - A recommendation should ideally have a defined "Rain Alternative" and a "Budget Alternative" within the same general region.
 
 ### 13.6 Release Management Policy
+
 Production safety is paramount:
+
 - **Production Read-Only Mandate:** No live database overrides may be directly edited while in Production status.
 - **Draft Branching:** To edit any Production dataset, the administrator must spin up a new Draft version. The live Production build remains unaffected until the new Draft passes all validation checks and is promoted to Production.
 
 ### 13.7 Audit Retention Policy
+
 Governance logs are retained for a minimum of 180 days:
+
 - Validation outputs, full coordinate histories, change summaries, and admin actions are persisted in local and secure cloud archives.
 
 ---
 
 ## Related Documents
-* [IDEMO Product Requirements Document](./ProductRequirementsDocument.md)
-* [IDEMO Mood Orbit Calibration Handbook](./MoodOrbitCalibrationHandbook.md)
-* [IDEMO Curation Standards Handbook](./CurationStandardsHandbook.md)
-* [IDEMO Recommendation Engine Technical Specification](./RecommendationEngineTechnicalSpecification.md)
-* [IDEMO Data Dictionary](./DataDictionary.md)
-* [IDEMO Design System Handbook](./DesignSystemHandbook.md)
-* [IDEMO Recommendation QA Handbook](./RecommendationQAHandbook.md)
-* [IDEMO AI Development Guidelines](./AIDevelopmentGuidelines.md)
-* [IDEMO Country Expansion Handbook](./CountryExpansionHandbook.md)
-* [IDEMO Architecture Decision Log](./ArchitectureDecisionLog.md)
-* [IDEMO Changelog](./CHANGELOG.md)
+
+- [IDEMO Product Requirements Document](./ProductRequirementsDocument.md)
+- [IDEMO Mood Orbit Calibration Handbook](./MoodOrbitCalibrationHandbook.md)
+- [IDEMO Curation Standards Handbook](./CurationStandardsHandbook.md)
+- [IDEMO Recommendation Engine Technical Specification](./RecommendationEngineTechnicalSpecification.md)
+- [IDEMO Data Dictionary](./DataDictionary.md)
+- [IDEMO Design System Handbook](./DesignSystemHandbook.md)
+- [IDEMO Recommendation QA Handbook](./RecommendationQAHandbook.md)
+- [IDEMO AI Development Guidelines](./AIDevelopmentGuidelines.md)
+- [IDEMO Country Expansion Handbook](./CountryExpansionHandbook.md)
+- [IDEMO Architecture Decision Log](./ArchitectureDecisionLog.md)
+- [IDEMO Changelog](./CHANGELOG.md)

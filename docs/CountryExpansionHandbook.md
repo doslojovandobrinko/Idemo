@@ -1,4 +1,5 @@
 # IDEMO Country Expansion Handbook
+
 **Onboarding Blueprints, Localization Protocol, and Release Checklists for Multi-National Scaling**
 
 - **System Version:** v2.4.0-Canonical
@@ -9,6 +10,7 @@
 ---
 
 ## Table of Contents
+
 1. [Introduction & Architectural Goals](#1-introduction--architectural-goals)
 2. [The New Country Onboarding Workflow](#2-the-new-country-onboarding-workflow)
 3. [Minimum Curation & Category Balance Thresholds](#3-minimum-curation--category-balance-thresholds)
@@ -24,7 +26,7 @@
 
 The **IDEMO** platform is structurally designed to expand beyond its initial Serbian footprint. As the platform prepares to onboard subsequent destination nations (e.g., Montenegro, France, Greece, Japan), this handbook defines the immutable standards, quality gates, and database schemas required to ensure a seamless integration.
 
-Our goal is simple: **Zero Code Changes during Country Onboarding.** Expanding to a new country must be a pure *data-layer operations task*, requiring no changes to the central React components, layout code, or visual styling of the platform.
+Our goal is simple: **Zero Code Changes during Country Onboarding.** Expanding to a new country must be a pure _data-layer operations task_, requiring no changes to the central React components, layout code, or visual styling of the platform.
 
 ---
 
@@ -47,22 +49,27 @@ The expansion pipeline consists of five consecutive phases, each governed by a s
 ```
 
 ### Phase 1: Reconnaissance & Regional Analysis
+
 - Analyze the target country's geographical layout, public transport hubs, and cultural identity.
 - Establish the regional origin point $[0.0, 0.0]$ representing the national average of sensory and urban density.
 
 ### Phase 2: Curation Core
+
 - Deploy local editorial scouts to assemble the initial curation cohort.
 - Verify the physical existence, bookability, and safety profile of every candidate attraction.
 
 ### Phase 3: Orbit Mapping
+
 - Calculate coordinates for each recommendation using the **Sensory-Environmental Axis Model** detailed in the [Calibration Handbook](./MoodOrbitCalibrationHandbook.md).
 - Apply polar jittering to resolve geographic center clashes.
 
 ### Phase 4: QA/QC Audit
+
 - Execute the complete 23-point verification test detailed in the [QA Handbook](./RecommendationQAHandbook.md).
 - Generate and validate the Country Coverage Heat Map.
 
 ### Phase 5: Production Go
+
 - Commit the validated JSON array to the production database and flag the country as active.
 
 ---
@@ -72,11 +79,13 @@ The expansion pipeline consists of five consecutive phases, each governed by a s
 To prevent a country from feeling sparse or heavily biased, a new country launch must meet strict density and categorical distribution limits:
 
 ### Minimum Curation Densities:
+
 - **Major Metropolitan Cities (e.g., Tokyo, Paris):** Minimum of $50$ highly curated experiences.
 - **Medium National Entities (e.g., Montenegro, Greece):** Minimum of $75$ highly curated experiences.
 - **Large National Entities (e.g., France, USA):** Minimum of $120$ highly curated experiences.
 
 ### Categorical Distribution Targets:
+
 No single category may dominate the national dataset. We enforce the following mathematical boundaries:
 
 - **History & Heritage:** $15\% - 30\%$
@@ -85,7 +94,7 @@ No single category may dominate the national dataset. We enforce the following m
 - **Clubbing & Evening Socials:** $10\% - 20\%$
 - **Wellbeing & Spas:** $10\% - 20\%$
 
-*These strict ratios ensure that regardless of the country chosen, users moving the sliders in any direction will receive a rich, diverse array of choices.*
+_These strict ratios ensure that regardless of the country chosen, users moving the sliders in any direction will receive a rich, diverse array of choices._
 
 ---
 
@@ -94,7 +103,8 @@ No single category may dominate the national dataset. We enforce the following m
 A common expansion pitfall is "relative scale drift." For example, what constitutes a "high-energy metropolitan club" in Montenegro might feel like a quiet suburban lounge in Tokyo.
 
 To correct this, we mandate **Regional Origin Normalization**:
-- **$[0,0]$ Alignment:** The center of the Mood Orbit ($x=0.0, y=0.0$) must represent the cultural average *of the target country*, not a global scale.
+
+- **$[0,0]$ Alignment:** The center of the Mood Orbit ($x=0.0, y=0.0$) must represent the cultural average _of the target country_, not a global scale.
 - **Northern Hemisphere ($Y > 0$):** Reserved for concrete and urban density relative to that nation. In Montenegro, the Old Town of Kotor is calibrated at $Y=+3.0$. In Japan, the Shibuya Crossing sits at $Y=+5.0$.
 - **Southern Hemisphere ($Y < 0$):** Reserved for natural ecosystems. A mountain hike in Serbia’s Tara sits at $Y=-4.5$; a wilderness peak in Japan’s Northern Alps sits at $Y=-5.0$.
 
@@ -133,6 +143,7 @@ Once metadata completeness is verified, the country release requires the signatu
 ## 8. Future Scalability & Multi-Tenancy Strategy
 
 To support thousands of curations across 20+ countries without degrading client-side performance:
+
 - **Dynamic Module Loading:** Split the `constants.ts` file into modular country-specific chunks (e.g., `constants.serbia.ts`, `constants.france.ts`).
 - **Dynamic Import:** Use React lazy-loading and dynamic ES imports to load only the active country's data payload when the user switches national profiles in the global navigation menu:
 
@@ -147,10 +158,12 @@ export async function loadCountryDatabase(countryCode: string) {
 This guarantees a persistent, lightweight footprint, allowing IDEMO to scale globally while preserving its ultra-fast, offline-first execution profile.
 
 ---
+
 **Related Technical Documents:**
-* [IDEMO Mood Orbit Calibration Handbook](./MoodOrbitCalibrationHandbook.md)
-* [IDEMO Curation Standards Handbook](./CurationStandardsHandbook.md)
-* [IDEMO Recommendation Engine Technical Specification](./RecommendationEngineTechnicalSpecification.md)
-* [IDEMO Data Dictionary](./DataDictionary.md)
-* [IDEMO Recommendation QA Handbook](./RecommendationQAHandbook.md)
-* [IDEMO Architecture Decision Log](./ArchitectureDecisionLog.md)
+
+- [IDEMO Mood Orbit Calibration Handbook](./MoodOrbitCalibrationHandbook.md)
+- [IDEMO Curation Standards Handbook](./CurationStandardsHandbook.md)
+- [IDEMO Recommendation Engine Technical Specification](./RecommendationEngineTechnicalSpecification.md)
+- [IDEMO Data Dictionary](./DataDictionary.md)
+- [IDEMO Recommendation QA Handbook](./RecommendationQAHandbook.md)
+- [IDEMO Architecture Decision Log](./ArchitectureDecisionLog.md)

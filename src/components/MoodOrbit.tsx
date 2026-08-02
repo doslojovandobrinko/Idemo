@@ -1,7 +1,17 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Compass, Sparkles, Sliders, Shield, Zap, Info, ChevronLeft, ChevronRight, Check } from 'lucide-react';
-import { safeStorage } from '../lib/safeStorage';
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Compass,
+  Sparkles,
+  Sliders,
+  Shield,
+  Zap,
+  Info,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+} from "lucide-react";
+import { safeStorage } from "../lib/safeStorage";
 
 export interface MoodOrbitProps {
   /**
@@ -66,11 +76,52 @@ const getSnappedTime = (time: number) => {
 
 // Dynamic matching archetypes in MoodOrbit Space for continuous score calibration
 const MO_ARCHETYPES = [
-  { id: 'cultural_strategist', name: { en: 'Cultural Strategist', sr: 'Kulturni strateg', zh: '文化思想家' }, budget: 281, time: 12 },
-  { id: 'wellness_escapist', name: { en: 'Wellness Escapist', sr: 'Velnes eskapista', zh: '康养避世客' }, budget: 408, time: 18 },
-  { id: 'culinary_explorer', name: { en: 'Culinary Explorer', sr: 'Kulinarski istraživač', zh: '美食品鉴家' }, budget: 218, time: 6 },
-  { id: 'active_naturalist', name: { en: 'Active Urban Naturalist', sr: 'Aktivni urbani naturalista', zh: '活力都市健行者' }, budget: 134, time: 9 },
-  { id: 'legacy_family', name: { en: 'Legacy Family Traveler', sr: 'Porodični putnik', zh: '合家观光客' }, budget: 324, time: 8 }
+  {
+    id: "cultural_strategist",
+    name: {
+      en: "Cultural Strategist",
+      sr: "Kulturni strateg",
+      zh: "文化思想家",
+    },
+    budget: 281,
+    time: 12,
+  },
+  {
+    id: "wellness_escapist",
+    name: { en: "Wellness Escapist", sr: "Velnes eskapista", zh: "康养避世客" },
+    budget: 408,
+    time: 18,
+  },
+  {
+    id: "culinary_explorer",
+    name: {
+      en: "Culinary Explorer",
+      sr: "Kulinarski istraživač",
+      zh: "美食品鉴家",
+    },
+    budget: 218,
+    time: 6,
+  },
+  {
+    id: "active_naturalist",
+    name: {
+      en: "Active Urban Naturalist",
+      sr: "Aktivni urbani naturalista",
+      zh: "活力都市健行者",
+    },
+    budget: 134,
+    time: 9,
+  },
+  {
+    id: "legacy_family",
+    name: {
+      en: "Legacy Family Traveler",
+      sr: "Porodični putnik",
+      zh: "合家观光客",
+    },
+    budget: 324,
+    time: 8,
+  },
 ];
 
 export default function MoodOrbit({
@@ -80,9 +131,9 @@ export default function MoodOrbit({
   time: propTime = 24,
   onChange,
   onHaptic,
-  language = 'en',
+  language = "en",
   conciergeStyleName,
-  onSelectConcierge
+  onSelectConcierge,
 }: MoodOrbitProps) {
   // Local state representing coordinates, budget and time
   const [localX, setLocalX] = useState(propX);
@@ -91,11 +142,13 @@ export default function MoodOrbit({
   const [localTime, setLocalTime] = useState(propTime);
   const [learnOpen, setLearnOpen] = useState(false);
 
-  const isSr = language === 'sr';
-  const isZh = language === 'zh';
+  const isSr = language === "sr";
+  const isZh = language === "zh";
 
   // Gestures active tracking
-  const [activeGesture, setActiveGesture] = useState<'position' | 'budget' | 'time' | null>(null);
+  const [activeGesture, setActiveGesture] = useState<
+    "position" | "budget" | "time" | null
+  >(null);
 
   // Advanced synchronization tracking system to prevent snapping back
   const lastSyncedPropX = useRef(propX);
@@ -164,10 +217,12 @@ export default function MoodOrbit({
       }
     }
   }, [propX, propY, propBudget, propTime]);
-  
+
   // User selected mode that locks down adjustments to one specific control (Position, Budget, or Time)
-  const [selectedMode, setSelectedMode] = useState<'position' | 'budget' | 'time' | null>(null);
-  
+  const [selectedMode, setSelectedMode] = useState<
+    "position" | "budget" | "time" | null
+  >(null);
+
   // Accessibility panel toggle
   const [showAccessibility, setShowAccessibility] = useState(false);
   const [showCorrelationModal, setShowCorrelationModal] = useState(false);
@@ -175,7 +230,7 @@ export default function MoodOrbit({
   // Onboarding guide state (auto-shows on first visit, can be manually triggered)
   const [showOnboarding, setShowOnboarding] = useState(() => {
     try {
-      return safeStorage.getItem('idemo_mood_orbit_onboarding_seen') !== 'true';
+      return safeStorage.getItem("idemo_mood_orbit_onboarding_seen") !== "true";
     } catch {
       return true;
     }
@@ -188,7 +243,7 @@ export default function MoodOrbit({
   // One-time interactive hints dismissed flags (managed via localStorage)
   const [ringHintDismissed, setRingHintDismissed] = useState(() => {
     try {
-      return safeStorage.getItem('idemo_time_ring_hint_dismissed') === 'true';
+      return safeStorage.getItem("idemo_time_ring_hint_dismissed") === "true";
     } catch {
       return false;
     }
@@ -207,7 +262,7 @@ export default function MoodOrbit({
     startBudget: 240,
     startDistance: 100,
     startAngle: 0,
-    startTime: 6
+    startTime: 6,
   });
 
   // Liquid divider organic physics state (underdamped spring oscillator)
@@ -229,7 +284,7 @@ export default function MoodOrbit({
   useEffect(() => {
     let animId: number;
     const stiffness = 160; // snappy organic response
-    const damping = 22;    // high resistance damping so it settles quickly and cleanly
+    const damping = 22; // high resistance damping so it settles quickly and cleanly
 
     const updatePhysics = () => {
       const now = Date.now();
@@ -239,12 +294,15 @@ export default function MoodOrbit({
       // Spring acceleration towards zero resting position
       const springForce = -stiffness * wiggle;
       wiggleVelocity.current += springForce * dt;
-      wiggleVelocity.current *= (1 - damping * dt); // decay velocity
+      wiggleVelocity.current *= 1 - damping * dt; // decay velocity
 
       const nextWiggle = wiggle + wiggleVelocity.current * dt;
 
       // Settle thresholds to kill infinite float rendering
-      if (Math.abs(nextWiggle) < 0.02 && Math.abs(wiggleVelocity.current) < 0.02) {
+      if (
+        Math.abs(nextWiggle) < 0.02 &&
+        Math.abs(wiggleVelocity.current) < 0.02
+      ) {
         setWiggle(0);
         wiggleVelocity.current = 0;
       } else {
@@ -292,19 +350,23 @@ export default function MoodOrbit({
         close: "Done",
         longPressTip: "Hold center to open manual editor",
         heartOfConcierge: "Mood Orbit is the heart of your concierge.",
-        alignedToMood: "Every recommendation is aligned to your mood, budget and time.",
+        alignedToMood:
+          "Every recommendation is aligned to your mood, budget and time.",
         flowMoodOrbit: "Mood Orbit",
         flowLiveProfile: "Live Profile",
         flowRecommendations: "Recommendations",
         flowItinerary: "Itinerary",
         guideBtn: "✨ Interactive Guide",
         guideTitle: "Calibration Tutorial",
-        guideStep0: "1. AVAILABLE TIME (Ring): Click and drag clockwise around the outermost bezel track to wind your travel hours (4 to 48 hours), auto-adjusting daily itineraries.",
-        guideStep1: "2. BUDGET LIMIT (Bezel): Drag outward or inward on the inner dial area to scale your budget limit (€50 - €450). The luxury watch physically scales to match!",
-        guideStep2: "3. TRAVEL VIBE (Center): Drag the watch core in any direction on the grid to change your mood quadrant (e.g. Nature/Urban, Adventure/Hedonist) and update recommendations instantly.",
+        guideStep0:
+          "1. AVAILABLE TIME (Ring): Click and drag clockwise around the outermost bezel track to wind your travel hours (4 to 48 hours), auto-adjusting daily itineraries.",
+        guideStep1:
+          "2. BUDGET LIMIT (Bezel): Drag outward or inward on the inner dial area to scale your budget limit (€50 - €450). The luxury watch physically scales to match!",
+        guideStep2:
+          "3. TRAVEL VIBE (Center): Drag the watch core in any direction on the grid to change your mood quadrant (e.g. Nature/Urban, Adventure/Hedonist) and update recommendations instantly.",
         next: "Next",
         prev: "Back",
-        finish: "EXPLORE - IDEMO"
+        finish: "EXPLORE - IDEMO",
       },
       sr: {
         title: "Senzor Orbita™",
@@ -329,19 +391,23 @@ export default function MoodOrbit({
         close: "Gotovo",
         longPressTip: "Zadržite centar za ručni unos",
         heartOfConcierge: "Senzor Orbita je srce vašeg konsijerža.",
-        alignedToMood: "Svaka preporuka je usklađena sa vašim raspoloženjem, budžetom i vremenom.",
+        alignedToMood:
+          "Svaka preporuka je usklađena sa vašim raspoloženjem, budžetom i vremenom.",
         flowMoodOrbit: "Orbita",
         flowLiveProfile: "Uživo profil",
         flowRecommendations: "Preporuke",
         flowItinerary: "Plan puta",
         guideBtn: "✨ Interaktivni vodič",
         guideTitle: "Vodič za kalibraciju",
-        guideStep0: "1. VREME (Prsten): Prevlačite kružno oko najudaljenijeg prstena sata da podesite sate puta (4-48h). Ovo automatski prilagođava trajanje plana puta.",
-        guideStep1: "2. BUDŽET (Brojčanik): Prevucite ka spolja/unutra središnju zonu da podesite budžet (€50-€450). Brojčanik sata se fizički širi ili smanjuje!",
-        guideStep2: "3. KOORDINATE (Središte): Prevucite krunicu sata u bilo kom smeru. Ovo kalibriše vaše raspoloženje (Priroda/Grad, Hedonizam/Avantura) i odmah ažurira sve preporuke.",
+        guideStep0:
+          "1. VREME (Prsten): Prevlačite kružno oko najudaljenijeg prstena sata da podesite sate puta (4-48h). Ovo automatski prilagođava trajanje plana puta.",
+        guideStep1:
+          "2. BUDŽET (Brojčanik): Prevucite ka spolja/unutra središnju zonu da podesite budžet (€50-€450). Brojčanik sata se fizički širi ili smanjuje!",
+        guideStep2:
+          "3. KOORDINATE (Središte): Prevucite krunicu sata u bilo kom smeru. Ovo kalibriše vaše raspoloženje (Priroda/Grad, Hedonizam/Avantura) i odmah ažurira sve preporuke.",
         next: "Sledeće",
         prev: "Nazad",
-        finish: "ISTRAŽI - IDEMO"
+        finish: "ISTRAŽI - IDEMO",
       },
       zh: {
         title: "心情星轨™",
@@ -373,15 +439,18 @@ export default function MoodOrbit({
         flowItinerary: "定制行程",
         guideBtn: "✨ 互动玩转指南",
         guideTitle: "互动式罗盘指南",
-        guideStep0: "1. 专属时间（外圈）：沿最外圈轨道顺时针旋转，即可调节行程可用小时数（4-48小时），动态计算与填充您的单日行程图谱。",
-        guideStep1: "2. 预算极限（内圈）：在其中段区域向外拉伸或向内收缩，即可调节行旅预算上限（€50-€450）。表壳将随其档次优雅进行等比缩放！",
-        guideStep2: "3. 探索偏好（中心）：在雷达图上拖拽表壳中心。这会即时调整您的旅行偏好（如自然/都市，探索/享乐）并实时刷新个性化定制推荐。",
+        guideStep0:
+          "1. 专属时间（外圈）：沿最外圈轨道顺时针旋转，即可调节行程可用小时数（4-48小时），动态计算与填充您的单日行程图谱。",
+        guideStep1:
+          "2. 预算极限（内圈）：在其中段区域向外拉伸或向内收缩，即可调节行旅预算上限（€50-€450）。表壳将随其档次优雅进行等比缩放！",
+        guideStep2:
+          "3. 探索偏好（中心）：在雷达图上拖拽表壳中心。这会即时调整您的旅行偏好（如自然/都市，探索/享乐）并实时刷新个性化定制推荐。",
         next: "下一步",
         prev: "上一步",
-        finish: "探索 - IDEMO"
-      }
+        finish: "探索 - IDEMO",
+      },
     };
-    return translations[language] || translations['en'];
+    return translations[language] || translations["en"];
   }, [language]);
 
   // Non-linear continuous budget mapping curves
@@ -398,7 +467,7 @@ export default function MoodOrbit({
   const orbDiameter = useMemo(() => {
     // Starting default size at 100 euro is 85px.
     // Double size at 500 euro is 170px.
-    const startD = 85; 
+    const startD = 85;
     const ratio = (localBudget - 100) / 400; // ranges from 0.0 to 1.0
     return startD * (1 + ratio);
   }, [localBudget]);
@@ -424,7 +493,7 @@ export default function MoodOrbit({
     // Map angle back to snapped travel durations
     let rawAngle = angle;
     if (rawAngle < 0) rawAngle += 360;
-    
+
     // Find closest snap indices
     let closestIndex = 0;
     let minDiff = Infinity;
@@ -439,7 +508,7 @@ export default function MoodOrbit({
     return {
       timeValue: SNAP_TIMES[closestIndex],
       snapAngle: SNAP_ANGLES[closestIndex],
-      diff: minDiff
+      diff: minDiff,
     };
   };
 
@@ -453,7 +522,7 @@ export default function MoodOrbit({
   // Compute live match confidence scoring relative to active archetypes
   const confidenceScore = useMemo(() => {
     let minDistance = Infinity;
-    MO_ARCHETYPES.forEach(arch => {
+    MO_ARCHETYPES.forEach((arch) => {
       // Scale differences between [0, 1] relative to domain limits
       const dBudget = Math.abs(localBudget - arch.budget) / 400;
       const dTime = Math.abs(localTime - arch.time) / 44;
@@ -462,22 +531,47 @@ export default function MoodOrbit({
     });
 
     const maxDistance = 0.58; // maximum plausible workspace distance
-    const percentage = Math.round(Math.max(48, Math.min(99, (1 - minDistance / maxDistance) * 100)));
+    const percentage = Math.round(
+      Math.max(48, Math.min(99, (1 - minDistance / maxDistance) * 100)),
+    );
     return percentage;
   }, [localBudget, localTime]);
 
   const confidenceRating = useMemo(() => {
-    if (confidenceScore >= 88) return { label: t.excellent, color: 'text-rose-600 bg-rose-50 border-rose-200/50', dots: 4, glow: 'shadow-rose-500/10 border-rose-500/40' };
-    if (confidenceScore >= 75) return { label: t.veryStrong, color: 'text-amber-600 bg-amber-50 border-amber-200/50', dots: 3, glow: 'shadow-amber-500/10 border-amber-500/30' };
-    if (confidenceScore >= 60) return { label: t.strong, color: 'text-yellow-600 bg-yellow-50 border-yellow-200/50', dots: 2, glow: 'shadow-yellow-500/10 border-yellow-500/30' };
-    return { label: t.good, color: 'text-emerald-600 bg-emerald-50 border-emerald-200/50', dots: 1, glow: 'shadow-emerald-500/10 border-emerald-500/20' };
+    if (confidenceScore >= 88)
+      return {
+        label: t.excellent,
+        color: "text-rose-600 bg-rose-50 border-rose-200/50",
+        dots: 4,
+        glow: "shadow-rose-500/10 border-rose-500/40",
+      };
+    if (confidenceScore >= 75)
+      return {
+        label: t.veryStrong,
+        color: "text-amber-600 bg-amber-50 border-amber-200/50",
+        dots: 3,
+        glow: "shadow-amber-500/10 border-amber-500/30",
+      };
+    if (confidenceScore >= 60)
+      return {
+        label: t.strong,
+        color: "text-yellow-600 bg-yellow-50 border-yellow-200/50",
+        dots: 2,
+        glow: "shadow-yellow-500/10 border-yellow-500/30",
+      };
+    return {
+      label: t.good,
+      color: "text-emerald-600 bg-emerald-50 border-emerald-200/50",
+      dots: 1,
+      glow: "shadow-emerald-500/10 border-emerald-500/20",
+    };
   }, [confidenceScore, t]);
 
   // Upright Centroid geometry coordinates so texts remain fully readable inside segments
   const centroids = useMemo(() => {
     const radB = ((visualAngle - 90) * Math.PI) / 180;
     const radT = ((visualAngle + 90) * Math.PI) / 180;
-    
+
     // Offset texts safely away from the curved liquid divider line
     const dist = 48;
 
@@ -485,7 +579,7 @@ export default function MoodOrbit({
       budgetX: dist * Math.cos(radB),
       budgetY: dist * Math.sin(radB),
       timeX: dist * Math.cos(radT),
-      timeY: dist * Math.sin(radT)
+      timeY: dist * Math.sin(radT),
     };
   }, [visualAngle]);
 
@@ -496,40 +590,79 @@ export default function MoodOrbit({
 
   // Dynamic travel recommendations summary interpretation
   const liveInterpretation = useMemo(() => {
-    const isSr = language === 'sr';
-    const isZh = language === 'zh';
+    const isSr = language === "sr";
+    const isZh = language === "zh";
 
     if (localX <= 0.45 && localY <= 0.45) {
       return {
-        tag: isSr ? "GRADSKI HEDONISTA" : isZh ? "都市臻奢派" : "METROPOLIS HEDONIST",
-        desc: isSr ? "Maksimalan komfor, izuzetna kuhinja i kulturni prefinjeni ugođaji." : isZh ? "追寻极致的米其林美食品鉴、高奢沙龙与精品艺术博览。" : "Highest tier comfort, fine gastronomy, and tailored private gallery spaces."
+        tag: isSr
+          ? "GRADSKI HEDONISTA"
+          : isZh
+            ? "都市臻奢派"
+            : "METROPOLIS HEDONIST",
+        desc: isSr
+          ? "Maksimalan komfor, izuzetna kuhinja i kulturni prefinjeni ugođaji."
+          : isZh
+            ? "追寻极致的米其林美食品鉴、高奢沙龙与精品艺术博览。"
+            : "Highest tier comfort, fine gastronomy, and tailored private gallery spaces.",
       };
     } else if (localX > 0.55 && localY <= 0.45) {
       return {
-        tag: isSr ? "KULTURNI ISTRAŽIVAČ" : isZh ? "历史漫游者" : "CULTURAL STRATEGIST",
-        desc: isSr ? "Temeljne pešačke rute, muzejske riznice i skriveni istorijski kutci." : isZh ? "深度穿梭于地标性历史名胜、古旧书店与巴洛克街区。" : "Detailed heritage exploration, historic architecture, and local archives."
+        tag: isSr
+          ? "KULTURNI ISTRAŽIVAČ"
+          : isZh
+            ? "历史漫游者"
+            : "CULTURAL STRATEGIST",
+        desc: isSr
+          ? "Temeljne pešačke rute, muzejske riznice i skriveni istorijski kutci."
+          : isZh
+            ? "深度穿梭于地标性历史名胜、古旧书店与巴洛克街区。"
+            : "Detailed heritage exploration, historic architecture, and local archives.",
       };
     } else if (localX <= 0.45 && localY > 0.55) {
       return {
         tag: isSr ? "OAZA SPOKOJA" : isZh ? "林野康养行" : "WELLNESS SANCTUARY",
-        desc: isSr ? "Umirujući banjski rituali, organska hrana i rehabilitujući spa tretmani." : isZh ? "置身山野私汤，呼吸天然负氧离子，舒展疲惫的身心。" : "Curated thermal therapy, organic gardens, and regenerative sensory silence."
+        desc: isSr
+          ? "Umirujući banjski rituali, organska hrana i rehabilitujući spa tretmani."
+          : isZh
+            ? "置身山野私汤，呼吸天然负氧离子，舒展疲惫的身心。"
+            : "Curated thermal therapy, organic gardens, and regenerative sensory silence.",
       };
     } else if (localX > 0.55 && localY > 0.55) {
       return {
-        tag: isSr ? "AVANTURISTA NA TERENU" : isZh ? "荒野拓荒先锋" : "WILD HORIZON EXPLORER",
-        desc: isSr ? "Adrenalinske rute, brdski biciklizam i savladavanje prirodnih staza." : isZh ? "充满热血的峭壁徒步、江河漂流与原生态露营探险。" : "Off-grid mountain biking, custom river kayaking, and scenic challenges."
+        tag: isSr
+          ? "AVANTURISTA NA TERENU"
+          : isZh
+            ? "荒野拓荒先锋"
+            : "WILD HORIZON EXPLORER",
+        desc: isSr
+          ? "Adrenalinske rute, brdski biciklizam i savladavanje prirodnih staza."
+          : isZh
+            ? "充满热血的峭壁徒步、江河漂流与原生态露营探险。"
+            : "Off-grid mountain biking, custom river kayaking, and scenic challenges.",
       };
     } else {
       return {
-        tag: isSr ? "BALANSIRANI NOMAD" : isZh ? "全能探索官" : "BALANCED VOYAGER",
-        desc: isSr ? "Sinergija prirodnog sklada i rafinirane gradske dinamike." : isZh ? "在热闹繁荣的都会社区与宁静深幽的旷野山川间寻找黄金平衡点。" : "Optimal harmony connecting premium social spots and untouched nature."
+        tag: isSr
+          ? "BALANSIRANI NOMAD"
+          : isZh
+            ? "全能探索官"
+            : "BALANCED VOYAGER",
+        desc: isSr
+          ? "Sinergija prirodnog sklada i rafinirane gradske dinamike."
+          : isZh
+            ? "在热闹繁荣的都会社区与宁静深幽的旷野山川间寻找黄金平衡点。"
+            : "Optimal harmony connecting premium social spots and untouched nature.",
       };
     }
   }, [localX, localY, language]);
 
   const isCultural = useMemo(() => {
     const activeTag = conciergeStyleName || liveInterpretation.tag;
-    return activeTag.toLowerCase().includes('cultural') || activeTag.toLowerCase().includes('kulturn');
+    return (
+      activeTag.toLowerCase().includes("cultural") ||
+      activeTag.toLowerCase().includes("kulturn")
+    );
   }, [conciergeStyleName, liveInterpretation.tag]);
 
   // Pointer interaction down handlers for multi-gestures
@@ -537,8 +670,8 @@ export default function MoodOrbit({
     e.stopPropagation();
     e.preventDefault();
     if (!fieldRef.current) return;
-    
-    setActiveGesture('position');
+
+    setActiveGesture("position");
     triggerHapticProxy(12);
 
     gestureState.current = {
@@ -546,7 +679,7 @@ export default function MoodOrbit({
       startX: e.clientX,
       startY: e.clientY,
       startOrbX: localX,
-      startOrbY: localY
+      startOrbY: localY,
     };
 
     // Long press detector for accessibility fallback panel
@@ -566,10 +699,13 @@ export default function MoodOrbit({
     const orbCenterX = rect.left + rect.width / 2;
     const orbCenterY = rect.top + rect.height / 2;
 
-    const initialDistance = Math.hypot(e.clientX - orbCenterX, e.clientY - orbCenterY);
+    const initialDistance = Math.hypot(
+      e.clientX - orbCenterX,
+      e.clientY - orbCenterY,
+    );
     if (initialDistance === 0) return;
 
-    setActiveGesture('budget');
+    setActiveGesture("budget");
     triggerHapticProxy(14);
 
     gestureState.current = {
@@ -577,7 +713,7 @@ export default function MoodOrbit({
       startX: e.clientX,
       startY: e.clientY,
       startDistance: initialDistance,
-      startBudget: localBudget
+      startBudget: localBudget,
     };
   };
 
@@ -590,9 +726,11 @@ export default function MoodOrbit({
     const orbCenterX = rect.left + rect.width / 2;
     const orbCenterY = rect.top + rect.height / 2;
 
-    const initialAngle = Math.atan2(e.clientY - orbCenterY, e.clientX - orbCenterX) * (180 / Math.PI);
+    const initialAngle =
+      Math.atan2(e.clientY - orbCenterY, e.clientX - orbCenterX) *
+      (180 / Math.PI);
 
-    setActiveGesture('time');
+    setActiveGesture("time");
     triggerHapticProxy(15);
 
     gestureState.current = {
@@ -600,12 +738,12 @@ export default function MoodOrbit({
       startX: e.clientX,
       startY: e.clientY,
       startAngle: initialAngle,
-      startTime: localTime
+      startTime: localTime,
     };
 
     if (!ringHintDismissed) {
       try {
-        safeStorage.setItem('idemo_time_ring_hint_dismissed', 'true');
+        safeStorage.setItem("idemo_time_ring_hint_dismissed", "true");
       } catch {}
       setRingHintDismissed(true);
     }
@@ -617,7 +755,7 @@ export default function MoodOrbit({
       if (!activeGesture) return;
 
       // Cancel long press sequence if mouse drifts significantly
-      if (activeGesture === 'position') {
+      if (activeGesture === "position") {
         const dx = Math.abs(e.clientX - gestureState.current.startX);
         const dy = Math.abs(e.clientY - gestureState.current.startY);
         if ((dx > 10 || dy > 10) && longPressTimeout.current) {
@@ -625,7 +763,7 @@ export default function MoodOrbit({
         }
       }
 
-      if (activeGesture === 'position' && fieldRef.current) {
+      if (activeGesture === "position" && fieldRef.current) {
         const rect = fieldRef.current.getBoundingClientRect();
         const dx = e.clientX - gestureState.current.startX;
         const dy = e.clientY - gestureState.current.startY;
@@ -633,8 +771,10 @@ export default function MoodOrbit({
         // Apply a high-precision, premium weighted damping factor (0.55) to make dragging
         // feel exceptionally smooth, deliberate, stable, and tactile, matching high-end mechanical instruments
         const dampingFactor = 0.55;
-        let computedX = gestureState.current.startOrbX + (dx / rect.width) * dampingFactor;
-        let computedY = gestureState.current.startOrbY + (dy / rect.height) * dampingFactor;
+        let computedX =
+          gestureState.current.startOrbX + (dx / rect.width) * dampingFactor;
+        let computedY =
+          gestureState.current.startOrbY + (dy / rect.height) * dampingFactor;
 
         // Magnetized center alignment snaps
         if (Math.abs(computedX - 0.5) < 0.035) computedX = 0.5;
@@ -664,18 +804,21 @@ export default function MoodOrbit({
         const triggerX = Math.min(0.92, Math.max(0.08, finalX));
         const triggerY = Math.min(0.92, Math.max(0.08, finalY));
         if (onChange) onChange(triggerX, triggerY, localBudget, localTime);
-      }
-
-      else if (activeGesture === 'budget' && orbRef.current) {
+      } else if (activeGesture === "budget" && orbRef.current) {
         const rect = orbRef.current.getBoundingClientRect();
         const orbCenterX = rect.left + rect.width / 2;
         const orbCenterY = rect.top + rect.height / 2;
 
-        let currentDistance = Math.hypot(e.clientX - orbCenterX, e.clientY - orbCenterY);
-        
+        let currentDistance = Math.hypot(
+          e.clientX - orbCenterX,
+          e.clientY - orbCenterY,
+        );
+
         const minDragDistance = 50; // pixels from center
         const maxDragDistance = 150; // pixels from center
-        const fraction = (currentDistance - minDragDistance) / (maxDragDistance - minDragDistance);
+        const fraction =
+          (currentDistance - minDragDistance) /
+          (maxDragDistance - minDragDistance);
         const clampedFraction = Math.max(0, Math.min(1, fraction));
         // Map to [100, 500] in steps of 100:
         let targetBudget = 100 + Math.round(clampedFraction * 4) * 100;
@@ -685,21 +828,22 @@ export default function MoodOrbit({
           triggerHapticProxy(12); // mechanical shift click!
           if (onChange) onChange(localX, localY, targetBudget, localTime);
         }
-      }
-
-      else if (activeGesture === 'time' && orbRef.current) {
+      } else if (activeGesture === "time" && orbRef.current) {
         const rect = orbRef.current.getBoundingClientRect();
         const orbCenterX = rect.left + rect.width / 2;
         const orbCenterY = rect.top + rect.height / 2;
 
-        const currentAngle = Math.atan2(e.clientY - orbCenterY, e.clientX - orbCenterX) * (180 / Math.PI);
+        const currentAngle =
+          Math.atan2(e.clientY - orbCenterY, e.clientX - orbCenterX) *
+          (180 / Math.PI);
         let angleDelta = currentAngle - gestureState.current.startAngle;
 
         // Angle full wrap calculations
         if (angleDelta > 180) angleDelta -= 360;
         if (angleDelta < -180) angleDelta += 360;
 
-        let targetAngle = computeAngleFromTime(gestureState.current.startTime) + angleDelta;
+        let targetAngle =
+          computeAngleFromTime(gestureState.current.startTime) + angleDelta;
         if (targetAngle < 0) targetAngle += 360;
         if (targetAngle >= 360) targetAngle -= 360;
 
@@ -726,11 +870,21 @@ export default function MoodOrbit({
         let restingY = localY;
         let didSpring = false;
 
-        if (localX < 0.08) { restingX = 0.08; didSpring = true; }
-        else if (localX > 0.92) { restingX = 0.92; didSpring = true; }
+        if (localX < 0.08) {
+          restingX = 0.08;
+          didSpring = true;
+        } else if (localX > 0.92) {
+          restingX = 0.92;
+          didSpring = true;
+        }
 
-        if (localY < 0.08) { restingY = 0.08; didSpring = true; }
-        else if (localY > 0.92) { restingY = 0.92; didSpring = true; }
+        if (localY < 0.08) {
+          restingY = 0.08;
+          didSpring = true;
+        } else if (localY > 0.92) {
+          restingY = 0.92;
+          didSpring = true;
+        }
 
         if (didSpring) {
           setLocalX(restingX);
@@ -741,19 +895,19 @@ export default function MoodOrbit({
       }
     };
 
-    window.addEventListener('pointermove', handleGlobalMove);
-    window.addEventListener('pointerup', handleGlobalUp);
+    window.addEventListener("pointermove", handleGlobalMove);
+    window.addEventListener("pointerup", handleGlobalUp);
 
     return () => {
-      window.removeEventListener('pointermove', handleGlobalMove);
-      window.removeEventListener('pointerup', handleGlobalUp);
+      window.removeEventListener("pointermove", handleGlobalMove);
+      window.removeEventListener("pointerup", handleGlobalUp);
     };
   }, [activeGesture, localX, localY, localBudget, localTime, onChange]);
 
   // Handle accessibility stepper changes
-  const adjustBudgetStep = (direction: 'up' | 'down') => {
+  const adjustBudgetStep = (direction: "up" | "down") => {
     let nextBudget = localBudget;
-    if (direction === 'up') {
+    if (direction === "up") {
       nextBudget = Math.min(500, localBudget + 100);
     } else {
       nextBudget = Math.max(100, localBudget - 100);
@@ -763,10 +917,10 @@ export default function MoodOrbit({
     if (onChange) onChange(localX, localY, nextBudget, localTime);
   };
 
-  const adjustTimeStep = (direction: 'up' | 'down') => {
+  const adjustTimeStep = (direction: "up" | "down") => {
     const currentIndex = SNAP_TIMES.indexOf(localTime);
     let nextIndex = currentIndex;
-    if (direction === 'up') {
+    if (direction === "up") {
       nextIndex = Math.min(SNAP_TIMES.length - 1, currentIndex + 1);
     } else {
       nextIndex = Math.max(0, currentIndex - 1);
@@ -777,16 +931,19 @@ export default function MoodOrbit({
     if (onChange) onChange(localX, localY, localBudget, nextTime);
   };
 
-  const shiftCoordinate = (axis: 'x' | 'y', direction: 'positive' | 'negative') => {
-    const step = 0.10;
-    let nextVal = axis === 'x' ? localX : localY;
-    if (direction === 'positive') {
+  const shiftCoordinate = (
+    axis: "x" | "y",
+    direction: "positive" | "negative",
+  ) => {
+    const step = 0.1;
+    let nextVal = axis === "x" ? localX : localY;
+    if (direction === "positive") {
       nextVal = Math.min(0.92, nextVal + step);
     } else {
       nextVal = Math.max(0.08, nextVal - step);
     }
-    
-    if (axis === 'x') {
+
+    if (axis === "x") {
       setLocalX(nextVal);
       if (onChange) onChange(nextVal, localY, localBudget, localTime);
     } else {
@@ -804,12 +961,14 @@ export default function MoodOrbit({
       {/* Premium Bezel Design Header */}
       <div className="flex justify-between items-start z-10 relative">
         <div className="space-y-0.5">
-          <h3 className="text-xl font-serif text-brand-charcoal font-black tracking-tight">{t.title}</h3>
+          <h3 className="text-xl font-serif text-brand-charcoal font-black tracking-tight">
+            {t.title}
+          </h3>
         </div>
       </div>
 
       {/* TODAY'S CONCIERGE box placed above Learn Mood Orbit box */}
-      <div 
+      <div
         onClick={() => {
           if (onSelectConcierge) {
             onSelectConcierge();
@@ -821,20 +980,50 @@ export default function MoodOrbit({
         className="bg-white rounded-[24px] border border-[#D5D3C8] p-4.5 shadow-xs text-left relative overflow-hidden cursor-pointer hover:border-accent-teal/30 active:scale-[0.99] transition-all group z-10 w-full"
       >
         <div className="absolute -right-12 -top-12 w-28 h-28 rounded-full bg-accent-teal/5 blur-xl pointer-events-none" />
-        
+
         <div className="flex justify-between items-center">
           <div className="space-y-0.5">
             <p className="text-[9px] uppercase tracking-[0.25em] text-accent-teal font-extrabold flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-accent-teal animate-pulse" />
-              <span>{language === 'sr' ? 'DANAŠNJI KONSJERŽ' : language === 'zh' ? '今日专属管家' : language === 'es' ? 'EL CONSERJE DE HOY' : language === 'de' ? 'DER HEUTIGE CONCIERGE' : language === 'ru' ? 'СЕГОДНЯŠНИЙ КОНSJERŽ' : "TODAY'S CONCIERGE"}</span>
-              <span className="text-[8px] font-sans font-bold text-accent-teal opacity-0 group-hover:opacity-100 transition-opacity">({language === 'sr' ? 'Saznaj više' : language === 'zh' ? '了解更多' : 'Learn more'})</span>
+              <span>
+                {language === "sr"
+                  ? "DANAŠNJI KONSJERŽ"
+                  : language === "zh"
+                    ? "今日专属管家"
+                    : language === "es"
+                      ? "EL CONSERJE DE HOY"
+                      : language === "de"
+                        ? "DER HEUTIGE CONCIERGE"
+                        : language === "ru"
+                          ? "СЕГОДНЯŠНИЙ КОНSJERŽ"
+                          : "TODAY'S CONCIERGE"}
+              </span>
+              <span className="text-[8px] font-sans font-bold text-accent-teal opacity-0 group-hover:opacity-100 transition-opacity">
+                (
+                {language === "sr"
+                  ? "Saznaj više"
+                  : language === "zh"
+                    ? "了解更多"
+                    : "Learn more"}
+                )
+              </span>
             </p>
             <h3 className="font-serif font-black text-lg text-brand-charcoal tracking-tight group-hover:text-accent-teal transition-colors">
               {conciergeStyleName || liveInterpretation.tag}
             </h3>
           </div>
           <span className="text-[8.5px] uppercase font-bold bg-accent-teal/10 text-accent-teal px-2.5 py-0.5 rounded-full select-none group-hover:bg-accent-teal/20 transition-colors">
-            {language === 'sr' ? 'Usklađeno' : language === 'zh' ? '已校准' : language === 'es' ? 'Calibrado' : language === 'de' ? 'Kalibriert' : language === 'ru' ? 'Откалиброван' : 'Calibrated'}
+            {language === "sr"
+              ? "Usklađeno"
+              : language === "zh"
+                ? "已校准"
+                : language === "es"
+                  ? "Calibrado"
+                  : language === "de"
+                    ? "Kalibriert"
+                    : language === "ru"
+                      ? "Откалиброван"
+                      : "Calibrated"}
           </span>
         </div>
       </div>
@@ -850,16 +1039,22 @@ export default function MoodOrbit({
         >
           <span className="flex items-center gap-2">
             <Info size={14} className="text-accent-teal" />
-            <span>{language === 'sr' ? 'Saznajte više o Mood Orbit-u' : language === 'zh' ? '了解情绪星轨仪' : 'Learn Mood Orbit'}</span>
+            <span>
+              {language === "sr"
+                ? "Saznajte više o Mood Orbit-u"
+                : language === "zh"
+                  ? "了解情绪星轨仪"
+                  : "Learn Mood Orbit"}
+            </span>
           </span>
-          <span className="text-lg leading-none">{learnOpen ? '−' : '+'}</span>
+          <span className="text-lg leading-none">{learnOpen ? "−" : "+"}</span>
         </button>
-        
+
         <AnimatePresence initial={false}>
           {learnOpen && (
             <motion.div
               initial={{ opacity: 0, height: 0, marginTop: 0 }}
-              animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
+              animate={{ opacity: 1, height: "auto", marginTop: 12 }}
               exit={{ opacity: 0, height: 0, marginTop: 0 }}
               transition={{ duration: 0.2 }}
               className="overflow-hidden space-y-4"
@@ -882,7 +1077,7 @@ export default function MoodOrbit({
                 <div className="flex items-center justify-between px-1.5 pt-0.5 relative">
                   {/* Connector Track passing precisely through the center of 32px bubbles */}
                   <div className="absolute left-8 right-8 top-[16px] h-[1px] bg-gradient-to-r from-accent-teal/30 via-amber-500/30 via-rose-500/30 to-accent-teal/30 pointer-events-none z-0" />
-                  
+
                   {/* Step 1: Mood Orbit */}
                   <div className="flex flex-col items-center space-y-1.5 flex-1 z-10">
                     <div className="w-8 h-8 rounded-full bg-[#FAF9F5] border border-accent-teal/30 flex items-center justify-center text-accent-teal shadow-xs">
@@ -936,7 +1131,11 @@ export default function MoodOrbit({
                   className="w-full py-3 px-4.5 rounded-2xl bg-[#FAF9F5] hover:bg-[#F5F3EB] border-2 border-[#D5D3C8] text-brand-charcoal transition-all flex items-center justify-between text-xs font-bold cursor-pointer group shadow-xs outline-none"
                 >
                   <span className="font-sans uppercase tracking-[0.2em] text-[10.5px] text-[#5C5A4D] font-black group-hover:text-brand-charcoal transition-colors">
-                    {language === 'sr' ? '> POKRENI INTERAKTIVNI VODIČ' : language === 'zh' ? '> 开启互动指南' : '> START INTERACTIVE GUIDE'}
+                    {language === "sr"
+                      ? "> POKRENI INTERAKTIVNI VODIČ"
+                      : language === "zh"
+                        ? "> 开启互动指南"
+                        : "> START INTERACTIVE GUIDE"}
                   </span>
                   <span className="text-[11px] text-[#8C8A7D] font-serif italic group-hover:translate-x-1 transition-transform">
                     &rarr;
@@ -961,7 +1160,8 @@ export default function MoodOrbit({
               </h4>
             </div>
             <span className="px-2 py-0.5 rounded bg-brand-charcoal text-white text-[8px] font-black uppercase tracking-widest leading-none">
-              €{Math.round(localBudget)} • {getSnappedTime(localTime)} {language === 'sr' ? 'SATI' : 'HRS'}
+              €{Math.round(localBudget)} • {getSnappedTime(localTime)}{" "}
+              {language === "sr" ? "SATI" : "HRS"}
             </span>
           </div>
 
@@ -971,7 +1171,10 @@ export default function MoodOrbit({
 
           <div className="p-2.5 bg-white border border-[#D5D3C8]/40 rounded-xl space-y-1">
             <div className="flex items-center gap-1.5">
-              <Shield className="text-emerald-600" style={{ width: 11, height: 11 }} />
+              <Shield
+                className="text-emerald-600"
+                style={{ width: 11, height: 11 }}
+              />
               <p className="text-[9px] font-black uppercase tracking-wider text-emerald-700">
                 {t.privacy}
               </p>
@@ -984,27 +1187,30 @@ export default function MoodOrbit({
       )}
 
       {/* Primary Coordinate Field Area */}
-      <div 
+      <div
         ref={fieldRef}
         onPointerDown={(e) => {
           // If the user clicks on the field background (not inside the watch orb), and selectedMode is null or position
-          if (e.target === fieldRef.current && (!selectedMode || selectedMode === 'position')) {
+          if (
+            e.target === fieldRef.current &&
+            (!selectedMode || selectedMode === "position")
+          ) {
             const rect = fieldRef.current.getBoundingClientRect();
             const clickX = (e.clientX - rect.left) / rect.width;
             const clickY = (e.clientY - rect.top) / rect.height;
-            
+
             setLocalX(clickX);
             setLocalY(clickY);
             if (onChange) onChange(clickX, clickY, localBudget, localTime);
-            
-            setActiveGesture('position');
+
+            setActiveGesture("position");
             triggerHapticProxy(12);
             gestureState.current = {
               ...gestureState.current,
               startX: e.clientX,
               startY: e.clientY,
               startOrbX: clickX,
-              startOrbY: clickY
+              startOrbY: clickY,
             };
           }
         }}
@@ -1018,7 +1224,9 @@ export default function MoodOrbit({
           }
         }}
         className={`w-full aspect-square relative bg-white border border-[#D5D3C8] rounded-[24px] overflow-hidden select-none touch-none cursor-crosshair z-10 transition-all duration-300 ${
-          activeGesture === 'position' ? 'shadow-inner bg-[#FAF9F5]/40 border-rose-500/35' : 'shadow-xs hover:border-[#BEBBB2]'
+          activeGesture === "position"
+            ? "shadow-inner bg-[#FAF9F5]/40 border-rose-500/35"
+            : "shadow-xs hover:border-[#BEBBB2]"
         }`}
       >
         {/* Alignment radar reticles */}
@@ -1064,23 +1272,25 @@ export default function MoodOrbit({
             type: "spring",
             stiffness: activeGesture ? 360 : 180,
             damping: activeGesture ? 30 : 20,
-            mass: 0.85
+            mass: 0.85,
           }}
           style={{
-            transform: 'translate(-50%, -50%)',
+            transform: "translate(-50%, -50%)",
           }}
           className={`absolute rounded-full flex items-center justify-center select-none pointer-events-auto shadow-2xl border border-white/90 bg-transparent ${
-            activeGesture ? 'shadow-rose-500/20 scale-[1.04]' : 'hover:shadow-xl'
+            activeGesture
+              ? "shadow-rose-500/20 scale-[1.04]"
+              : "hover:shadow-xl"
           }`}
         >
-          <svg 
-            viewBox="-100 -100 200 200" 
+          <svg
+            viewBox="-100 -100 200 200"
             onPointerDown={(e) => {
-              if (selectedMode === 'position') {
+              if (selectedMode === "position") {
                 handlePositionStart(e);
-              } else if (selectedMode === 'budget') {
+              } else if (selectedMode === "budget") {
                 handleBudgetStart(e);
-              } else if (selectedMode === 'time') {
+              } else if (selectedMode === "time") {
                 handleTimeStart(e);
               }
             }}
@@ -1107,8 +1317,14 @@ export default function MoodOrbit({
 
               {/* Upper Segment Premium Rose Gold Gradient (Vibrancy adjusts dynamically with budget scale) */}
               <linearGradient id="budgetGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={localBudget >= 300 ? "#FB7185" : "#FDA4AF"} />
-                <stop offset="100%" stopColor={localBudget >= 300 ? "#E11D48" : "#F43F5E"} />
+                <stop
+                  offset="0%"
+                  stopColor={localBudget >= 300 ? "#FB7185" : "#FDA4AF"}
+                />
+                <stop
+                  offset="100%"
+                  stopColor={localBudget >= 300 ? "#E11D48" : "#F43F5E"}
+                />
               </linearGradient>
 
               {/* Crown Mechanical Ridged Texture Gradient */}
@@ -1136,9 +1352,23 @@ export default function MoodOrbit({
               </linearGradient>
 
               {/* Chromalight Glow Filter for Luxury Watch Luminescence */}
-              <filter id="chromalightGlow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur in="SourceGraphic" stdDeviation="1.2" result="blur1" />
-                <feGaussianBlur in="SourceGraphic" stdDeviation="3.0" result="blur2" />
+              <filter
+                id="chromalightGlow"
+                x="-50%"
+                y="-50%"
+                width="200%"
+                height="200%"
+              >
+                <feGaussianBlur
+                  in="SourceGraphic"
+                  stdDeviation="1.2"
+                  result="blur1"
+                />
+                <feGaussianBlur
+                  in="SourceGraphic"
+                  stdDeviation="3.0"
+                  result="blur2"
+                />
                 <feMerge>
                   <feMergeNode in="blur2" />
                   <feMergeNode in="blur1" />
@@ -1167,30 +1397,35 @@ export default function MoodOrbit({
             </defs>
 
             {/* Time Segment base layer */}
-            <circle r="98" fill="url(#timeGrad)" stroke="#334155" strokeWidth="1" />
+            <circle
+              r="98"
+              fill="url(#timeGrad)"
+              stroke="#334155"
+              strokeWidth="1"
+            />
 
             {/* Upper Budget segment overlaid & divided dynamically by organic wavy liquid line */}
-            <path 
-              d={`M -90,0 C -45,${12 + wiggle} 45,${-(12 + wiggle)} 90,0 A 90,90 0 0,0 -90,0 Z`} 
-              fill="url(#budgetGrad)" 
+            <path
+              d={`M -90,0 C -45,${12 + wiggle} 45,${-(12 + wiggle)} 90,0 A 90,90 0 0,0 -90,0 Z`}
+              fill="url(#budgetGrad)"
               transform={`rotate(${visualAngle})`}
               className="transition-all duration-75"
             />
 
             {/* Polished Metallic Beveled Divider on Dial Seam to split segments elegantly */}
-            <path 
-              d={`M -90,0 C -45,${12 + wiggle} 45,${-(12 + wiggle)} 90,0`} 
-              fill="none" 
-              stroke="#0F172A" 
-              strokeWidth="2" 
+            <path
+              d={`M -90,0 C -45,${12 + wiggle} 45,${-(12 + wiggle)} 90,0`}
+              fill="none"
+              stroke="#0F172A"
+              strokeWidth="2"
               className="opacity-45 pointer-events-none transition-all duration-75"
               transform={`rotate(${visualAngle})`}
             />
-            <path 
-              d={`M -90,0 C -45,${12 + wiggle} 45,${-(12 + wiggle)} 90,0`} 
-              fill="none" 
-              stroke="#E2E8F0" 
-              strokeWidth="0.75" 
+            <path
+              d={`M -90,0 C -45,${12 + wiggle} 45,${-(12 + wiggle)} 90,0`}
+              fill="none"
+              stroke="#E2E8F0"
+              strokeWidth="0.75"
               className="opacity-90 pointer-events-none transition-all duration-75"
               transform={`rotate(${visualAngle})`}
             />
@@ -1199,7 +1434,7 @@ export default function MoodOrbit({
             {Array.from({ length: 60 }).map((_, i) => {
               const angle = i * 6;
               const isHourMarker = i % 5 === 0;
-              
+
               // Skip drawing standard ticks on positions with big Arabic numerals or the triangle index
               if (isHourMarker) {
                 const hour = i / 5;
@@ -1207,7 +1442,7 @@ export default function MoodOrbit({
                   return null;
                 }
               }
-              
+
               const r1 = isHourMarker ? 80 : 83;
               const r2 = 85;
               const rad = (angle * Math.PI) / 180;
@@ -1215,28 +1450,28 @@ export default function MoodOrbit({
               const y1 = r1 * Math.sin(rad);
               const x2 = r2 * Math.cos(rad);
               const y2 = r2 * Math.sin(rad);
-              
+
               return (
-                <line 
-                  key={i} 
-                  x1={x1} 
-                  y1={y1} 
-                  x2={x2} 
-                  y2={y2} 
-                  stroke="#FFFFFF" 
-                  className={isHourMarker ? 'opacity-40' : 'opacity-15'}
-                  strokeWidth={isHourMarker ? 0.75 : 0.4} 
+                <line
+                  key={i}
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke="#FFFFFF"
+                  className={isHourMarker ? "opacity-40" : "opacity-15"}
+                  strokeWidth={isHourMarker ? 0.75 : 0.4}
                 />
               );
             })}
 
             {/* Rolex Explorer 12 O'Clock Inverted Triangle (Chromalight) */}
-            <polygon 
-              points="-5.5,-83 5.5,-83 0,-71" 
-              fill="url(#lumeFill)" 
-              stroke="#E4E4E7" 
-              strokeWidth="0.5" 
-              filter="url(#chromalightGlow)" 
+            <polygon
+              points="-5.5,-83 5.5,-83 0,-71"
+              fill="url(#lumeFill)"
+              stroke="#E4E4E7"
+              strokeWidth="0.5"
+              filter="url(#chromalightGlow)"
               className="pointer-events-none"
             />
 
@@ -1251,7 +1486,7 @@ export default function MoodOrbit({
               strokeWidth="0.5"
               filter="url(#chromalightGlow)"
               className="font-sans font-black select-none pointer-events-none"
-              style={{ fontSize: '11px', letterSpacing: '-0.05em' }}
+              style={{ fontSize: "11px", letterSpacing: "-0.05em" }}
             >
               3
             </text>
@@ -1266,7 +1501,7 @@ export default function MoodOrbit({
               strokeWidth="0.5"
               filter="url(#chromalightGlow)"
               className="font-sans font-black select-none pointer-events-none"
-              style={{ fontSize: '11px', letterSpacing: '-0.05em' }}
+              style={{ fontSize: "11px", letterSpacing: "-0.05em" }}
             >
               6
             </text>
@@ -1281,26 +1516,26 @@ export default function MoodOrbit({
               strokeWidth="0.5"
               filter="url(#chromalightGlow)"
               className="font-sans font-black select-none pointer-events-none"
-              style={{ fontSize: '11px', letterSpacing: '-0.05em' }}
+              style={{ fontSize: "11px", letterSpacing: "-0.05em" }}
             >
               9
             </text>
 
             {/* Rolex Explorer Baton Hour Indices (Chromalight) */}
-            {[1, 2, 4, 5, 7, 8, 10, 11].map(h => {
+            {[1, 2, 4, 5, 7, 8, 10, 11].map((h) => {
               const angle = h * 30;
               return (
                 <g key={h} transform={`rotate(${angle})`}>
-                  <rect 
-                    x="-1.8" 
-                    y="-83" 
-                    width="3.6" 
-                    height="9" 
+                  <rect
+                    x="-1.8"
+                    y="-83"
+                    width="3.6"
+                    height="9"
                     rx="0.5"
-                    fill="url(#lumeFill)" 
-                    stroke="#E4E4E7" 
-                    strokeWidth="0.5" 
-                    filter="url(#chromalightGlow)" 
+                    fill="url(#lumeFill)"
+                    stroke="#E4E4E7"
+                    strokeWidth="0.5"
+                    filter="url(#chromalightGlow)"
                     className="pointer-events-none"
                   />
                 </g>
@@ -1308,71 +1543,179 @@ export default function MoodOrbit({
             })}
 
             {/* Thick Bezel Ring Frame */}
-            <circle r={98 - outerBezelWidth / 2} fill="none" stroke="url(#silverBezel)" strokeWidth={outerBezelWidth} className="opacity-85 pointer-events-none" />
-            
+            <circle
+              r={98 - outerBezelWidth / 2}
+              fill="none"
+              stroke="url(#silverBezel)"
+              strokeWidth={outerBezelWidth}
+              className="opacity-85 pointer-events-none"
+            />
+
             {/* Sapphire glass and convex reflection overlays */}
-            <circle r="96" fill="url(#glassReflection)" className="pointer-events-none mix-blend-overlay" />
-            <circle r="96" fill="url(#sapphireAR)" className="pointer-events-none mix-blend-screen" />
+            <circle
+              r="96"
+              fill="url(#glassReflection)"
+              className="pointer-events-none mix-blend-overlay"
+            />
+            <circle
+              r="96"
+              fill="url(#sapphireAR)"
+              className="pointer-events-none mix-blend-screen"
+            />
 
             {/* Watch Bezel Hand-Polished Chamfer Ring */}
-            <circle r="97.5" fill="none" stroke="#FFFFFF" strokeWidth="0.75" className="opacity-60 pointer-events-none" />
+            <circle
+              r="97.5"
+              fill="none"
+              stroke="#FFFFFF"
+              strokeWidth="0.75"
+              className="opacity-60 pointer-events-none"
+            />
 
             {/* Inner dark bezel shadow step/rim separating bezel and dial face */}
-            <circle r={98 - outerBezelWidth} fill="none" stroke="#090d16" strokeWidth="1.25" className="opacity-35 pointer-events-none" />
+            <circle
+              r={98 - outerBezelWidth}
+              fill="none"
+              stroke="#090d16"
+              strokeWidth="1.25"
+              className="opacity-35 pointer-events-none"
+            />
 
             {/* Mechanical Watch Crown Rotatable Indicator Pointer */}
             <g transform={`rotate(${visualAngle}) translate(92, 0)`}>
               {/* Dropshadow */}
-              <rect x="-6.5" y="-13" width="13" height="26" rx="2" fill="#000" className="opacity-15 pointer-events-none" transform="translate(1, 1)" />
-              
+              <rect
+                x="-6.5"
+                y="-13"
+                width="13"
+                height="26"
+                rx="2"
+                fill="#000"
+                className="opacity-15 pointer-events-none"
+                transform="translate(1, 1)"
+              />
+
               {/* Precision casing */}
-              <rect x="-6.5" y="-13" width="13" height="26" rx="2.5" fill="url(#silverBezel)" stroke="#1F2937" strokeWidth="0.75" />
-              
+              <rect
+                x="-6.5"
+                y="-13"
+                width="13"
+                height="26"
+                rx="2.5"
+                fill="url(#silverBezel)"
+                stroke="#1F2937"
+                strokeWidth="0.75"
+              />
+
               {/* Elegant circular inset with emerald/teal gemstone centerpiece */}
-              <circle r="2.5" fill="#14B8A6" stroke="#0D9488" strokeWidth="0.5" cx="0" cy="0" className="shadow-xs" />
-              
+              <circle
+                r="2.5"
+                fill="#14B8A6"
+                stroke="#0D9488"
+                strokeWidth="0.5"
+                cx="0"
+                cy="0"
+                className="shadow-xs"
+              />
+
               {/* Micro-machined physical grip ridges */}
-              <line x1="-4.5" y1="-9" x2="4.5" y2="-9" stroke="#374151" strokeWidth="0.75" />
-              <line x1="-4.5" y1="-6" x2="4.5" y2="-6" stroke="#374151" strokeWidth="0.75" />
-              <line x1="-4.5" y1="-3" x2="4.5" y2="-3" stroke="#374151" strokeWidth="0.75" />
-              <line x1="-4.5" y1="3" x2="4.5" y2="3" stroke="#374151" strokeWidth="0.75" />
-              <line x1="-4.5" y1="6" x2="4.5" y2="6" stroke="#374151" strokeWidth="0.75" />
-              <line x1="-4.5" y1="9" x2="4.5" y2="9" stroke="#374151" strokeWidth="0.75" />
+              <line
+                x1="-4.5"
+                y1="-9"
+                x2="4.5"
+                y2="-9"
+                stroke="#374151"
+                strokeWidth="0.75"
+              />
+              <line
+                x1="-4.5"
+                y1="-6"
+                x2="4.5"
+                y2="-6"
+                stroke="#374151"
+                strokeWidth="0.75"
+              />
+              <line
+                x1="-4.5"
+                y1="-3"
+                x2="4.5"
+                y2="-3"
+                stroke="#374151"
+                strokeWidth="0.75"
+              />
+              <line
+                x1="-4.5"
+                y1="3"
+                x2="4.5"
+                y2="3"
+                stroke="#374151"
+                strokeWidth="0.75"
+              />
+              <line
+                x1="-4.5"
+                y1="6"
+                x2="4.5"
+                y2="6"
+                stroke="#374151"
+                strokeWidth="0.75"
+              />
+              <line
+                x1="-4.5"
+                y1="9"
+                x2="4.5"
+                y2="9"
+                stroke="#374151"
+                strokeWidth="0.75"
+              />
             </g>
 
             {/* Symmetrically Centered Live Value Displays inside segments */}
             {/* Budget text */}
-            <g transform={`translate(${centroids.budgetX}, ${centroids.budgetY})`}>
+            <g
+              transform={`translate(${centroids.budgetX}, ${centroids.budgetY})`}
+            >
               {/* Elegant text background drop shadow for readability on bright colors */}
-              <text 
-                textAnchor="middle" 
-                dominantBaseline="middle" 
+              <text
+                textAnchor="middle"
+                dominantBaseline="middle"
                 className="fill-black/30 font-sans font-black tracking-tight"
-                style={{ fontSize: '18.5px', userSelect: 'none', transform: 'translateY(1.5px)' }}
+                style={{
+                  fontSize: "18.5px",
+                  userSelect: "none",
+                  transform: "translateY(1.5px)",
+                }}
               >
                 €{Math.round(localBudget)}
               </text>
-              <text 
-                textAnchor="middle" 
-                dominantBaseline="middle" 
+              <text
+                textAnchor="middle"
+                dominantBaseline="middle"
                 className="fill-white font-sans font-black tracking-tight"
-                style={{ fontSize: '18px', userSelect: 'none' }}
+                style={{ fontSize: "18px", userSelect: "none" }}
               >
                 €{Math.round(localBudget)}
               </text>
-              <text 
-                textAnchor="middle" 
-                dominantBaseline="middle" 
+              <text
+                textAnchor="middle"
+                dominantBaseline="middle"
                 className="fill-black/20 font-sans font-extrabold tracking-widest"
-                style={{ fontSize: '7.5px', transform: 'translateY(14.5px)', userSelect: 'none' }}
+                style={{
+                  fontSize: "7.5px",
+                  transform: "translateY(14.5px)",
+                  userSelect: "none",
+                }}
               >
                 BUDGET
               </text>
-              <text 
-                textAnchor="middle" 
-                dominantBaseline="middle" 
+              <text
+                textAnchor="middle"
+                dominantBaseline="middle"
                 className="fill-white/75 font-sans font-extrabold tracking-widest"
-                style={{ fontSize: '7.5px', transform: 'translateY(13.5px)', userSelect: 'none' }}
+                style={{
+                  fontSize: "7.5px",
+                  transform: "translateY(13.5px)",
+                  userSelect: "none",
+                }}
               >
                 BUDGET
               </text>
@@ -1381,99 +1724,168 @@ export default function MoodOrbit({
             {/* Time text */}
             <g transform={`translate(${centroids.timeX}, ${centroids.timeY})`}>
               {/* Background text drop shadow */}
-              <text 
-                textAnchor="middle" 
-                dominantBaseline="middle" 
+              <text
+                textAnchor="middle"
+                dominantBaseline="middle"
                 className="fill-black/35 font-sans font-black tracking-tight"
-                style={{ fontSize: '18.5px', userSelect: 'none', transform: 'translateY(1.5px)' }}
+                style={{
+                  fontSize: "18.5px",
+                  userSelect: "none",
+                  transform: "translateY(1.5px)",
+                }}
               >
                 {getSnappedTime(localTime)} h
               </text>
-              <text 
-                textAnchor="middle" 
-                dominantBaseline="middle" 
+              <text
+                textAnchor="middle"
+                dominantBaseline="middle"
                 className="fill-white font-sans font-black tracking-tight"
-                style={{ fontSize: '18px', userSelect: 'none' }}
+                style={{ fontSize: "18px", userSelect: "none" }}
               >
                 {getSnappedTime(localTime)} h
               </text>
-              <text 
-                textAnchor="middle" 
-                dominantBaseline="middle" 
+              <text
+                textAnchor="middle"
+                dominantBaseline="middle"
                 className="fill-black/20 font-sans font-extrabold tracking-widest"
-                style={{ fontSize: '7.5px', transform: 'translateY(14.5px)', userSelect: 'none' }}
+                style={{
+                  fontSize: "7.5px",
+                  transform: "translateY(14.5px)",
+                  userSelect: "none",
+                }}
               >
                 TIME
               </text>
-              <text 
-                textAnchor="middle" 
-                dominantBaseline="middle" 
+              <text
+                textAnchor="middle"
+                dominantBaseline="middle"
                 className="fill-white/75 font-sans font-extrabold tracking-widest"
-                style={{ fontSize: '7.5px', transform: 'translateY(13.5px)', userSelect: 'none' }}
+                style={{
+                  fontSize: "7.5px",
+                  transform: "translateY(13.5px)",
+                  userSelect: "none",
+                }}
               >
                 TIME
               </text>
             </g>
 
             {/* Rolex Explorer Mercedes Hour Hand */}
-            <g transform={`rotate(${visualAngle})`} className="pointer-events-none">
+            <g
+              transform={`rotate(${visualAngle})`}
+              className="pointer-events-none"
+            >
               {/* Silver outline shadow */}
-              <path 
-                d="M 0,0 L -1.5,-6 L -1.5,-23 A 4.5,4.5 0 0,1 -4,-26.5 A 4.5,4.5 0 0,1 -1.5,-30.5 L -1.5,-38 L 0,-41 L 1.5,-38 L 1.5,-30.5 A 4.5,4.5 0 0,1 4,-26.5 A 4.5,4.5 0 0,1 1.5,-23 L 1.5,-6 Z" 
-                fill="#3F3F46" 
-                className="opacity-40" 
+              <path
+                d="M 0,0 L -1.5,-6 L -1.5,-23 A 4.5,4.5 0 0,1 -4,-26.5 A 4.5,4.5 0 0,1 -1.5,-30.5 L -1.5,-38 L 0,-41 L 1.5,-38 L 1.5,-30.5 A 4.5,4.5 0 0,1 4,-26.5 A 4.5,4.5 0 0,1 1.5,-23 L 1.5,-6 Z"
+                fill="#3F3F46"
+                className="opacity-40"
                 transform="translate(0, 0.5)"
               />
               {/* Main Hand body with Chromalight lume */}
-              <path 
-                d="M 0,0 L -1.2,-6 L -1.2,-23 A 4.2,4.2 0 0,1 -3.5,-26.5 A 4.2,4.2 0 0,1 -1.2,-30 L -1.2,-37 L 0,-40 L 1.2,-37 L 1.2,-30 A 4.2,4.2 0 0,1 3.5,-26.5 A 4.2,4.2 0 0,1 1.2,-23 L 1.2,-6 Z" 
-                fill="url(#lumeFill)" 
-                stroke="#E4E4E7" 
-                strokeWidth="0.75" 
+              <path
+                d="M 0,0 L -1.2,-6 L -1.2,-23 A 4.2,4.2 0 0,1 -3.5,-26.5 A 4.2,4.2 0 0,1 -1.2,-30 L -1.2,-37 L 0,-40 L 1.2,-37 L 1.2,-30 A 4.2,4.2 0 0,1 3.5,-26.5 A 4.2,4.2 0 0,1 1.2,-23 L 1.2,-6 Z"
+                fill="url(#lumeFill)"
+                stroke="#E4E4E7"
+                strokeWidth="0.75"
                 filter="url(#chromalightGlow)"
               />
               {/* Mercedes logo star divider inside the circle */}
-              <circle cx="0" cy="-26.5" r="3.2" fill="none" stroke="#52525B" strokeWidth="0.5" />
-              <line x1="0" y1="-26.5" x2="0" y2="-29.7" stroke="#52525B" strokeWidth="0.55" />
-              <line x1="0" y1="-26.5" x2="-2.77" y2="-24.9" stroke="#52525B" strokeWidth="0.55" />
-              <line x1="0" y1="-26.5" x2="2.77" y2="-24.9" stroke="#52525B" strokeWidth="0.55" />
+              <circle
+                cx="0"
+                cy="-26.5"
+                r="3.2"
+                fill="none"
+                stroke="#52525B"
+                strokeWidth="0.5"
+              />
+              <line
+                x1="0"
+                y1="-26.5"
+                x2="0"
+                y2="-29.7"
+                stroke="#52525B"
+                strokeWidth="0.55"
+              />
+              <line
+                x1="0"
+                y1="-26.5"
+                x2="-2.77"
+                y2="-24.9"
+                stroke="#52525B"
+                strokeWidth="0.55"
+              />
+              <line
+                x1="0"
+                y1="-26.5"
+                x2="2.77"
+                y2="-24.9"
+                stroke="#52525B"
+                strokeWidth="0.55"
+              />
             </g>
 
             {/* Rolex Explorer Tapered Minute Hand */}
-            <g transform={`rotate(${budgetAngle})`} className="pointer-events-none">
+            <g
+              transform={`rotate(${budgetAngle})`}
+              className="pointer-events-none"
+            >
               {/* Silver outline shadow */}
-              <path 
-                d="M 0,0 L -1.5,-8 L -1.5,-55 L 0,-59 L 1.5,-55 L 1.5,-8 Z" 
-                fill="#3F3F46" 
-                className="opacity-40" 
+              <path
+                d="M 0,0 L -1.5,-8 L -1.5,-55 L 0,-59 L 1.5,-55 L 1.5,-8 Z"
+                fill="#3F3F46"
+                className="opacity-40"
                 transform="translate(0, 0.5)"
               />
               {/* Main Hand body with Chromalight lume */}
-              <path 
-                d="M 0,0 L -1.1,-8 L -1.1,-54 L 0,-58 L 1.1,-54 L 1.1,-8 Z" 
-                fill="url(#lumeFill)" 
-                stroke="#E4E4E7" 
-                strokeWidth="0.75" 
+              <path
+                d="M 0,0 L -1.1,-8 L -1.1,-54 L 0,-58 L 1.1,-54 L 1.1,-8 Z"
+                fill="url(#lumeFill)"
+                stroke="#E4E4E7"
+                strokeWidth="0.75"
                 filter="url(#chromalightGlow)"
               />
               {/* Center rib lines */}
-              <line x1="0" y1="-8" x2="0" y2="-53" stroke="#52525B" strokeWidth="0.5" className="opacity-40" />
+              <line
+                x1="0"
+                y1="-8"
+                x2="0"
+                y2="-53"
+                stroke="#52525B"
+                strokeWidth="0.5"
+                className="opacity-40"
+              />
             </g>
 
             {/* Rolex Explorer Lollipop Second Hand (Mesmerizing Continuous Sweep) */}
             <g className="watch-second-hand-sweep pointer-events-none">
               {/* Main ultra-thin needle */}
-              <line x1="0" y1="15" x2="0" y2="-66" stroke="#E2E8F0" strokeWidth="0.5" />
-              
+              <line
+                x1="0"
+                y1="15"
+                x2="0"
+                y2="-66"
+                stroke="#E2E8F0"
+                strokeWidth="0.5"
+              />
+
               {/* Lollipop luminescent bubble */}
-              <circle cx="0" cy="-48" r="3.2" fill="url(#lumeFill)" stroke="#E4E4E7" strokeWidth="0.5" filter="url(#chromalightGlow)" />
-              
+              <circle
+                cx="0"
+                cy="-48"
+                r="3.2"
+                fill="url(#lumeFill)"
+                stroke="#E4E4E7"
+                strokeWidth="0.5"
+                filter="url(#chromalightGlow)"
+              />
+
               {/* Counterweight circular balance at the tail */}
               <circle cx="0" cy="12" r="1.5" fill="#E2E8F0" />
             </g>
 
             {/* Watch crown Position Anchor Core Center Button (Chronograph Style) */}
-            <g 
+            <g
               onPointerDown={(e) => {
                 if (!selectedMode) {
                   handlePositionStart(e);
@@ -1482,19 +1894,21 @@ export default function MoodOrbit({
               className="cursor-move group pointer-events-auto"
             >
               <circle r="24" fill="transparent" /> {/* Large catch target */}
-              
               {/* Dropshadow for 3D depth */}
-              <circle r="16.5" fill="#000" className="opacity-15 pointer-events-none" transform="translate(0, 1.5)" />
-              
-              {/* Outer high-polished steel collar/bezel */}
-              <circle 
-                r="15" 
-                fill="url(#silverBezel)" 
-                stroke="#4B5563" 
-                strokeWidth="0.5" 
-                className="transition-transform duration-200 group-hover:scale-105" 
+              <circle
+                r="16.5"
+                fill="#000"
+                className="opacity-15 pointer-events-none"
+                transform="translate(0, 1.5)"
               />
-              
+              {/* Outer high-polished steel collar/bezel */}
+              <circle
+                r="15"
+                fill="url(#silverBezel)"
+                stroke="#4B5563"
+                strokeWidth="0.5"
+                className="transition-transform duration-200 group-hover:scale-105"
+              />
               {/* Machined outer teeth/ridges (minimal tactile detents for crown feel) */}
               {Array.from({ length: 12 }).map((_, i) => {
                 const angle = i * 30;
@@ -1504,39 +1918,58 @@ export default function MoodOrbit({
                 const x2 = 14.5 * Math.cos(rad);
                 const y2 = 14.5 * Math.sin(rad);
                 return (
-                  <line 
-                    key={i} 
-                    x1={x1} 
-                    y1={y1} 
-                    x2={x2} 
-                    y2={y2} 
-                    stroke="#374151" 
-                    strokeWidth="0.75" 
-                    className="opacity-70 pointer-events-none" 
+                  <line
+                    key={i}
+                    x1={x1}
+                    y1={y1}
+                    x2={x2}
+                    y2={y2}
+                    stroke="#374151"
+                    strokeWidth="0.75"
+                    className="opacity-70 pointer-events-none"
                   />
                 );
               })}
-              
               {/* Inner bezel core rim */}
-              <circle r="11" fill="#111827" stroke="#9CA3AF" strokeWidth="0.5" className="opacity-90" />
-              
+              <circle
+                r="11"
+                fill="#111827"
+                stroke="#9CA3AF"
+                strokeWidth="0.5"
+                className="opacity-90"
+              />
               {/* Dome crown cabochon face with precision-engraved target rings */}
-              <circle r="8.5" fill="url(#crownGrad)" stroke="#111827" strokeWidth="0.5" />
-              <circle r="5" fill="none" stroke="#374151" strokeWidth="0.5" className="opacity-40" />
-              
+              <circle
+                r="8.5"
+                fill="url(#crownGrad)"
+                stroke="#111827"
+                strokeWidth="0.5"
+              />
+              <circle
+                r="5"
+                fill="none"
+                stroke="#374151"
+                strokeWidth="0.5"
+                className="opacity-40"
+              />
               {/* Glowing or colored central jewel pivot (sapphire/teal dot) */}
               <circle r="2.5" fill="#14B8A6" className="opacity-90" />
-              
               {/* Soft asymmetric light reflection on dome */}
-              <circle r="4" fill="#FFFFFF" className="opacity-30" cx="-1.5" cy="-1.5" />
+              <circle
+                r="4"
+                fill="#FFFFFF"
+                className="opacity-30"
+                cx="-1.5"
+                cy="-1.5"
+              />
             </g>
 
             {/* Invisible Outer Dial Track Ring to Adjust Budget limit */}
-            <circle 
-              r="92" 
-              fill="none" 
-              stroke="transparent" 
-              strokeWidth="16" 
+            <circle
+              r="92"
+              fill="none"
+              stroke="transparent"
+              strokeWidth="16"
               className="cursor-pointer pointer-events-auto"
               onPointerDown={(e) => {
                 if (!selectedMode) {
@@ -1546,11 +1979,11 @@ export default function MoodOrbit({
             />
 
             {/* Invisible Inner Body Zone to scale Time limit */}
-            <circle 
-              r="55" 
-              fill="none" 
-              stroke="transparent" 
-              strokeWidth="50" 
+            <circle
+              r="55"
+              fill="none"
+              stroke="transparent"
+              strokeWidth="50"
               className="cursor-pointer pointer-events-auto"
               onPointerDown={(e) => {
                 if (!selectedMode) {
@@ -1576,7 +2009,7 @@ export default function MoodOrbit({
         {/* Compact Synchronized Accessibility Fallback Manual Steppers Panel */}
         <AnimatePresence>
           {showAccessibility && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -1587,8 +2020,11 @@ export default function MoodOrbit({
                   <span className="text-[10px] font-black uppercase tracking-wider text-brand-charcoal">
                     ⚙️ {t.manualTitle}
                   </span>
-                  <button 
-                    onClick={() => { setShowAccessibility(false); triggerHapticProxy(12); }}
+                  <button
+                    onClick={() => {
+                      setShowAccessibility(false);
+                      triggerHapticProxy(12);
+                    }}
                     className="h-7 px-3 rounded-full bg-brand-charcoal text-white text-[9px] font-black uppercase tracking-widest hover:bg-brand-charcoal/95"
                   >
                     {t.close}
@@ -1601,28 +2037,28 @@ export default function MoodOrbit({
                     🗺️ Quadrant Offset
                   </span>
                   <div className="flex items-center justify-center gap-2">
-                    <button 
-                      onClick={() => shiftCoordinate('x', 'negative')}
+                    <button
+                      onClick={() => shiftCoordinate("x", "negative")}
                       className="w-10 h-10 rounded-lg bg-white border border-[#D5D3C8] hover:bg-[#F5F4EE] flex items-center justify-center font-bold text-sm"
                     >
                       ◀
                     </button>
                     <div className="flex flex-col gap-1">
-                      <button 
-                        onClick={() => shiftCoordinate('y', 'negative')}
+                      <button
+                        onClick={() => shiftCoordinate("y", "negative")}
                         className="w-10 h-10 rounded-lg bg-white border border-[#D5D3C8] hover:bg-[#F5F4EE] flex items-center justify-center font-bold text-sm"
                       >
                         ▲
                       </button>
-                      <button 
-                        onClick={() => shiftCoordinate('y', 'positive')}
+                      <button
+                        onClick={() => shiftCoordinate("y", "positive")}
                         className="w-10 h-10 rounded-lg bg-white border border-[#D5D3C8] hover:bg-[#F5F4EE] flex items-center justify-center font-bold text-sm"
                       >
                         ▼
                       </button>
                     </div>
-                    <button 
-                      onClick={() => shiftCoordinate('x', 'positive')}
+                    <button
+                      onClick={() => shiftCoordinate("x", "positive")}
                       className="w-10 h-10 rounded-lg bg-white border border-[#D5D3C8] hover:bg-[#F5F4EE] flex items-center justify-center font-bold text-sm"
                     >
                       ▶
@@ -1636,17 +2072,19 @@ export default function MoodOrbit({
                     <span className="text-[8.5px] uppercase tracking-wider text-[#8C8A7D] font-black">
                       💰 Budget Limit
                     </span>
-                    <span className="text-[13px] font-black">€{Math.round(localBudget)}</span>
+                    <span className="text-[13px] font-black">
+                      €{Math.round(localBudget)}
+                    </span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <button 
-                      onClick={() => adjustBudgetStep('down')}
+                    <button
+                      onClick={() => adjustBudgetStep("down")}
                       className="w-10 h-10 rounded-full bg-white border border-[#D5D3C8] hover:bg-[#F5F4EE] flex items-center justify-center font-black text-lg shadow-sm"
                     >
                       -
                     </button>
-                    <button 
-                      onClick={() => adjustBudgetStep('up')}
+                    <button
+                      onClick={() => adjustBudgetStep("up")}
                       className="w-10 h-10 rounded-full bg-white border border-[#D5D3C8] hover:bg-[#F5F4EE] flex items-center justify-center font-black text-lg shadow-sm"
                     >
                       +
@@ -1660,17 +2098,19 @@ export default function MoodOrbit({
                     <span className="text-[8.5px] uppercase tracking-wider text-[#8C8A7D] font-black">
                       ⏱️ Available Time
                     </span>
-                    <span className="text-[13px] font-black">{getSnappedTime(localTime)} Hours</span>
+                    <span className="text-[13px] font-black">
+                      {getSnappedTime(localTime)} Hours
+                    </span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <button 
-                      onClick={() => adjustTimeStep('down')}
+                    <button
+                      onClick={() => adjustTimeStep("down")}
                       className="w-10 h-10 rounded-full bg-white border border-[#D5D3C8] hover:bg-[#F5F4EE] flex items-center justify-center font-black text-lg shadow-sm"
                     >
                       -
                     </button>
-                    <button 
-                      onClick={() => adjustTimeStep('up')}
+                    <button
+                      onClick={() => adjustTimeStep("up")}
                       className="w-10 h-10 rounded-full bg-white border border-[#D5D3C8] hover:bg-[#F5F4EE] flex items-center justify-center font-black text-lg shadow-sm"
                     >
                       +
@@ -1695,64 +2135,97 @@ export default function MoodOrbit({
       {/* Interactive Tooltips explaining sensory gesture inputs */}
       <div className="grid grid-cols-3 gap-2.5 py-1.5 z-10 select-none text-center">
         {/* POSITION button */}
-        <button 
+        <button
           onClick={() => {
-            const next = selectedMode === 'position' ? null : 'position';
+            const next = selectedMode === "position" ? null : "position";
             setSelectedMode(next);
             triggerHapticProxy(15);
           }}
           className={`px-1.5 py-2.5 rounded-xl transition-all duration-150 cursor-pointer flex flex-col items-center justify-center outline-none ${
-            selectedMode === 'position' 
-              ? 'bg-amber-50/80 border border-amber-500 border-b-[1px] translate-y-[3px] shadow-[inset_0_2px_4px_rgba(245,158,11,0.2)]' 
-              : 'bg-gradient-to-b from-white to-[#FAF9F5] border border-[#D5D3C8] border-b-[4px] shadow-[0_2px_4px_rgba(0,0,0,0.05),_0_2px_0_#D5D3C8] hover:to-amber-50/10 hover:border-amber-400/40 active:translate-y-[2px] active:border-b-[2px]'
+            selectedMode === "position"
+              ? "bg-amber-50/80 border border-amber-500 border-b-[1px] translate-y-[3px] shadow-[inset_0_2px_4px_rgba(245,158,11,0.2)]"
+              : "bg-gradient-to-b from-white to-[#FAF9F5] border border-[#D5D3C8] border-b-[4px] shadow-[0_2px_4px_rgba(0,0,0,0.05),_0_2px_0_#D5D3C8] hover:to-amber-50/10 hover:border-amber-400/40 active:translate-y-[2px] active:border-b-[2px]"
           }`}
         >
-          <span className={`text-[13px] mb-1 transition-transform ${selectedMode === 'position' ? 'scale-90 translate-y-0.5' : 'scale-100'}`}>🎯</span>
-          <span className={`text-[8.5px] font-black uppercase tracking-wider leading-none mb-0.5 ${selectedMode === 'position' ? 'text-amber-700' : 'text-brand-charcoal'}`}>POSITION</span>
-          <span className="text-[7px] font-bold text-[#8C8A7D] leading-tight scale-90">{t.tipPosition}</span>
+          <span
+            className={`text-[13px] mb-1 transition-transform ${selectedMode === "position" ? "scale-90 translate-y-0.5" : "scale-100"}`}
+          >
+            🎯
+          </span>
+          <span
+            className={`text-[8.5px] font-black uppercase tracking-wider leading-none mb-0.5 ${selectedMode === "position" ? "text-amber-700" : "text-brand-charcoal"}`}
+          >
+            POSITION
+          </span>
+          <span className="text-[7px] font-bold text-[#8C8A7D] leading-tight scale-90">
+            {t.tipPosition}
+          </span>
         </button>
 
         {/* BUDGET button */}
-        <button 
+        <button
           onClick={() => {
-            const next = selectedMode === 'budget' ? null : 'budget';
+            const next = selectedMode === "budget" ? null : "budget";
             setSelectedMode(next);
             triggerHapticProxy(15);
           }}
           className={`px-1.5 py-2.5 rounded-xl transition-all duration-150 cursor-pointer flex flex-col items-center justify-center outline-none ${
-            selectedMode === 'budget' 
-              ? 'bg-rose-50/80 border border-rose-500 border-b-[1px] translate-y-[3px] shadow-[inset_0_2px_4px_rgba(244,63,94,0.2)]' 
-              : 'bg-gradient-to-b from-white to-[#FAF9F5] border border-[#D5D3C8] border-b-[4px] shadow-[0_2px_4px_rgba(0,0,0,0.05),_0_2px_0_#D5D3C8] hover:to-rose-50/10 hover:border-rose-400/40 active:translate-y-[2px] active:border-b-[2px]'
+            selectedMode === "budget"
+              ? "bg-rose-50/80 border border-rose-500 border-b-[1px] translate-y-[3px] shadow-[inset_0_2px_4px_rgba(244,63,94,0.2)]"
+              : "bg-gradient-to-b from-white to-[#FAF9F5] border border-[#D5D3C8] border-b-[4px] shadow-[0_2px_4px_rgba(0,0,0,0.05),_0_2px_0_#D5D3C8] hover:to-rose-50/10 hover:border-rose-400/40 active:translate-y-[2px] active:border-b-[2px]"
           }`}
         >
-          <span className={`text-[13px] mb-1 transition-transform ${selectedMode === 'budget' ? 'scale-90 translate-y-0.5' : 'scale-100'}`}>📐</span>
-          <span className={`text-[8.5px] font-black uppercase tracking-wider leading-none mb-0.5 ${selectedMode === 'budget' ? 'text-rose-700' : 'text-brand-charcoal'}`}>BUDGET</span>
-          <span className="text-[7px] font-bold text-[#8C8A7D] leading-tight scale-90">{t.tipBudget}</span>
+          <span
+            className={`text-[13px] mb-1 transition-transform ${selectedMode === "budget" ? "scale-90 translate-y-0.5" : "scale-100"}`}
+          >
+            📐
+          </span>
+          <span
+            className={`text-[8.5px] font-black uppercase tracking-wider leading-none mb-0.5 ${selectedMode === "budget" ? "text-rose-700" : "text-brand-charcoal"}`}
+          >
+            BUDGET
+          </span>
+          <span className="text-[7px] font-bold text-[#8C8A7D] leading-tight scale-90">
+            {t.tipBudget}
+          </span>
         </button>
 
         {/* TIME button */}
-        <button 
+        <button
           onClick={() => {
-            const next = selectedMode === 'time' ? null : 'time';
+            const next = selectedMode === "time" ? null : "time";
             setSelectedMode(next);
             triggerHapticProxy(15);
           }}
           className={`px-1.5 py-2.5 rounded-xl transition-all duration-150 cursor-pointer flex flex-col items-center justify-center outline-none ${
-            selectedMode === 'time' 
-              ? 'bg-teal-50/80 border border-teal-500 border-b-[1px] translate-y-[3px] shadow-[inset_0_2px_4px_rgba(20,184,166,0.2)]' 
-              : 'bg-gradient-to-b from-white to-[#FAF9F5] border border-[#D5D3C8] border-b-[4px] shadow-[0_2px_4px_rgba(0,0,0,0.05),_0_2px_0_#D5D3C8] hover:to-teal-50/10 hover:border-teal-400/40 active:translate-y-[2px] active:border-b-[2px]'
+            selectedMode === "time"
+              ? "bg-teal-50/80 border border-teal-500 border-b-[1px] translate-y-[3px] shadow-[inset_0_2px_4px_rgba(20,184,166,0.2)]"
+              : "bg-gradient-to-b from-white to-[#FAF9F5] border border-[#D5D3C8] border-b-[4px] shadow-[0_2px_4px_rgba(0,0,0,0.05),_0_2px_0_#D5D3C8] hover:to-teal-50/10 hover:border-teal-400/40 active:translate-y-[2px] active:border-b-[2px]"
           }`}
         >
-          <span className={`text-[13px] mb-1 transition-transform ${selectedMode === 'time' ? 'scale-90 translate-y-0.5' : 'scale-100'}`}>⏱️</span>
-          <span className={`text-[8.5px] font-black uppercase tracking-wider leading-none mb-0.5 ${selectedMode === 'time' ? 'text-teal-700' : 'text-brand-charcoal'}`}>TIME</span>
-          <span className="text-[7px] font-bold text-[#8C8A7D] leading-tight scale-90">{t.tipTime}</span>
+          <span
+            className={`text-[13px] mb-1 transition-transform ${selectedMode === "time" ? "scale-90 translate-y-0.5" : "scale-100"}`}
+          >
+            ⏱️
+          </span>
+          <span
+            className={`text-[8.5px] font-black uppercase tracking-wider leading-none mb-0.5 ${selectedMode === "time" ? "text-teal-700" : "text-brand-charcoal"}`}
+          >
+            TIME
+          </span>
+          <span className="text-[7px] font-bold text-[#8C8A7D] leading-tight scale-90">
+            {t.tipTime}
+          </span>
         </button>
       </div>
 
       {/* Dynamic correlation explanatory modal */}
       <AnimatePresence>
         {showCorrelationModal && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm" id="mood-orbit-correlation-modal">
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm"
+            id="mood-orbit-correlation-modal"
+          >
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -1774,31 +2247,46 @@ export default function MoodOrbit({
 
               <div className="space-y-4 pt-2">
                 <span className="text-[8px] uppercase tracking-[0.25em] text-accent-teal font-black block leading-none">
-                  {isSr ? 'POVEZANOST I UTICAJ NA PREPORUKE' : isZh ? '画像关联与推荐机制' : 'ALIGNMENT & OFFER INFLUENCE'}
+                  {isSr
+                    ? "POVEZANOST I UTICAJ NA PREPORUKE"
+                    : isZh
+                      ? "画像关联与推荐机制"
+                      : "ALIGNMENT & OFFER INFLUENCE"}
                 </span>
-                
+
                 <h4 className="text-base font-serif font-black text-brand-charcoal tracking-tight leading-snug">
-                  {isCultural && !isSr && !isZh ? (
-                    'How Do Your Persona & Vibe Work Together?'
-                  ) : (
-                    isSr ? 'Kako se Vaša Persona i Vajb dopunjuju?' : isZh ? '您的旅行人格与核心氛围如何相辅相成？' : 'How Do Your Persona & Vibe Relate?'
-                  )}
+                  {isCultural && !isSr && !isZh
+                    ? "How Do Your Persona & Vibe Work Together?"
+                    : isSr
+                      ? "Kako se Vaša Persona i Vajb dopunjuju?"
+                      : isZh
+                        ? "您的旅行人格与核心氛围如何相辅相成？"
+                        : "How Do Your Persona & Vibe Relate?"}
                 </h4>
 
                 <div className="space-y-3.5 text-[#2D3025] text-[11.5px] leading-relaxed font-medium">
                   {isCultural && !isSr && !isZh ? (
                     <>
                       <p>
-                        Your <strong>Mood Orbit</strong> is where personalization begins. By adjusting it, you tell IDEMO how you feel today.
+                        Your <strong>Mood Orbit</strong> is where
+                        personalization begins. By adjusting it, you tell IDEMO
+                        how you feel today.
                       </p>
                       <p className="border-t border-[#2D3025]/10 pt-3">
-                        Your <strong>Vibe</strong> reflects your current mood, while your <strong>Persona</strong> represents your broader travel style, shaped over time by your preferences and interactions.
+                        Your <strong>Vibe</strong> reflects your current mood,
+                        while your <strong>Persona</strong> represents your
+                        broader travel style, shaped over time by your
+                        preferences and interactions.
                       </p>
                       <p>
-                        Together, they help IDEMO curate recommendations that feel personal and relevant—all processed privately on your device.
+                        Together, they help IDEMO curate recommendations that
+                        feel personal and relevant—all processed privately on
+                        your device.
                       </p>
                       <p className="border-t border-[#2D3025]/10 pt-3 text-xs font-bold text-accent-teal">
-                        <strong>New to IDEMO?</strong> Visit <strong>Profile</strong> and calibrate your Mood Orbit for more personalized recommendations.
+                        <strong>New to IDEMO?</strong> Visit{" "}
+                        <strong>Profile</strong> and calibrate your Mood Orbit
+                        for more personalized recommendations.
                       </p>
                     </>
                   ) : (
@@ -1806,15 +2294,27 @@ export default function MoodOrbit({
                       <p>
                         {isSr ? (
                           <>
-                            Vaša <strong>Preovlađujuća Persona</strong> predstavlja Vaš osnovni, dugoročni stil putovanja (određen položajem Mood Orbite). S druge strane, <strong>Atmosfera / Vajb</strong> je trenutni dinamički odraz Vaših izabranih kategorija interesovanja.
+                            Vaša <strong>Preovlađujuća Persona</strong>{" "}
+                            predstavlja Vaš osnovni, dugoročni stil putovanja
+                            (određen položajem Mood Orbite). S druge strane,{" "}
+                            <strong>Atmosfera / Vajb</strong> je trenutni
+                            dinamički odraz Vaših izabranih kategorija
+                            interesovanja.
                           </>
                         ) : isZh ? (
                           <>
-                            您的<strong>核心旅行人格</strong>代表您长期且本质的探索方式（由情绪星轨定义），而<strong>核心氛围</strong>则是您当前选择的兴趣品类的动态映射。
+                            您的<strong>核心旅行人格</strong>
+                            代表您长期且本质的探索方式（由情绪星轨定义），而
+                            <strong>核心氛围</strong>
+                            则是您当前选择的兴趣品类的动态映射。
                           </>
                         ) : (
                           <>
-                            Your <strong>Prevailing Persona</strong> acts as your overarching travel signature (derived from your Mood Orbit), while your <strong>Atmosphere / Vibe</strong> is a real-time reflection of your selected category interests.
+                            Your <strong>Prevailing Persona</strong> acts as
+                            your overarching travel signature (derived from your
+                            Mood Orbit), while your{" "}
+                            <strong>Atmosphere / Vibe</strong> is a real-time
+                            reflection of your selected category interests.
                           </>
                         )}
                       </p>
@@ -1822,15 +2322,29 @@ export default function MoodOrbit({
                       <p className="border-t border-[#2D3025]/10 pt-3">
                         {isSr ? (
                           <>
-                            <strong>Uticaj na ponudu:</strong> Persona postavlja osnovni stil kustosiranja (npr. naglašavajući skrivena mesta naspram elitnog nasleđa), dok aktivni Vajb direktno utiče na težinu i redosled preporuka u katalogu, izdvajajući na vrh beogradska mesta koja se najviše poklapaju sa Vašim trenutnim raspoloženjem.
+                            <strong>Uticaj na ponudu:</strong> Persona postavlja
+                            osnovni stil kustosiranja (npr. naglašavajući
+                            skrivena mesta naspram elitnog nasleđa), dok aktivni
+                            Vajb direktno utiče na težinu i redosled preporuka u
+                            katalogu, izdvajajući na vrh beogradska mesta koja
+                            se najviše poklapaju sa Vašim trenutnim
+                            raspoloženjem.
                           </>
                         ) : isZh ? (
                           <>
-                            <strong>推荐影响：</strong>核心旅行人格设定了整体推荐内容的深度与调性，而核心氛围则根据当下的兴趣标签直接对贝尔格莱德的地标点位进行排序与加权，确保展示最契合您的特色行程。
+                            <strong>推荐影响：</strong>
+                            核心旅行人格设定了整体推荐内容的深度与调性，而核心氛围则根据当下的兴趣标签直接对贝尔格莱德的地标点位进行排序与加权，确保展示最契合您的特色行程。
                           </>
                         ) : (
                           <>
-                            <strong>Consequence on offer selection:</strong> The Persona sets the qualitative curation threshold (e.g., prioritizing hidden gems versus historic heritage), while the active Vibe directly weights and prioritizes the list of Belgrade spots—bringing locations that maximize both your active mindset and your selected interests straight to the top of your catalog.
+                            <strong>Consequence on offer selection:</strong> The
+                            Persona sets the qualitative curation threshold
+                            (e.g., prioritizing hidden gems versus historic
+                            heritage), while the active Vibe directly weights
+                            and prioritizes the list of Belgrade spots—bringing
+                            locations that maximize both your active mindset and
+                            your selected interests straight to the top of your
+                            catalog.
                           </>
                         )}
                       </p>
@@ -1845,7 +2359,7 @@ export default function MoodOrbit({
                   }}
                   className="w-full h-10 mt-2 bg-brand-charcoal text-[#F6F5F2] rounded-xl font-serif text-xs tracking-tight hover:bg-brand-charcoal/90 transition-all flex items-center justify-center gap-2 shadow-sm border border-brand-charcoal/10 cursor-pointer"
                 >
-                  {isSr ? 'Razumem' : isZh ? '我知道了' : 'Understood'}
+                  {isSr ? "Razumem" : isZh ? "我知道了" : "Understood"}
                 </button>
               </div>
             </motion.div>
@@ -1882,36 +2396,63 @@ export default function MoodOrbit({
               <div className="flex items-start gap-1.5">
                 <span className="text-cyan-400 text-xs leading-none">⏱️</span>
                 <span>
-                  {language === 'sr' ? (
-                    <><strong>Vreme:</strong> Izaberite raspoloživo vreme rotiranjem prstena.</>
-                  ) : language === 'zh' ? (
-                    <><strong>可用时间:</strong> 通过旋转最外侧轨环来选择行程可用时间。</>
+                  {language === "sr" ? (
+                    <>
+                      <strong>Vreme:</strong> Izaberite raspoloživo vreme
+                      rotiranjem prstena.
+                    </>
+                  ) : language === "zh" ? (
+                    <>
+                      <strong>可用时间:</strong>{" "}
+                      通过旋转最外侧轨环来选择行程可用时间。
+                    </>
                   ) : (
-                    <><strong>Time:</strong> Select time available by rotating the ring.</>
+                    <>
+                      <strong>Time:</strong> Select time available by rotating
+                      the ring.
+                    </>
                   )}
                 </span>
               </div>
               <div className="flex items-start gap-1.5">
                 <span className="text-amber-400 text-xs leading-none">💰</span>
                 <span>
-                  {language === 'sr' ? (
-                    <><strong>Budžet:</strong> Podesite budžet povlačenjem prečnika unutra i spolja.</>
-                  ) : language === 'zh' ? (
-                    <><strong>预算上限:</strong> 通过向内或向外拉伸表壳以设置行旅预算。</>
+                  {language === "sr" ? (
+                    <>
+                      <strong>Budžet:</strong> Podesite budžet povlačenjem
+                      prečnika unutra i spolja.
+                    </>
+                  ) : language === "zh" ? (
+                    <>
+                      <strong>预算上限:</strong>{" "}
+                      通过向内或向外拉伸表壳以设置行旅预算。
+                    </>
                   ) : (
-                    <><strong>Budget:</strong> Set the budget by pulling the diameter in and out.</>
+                    <>
+                      <strong>Budget:</strong> Set the budget by pulling the
+                      diameter in and out.
+                    </>
                   )}
                 </span>
               </div>
               <div className="flex items-start gap-1.5">
                 <span className="text-rose-400 text-xs leading-none">🎯</span>
                 <span>
-                  {language === 'sr' ? (
-                    <><strong>Smer:</strong> Postavite centar tamo gde najbolje opisuje Vaše raspoloženje.</>
-                  ) : language === 'zh' ? (
-                    <><strong>旅行心情:</strong> 拖拽中心点，将其定位在最契合您当下心情的位置。</>
+                  {language === "sr" ? (
+                    <>
+                      <strong>Smer:</strong> Postavite centar tamo gde najbolje
+                      opisuje Vaše raspoloženje.
+                    </>
+                  ) : language === "zh" ? (
+                    <>
+                      <strong>旅行心情:</strong>{" "}
+                      拖拽中心点，将其定位在最契合您当下心情的位置。
+                    </>
                   ) : (
-                    <><strong>Mood:</strong> Place where best describes your current mood.</>
+                    <>
+                      <strong>Mood:</strong> Place where best describes your
+                      current mood.
+                    </>
                   )}
                 </span>
               </div>
@@ -1925,7 +2466,10 @@ export default function MoodOrbit({
                   triggerHapticProxy(12);
                   setShowOnboarding(false);
                   try {
-                    safeStorage.setItem('idemo_mood_orbit_onboarding_seen', 'true');
+                    safeStorage.setItem(
+                      "idemo_mood_orbit_onboarding_seen",
+                      "true",
+                    );
                   } catch (err) {
                     console.warn(err);
                   }
@@ -1935,7 +2479,13 @@ export default function MoodOrbit({
                 }}
                 className="px-4 py-1 rounded-md bg-amber-500 text-brand-charcoal hover:bg-amber-400 font-black text-[9px] uppercase tracking-widest transition-all flex items-center gap-1 cursor-pointer outline-none shadow-md shadow-amber-500/20 pointer-events-auto"
               >
-                <span>{language === 'sr' ? 'U REDU' : language === 'zh' ? '我知道了' : 'Got it'}</span>
+                <span>
+                  {language === "sr"
+                    ? "U REDU"
+                    : language === "zh"
+                      ? "我知道了"
+                      : "Got it"}
+                </span>
                 <span>&rarr;</span>
               </button>
             </div>

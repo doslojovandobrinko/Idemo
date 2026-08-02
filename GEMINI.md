@@ -72,7 +72,23 @@ Describe the requested task precisely.
 
 ## Governance Version
 
-State the current approved governance version and status.
+State the current approved governance version and status. Do not invent or fabricate governance versions. If unknown, report as UNKNOWN.
+
+## Scope Manifest
+
+CREATE: List files to create (or None)
+MODIFY: List exact files to modify
+PROTECT: List explicitly protected files/directories
+
+## Frozen Contract Declarations
+
+Declare frozen contracts for this work package:
+
+- Database Schema & Tables:
+- RPC Signatures & Enums:
+- Edge Function Routes:
+- Request / Response Contracts:
+- UI Wording & Status Values:
 
 ## Files Proposed for Modification
 
@@ -271,11 +287,31 @@ Every completed implementation must end with:
 
 ## Governance Version
 
-State the approved governance version used.
+State the approved governance version used. Do not invent or fabricate governance versions. If unknown, report as UNKNOWN.
 
 ## Compliance Verdict
 
 Repeat the pre-implementation verdict.
+
+## Discrepancies Found
+
+DISCREPANCIES FOUND:
+
+- None (or list exact discrepancies found)
+
+## Scope Manifest Verification
+
+CREATE: Confirmed created files (or None)
+MODIFY: Confirmed modified files
+PROTECT: Confirmed untouched protected files
+
+## Future Backlog Items
+
+List any optional refinements or post-freeze ideas discovered during execution (must be excluded from current implementation).
+
+## Evidence Requirement Note
+
+AI-generated completion reports are claims until independently verified by repository evidence, test outputs, logs, database state, or deployment verification.
 
 ## Files Changed
 
@@ -291,7 +327,13 @@ Confirm the protected scope that remained untouched.
 
 ## Tests Executed
 
-List every executed command or manual validation and its actual result.
+List every executed command or manual validation and its actual result. Format as:
+
+- TEST NAME:
+- Command executed:
+- Expected result:
+- Actual result:
+- PASS / FAIL
 
 ## Tests Not Executed
 
@@ -336,6 +378,18 @@ Every task must preserve the following:
 8. One authoritative source of truth.
 9. Evidence over assumptions.
 10. Design for long-term scale.
+11. Core Engine Architecture Freeze: Extend the platform, do not redesign the platform. Once the Core Engine architecture is established and validated, future work must prioritize configuration, content expansion, partner onboarding, operational tooling (IDEMO Studio), and quality assurance while preserving backward compatibility and avoiding unnecessary architectural churn.
+12. Principle 28 — Editorial Content Is Versioned: Every editorial asset (Recommendations, Partners, Editorial Collections, Destination Guides, Translation Records, Images, Editorial Notes) shall have its own independent version history, completely decoupled from Application and Destination Package versions. Every editorial asset shall support Current Version, Previous Versions, Change History, Approval History, and Publication History.
+13. Principle 29 — Every Change Has A Reason: Every editorial modification shall record what changed, why it changed, who approved it, date & time, previous version, new version, and the first Destination Package containing the change. No editorial modification shall become anonymous.
+14. Principle 30 — Everything Is Draft Until Published: Every editorial object shall progress through a governed lifecycle (`Research Candidate → Editorial Draft → Review → Approved → Canonical → Included In Destination Package → Published → Archived`). Only Published content becomes visible to visitors.
+15. Principle 31 — Editorial Change Intelligence (ECI): Whenever an editorial object changes, IDEMO Studio shall automatically determine downstream impact (translations requiring review, partner mappings affected, collections affected, destination packages requiring regeneration, publication readiness updated). Editors shall never manually determine dependencies.
+16. Principle 32 — Destination Health Dashboard: Every destination shall expose a real-time operational health dashboard tracking Recommendations, Partners, Translations, Images, Coordinates, Mood Orbit, Editorial Collections, Destination Packages, QA Status, Outstanding Blocking Issues, and Overall Release Readiness to answer: "Is this destination ready for release today?"
+17. Principle 33 — Translation Review Workspace: Localization shall become a permanent operational capability inside IDEMO Studio (side-by-side language comparison, difference highlighting, translation approval workflow, mobile preview, terminology validation, progress dashboard, Translation Memory, Editorial Change Intelligence, automatic review requests when English changes, version comparison, human approval workflow). No future localization shall require external spreadsheets or manual comparison.
+18. Principle 34 — Operational Tooling Over Engineering: The Core Engine is complete. Future investment shall prioritize editorial productivity, quality assurance, partner onboarding, content governance, publishing workflow, operational analytics, and release confidence before introducing new technical capabilities.
+19. Principle 35 — Destination Intelligence Platform: IDEMO Studio is officially recognized as the permanent operational platform of IDEMO. Its purpose is to manage Recommendations, Partners, Editorial Collections, Translations, Destination Packages, Publication, Analytics, Editorial Intelligence, Quality Assurance, and Release Governance. The mobile application remains a presentation client while authoritative business intelligence resides within IDEMO Studio.
+20. Principle 36 — Single Source of Truth (SSOT): Every business object managed by IDEMO (Recommendations, Partners, Editorial Collections, Destinations, Translations, Image Assets, Mood Orbit Calibrations, Geographic Coordinates, Contact Details, Editorial Notes, Package Manifests, Category Definitions, Taxonomies, Service Areas, Language Definitions) shall have exactly one authoritative record stored in Supabase. No duplicated business data shall exist as independently maintained copies. Mobile applications, destination packages, search indexes, analytics, APIs, offline caches, partner portals, and translation workspaces consume authoritative data as generated or cached views.
+21. Principle 37 — Platform Maturation Phase & Operational Governance: Future development transitions from architectural expansion to disciplined operational execution. Engineering priority is restricted to production readiness, operational excellence, editorial quality, partner quality, reliability, performance, and maintainability across the 5 approved streams (Editorial Operations, Partner Operations, Destination Operations, Platform Operations, and Production Operations). Redesign of stable components or unnecessary feature expansion is strictly prohibited.
+22. Principle 38 — Architecture Freeze & Stage-Gated Execution: Once a work package receives explicit architectural approval, the approved architecture becomes frozen. Implementation must execute the frozen specification exactly without redesigning, reinterpreting, substituting, renaming, merging, relocating, optimizing, or introducing unapproved "minor improvements". Any conflict with repository baseline, live schema, security, or runtime dependencies mandates an immediate STOP and report. Architecture, implementation, verification, and deployment operate as separate, sequential approval gates. Optional post-freeze ideas must be recorded in a separate future backlog.
 
 ---
 

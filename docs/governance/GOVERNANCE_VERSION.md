@@ -15,14 +15,15 @@ The following documents form the approved IDEMO Governance Framework:
 
 1. `IDEMO_PLATFORM_CONSTITUTION.md`
 2. `PROJECT_PRINCIPLES.md`
-3. `AI_IMPLEMENTATION_PROTOCOL.md`
-4. `ARCHITECTURE_CHECKLIST.md`
-5. `API_CONTRACT_SPECIFICATION.md`
-6. `DATA_MODEL_STANDARD.md`
-7. `EDITORIAL_PUBLISHING_POLICY.md`
-8. `AI_INTEGRATION_POLICY.md`
-9. `SECURITY_MODEL.md`
-10. `CHANGE_CONTROL_POLICY.md`
+3. `CANONICAL_BASELINE_V1.md`
+4. `AI_IMPLEMENTATION_PROTOCOL.md`
+5. `ARCHITECTURE_CHECKLIST.md`
+6. `API_CONTRACT_SPECIFICATION.md`
+7. `DATA_MODEL_STANDARD.md`
+8. `EDITORIAL_PUBLISHING_POLICY.md`
+9. `AI_INTEGRATION_POLICY.md`
+10. `SECURITY_MODEL.md`
+11. `CHANGE_CONTROL_POLICY.md`
 
 All future implementation work must comply with the current approved version of this framework.
 
@@ -42,6 +43,10 @@ Any proposed governance change requires:
 8. Confirmation that no existing security, editorial or architectural control has been weakened unintentionally.
 
 Silent changes, incidental rewrites and implementation-driven exceptions are prohibited.
+
+## Prohibition Against Invented Versions
+
+AI agents, developers, and automated tools must never invent, fabricate, or guess governance version numbers. If the governance version cannot be verified from `GOVERNANCE_VERSION.md`, it must be explicitly reported as `UNKNOWN` rather than fabricated.
 
 ## Versioning Rules
 

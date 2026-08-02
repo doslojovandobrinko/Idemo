@@ -1,4 +1,5 @@
 # IDEMO Canonical Engineering Knowledge Base
+
 **Master Entrance & Documentation Roadmap**
 
 - **System Version:** v2.4.0-Canonical
@@ -167,7 +168,7 @@ For new developers, engineers, and curation directors joining the IDEMO project,
 
 ## 6. Document Ownership & Revision Policy
 
-- **Document Owners:** 
+- **Document Owners:**
   - **Engineering Leads:** Responsible for `RecommendationEngineTechnicalSpecification.md`, `DataDictionary.md`, `ArchitectureDecisionLog.md`, and `AIDevelopmentGuidelines.md`.
   - **Curation & Editorial Leads:** Responsible for `CurationStandardsHandbook.md`, `RecommendationQAHandbook.md`, and `CountryExpansionHandbook.md`.
   - **Product & Design Leads:** Responsible for `ProductRequirementsDocument.md` and `DesignSystemHandbook.md`.
@@ -181,16 +182,18 @@ For new developers, engineers, and curation directors joining the IDEMO project,
 For architectural escalations, board approvals, and release authorizations, contact the Governance Board director or open a tracking issue in the central engineering workspace.
 
 ---
+
 **Related Technical Documents:**
-* [IDEMO Governance Charter](./GovernanceCharter.md)
-* [IDEMO Product Requirements Document](./ProductRequirementsDocument.md)
-* [IDEMO Mood Orbit Calibration Handbook](./MoodOrbitCalibrationHandbook.md)
-* [IDEMO Curation Standards Handbook](./CurationStandardsHandbook.md)
-* [IDEMO Recommendation Engine Technical Specification](./RecommendationEngineTechnicalSpecification.md)
-* [IDEMO Data Dictionary](./DataDictionary.md)
-* [IDEMO Design System Handbook](./DesignSystemHandbook.md)
-* [IDEMO Recommendation QA Handbook](./RecommendationQAHandbook.md)
-* [IDEMO AI Development Guidelines](./AIDevelopmentGuidelines.md)
-* [IDEMO Country Expansion Handbook](./CountryExpansionHandbook.md)
-* [IDEMO Architecture Decision Log](./ArchitectureDecisionLog.md)
-* [IDEMO Changelog](./CHANGELOG.md)
+
+- [IDEMO Governance Charter](./GovernanceCharter.md)
+- [IDEMO Product Requirements Document](./ProductRequirementsDocument.md)
+- [IDEMO Mood Orbit Calibration Handbook](./MoodOrbitCalibrationHandbook.md)
+- [IDEMO Curation Standards Handbook](./CurationStandardsHandbook.md)
+- [IDEMO Recommendation Engine Technical Specification](./RecommendationEngineTechnicalSpecification.md)
+- [IDEMO Data Dictionary](./DataDictionary.md)
+- [IDEMO Design System Handbook](./DesignSystemHandbook.md)
+- [IDEMO Recommendation QA Handbook](./RecommendationQAHandbook.md)
+- [IDEMO AI Development Guidelines](./AIDevelopmentGuidelines.md)
+- [IDEMO Country Expansion Handbook](./CountryExpansionHandbook.md)
+- [IDEMO Architecture Decision Log](./ArchitectureDecisionLog.md)
+- [IDEMO Changelog](./CHANGELOG.md)

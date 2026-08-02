@@ -40,31 +40,31 @@ Never solve a content or operations requirement by hard-coding production data i
 
 The frontend may contain:
 
-* reusable screen structures;
-* reusable recommendation and collection renderers;
-* the Mood Orbit interface;
-* travel-plan functionality;
-* inquiry workflow interfaces;
-* Partner Portal interfaces;
-* secure API-client logic;
-* loading, error and offline states;
-* supported component schemas;
-* local caching of non-sensitive server responses;
-* minimum-version and compatibility handling.
+- reusable screen structures;
+- reusable recommendation and collection renderers;
+- the Mood Orbit interface;
+- travel-plan functionality;
+- inquiry workflow interfaces;
+- Partner Portal interfaces;
+- secure API-client logic;
+- loading, error and offline states;
+- supported component schemas;
+- local caching of non-sensitive server responses;
+- minimum-version and compatibility handling.
 
 The frontend must not contain:
 
-* production recommendation records;
-* production partner records;
-* partner PINs or credentials;
-* production recommendation-to-partner assignments;
-* active pricing records;
-* routing decisions;
-* editorial publication status;
-* notification queues;
-* Gemini API keys;
-* Supabase service-role keys;
-* simulated successful production operations.
+- production recommendation records;
+- production partner records;
+- partner PINs or credentials;
+- production recommendation-to-partner assignments;
+- active pricing records;
+- routing decisions;
+- editorial publication status;
+- notification queues;
+- Gemini API keys;
+- Supabase service-role keys;
+- simulated successful production operations.
 
 ---
 
@@ -72,30 +72,30 @@ The frontend must not contain:
 
 Supabase is the authoritative source for:
 
-* recommendations;
-* recommendation translations;
-* recommendation images;
-* recommendation attributes;
-* categories;
-* collections;
-* seasonal availability;
-* editorial review status;
-* publication status;
-* partner profiles;
-* partner capabilities;
-* partner languages;
-* partner coverage;
-* partner availability;
-* recommendation-to-partner relationships;
-* inquiry records;
-* inquiry candidates;
-* partner offers and responses;
-* visitor resolutions;
-* routing configuration;
-* notification state;
-* feature flags;
-* application configuration;
-* audit records.
+- recommendations;
+- recommendation translations;
+- recommendation images;
+- recommendation attributes;
+- categories;
+- collections;
+- seasonal availability;
+- editorial review status;
+- publication status;
+- partner profiles;
+- partner capabilities;
+- partner languages;
+- partner coverage;
+- partner availability;
+- recommendation-to-partner relationships;
+- inquiry records;
+- inquiry candidates;
+- partner offers and responses;
+- visitor resolutions;
+- routing configuration;
+- notification state;
+- feature flags;
+- application configuration;
+- audit records.
 
 Local React state and safeStorage may support temporary interface behaviour and caching only.
 
@@ -111,17 +111,17 @@ The frontend must not directly depend on internal database implementation detail
 
 Use stable typed contracts for operations such as:
 
-* application bootstrap;
-* recommendation listing;
-* recommendation details;
-* collections;
-* inquiry creation;
-* inquiry status;
-* visitor resolution;
-* partner authentication;
-* partner opportunities;
-* partner responses;
-* assignment release.
+- application bootstrap;
+- recommendation listing;
+- recommendation details;
+- collections;
+- inquiry creation;
+- inquiry status;
+- visitor resolution;
+- partner authentication;
+- partner opportunities;
+- partner responses;
+- assignment release.
 
 Do not expose service-role credentials to the client.
 
@@ -137,13 +137,13 @@ Production workflows must never simulate success.
 
 Forbidden patterns include:
 
-* generating a random inquiry reference without creating a backend inquiry;
-* saving an inquiry only to safeStorage;
-* updating inquiry status only in React state;
-* accepting a partner offer only in a local array;
-* displaying mock partner opportunities as live data;
-* returning a successful interface state when the backend request failed;
-* silently falling back to fabricated production records.
+- generating a random inquiry reference without creating a backend inquiry;
+- saving an inquiry only to safeStorage;
+- updating inquiry status only in React state;
+- accepting a partner offer only in a local array;
+- displaying mock partner opportunities as live data;
+- returning a successful interface state when the backend request failed;
+- silently falling back to fabricated production records.
 
 Mock data may exist only in clearly isolated development fixtures or automated tests.
 
@@ -169,14 +169,14 @@ A recommendation must not become public merely because text or images exist.
 
 Publication must respect required editorial gates, including where applicable:
 
-* factual review;
-* image-quality review;
-* translation completeness;
-* geographic verification;
-* editorial confidence;
-* legal or safety review;
-* publication dates;
-* curation tier.
+- factual review;
+- image-quality review;
+- translation completeness;
+- geographic verification;
+- editorial confidence;
+- legal or safety review;
+- publication dates;
+- curation tier.
 
 The premium IDEMO position must be protected through editorial selection, not catalogue volume.
 
@@ -201,15 +201,15 @@ Adding, suspending, reactivating or reassigning a partner must not require an ap
 
 Partner eligibility must be derived from validated backend data, including:
 
-* capability;
-* language;
-* geography;
-* availability;
-* recommendation relationships;
-* service area;
-* operating status;
-* responsiveness;
-* other approved qualification criteria.
+- capability;
+- language;
+- geography;
+- availability;
+- recommendation relationships;
+- service area;
+- operating status;
+- responsiveness;
+- other approved qualification criteria.
 
 Never hard-code individual partners or assignments into the frontend.
 
@@ -251,27 +251,27 @@ The Gemini API key must be stored as a server-side secret.
 
 Never place a Gemini API key in:
 
-* App.tsx;
-* frontend source files;
-* VITE-prefixed environment variables;
-* mobile packages;
-* safeStorage;
-* localStorage;
-* public configuration tables;
-* committed repository files.
+- App.tsx;
+- frontend source files;
+- VITE-prefixed environment variables;
+- mobile packages;
+- safeStorage;
+- localStorage;
+- public configuration tables;
+- committed repository files.
 
 The secure server-side function must apply:
 
-* authentication where required;
-* authorisation;
-* rate limits;
-* input-length limits;
-* timeout limits;
-* retry limits;
-* daily cost controls;
-* schema validation;
-* safe fallback behaviour;
-* audit logging.
+- authentication where required;
+- authorisation;
+- rate limits;
+- input-length limits;
+- timeout limits;
+- retry limits;
+- daily cost controls;
+- schema validation;
+- safe fallback behaviour;
+- audit logging.
 
 ---
 
@@ -281,31 +281,31 @@ Gemini is an assisted intelligence layer.
 
 Gemini may:
 
-* draft editorial descriptions;
-* draft translations;
-* extract structured inquiry attributes;
-* suggest categories;
-* suggest tags;
-* suggest Mood Orbit coordinates;
-* detect missing information;
-* flag editorial weaknesses;
-* identify possible duplication;
-* summarise inquiries;
-* propose alternatives from an already verified candidate set.
+- draft editorial descriptions;
+- draft translations;
+- extract structured inquiry attributes;
+- suggest categories;
+- suggest tags;
+- suggest Mood Orbit coordinates;
+- detect missing information;
+- flag editorial weaknesses;
+- identify possible duplication;
+- summarise inquiries;
+- propose alternatives from an already verified candidate set.
 
 Gemini may not:
 
-* publish recommendations;
-* approve translations;
-* activate partners;
-* assign unverified partners;
-* accept or reject partner offers;
-* alter inquiry status directly;
-* bypass editorial review;
-* alter prices;
-* change routing rules;
-* execute unrestricted database writes;
-* treat generated claims as verified facts.
+- publish recommendations;
+- approve translations;
+- activate partners;
+- assign unverified partners;
+- accept or reject partner offers;
+- alter inquiry status directly;
+- bypass editorial review;
+- alter prices;
+- change routing rules;
+- execute unrestricted database writes;
+- treat generated claims as verified facts.
 
 Gemini output is always untrusted input until validated.
 
@@ -343,5 +343,53 @@ Publication requires an explicit authorised editorial approval step.
 
 The review interface must clearly distinguish:
 
-* source material;
-* Gemini-generated draft;
+- source material;
+- Gemini-generated draft;
+
+---
+
+## 14. Architecture Freeze & Stage-Gated Execution Protocol
+
+Once a work package receives explicit architectural approval, the approved architecture becomes frozen for that work package.
+
+### 1. Frozen Specification Mandate
+
+From the point of architectural approval forward:
+
+- Implementation must execute the frozen specification exactly.
+- No human engineer or AI agent may redesign, reinterpret, simplify, substitute, rename, merge, relocate, optimize, broaden, narrow, or introduce "minor improvements" unless a new architectural review is explicitly opened and approved.
+- Renaming or altering frozen contracts is strictly prohibited (including tables, columns, enum values, RPC names, route names, request contracts, response contracts, UI wording, status values, storage paths, and feature boundaries).
+
+### 2. Mandatory Conflict Stop
+
+Any repository, live-schema, runtime, deployment, security, or platform conflict with the frozen architecture mandates an immediate STOP.
+The implementer must:
+
+1. Identify the exact conflict.
+2. Identify the affected file, table, column, RPC, route, status, UI contract, or runtime dependency.
+3. Explain why the frozen requirement cannot be implemented as approved.
+4. Make no substitute implementation or silent workaround.
+5. Await explicit architectural direction.
+
+### 3. Stage-Gated Execution Pipeline
+
+1. **GATE 1 — VERIFIED BASELINE**: Read-only discovery. Produce verified repository, live-schema, and runtime facts. No implementation or assumptions presented as facts.
+2. **GATE 2 — ARCHITECTURAL APPROVAL**: Approve and freeze one minimal design, including file manifest (`CREATE:`, `MODIFY:`, `PROTECT:`), database schema, RPC signatures, routes, enums, status transitions, UI wording, and security boundaries.
+3. **GATE 3 — IMPLEMENTATION**: Execute frozen specification exactly. Provide mandatory scope manifest (`CREATE:`, `MODIFY:`, `PROTECT:`) before editing.
+4. **GATE 4 — VERIFICATION**: Provide evidence-based test results (command, expected, actual, PASS/FAIL) rather than summary claims.
+5. **GATE 5 — DEPLOYMENT APPROVAL**: Separate approval gate required before running SQL migrations, deploying Edge Functions, creating storage buckets, or publishing frontend builds.
+
+### 4. Conflict Precedence Authority Order
+
+1. IDEMO Architectural Vision
+2. Approved Engineering Constitution and Governance Framework
+3. Frozen work-package architecture
+4. Verified live database & deployed runtime
+5. Current repository implementation
+6. Migration history
+7. Technical documentation
+8. Previous AI reports or assumptions
+
+### 5. Future Backlog Rule
+
+Optional refinements or improvements discovered after architectural freeze must be recorded separately as future backlog items and excluded from the active work package unless approved through a formal change-control decision.

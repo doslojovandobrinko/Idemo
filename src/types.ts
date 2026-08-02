@@ -4,20 +4,30 @@
  */
 
 export enum Category {
-  WELLBEING = 'Wellbeing',
-  MEDICAL = 'Medical',
-  NATURE = 'Nature',
-  HISTORY = 'History',
-  GASTRONOMY = 'Gastronomy',
-  TRAVEL = 'Travel',
-  CLUBBING = 'Clubbing',
+  WELLBEING = "Wellbeing",
+  MEDICAL = "Medical",
+  NATURE = "Nature",
+  HISTORY = "History",
+  GASTRONOMY = "Gastronomy",
+  TRAVEL = "Travel",
+  CLUBBING = "Clubbing",
 }
+
+export type RecommendationLifecycleStatus =
+  | "RESEARCH_CANDIDATE"
+  | "NEEDS_EDITORIAL_IMPROVEMENT"
+  | "NEEDS_ADDITIONAL_RESEARCH"
+  | "CANONICAL"
+  | "PUBLISHED"
+  | "DEFERRED"
+  | "RETIRED";
 
 export interface Recommendation {
   id: string;
   dbId?: string;
   title: string;
   category: Category | string;
+  publicationStatus?: RecommendationLifecycleStatus;
   shortDescription: string; // ~50 words
   longDescription: string; // up to 200 words
   image: string;
@@ -28,7 +38,7 @@ export interface Recommendation {
   estimatedCost: string;
   preferredTransport: string;
   isLiked?: boolean;
-  badge?: 'silver' | 'gold' | 'platinum';
+  badge?: "silver" | "gold" | "platinum";
   scheduledDate?: string; // ISO string
   coordinates?: { lat: number; lng: number };
   coordinateX?: number;
@@ -40,22 +50,69 @@ export interface Recommendation {
   urbanity?: number;
   nature?: number;
   weatherDependency?: number;
-  seasonality?: 'all' | 'summer' | 'winter' | 'spring-fall';
+  seasonality?: "all" | "summer" | "winter" | "spring-fall";
   familySuitability?: boolean;
   accessibility?: boolean;
-  premiumLevel?: 'standard' | 'premium' | 'ultra';
-  budgetLevel?: 'free' | 'low' | 'moderate' | 'high' | 'exclusive';
+  premiumLevel?: "standard" | "premium" | "ultra";
+  budgetLevel?: "free" | "low" | "moderate" | "high" | "exclusive";
   recommendedVisitDuration?: number; // in minutes
   equivalents?: Record<string, string>;
   website?: string;
   phone?: string;
   conciergePhone?: string;
-  translations?: Record<string, {
-    title?: string;
-    shortDescription?: string;
-    longDescription?: string;
-    location?: string;
-  }>;
+  translations?: Record<
+    string,
+    {
+      title?: string;
+      shortDescription?: string;
+      longDescription?: string;
+      location?: string;
+      bestTimeToVisit?: string;
+      insiderTip?: string;
+      tagline?: string;
+    }
+  >;
+}
+
+export interface Partner {
+  id: string;
+  pinHash: string;
+  nameEn: string;
+  nameSr: string;
+  nameZh: string;
+  category: string;
+  partnerType: "Individual" | "Organisation";
+  specialOfferEn?: string;
+  specialOfferSr?: string;
+  specialOfferZh?: string;
+  descriptionEn?: string;
+  descriptionSr?: string;
+  descriptionZh?: string;
+  locationEn?: string;
+  locationSr?: string;
+  locationZh?: string;
+  phone?: string;
+  whatsApp?: string;
+  email?: string;
+  website?: string;
+  coordinateX?: number;
+  coordinateY?: number;
+  expertise?: string[];
+  entityType?: string;
+  candidateType?: string;
+  verificationStatus?: string;
+  verificationDetails?: string;
+  lastVerified?: string;
+  routingRole?: string;
+  operationalRole?: string;
+  conciergeRoutingEligible?: string;
+  directContactAvailable?: string;
+  directBookingPhone?: string;
+  directBookingWhatsApp?: string;
+  directBookingEmail?: string;
+  directBookingUrl?: string;
+  directBookingNotes?: string;
+  linkedRecommendations?: string[];
 }
 
 export interface UsefulTip {
@@ -69,10 +126,13 @@ export interface UsefulTip {
   androidLink?: string;
   iosLink?: string;
   equivalentPhrases?: string;
-  translations?: Record<string, {
-    title?: string;
-    description?: string;
-  }>;
+  translations?: Record<
+    string,
+    {
+      title?: string;
+      description?: string;
+    }
+  >;
 }
 
 export interface DidYouKnow {
@@ -81,13 +141,24 @@ export interface DidYouKnow {
   whyItMatters: string;
   coordinateX?: number;
   coordinateY?: number;
-  translations?: Record<string, {
-    fact?: string;
-    whyItMatters?: string;
-  }>;
+  translations?: Record<
+    string,
+    {
+      fact?: string;
+      whyItMatters?: string;
+    }
+  >;
 }
 
-export type AppScreen = 'landing' | 'home' | 'details' | 'plan' | 'explore' | 'profile' | 'partners';
+export type AppScreen =
+  | "landing"
+  | "home"
+  | "details"
+  | "plan"
+  | "explore"
+  | "profile"
+  | "partners"
+  | "studio";
 
 export interface InquiryRecordV2 {
   local_queue_id: string;
@@ -102,7 +173,7 @@ export interface InquiryRecordV2 {
   requested_end_at: string;
   preferred_date: string;
   preferred_time: string;
-  status: 'draft' | 'submitting' | 'submitted' | 'failed';
+  status: "draft" | "submitting" | "submitted" | "failed";
   server_inquiry_id?: string;
   public_reference_code?: string;
   is_server_authoritative: boolean;
@@ -142,4 +213,143 @@ export interface VisitorActionResult {
   match_id?: string;
   status?: string;
   error?: string;
+}
+
+export enum EditorialCollectionCategory {
+  HISTORY_HERITAGE = "History & Heritage",
+  SPIRITUAL_CULTURE = "Spiritual & Culture",
+  NATURE_TRAILS = "Nature & Trails",
+  URBAN_MODERN = "Urban & Modern",
+  GASTRONOMY_WINE = "Gastronomy & Wine",
+  SPECIAL_JOURNEY = "Special Journey",
+}
+
+export interface EditorialCollectionMapRouteItem {
+  latitude: number;
+  longitude: number;
+  label?: string;
+  recommendationId?: string;
+}
+
+export interface EditorialCollection {
+  id: string;
+  dbId?: string;
+  titleEn: string;
+  titleSr?: string;
+  titleZh?: string;
+  subtitleEn: string;
+  subtitleSr?: string;
+  subtitleZh?: string;
+  introductionEn: string;
+  introductionSr?: string;
+  introductionZh?: string;
+  heroImage: string;
+  gallery?: string[];
+  category: EditorialCollectionCategory | string;
+  estimatedDuration?: string;
+  visitorProfile?: string[];
+  recommendedSeason?: string[];
+  estimatedBudget?: string;
+  geographicScope?: string;
+  recommendationIds: string[];
+  recommendedOrder?: number[];
+  mapRoute?: EditorialCollectionMapRouteItem[];
+  visitorTakeawayEn?: string;
+  visitorTakeawaySr?: string;
+  visitorTakeawayZh?: string;
+  journeyRationale?: Record<string, string>;
+  translations?: Record<
+    string,
+    {
+      title?: string;
+      subtitle?: string;
+      introduction?: string;
+      estimatedDuration?: string;
+      geographicScope?: string;
+      estimatedBudget?: string;
+      visitorTakeaway?: string;
+    }
+  >;
+  isPublished?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LoadEditorialCollectionsResult {
+  data: EditorialCollection[] | null;
+  error: string | null;
+  isLive: boolean;
+}
+
+export interface SupabaseEditorialCollectionRow {
+  id: string;
+  source_id?: string | null;
+  title_en: string;
+  title_sr?: string | null;
+  title_zh?: string | null;
+  subtitle_en?: string | null;
+  subtitle_sr?: string | null;
+  subtitle_zh?: string | null;
+  introduction_en?: string | null;
+  introduction_sr?: string | null;
+  introduction_zh?: string | null;
+  hero_image?: string | null;
+  gallery?: string[] | null;
+  category?: string | null;
+  estimated_duration?: string | null;
+  visitor_profile?: string[] | null;
+  recommended_season?: string[] | null;
+  estimated_budget?: string | null;
+  geographic_scope?: string | null;
+  recommendation_ids?: string[] | null;
+  recommended_order?: number[] | null;
+  map_route?: any | null;
+  is_published?: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export type PublicationWorkflowStage =
+  | "draft"
+  | "editorial_review"
+  | "engineering_validation"
+  | "approved"
+  | "published"
+  | "archived";
+
+export interface DestinationManifest {
+  destinationId: string;
+  destinationName: string;
+  contentVersion: string;
+  packageVersion: string;
+  schemaVersion: string;
+  publishedAt: string;
+  minSupportedAppVersion: string;
+  sha256: string;
+  packageSizeBytes: number;
+  itemCount: {
+    recommendations: number;
+    collections: number;
+    partners: number;
+  };
+  status: PublicationWorkflowStage;
+}
+
+export interface DestinationPackage {
+  manifest: DestinationManifest;
+  recommendations: Recommendation[];
+  editorialCollections: EditorialCollection[];
+  partners: Partner[];
+}
+
+export interface SyncStatus {
+  isOnline: boolean;
+  currentPackageVersion: string;
+  latestPackageVersion: string | null;
+  lastCheckedAt: string | null;
+  lastSyncAt: string | null;
+  syncState:
+    "idle" | "checking" | "downloading" | "validating" | "active" | "error";
+  syncError: string | null;
+  availableDestinations: string[];
 }

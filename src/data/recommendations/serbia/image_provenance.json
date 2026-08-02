@@ -1,6 +1,6 @@
 [
   {
-    "draftId": "draft-1",
+    "draftId": "103",
     "assetPath": "https://upload.wikimedia.org/wikipedia/commons/2/29/Lazarev_kanjon._Srbija,_%D0%A1%D0%9F245.jpg",
     "status": "VERIFIED PRODUCTION IMAGE",
     "sourcePage": "https://commons.wikimedia.org/wiki/File:Lazarev_kanjon._Srbija,_%D0%A1%D0%9F245.jpg",
@@ -14,7 +14,7 @@
     "notes": "Verified geographically authentic photo of Lazarev Canyon, Bor, Serbia."
   },
   {
-    "draftId": "draft-2",
+    "draftId": "104",
     "assetPath": "https://upload.wikimedia.org/wikipedia/commons/a/a6/Prerast_u_kanjonu_Vratne_1.jpg",
     "status": "VERIFIED PRODUCTION IMAGE",
     "sourcePage": "https://commons.wikimedia.org/wiki/File:Prerast_u_kanjonu_Vratne_1.jpg",
@@ -28,7 +28,7 @@
     "notes": "Verified geographically authentic photo from Vratna Canyon, Serbia. Depicts Mala Prerast (Small stone bridge)."
   },
   {
-    "draftId": "draft-3",
+    "draftId": "105",
     "assetPath": "https://upload.wikimedia.org/wikipedia/commons/f/fb/Reka_Jerma_-_kanjon.jpg",
     "status": "VERIFIED PRODUCTION IMAGE",
     "sourcePage": "https://commons.wikimedia.org/wiki/File:Reka_Jerma_-_kanjon.jpg",
@@ -42,7 +42,7 @@
     "notes": "Verified authentic photo of Jerma River Gorge (Kanjon Jerme), southeastern Serbia."
   },
   {
-    "draftId": "draft-4",
+    "draftId": "106",
     "assetPath": "/src/assets/images/idemo_rosomaca_canyon.webp",
     "status": "REJECTED — GEOGRAPHIC IDENTITY UNVERIFIED",
     "sourcePage": null,
@@ -56,7 +56,7 @@
     "notes": "Observed evidence: renders a generic mountain landscape rather than the distinctive Rosomački Lonci layered limestone canyon."
   },
   {
-    "draftId": "draft-5",
+    "draftId": "107",
     "assetPath": "/src/assets/images/idemo_krupaj_spring.webp",
     "status": "REJECTED — DUPLICATE / WRONG IMAGE",
     "sourcePage": null,
@@ -70,7 +70,7 @@
     "notes": "Binary duplicate of Zagajička Hills (idemo_zagajicka_hills.webp)."
   },
   {
-    "draftId": "draft-6",
+    "draftId": "108",
     "assetPath": "https://upload.wikimedia.org/wikipedia/commons/9/9c/Valjevske_planine_-_kanjon_reke_Gradac_-_mesto_%C5%A0areno_platno_-_detalj_1.jpg",
     "status": "VERIFIED PRODUCTION IMAGE",
     "sourcePage": "https://commons.wikimedia.org/wiki/File:Valjevske_planine_-_kanjon_reke_Gradac_-_mesto_%C5%A0areno_platno_-_detalj_1.jpg",
@@ -84,7 +84,7 @@
     "notes": "Verified geographically authentic photo of the Gradac River Canyon (Kanjon reke Gradac) at Šareno platno, Valjevske planine, Serbia."
   },
   {
-    "draftId": "draft-7",
+    "draftId": "109",
     "assetPath": "/src/assets/images/idemo_ovcar_kablar.webp",
     "status": "VERIFIED PRODUCTION IMAGE",
     "sourcePage": null,
@@ -98,7 +98,7 @@
     "notes": "Accepted by Creator. Verified geographically authentic photo of the Ovčar-Kablar Gorge."
   },
   {
-    "draftId": "draft-8",
+    "draftId": "110",
     "assetPath": "/src/assets/images/idemo_kablar_viewpoint.webp",
     "status": "VERIFIED PRODUCTION IMAGE",
     "sourcePage": null,
@@ -112,7 +112,7 @@
     "notes": "Accepted by Creator. Verified geographically authentic photo of the Kablar viewpoint."
   },
   {
-    "draftId": "draft-9",
+    "draftId": "111",
     "assetPath": "/src/assets/images/idemo_golija_retreat.webp",
     "status": "VERIFIED PRODUCTION IMAGE",
     "sourcePage": null,
@@ -126,7 +126,7 @@
     "notes": "Accepted by Creator. Verified geographically authentic photo of the Golija Biosphere Reserve (Golija mountain retreat)."
   },
   {
-    "draftId": "draft-10",
+    "draftId": "1030",
     "assetPath": "/src/assets/images/idemo_zagajicka_hills.webp",
     "status": "REJECTED — DUPLICATE / WRONG IMAGE",
     "sourcePage": null,
@@ -140,7 +140,7 @@
     "notes": "Binary duplicate of Krupaj Spring (idemo_krupaj_spring.webp)."
   },
   {
-    "draftId": "draft-11",
+    "draftId": "1031",
     "assetPath": "/src/assets/images/idemo_carska_bara.webp",
     "status": "UNVERIFIED",
     "sourcePage": null,
@@ -154,7 +154,7 @@
     "notes": "Geographic identity unverified."
   },
   {
-    "draftId": "draft-47",
+    "draftId": "1067",
     "assetPath": "https://upload.wikimedia.org/wikipedia/commons/6/60/Ov%C4%8Darsko-kablarska_klisura_01.jpg",
     "status": "VERIFIED PRODUCTION IMAGE",
     "sourcePage": "https://commons.wikimedia.org/wiki/File:Ov%C4%8Darsko-kablarska_klisura_01.jpg",
@@ -168,7 +168,7 @@
     "notes": "Verified geographically authentic photo of the Ovčar-Kablar Gorge (Ovčarsko-kablarska klisura), Serbia."
   },
   {
-    "draftId": "draft-14",
+    "draftId": "1034",
     "assetPath": "https://upload.wikimedia.org/wikipedia/commons/c/c9/Manastir_Ra%C4%8Da_124.jpg",
     "status": "VERIFIED PRODUCTION IMAGE",
     "sourcePage": "https://commons.wikimedia.org/wiki/File:Manastir_Ra%C4%8Da_124.jpg",

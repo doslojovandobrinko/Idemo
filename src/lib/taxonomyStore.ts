@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient';
+import { getSupabaseClient, isSupabaseConfigured } from "./supabaseClient";
 
 export interface TaxonomyCache {
   defaultLanguageId: string | null;
@@ -25,21 +25,22 @@ export async function bootstrapTaxonomy(): Promise<TaxonomyCache> {
   if (cache.isLoaded) return cache;
 
   if (!isSupabaseConfigured()) {
-    cache.loadError = 'Supabase environment not configured for taxonomy bootstrap.';
+    cache.loadError =
+      "Supabase environment not configured for taxonomy bootstrap.";
     return cache;
   }
 
   const supabase = getSupabaseClient();
   if (!supabase) {
-    cache.loadError = 'Failed to initialize Supabase client for taxonomy.';
+    cache.loadError = "Failed to initialize Supabase client for taxonomy.";
     return cache;
   }
 
   try {
     const [langRes, areaRes, capRes] = await Promise.all([
-      supabase.from('languages').select('id, code').limit(5),
-      supabase.from('service_areas').select('id').limit(5),
-      supabase.from('capabilities').select('id, code').limit(10),
+      supabase.from("languages").select("id, code").limit(5),
+      supabase.from("service_areas").select("id").limit(5),
+      supabase.from("capabilities").select("id, code").limit(10),
     ]);
 
     if (langRes.error || areaRes.error) {
@@ -52,7 +53,8 @@ export async function bootstrapTaxonomy(): Promise<TaxonomyCache> {
     const capIds = (capRes.data || []).map((c: any) => c.id).filter(Boolean);
 
     if (!langId || !areaId) {
-      cache.loadError = 'Taxonomy tables returned empty results for primary language or service area.';
+      cache.loadError =
+        "Taxonomy tables returned empty results for primary language or service area.";
       return cache;
     }
 

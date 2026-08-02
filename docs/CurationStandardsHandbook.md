@@ -1,4 +1,5 @@
 # IDEMO Curation Standards Handbook
+
 **Editorial Guidelines, Authenticity Protocols & Quality Thresholds for Premium Serbian Curations**
 
 - **System Version:** v2.4.0-Canonical
@@ -10,15 +11,16 @@
 
 ## Revision History
 
-| Version | Date | Author | Description | Status |
-| :--- | :--- | :--- | :--- | :--- |
-| v1.0.0 | 2025-11-12 | Curation Team | Initial editorial guidelines for Belgrade Core pilot launch. | Superseded |
-| v2.0.0 | 2026-03-15 | Lead Ethno-Research | Added strict verification steps for rural and monastery listings. | Superseded |
-| v2.4.0 | 2026-07-02 | Lead AI Agent | Canonical alignment of multi-dimensional attribute metrics. | Active |
+| Version | Date       | Author              | Description                                                       | Status     |
+| :------ | :--------- | :------------------ | :---------------------------------------------------------------- | :--------- |
+| v1.0.0  | 2025-11-12 | Curation Team       | Initial editorial guidelines for Belgrade Core pilot launch.      | Superseded |
+| v2.0.0  | 2026-03-15 | Lead Ethno-Research | Added strict verification steps for rural and monastery listings. | Superseded |
+| v2.4.0  | 2026-07-02 | Lead AI Agent       | Canonical alignment of multi-dimensional attribute metrics.       | Active     |
 
 ---
 
 ## Table of Contents
+
 1. [Core Mission & Philosophy](#1-core-mission--philosophy)
 2. [Strict Authenticity & Bookability Protocols](#2-strict-authenticity--bookability-protocols)
 3. [Editorial Standards: Copywriting & Nomenclature](#3-editorial-standards-copywriting--nomenclature)
@@ -36,8 +38,9 @@
 The primary mission of **IDEMO** is to dismantle standard tourism clichès and replace them with high-fidelity, culturally deep, and geographically authentic local curations. We do not curate tourist traps. Every entry in the IDEMO database must reflect the real, living heartbeat of Serbia—connecting international travelers, business executives, and EXPO 2027 attendees directly with genuine local communities, hidden historical wonders, top-tier medical wellness clinics, and untamed natural ecosystems.
 
 Our philosophy stands on three pillars:
+
 - **Zero Simulation:** We never invent attractions, festivals, or experiences.
-- **Narrative Depth:** We provide cultural context, localized terminology (e.g., *Silosi*, *Kafana*, *Pimnice*), and historical truth.
+- **Narrative Depth:** We provide cultural context, localized terminology (e.g., _Silosi_, _Kafana_, _Pimnice_), and historical truth.
 - **Cognitive Integration:** Every curated asset is mathematically indexed within the **IDEMO Mood Orbit**, making it instantly discoverable through the emotional state of the visitor.
 
 ---
@@ -58,9 +61,10 @@ To preserve the reputation of the platform, every recommendation must adhere to 
 Our copywriting is sophisticated, intellectually honest, and evocative. We avoid generic travel marketing terms like "breathtaking", "stunning", or "jaw-dropping". Instead, we use precise, descriptive, and historically grounded language.
 
 ### Nomenclature Rules:
-- **Localization:** Always include localized Serbian names in the original Cyrillic/Latin script alongside English translations (e.g., *Hram Svetog Save* for Temple of Saint Sava; *Rajačke Pimnice* for Rajac Wine Cellars).
-- **Conciseness:** 
-  - `shortDescription` must be a high-impact, single-sentence summary focusing on the *sensory hook* (maximum 160 characters).
+
+- **Localization:** Always include localized Serbian names in the original Cyrillic/Latin script alongside English translations (e.g., _Hram Svetog Save_ for Temple of Saint Sava; _Rajačke Pimnice_ for Rajac Wine Cellars).
+- **Conciseness:**
+  - `shortDescription` must be a high-impact, single-sentence summary focusing on the _sensory hook_ (maximum 160 characters).
   - `longDescription` must provide complete cultural context, historical details, transport advice, and specific insider tips (typically 3 to 4 well-structured paragraphs).
 - **Avoid Tech Larping:** Do not add fake status coordinates, telemetry lines, or server ports inside the descriptions. The copy must read as if written by a seasoned culture journalist.
 
@@ -82,10 +86,10 @@ Every recommendation must map to exactly one primary category (declared inside `
 ```
 
 - **History (Historic Sites & Museums):** Fortresses, monasteries, archaeological sites, monument complexes, museums.
-- **Gastronomy (Culinary Traditions):** Historic kafanas, modern fine dining, local farmsteads (*salaši*), wine cellars (*pimnice*).
+- **Gastronomy (Culinary Traditions):** Historic kafanas, modern fine dining, local farmsteads (_salaši_), wine cellars (_pimnice_).
 - **Nature (Outdoors & Protected Ecosystems):** Canyons, rivers, mountain reserves, lookout points, hiking trails.
 - **Travel (Urban Explorations & Transit):** Historic neighborhoods (Zemun, Kosančićev Venac), scenic rail routes, scenic viewpoints.
-- **Clubbing (Social Gatherings & Events):** Music festivals, floating clubs (*splavovi*), underground cocktail lounges, warehouse clubs.
+- **Clubbing (Social Gatherings & Events):** Music festivals, floating clubs (_splavovi_), underground cocktail lounges, warehouse clubs.
 - **Wellbeing (Regenerative Spa & Health):** Mud baths, thermal springs, medical clinics, sensory deprivation tanks.
 - **Medical (Advanced Clinical Diagnostics):** Anti-stress clinics, physical therapy centers, stem-cell research centers, high-end dental restoration clinics (retaining EXPO 2027 luxury focus).
 
@@ -96,12 +100,14 @@ Every recommendation must map to exactly one primary category (declared inside `
 Curation teams must assign coordinates based on physical and sensory impact, avoiding arbitrary guess-work.
 
 ### Standard Calibration Values (SCV):
+
 - **Remote Wilderness (e.g., Tara Lookout):** $[x: +2.0, y: -4.5]$ (Highly active physical walk, absolute natural serenity).
 - **Underground Nightclub (e.g., Drugstore):** $[x: +4.5, y: +3.0]$ (Massive high-intensity techno, industrial urban setting).
 - **Isolated Hermit Monastery (e.g., Crna Reka):** $[x: -4.0, y: -3.5]$ (Deep introspective meditation, rugged vertical cliff face).
 - **Michelin-Tier Gastronomy (e.g., Salon 1905):** $[x: -3.5, y: +3.0]$ (Deeply refined quiet luxury, central historical bank building).
 
 ### Slider-to-Coordinate Mapping Rules:
+
 - **Budget Level:** High-cost curations ($>€100$ per person) are positioned with a high luxury attribute ($>8.5$) and typically occupy the left hemisphere of the Mood Orbit ($X < 0$), reflecting personalized, exclusive, uncrowded care.
 - **Time/Duration:** Multi-day excursions automatically receive lower urbanity ($Y < 0$) and lower accessibility ratings, as they require significant travel time away from the Belgrade concrete core.
 
@@ -151,18 +157,24 @@ Before a curation is promoted to the production database (`src/constants.ts`), i
 No curated listing is permanent. The local landscape shifts rapidly.
 
 ### The Annual Review Protocol:
+
 Every January, the curation team must audit all 100+ active recommendations:
+
 - Verify phone numbers, website links, and reservation URLs.
 - Update seasonal pricing bounds to adjust for inflation.
 - Read local reviews (Google, TripAdvisor, local blogs) to catch any decline in quality or service deterioration.
 
 ### Deprecation Policy:
+
 A curation is automatically deactivated and moved to archive status if:
+
 - It ceases operations for more than 45 consecutive days.
 - It loses local authenticity (e.g., a quiet family vineyard is sold to a massive international beverage conglomerate).
 - Its average user satisfaction score drops below $4.0/5.0$ over a 3-month rolling window.
 
 ---
+
 **Related Technical Documents:**
-* [IDEMO Mood Orbit Calibration Handbook](./MoodOrbitCalibrationHandbook.md)
-* [IDEMO Recommendation Engine Technical Specification](./RecommendationEngineTechnicalSpecification.md)
+
+- [IDEMO Mood Orbit Calibration Handbook](./MoodOrbitCalibrationHandbook.md)
+- [IDEMO Recommendation Engine Technical Specification](./RecommendationEngineTechnicalSpecification.md)

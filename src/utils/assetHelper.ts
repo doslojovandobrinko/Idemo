@@ -9,20 +9,20 @@
  * allowing seamless migration to WebP without database modifications.
  */
 export function getOptimizedImageUrl(src: string): string {
-  if (!src) return '';
-  
+  if (!src) return "";
+
   let cleaned = src;
-  if (cleaned.startsWith('/src/assets/images/')) {
-    cleaned = cleaned.replace('/src/assets/images/', 'assets/images/');
-  } else if (cleaned.startsWith('src/assets/images/')) {
-    cleaned = cleaned.replace('src/assets/images/', 'assets/images/');
-  } else if (cleaned.startsWith('/assets/images/')) {
-    cleaned = cleaned.replace('/assets/images/', 'assets/images/');
+  if (cleaned.startsWith("/src/assets/images/")) {
+    cleaned = cleaned.replace("/src/assets/images/", "assets/images/");
+  } else if (cleaned.startsWith("src/assets/images/")) {
+    cleaned = cleaned.replace("src/assets/images/", "assets/images/");
+  } else if (cleaned.startsWith("/assets/images/")) {
+    cleaned = cleaned.replace("/assets/images/", "assets/images/");
   }
-  
-  if (cleaned.endsWith('.png')) {
-    cleaned = cleaned.substring(0, cleaned.length - 4) + '.webp';
+
+  if (cleaned.endsWith(".png")) {
+    cleaned = cleaned.substring(0, cleaned.length - 4) + ".webp";
   }
-  
+
   return cleaned;
 }

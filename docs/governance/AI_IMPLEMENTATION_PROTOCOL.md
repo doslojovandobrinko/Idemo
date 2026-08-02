@@ -10,10 +10,10 @@ The goal of this protocol is to guarantee zero visual, structural, or architectu
 
 ## Definitions
 
-* **AI Agent**: Any automated LLM system, coding assistant, or background agent operating on the IDEMO codebase.
-* **Constitution**: The governing architecture and platform standard located at `/docs/governance/IDEMO_PLATFORM_CONSTITUTION.md`.
-* **Governance Framework**: The collective suite of standards stored within `/docs/governance/`.
-* **Pre-Execution Check**: Mandatory verification steps performed prior to emitting or editing code.
+- **AI Agent**: Any automated LLM system, coding assistant, or background agent operating on the IDEMO codebase.
+- **Constitution**: The governing architecture and platform standard located at `/docs/governance/IDEMO_PLATFORM_CONSTITUTION.md`.
+- **Governance Framework**: The collective suite of standards stored within `/docs/governance/`.
+- **Pre-Execution Check**: Mandatory verification steps performed prior to emitting or editing code.
 
 ---
 
@@ -31,45 +31,53 @@ Before proposing or applying any code changes, the AI Agent MUST read and digest
 
 ## Pre-Implementation Protocol Steps
 
-### Step 1: Constitutional Compliance Verification
-The AI Agent must evaluate the requested task against the 13 Core Principles of `IDEMO_PLATFORM_CONSTITUTION.md`.
-* *Constraint*: If the user request violates any constitutional principle (e.g., asking to hardcode recommendation records in React or expose Gemini keys in the client), the AI Agent MUST explicitly refuse the implementation and state the constitutional conflict.
+### Step 1: Constitutional Compliance & Gate 1 Verification
 
-### Step 2: Architecture & Scope Review
-Identify:
-* Exactly which files need modification.
-* Exactly which files must NOT be touched.
-* Whether the change requires store-release intervention or backend configuration only.
+The AI Agent must perform read-only discovery (Gate 1) and evaluate the task against `IDEMO_PLATFORM_CONSTITUTION.md`.
 
-### Step 3: Risk Analysis
-Evaluate:
-* Potential regression in database RLS policies or RPC security.
-* Potential breaking changes in typed API contracts.
-* Impact on existing test suites (e.g., pgTAP, unit tests).
+- _Constraint_: If the request violates any constitutional principle, the AI Agent MUST refuse implementation.
 
-### Step 4: Execution Procedure
-* Apply minimal surgical modifications.
-* Ensure all database RPC parameters use explicit type annotations and handle NULL safety.
-* Maintain complete modularity and type safety.
+### Step 2: Architecture Freeze & Scope Manifest (Gate 2 & Gate 3)
 
-### Step 5: Verification Procedure
-* Run static analysis / linting (`lint_applet` or `tsc`).
-* Verify applet compilation (`compile_applet`).
-* Verify that no files outside the agreed scope were modified.
+Before emitting or editing code, the AI Agent MUST explicitly state:
+
+- Scope Manifest: `CREATE:`, `MODIFY:`, `PROTECT:`
+- Frozen Contract Declarations (Schemas, Tables, RPCs, Routes, Contracts, UI Wording)
+
+* _Freeze Constraint_: Once frozen, the AI Agent is strictly prohibited from redesigning, reinterpreting, simplifying, substituting, renaming, or introducing "minor improvements". Any conflict with baseline or runtime dependencies requires an immediate STOP. Silent workarounds are prohibited.
+
+### Step 3: Risk & Regression Analysis
+
+Evaluate RLS security, API contracts, typed contracts, and existing test suites.
+
+### Step 4: Execution Procedure (Gate 3)
+
+- Apply minimal surgical modifications strictly to files listed under `MODIFY:` or `CREATE:`.
+- Maintain complete modularity and type safety.
+
+### Step 5: Verification & Completion Procedure (Gate 4 & Gate 5)
+
+- Run static analysis (`lint_applet` / `tsc`) and build verification (`compile_applet`).
+- Provide evidence-based test results (command, expected, actual, PASS/FAIL).
+- Include mandatory fields in completion report: `DISCREPANCIES FOUND:`, `SCOPE MANIFEST VERIFICATION:`, and `FUTURE BACKLOG ITEMS:`.
+- Treat completion claims as claims until independently verified by test evidence. Do not fabricate governance versions.
+- Keep deployment (Gate 5) strictly separated — do not execute unapproved SQL migrations, Edge Function deployments, storage bucket creation, or frontend publication.
 
 ---
 
 ## File Scope Rules
 
 ### Allowed File Modifications
-* Files explicitly designated in the step specification.
-* New additive migration scripts in `/supabase/migrations/` when database updates are required.
-* New additive Edge Functions in `/supabase/functions/`.
+
+- Files explicitly designated in the step specification.
+- New additive migration scripts in `/supabase/migrations/` when database updates are required.
+- New additive Edge Functions in `/supabase/functions/`.
 
 ### Prohibited Modifications
-* Existing deployed database migrations (immutable historical record).
-* `IDEMO_PLATFORM_CONSTITUTION.md` (immutable constitutional foundation).
-* Service-role key exposures or client-side secret injections.
+
+- Existing deployed database migrations (immutable historical record).
+- `IDEMO_PLATFORM_CONSTITUTION.md` (immutable constitutional foundation).
+- Service-role key exposures or client-side secret injections.
 
 ---
 
@@ -83,6 +91,6 @@ If a user prompt requests an action that violates `IDEMO_PLATFORM_CONSTITUTION.m
 
 ## Cross References
 
-* `/docs/governance/IDEMO_PLATFORM_CONSTITUTION.md`
-* `/docs/governance/ARCHITECTURE_CHECKLIST.md`
-* `/docs/governance/SECURITY_MODEL.md`
+- `/docs/governance/IDEMO_PLATFORM_CONSTITUTION.md`
+- `/docs/governance/ARCHITECTURE_CHECKLIST.md`
+- `/docs/governance/SECURITY_MODEL.md`

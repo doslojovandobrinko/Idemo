@@ -1,4 +1,5 @@
 # IDEMO Data Dictionary
+
 **Canonical Database Schema, Type Constraints, and Validation Rules for Curation Objects**
 
 - **System Version:** v2.4.0-Canonical
@@ -9,6 +10,7 @@
 ---
 
 ## Table of Contents
+
 1. [Core Architectural Typing](#1-core-architectural-typing)
 2. [Data Schema & Field-Level Specifications](#2-data-schema--field-level-specifications)
 3. [Field Rules & Allowed Values](#3-field-rules--allowed-values)
@@ -30,6 +32,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 ### 2.1 Core Identity Fields
 
 #### `id`
+
 - **Description:** Globally unique identifier for the recommendation.
 - **Data Type:** `string` (UUID or unique numeric string).
 - **Allowed Values:** Non-empty, alphanumeric characters, hyphens, and underscores.
@@ -39,6 +42,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `"3"` (or `"rec_belgrade_silosi_04"`)
 
 #### `title`
+
 - **Description:** The primary human-readable name of the curation.
 - **Data Type:** `string`
 - **Allowed Values:** 3 to 80 characters.
@@ -48,6 +52,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `"Silosi Belgrade"`
 
 #### `subtitle`
+
 - **Description:** A brief secondary sensory headline or brand tag.
 - **Data Type:** `string`
 - **Allowed Values:** 5 to 100 characters.
@@ -57,6 +62,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `"Silosi Beograd - Creative District & Honeycomb Architecture"`
 
 #### `description`
+
 - **Description:** The primary English narrative description of the curation.
 - **Data Type:** `string`
 - **Allowed Values:** Markdown-compatible text, 100 to 1200 characters.
@@ -70,6 +76,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 ### 2.2 Classification & Geography
 
 #### `category`
+
 - **Description:** The primary core category mapping for search and filtering.
 - **Data Type:** `string` / `Category` (Union type)
 - **Allowed Values:** `"history"`, `"gastronomy"`, `"nature"`, `"travel"`, `"clubbing"`, `"wellbeing"`, `"medical"`
@@ -79,6 +86,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `"wellbeing"`
 
 #### `country`
+
 - **Description:** The ISO 3166-1 alpha-2 code of the country the experience is physically located in.
 - **Data Type:** `string`
 - **Allowed Values:** `"RS"` (Serbia), `"ME"` (Montenegro), `"FR"` (France), `"JP"` (Japan), etc.
@@ -88,6 +96,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `"RS"`
 
 #### `region`
+
 - **Description:** The regional province or federal state.
 - **Data Type:** `string`
 - **Allowed Values:** Regional divisions (e.g., `"Vojvodina"`, `"Šumadija"`, `"Kanto"`, `"Provence"`).
@@ -97,6 +106,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `"Vojvodina"`
 
 #### `city`
+
 - **Description:** The closest municipality, city, or town.
 - **Data Type:** `string`
 - **Allowed Values:** Standard city names.
@@ -106,6 +116,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `"Belgrade"`
 
 #### `latitude`
+
 - **Description:** The geographic WGS-84 coordinate latitude.
 - **Data Type:** `number`
 - **Allowed Values:** Floating point within $[-90.0, 90.0]$
@@ -115,6 +126,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `44.8219`
 
 #### `longitude`
+
 - **Description:** The geographic WGS-84 coordinate longitude.
 - **Data Type:** `number`
 - **Allowed Values:** Floating point within $[-180.0, 180.0]$
@@ -128,6 +140,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 ### 2.3 The Mood Orbit & Spatial Projection
 
 #### `coordinateX`
+
 - **Description:** The canonical position along the horizontal Emotional/Sensory axis of the Mood Orbit.
 - **Data Type:** `number`
 - **Allowed Values:** Floating point within $[-5.0, +5.0]$, rounded to the nearest $0.5$ step.
@@ -137,6 +150,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `-3.5`
 
 #### `coordinateY`
+
 - **Description:** The canonical position along the vertical Environmental Density axis of the Mood Orbit.
 - **Data Type:** `number`
 - **Allowed Values:** Floating point within $[-5.0, +5.0]$, rounded to the nearest $0.5$ step.
@@ -146,6 +160,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `4.0`
 
 #### `radius`
+
 - **Description:** Calculated Euclidean distance of the curation coordinate from the central origin $[0,0]$.
 - **Data Type:** `number`
 - **Allowed Values:** Floating point within $[0.0, 7.071]$
@@ -159,6 +174,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 ### 2.4 Multi-Dimensional Semantic Attributes
 
 #### `energy`
+
 - **Description:** Metric tracking the sensory and neurological intensity of the curation.
 - **Data Type:** `number`
 - **Allowed Values:** Floating point within $[1.0, 10.0]$
@@ -168,6 +184,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `1.5`
 
 #### `social`
+
 - **Description:** Level of human density and active social interaction expected.
 - **Data Type:** `number`
 - **Allowed Values:** Floating point within $[1.0, 10.0]$
@@ -177,6 +194,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `9.2`
 
 #### `luxury`
+
 - **Description:** Level of customized care, exclusivity, and premium pricing.
 - **Data Type:** `number`
 - **Allowed Values:** Floating point within $[1.0, 10.0]$
@@ -186,6 +204,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `8.5`
 
 #### `urbanity`
+
 - **Description:** Environmental density score evaluating concrete infrastructure vs. foliage.
 - **Data Type:** `number`
 - **Allowed Values:** Floating point within $[1.0, 10.0]$
@@ -195,6 +214,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `9.0`
 
 #### `nature`
+
 - **Description:** Complementary index representing vegetation and natural open space.
 - **Data Type:** `number`
 - **Allowed Values:** Floating point within $[1.0, 10.0]$
@@ -204,6 +224,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `1.0`
 
 #### `weatherDependency`
+
 - **Description:** The vulnerability of the curation to poor climate conditions (rain, snow, extreme heat).
 - **Data Type:** `number`
 - **Allowed Values:** Floating point within $[1.0, 10.0]$
@@ -213,6 +234,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `8.5`
 
 #### `seasonality`
+
 - **Description:** Seasonal constraints governing operation.
 - **Data Type:** `string`
 - **Allowed Values:** `"all"`, `"summer"`, `"winter"`, `"spring-fall"`
@@ -222,6 +244,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `"summer"`
 
 #### `familySuitability`
+
 - **Description:** Determines suitability for children and multi-generational families.
 - **Data Type:** `boolean`
 - **Allowed Values:** `true`, `false`
@@ -231,6 +254,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `false`
 
 #### `accessibility`
+
 - **Description:** Declares wheelchair and physical accessibility.
 - **Data Type:** `boolean`
 - **Allowed Values:** `true`, `false`
@@ -240,6 +264,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `true`
 
 #### `premiumLevel`
+
 - **Description:** The tiering classification for luxury and EXPO VIP filtering.
 - **Data Type:** `string`
 - **Allowed Values:** `"standard"`, `"premium"`, `"ultra"`
@@ -249,6 +274,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `"premium"`
 
 #### `budgetLevel`
+
 - **Description:** Ordinal tier representing cost bounds.
 - **Data Type:** `string`
 - **Allowed Values:** `"free"`, `"low"`, `"moderate"`, `"high"`, `"exclusive"`
@@ -258,6 +284,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `"high"`
 
 #### `recommendedVisitDuration`
+
 - **Description:** Expected dwell time at the location.
 - **Data Type:** `number`
 - **Allowed Values:** Integers $>0$.
@@ -271,6 +298,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 ### 2.5 Presentation & Logistics
 
 #### `image`
+
 - **Description:** High-resolution cover photograph URL.
 - **Data Type:** `string`
 - **Allowed Values:** Clean URL pointing to approved image servers.
@@ -280,6 +308,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `"https://images.unsplash.com/photo-1549144511-f099e773c147"`
 
 #### `gallery`
+
 - **Description:** Array of secondary high-definition photographs.
 - **Data Type:** `string[]`
 - **Allowed Values:** Non-empty array of valid URL strings.
@@ -289,6 +318,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `["https://images.unsplash.com/photo-1", "https://images.unsplash.com/photo-2"]`
 
 #### `tags`
+
 - **Description:** Secondary thematic discoverability metadata keywords.
 - **Data Type:** `string[]`
 - **Allowed Values:** Unstructured alphanumeric strings (typically 3 to 8 tags).
@@ -298,6 +328,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `["mill", "design", "gallery", "waterfront"]`
 
 #### `openingHours`
+
 - **Description:** Human-readable operating times.
 - **Data Type:** `string`
 - **Allowed Values:** Clear hour descriptions (e.g., `"Mon-Fri 09:00 - 18:00"`).
@@ -307,6 +338,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `"Daily 10:00 - 22:00"`
 
 #### `estimatedCost`
+
 - **Description:** Text representation of cost for immediate presentation.
 - **Data Type:** `string`
 - **Allowed Values:** Text, typically currency indicators or ranges.
@@ -316,6 +348,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `"1200 RSD (Approx €10)"`
 
 #### `transportMode`
+
 - **Description:** Recommended mode of transit to reach the venue from Belgrade core.
 - **Data Type:** `string`
 - **Allowed Values:** `"walk"`, `"car"`, `"train"`, `"boat"`, `"bicycle"`
@@ -329,6 +362,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 ### 2.6 Algorithmic Scoring & Tracking
 
 #### `popularity`
+
 - **Description:** Base weight representing relative popularity.
 - **Data Type:** `number`
 - **Allowed Values:** Floating point within $[1.0, 5.0]$
@@ -338,6 +372,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `4.9`
 
 #### `recommendationScore`
+
 - **Description:** Calculated rank score for sorting.
 - **Data Type:** `number`
 - **Allowed Values:** Floating point within $[0.0, 150.0]$
@@ -347,6 +382,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `118.4`
 
 #### `confidenceScore`
+
 - **Description:** Deterministic data auditing confidence score.
 - **Data Type:** `number`
 - **Allowed Values:** Percentage within $[0.0, 1.0]$
@@ -356,6 +392,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `0.98`
 
 #### `createdDate`
+
 - **Description:** ISO 8601 timestamp logging database ingestion.
 - **Data Type:** `string`
 - **Allowed Values:** Valid ISO datetime string.
@@ -365,6 +402,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 - **Example:** `"2025-11-12T14:30:00Z"`
 
 #### `updatedDate`
+
 - **Description:** ISO 8601 timestamp logging last database update.
 - **Data Type:** `string`
 - **Allowed Values:** Valid ISO datetime string.
@@ -380,6 +418,7 @@ Below is the definitive documentation for every property processed by the IDEMO 
 To preserve strict type safety, certain categorical properties are bounded using fixed union types or static maps:
 
 ### The Category Scale Map:
+
 - `"history"`: Maps to culture, archeology, monuments, and religious structures.
 - `"gastronomy"`: Maps to restaurants, wineries, kafanas, and agricultural salaši.
 - `"nature"`: Maps to hiking, kayaking, viewpoints, and canyons.
@@ -408,6 +447,7 @@ translations?: Record<string, {
 ```
 
 ### Key Rules:
+
 1. **Fallback Strategy:** If a language request (e.g., Serbian `"sr"`) cannot resolve a key, the engine must default instantly and gracefully to English (`"en"`).
 2. **Key Preservation:** The structural record keys (e.g., `"sr"`, `"de"`) must remain lowercase ISO language codes.
 
@@ -416,14 +456,41 @@ translations?: Record<string, {
 ## 5. Future Compatibility & Extension Notes
 
 As IDEMO expands, future data schema additions must respect these boundaries:
+
 - **Null Safety:** New properties should be declared as optional (`property?: type`) to prevent breaking current JSON structures.
 - **Attribute Scale Stability:** Any new sensory attribute must use the standard $[1.0, 10.0]$ scale to preserve compatibility with the semantic similarity formulas.
 
 ---
+
+## 6. Permanent Editorial Collections Architecture Schema
+
+Editorial Collections introduce a canonical presentation and storytelling layer above individual recommendations.
+
+### 6.1 Entity Definition (`EditorialCollection`)
+
+- **`id`**: `string` - Unique identifier for the collection (e.g. `"col_roman_emperors_01"`).
+- **`titleEn` / `titleSr` / `titleZh`**: `string` - Multilingual collection titles.
+- **`subtitleEn` / `subtitleSr` / `subtitleZh`**: `string` - Multilingual collection subtitles.
+- **`introductionEn` / `introductionSr` / `introductionZh`**: `string` - Narrative introduction.
+- **`heroImage`**: `string` - Path or URL to high-resolution thematic hero visual asset.
+- **`gallery`**: `string[]` - Optional gallery of curated images.
+- **`category`**: `EditorialCollectionCategory | string` - Category (`History & Heritage`, `Spiritual & Culture`, `Nature & Trails`, `Urban & Modern`, `Gastronomy & Wine`, `Special Journey`).
+- **`estimatedDuration`**: `string` - Recommended completion timeframe (e.g., `"2 Days"` or `"Half Day"`).
+- **`visitorProfile`**: `string[]` - Target traveler profiles (e.g., `["History Enthusiasts", "Families"]`).
+- **`recommendedSeason`**: `string[]` - Optimal seasons (e.g., `["Spring", "Autumn"]`).
+- **`estimatedBudget`**: `string` - General budget band across the collection.
+- **`geographicScope`**: `string` - Region or geographical reach (e.g., `"Eastern Serbia & Danube"`).
+- **`recommendationIds`**: `string[]` - List of linked `Recommendation.id` items.
+- **`recommendedOrder`**: `number[]` - Optional indices specifying suggested journey sequence.
+- **`mapRoute`**: `EditorialCollectionMapRouteItem[]` - Optional ordered route coordinates for journey mapping.
+
+---
+
 **Related Technical Documents:**
-* [IDEMO Mood Orbit Calibration Handbook](./MoodOrbitCalibrationHandbook.md)
-* [IDEMO Curation Standards Handbook](./CurationStandardsHandbook.md)
-* [IDEMO Recommendation Engine Technical Specification](./RecommendationEngineTechnicalSpecification.md)
-* [IDEMO Recommendation QA Handbook](./RecommendationQAHandbook.md)
-* [IDEMO Country Expansion Handbook](./CountryExpansionHandbook.md)
-* [IDEMO Architecture Decision Log](./ArchitectureDecisionLog.md)
+
+- [IDEMO Mood Orbit Calibration Handbook](./MoodOrbitCalibrationHandbook.md)
+- [IDEMO Curation Standards Handbook](./CurationStandardsHandbook.md)
+- [IDEMO Recommendation Engine Technical Specification](./RecommendationEngineTechnicalSpecification.md)
+- [IDEMO Recommendation QA Handbook](./RecommendationQAHandbook.md)
+- [IDEMO Country Expansion Handbook](./CountryExpansionHandbook.md)
+- [IDEMO Architecture Decision Log](./ArchitectureDecisionLog.md)

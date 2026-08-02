@@ -8,7 +8,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.8";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -25,7 +26,9 @@ serve(async (req) => {
     const workerSecret = Deno.env.get("NOTIFICATION_WORKER_SECRET") ?? "";
 
     if (!supabaseUrl || !supabaseServiceKey || !workerSecret) {
-      throw new Error("Missing Supabase or worker authentication environment variables.");
+      throw new Error(
+        "Missing Supabase or worker authentication environment variables.",
+      );
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
@@ -40,17 +43,23 @@ serve(async (req) => {
     // 3. Step A: Run the Operational Watchdog
     // This processes expired offers, recovers stalled inquiries, and escalates to concierge
     console.log("Running Operational Watchdog...");
-    const { data: watchdogResult, error: watchdogError } = await supabase.rpc("run_operational_watchdog");
+    const { data: watchdogResult, error: watchdogError } = await supabase.rpc(
+      "run_operational_watchdog",
+    );
     if (watchdogError) {
       console.error("Operational Watchdog failed:", watchdogError);
     } else {
-      console.log(`Operational Watchdog completed successfully. Resolved instances: ${watchdogResult}`);
+      console.log(
+        `Operational Watchdog completed successfully. Resolved instances: ${watchdogResult}`,
+      );
     }
 
     // 4. Step B: Run System Maintenance
     // Cleans up old rate-limit records and historical notification logs
     console.log("Running System Maintenance...");
-    const { error: maintenanceError } = await supabase.rpc("run_system_maintenance");
+    const { error: maintenanceError } = await supabase.rpc(
+      "run_system_maintenance",
+    );
     if (maintenanceError) {
       console.error("System Maintenance failed:", maintenanceError);
     } else {
@@ -68,7 +77,7 @@ serve(async (req) => {
       const response = await fetch(workerUrl, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${supabaseServiceKey}`,
+          Authorization: `Bearer ${supabaseServiceKey}`,
           "Content-Type": "application/json",
           "x-idemo-worker-secret": workerSecret,
         },
@@ -77,7 +86,10 @@ serve(async (req) => {
       workerResult = JSON.stringify(resData);
       console.log("Notification Worker finished:", workerResult);
     } catch (err: any) {
-      console.error("Failed to invoke Notification Worker via HTTP:", err?.message);
+      console.error(
+        "Failed to invoke Notification Worker via HTTP:",
+        err?.message,
+      );
       workerResult = `Error: ${err?.message}`;
     }
 
@@ -92,17 +104,13 @@ serve(async (req) => {
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
-
   } catch (error: any) {
     console.error("Cron scheduler process execution failed:", error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

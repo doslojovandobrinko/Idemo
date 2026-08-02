@@ -8,7 +8,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.8";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -29,7 +30,7 @@ serve(async (req) => {
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
@@ -76,7 +77,7 @@ serve(async (req) => {
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
@@ -102,7 +103,10 @@ serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (authHeader && authHeader.startsWith("Bearer ")) {
       const token = authHeader.substring(7);
-      const { data: { user }, error } = await supabase.auth.getUser(token);
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser(token);
       if (!error && user) {
         callerUserId = user.id;
       }
@@ -110,7 +114,9 @@ serve(async (req) => {
 
     // 6. Invoke the atomic create_public_inquiry PL/pgSQL RPC
     const normalizedEmail = isNonEmptyString(email) ? email : null;
-    const normalizedPhone = isNonEmptyString(phone_number) ? phone_number : null;
+    const normalizedPhone = isNonEmptyString(phone_number)
+      ? phone_number
+      : null;
     const normalizedCapabilityIds = Array.isArray(required_capability_ids)
       ? required_capability_ids
       : null;
@@ -130,29 +136,24 @@ serve(async (req) => {
       p_consent_channel: consent_channel,
       p_required_capability_ids: normalizedCapabilityIds,
       p_visitor_auth_user_id: callerUserId,
-      p_client_request_id: isNonEmptyString(client_request_id) ? client_request_id : null,
+      p_client_request_id: isNonEmptyString(client_request_id)
+        ? client_request_id
+        : null,
     });
 
     if (error) {
       console.error("RPC execution failed:", error);
-      return new Response(
-        JSON.stringify({ error: error.message }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // 6. Return successful payload (including raw recovery token)
-    return new Response(
-      JSON.stringify(data),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
-
+    return new Response(JSON.stringify(data), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (err: any) {
     console.error("Edge function error:", err);
     return new Response(
@@ -160,7 +161,7 @@ serve(async (req) => {
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });

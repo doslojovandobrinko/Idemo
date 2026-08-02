@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { safeStorage } from './safeStorage';
+import { safeStorage } from "./safeStorage";
 
 export const getLocalizedValue = (item: any, field: string, lang: string) => {
-  if (!item) return '';
+  if (!item) return "";
 
   // Tier 1: Selected Language - Try hardcoded translation first
   if (item.translations?.[lang]?.[field]) {
@@ -14,10 +14,10 @@ export const getLocalizedValue = (item: any, field: string, lang: string) => {
   }
 
   // Tier 2: Check localStorage translation cache for the selected language
-  const originalText = item[field] || item.translations?.['en']?.[field] || '';
-  const cacheKey = `tr_${item.id || item.title || 'g'}_${lang}_${field}`;
-  
-  if (lang !== 'en') {
+  const originalText = item[field] || item.translations?.["en"]?.[field] || "";
+  const cacheKey = `tr_${item.id || item.title || "g"}_${lang}_${field}`;
+
+  if (lang !== "en") {
     const cachedValue = safeStorage.getItem(cacheKey);
     if (cachedValue) {
       return cachedValue;
@@ -25,8 +25,8 @@ export const getLocalizedValue = (item: any, field: string, lang: string) => {
   }
 
   // Tier 3: Fall back to English hardcoded translation if available
-  if (item.translations?.['en']?.[field]) {
-    return item.translations['en'][field];
+  if (item.translations?.["en"]?.[field]) {
+    return item.translations["en"][field];
   }
 
   // Tier 4: Fall back to base field (English / Primary)
@@ -48,9 +48,12 @@ export const getLocalizedValue = (item: any, field: string, lang: string) => {
 };
 
 export const formatCategory = (categoryStr: string, tDict: any) => {
-  if (!categoryStr) return '';
-  return categoryStr.split(',').map(c => {
-    const term = c.trim();
-    return tDict['category_' + term.toLowerCase()] || term;
-  }).join(' / ');
+  if (!categoryStr) return "";
+  return categoryStr
+    .split(",")
+    .map((c) => {
+      const term = c.trim();
+      return tDict["category_" + term.toLowerCase()] || term;
+    })
+    .join(" / ");
 };

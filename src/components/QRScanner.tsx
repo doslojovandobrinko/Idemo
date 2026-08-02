@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Camera, X, RefreshCw, Zap, AlertCircle } from 'lucide-react';
-import jsQR from 'jsqr';
+import React, { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { Camera, X, RefreshCw, Zap, AlertCircle } from "lucide-react";
+import jsQR from "jsqr";
 
 interface QRScannerProps {
   language: string;
@@ -25,13 +25,13 @@ export default function QRScanner({
   onClose,
   triggerHaptic,
 }: QRScannerProps) {
-  const t = translations[language] || translations['en'];
+  const t = translations[language] || translations["en"];
 
   const [isActive, setIsActive] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [torchOn, setTorchOn] = useState(false);
   const [hasTorch, setHasTorch] = useState(false);
-  
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -46,38 +46,51 @@ export default function QRScanner({
   }, []);
 
   const handleDecodedCode = (qrContent: string) => {
-    let matchedId = '';
+    let matchedId = "";
 
     // Match against existing recommendation IDs (either direct or URL query patterns)
-    if (recommendations.some(r => r.id === qrContent)) {
+    if (recommendations.some((r) => r.id === qrContent)) {
       matchedId = qrContent;
     } else {
       try {
         // Check if it represents a URL
-        if (qrContent.startsWith('http://') || qrContent.startsWith('https://')) {
+        if (
+          qrContent.startsWith("http://") ||
+          qrContent.startsWith("https://")
+        ) {
           const urlObj = new URL(qrContent);
           const searchParams = urlObj.searchParams;
-          const idParam = searchParams.get('id') || searchParams.get('rec') || searchParams.get('recommendation');
-          if (idParam && recommendations.some(r => r.id === idParam)) {
+          const idParam =
+            searchParams.get("id") ||
+            searchParams.get("rec") ||
+            searchParams.get("recommendation");
+          if (idParam && recommendations.some((r) => r.id === idParam)) {
             matchedId = idParam;
           } else {
             // Peek trailing segment e.g. /detail/1
-            const segments = urlObj.pathname.split('/').filter(Boolean);
+            const segments = urlObj.pathname.split("/").filter(Boolean);
             const lastSegment = segments[segments.length - 1];
-            if (lastSegment && recommendations.some(r => r.id === lastSegment)) {
+            if (
+              lastSegment &&
+              recommendations.some((r) => r.id === lastSegment)
+            ) {
               matchedId = lastSegment;
             }
           }
         } else {
           // Try regex search or fuzzy checks
-          const matched = recommendations.find(r => qrContent.toLowerCase().includes(r.id.toLowerCase()));
+          const matched = recommendations.find((r) =>
+            qrContent.toLowerCase().includes(r.id.toLowerCase()),
+          );
           if (matched) {
             matchedId = matched.id;
           }
         }
       } catch (e) {
         // Fuzzy lookups
-        const matched = recommendations.find(r => qrContent.toLowerCase().includes(r.id.toLowerCase()));
+        const matched = recommendations.find((r) =>
+          qrContent.toLowerCase().includes(r.id.toLowerCase()),
+        );
         if (matched) {
           matchedId = matched.id;
         }
@@ -89,8 +102,17 @@ export default function QRScanner({
       stopCamera();
       onMatch(matchedId);
     } else {
-      console.warn('QR Code scanned but no matching recommendation found: ', qrContent);
-      setErrorMsg(language === 'sr' ? 'Automatska provera nije uspela. Izaberite drugi kod.' : language === 'zh' ? '验证推荐不成功，请选择其他二维码。' : 'Recommendation check failed. Please try a different QR code.');
+      console.warn(
+        "QR Code scanned but no matching recommendation found: ",
+        qrContent,
+      );
+      setErrorMsg(
+        language === "sr"
+          ? "Automatska provera nije uspela. Izaberite drugi kod."
+          : language === "zh"
+            ? "验证推荐不成功，请选择其他二维码。"
+            : "Recommendation check failed. Please try a different QR code.",
+      );
       triggerHaptic([30, 80, 30]);
     }
   };
@@ -106,26 +128,43 @@ export default function QRScanner({
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
-        const canvas = canvasRef.current || document.createElement('canvas');
-        const context = canvas.getContext('2d');
+        const canvas = canvasRef.current || document.createElement("canvas");
+        const context = canvas.getContext("2d");
         if (context) {
           canvas.width = img.width;
           canvas.height = img.height;
           context.drawImage(img, 0, 0);
           try {
             const imageData = context.getImageData(0, 0, img.width, img.height);
-            const code = jsQR(imageData.data, imageData.width, imageData.height, {
-              inversionAttempts: 'dontInvert',
-            });
+            const code = jsQR(
+              imageData.data,
+              imageData.width,
+              imageData.height,
+              {
+                inversionAttempts: "dontInvert",
+              },
+            );
             if (code && code.data) {
               handleDecodedCode(code.data.trim());
             } else {
-              setErrorMsg(language === 'sr' ? 'Nismo pronašli važeći QR kod na slici.' : language === 'zh' ? '在图片中未检测到有效的二维码。' : 'No valid QR code detected in the image.');
+              setErrorMsg(
+                language === "sr"
+                  ? "Nismo pronašli važeći QR kod na slici."
+                  : language === "zh"
+                    ? "在图片中未检测到有效的二维码。"
+                    : "No valid QR code detected in the image.",
+              );
               triggerHaptic([30, 80, 30]);
             }
           } catch (err) {
-            console.error('Failed to parse uploaded image:', err);
-            setErrorMsg(language === 'sr' ? 'Greška pri čitanju slike. Izaberite drugu.' : language === 'zh' ? '读取图片失败，请选择其他。' : 'Failed to read image. Please select another.');
+            console.error("Failed to parse uploaded image:", err);
+            setErrorMsg(
+              language === "sr"
+                ? "Greška pri čitanju slike. Izaberite drugu."
+                : language === "zh"
+                  ? "读取图片失败，请选择其他。"
+                  : "Failed to read image. Please select another.",
+            );
             triggerHaptic([30, 80, 30]);
           }
         }
@@ -146,7 +185,11 @@ export default function QRScanner({
 
       // Contextual Permission Request
       const constraints: MediaStreamConstraints = {
-        video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 640 } },
+        video: {
+          facingMode: "environment",
+          width: { ideal: 640 },
+          height: { ideal: 640 },
+        },
         audio: false,
       };
 
@@ -155,8 +198,8 @@ export default function QRScanner({
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.setAttribute('playsinline', 'true'); // Required for iOS
-        videoRef.current.play().catch(e => {
+        videoRef.current.setAttribute("playsinline", "true"); // Required for iOS
+        videoRef.current.play().catch((e) => {
           console.error("Video play failed:", e);
         });
       }
@@ -166,19 +209,23 @@ export default function QRScanner({
       // Check if torch/flashlight is supported
       const track = stream.getVideoTracks()[0];
       if (track) {
-        const capabilities = track.getCapabilities ? track.getCapabilities() : {};
-        if ('torch' in capabilities) {
+        const capabilities = track.getCapabilities
+          ? track.getCapabilities()
+          : {};
+        if ("torch" in capabilities) {
           setHasTorch(true);
         }
       }
 
       // Start decoding loop
       animationFrameRef.current = requestAnimationFrame(tick);
-
     } catch (err: any) {
-      console.error('Camera permission or loading error:', err);
+      console.error("Camera permission or loading error:", err);
       // Give a precise, descriptive error matching privacy expectations
-      setErrorMsg(t.camera_permission_denied || 'Camera access denied. Please use the camera upload button above or enable camera access in device settings.');
+      setErrorMsg(
+        t.camera_permission_denied ||
+          "Camera access denied. Please use the camera upload button above or enable camera access in device settings.",
+      );
       triggerHaptic([30, 80, 30]);
     }
   };
@@ -190,7 +237,7 @@ export default function QRScanner({
     }
 
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => {
+      streamRef.current.getTracks().forEach((track) => {
         track.stop();
       });
       streamRef.current = null;
@@ -206,8 +253,10 @@ export default function QRScanner({
     const track = streamRef.current.getVideoTracks()[0];
     if (track) {
       try {
-        const capabilities = track.getCapabilities ? track.getCapabilities() : {};
-        if ('torch' in capabilities) {
+        const capabilities = track.getCapabilities
+          ? track.getCapabilities()
+          : {};
+        if ("torch" in capabilities) {
           const nextTorchState = !torchOn;
           await track.applyConstraints({
             advanced: [{ torch: nextTorchState } as any],
@@ -216,20 +265,24 @@ export default function QRScanner({
           triggerHaptic(10);
         }
       } catch (e) {
-        console.warn('Torch not supported or failed to toggle:', e);
+        console.warn("Torch not supported or failed to toggle:", e);
       }
     }
   };
 
   const tick = () => {
-    if (!videoRef.current || !canvasRef.current || videoRef.current.readyState !== videoRef.current.HAVE_ENOUGH_DATA) {
+    if (
+      !videoRef.current ||
+      !canvasRef.current ||
+      videoRef.current.readyState !== videoRef.current.HAVE_ENOUGH_DATA
+    ) {
       animationFrameRef.current = requestAnimationFrame(tick);
       return;
     }
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const context = canvas.getContext('2d', { willReadFrequently: true });
+    const context = canvas.getContext("2d", { willReadFrequently: true });
 
     if (context) {
       // Draw video frame to our hidden analysis canvas
@@ -243,7 +296,7 @@ export default function QRScanner({
 
       // Call jsQR decoder
       const code = jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: 'dontInvert',
+        inversionAttempts: "dontInvert",
       });
 
       if (code && code.data) {
@@ -266,9 +319,11 @@ export default function QRScanner({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 rounded-full bg-accent-teal animate-pulse" />
-          <h4 className="text-[10px] uppercase tracking-[0.4em] text-[#8C8A7D] font-black">{t.scan_qr || "Scan QR Code"}</h4>
+          <h4 className="text-[10px] uppercase tracking-[0.4em] text-[#8C8A7D] font-black">
+            {t.scan_qr || "Scan QR Code"}
+          </h4>
         </div>
-        <button 
+        <button
           onClick={handleClose}
           className="p-1.5 bg-brand-pearl hover:bg-brand-pearl/80 rounded-full text-brand-charcoal border border-border-main active:scale-90 transition-all cursor-pointer"
         >
@@ -277,7 +332,8 @@ export default function QRScanner({
       </div>
 
       <p className="text-[10px] text-brand-charcoal/60 leading-relaxed font-sans mt-1">
-        {t.qr_scanner_desc || "Scan a recommendation QR code to instantly pull up its details."}
+        {t.qr_scanner_desc ||
+          "Scan a recommendation QR code to instantly pull up its details."}
       </p>
 
       {/* Main scanner view frame */}
@@ -292,21 +348,34 @@ export default function QRScanner({
               <div className="space-y-3 max-w-[240px]">
                 <div className="flex items-center justify-center gap-1.5 text-accent-red">
                   <AlertCircle size={14} />
-                  <span className="text-[9px] uppercase font-bold tracking-wider">{t.error || "Error"}</span>
+                  <span className="text-[9px] uppercase font-bold tracking-wider">
+                    {t.error || "Error"}
+                  </span>
                 </div>
-                <p className="text-[10px] text-[#A64B2A]/85 font-medium leading-normal">{errorMsg}</p>
+                <p className="text-[10px] text-[#A64B2A]/85 font-medium leading-normal">
+                  {errorMsg}
+                </p>
                 <div className="flex flex-col gap-2 pt-1 justify-center items-center">
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="px-4 py-2 bg-brand-pearl text-brand-charcoal rounded-full text-[8px] font-black uppercase tracking-widest hover:bg-brand-pearl/90 active:scale-95 transition-all border border-border-main/50 select-none cursor-pointer"
                   >
-                    📂 {language === 'sr' ? 'Izaberi sliku' : language === 'zh' ? '上传二维码图片' : 'Upload QR Image'}
+                    📂{" "}
+                    {language === "sr"
+                      ? "Izaberi sliku"
+                      : language === "zh"
+                        ? "上传二维码图片"
+                        : "Upload QR Image"}
                   </button>
                   <button
                     onClick={startCamera}
                     className="text-[8px] font-bold text-white/70 hover:text-white underline tracking-wider uppercase select-none cursor-pointer"
                   >
-                    {language === 'sr' ? 'Započni strim kamere' : language === 'zh' ? '或启用 live 摄像头' : 'Or try live Camera Stream'}
+                    {language === "sr"
+                      ? "Započni strim kamere"
+                      : language === "zh"
+                        ? "或启用 live 摄像头"
+                        : "Or try live Camera Stream"}
                   </button>
                 </div>
               </div>
@@ -316,21 +385,30 @@ export default function QRScanner({
                   onClick={() => fileInputRef.current?.click()}
                   className="w-full max-w-[220px] px-5 py-3 bg-brand-charcoal text-white rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-brand-charcoal/90 hover:scale-[1.02] active:scale-[0.98] transition-all border border-white/10 select-none cursor-pointer"
                 >
-                  📸 {language === 'sr' ? 'Slikaj ili učitaj QR' : language === 'zh' ? '拍照或上传二维码' : 'Take Photo or Choose QR'}
+                  📸{" "}
+                  {language === "sr"
+                    ? "Slikaj ili učitaj QR"
+                    : language === "zh"
+                      ? "拍照或上传二维码"
+                      : "Take Photo or Choose QR"}
                 </button>
-                
+
                 <button
                   onClick={startCamera}
                   className="text-[8px] font-medium text-white/50 hover:text-white/80 transition-all select-none cursor-pointer"
                 >
-                  {language === 'sr' ? 'Započni skeniranje uživo' : language === 'zh' ? '开启即时视频扫描' : 'Use live Video Scanner'}
+                  {language === "sr"
+                    ? "Započni skeniranje uživo"
+                    : language === "zh"
+                      ? "开启即时视频扫描"
+                      : "Use live Video Scanner"}
                 </button>
               </div>
             )}
           </div>
         ) : (
           <>
-            <video 
+            <video
               ref={videoRef}
               className="absolute inset-0 w-full h-full object-cover"
               muted
@@ -345,7 +423,7 @@ export default function QRScanner({
                 <span className="absolute -top-[2px] -right-[2px] w-5 h-5 border-t-[3px] border-r-[3px] border-accent-teal rounded-tr-lg" />
                 <span className="absolute -bottom-[2px] -left-[2px] w-5 h-5 border-b-[3px] border-l-[3px] border-accent-teal rounded-bl-lg" />
                 <span className="absolute -bottom-[2px] -right-[2px] w-5 h-5 border-b-[3px] border-r-[3px] border-accent-teal rounded-br-lg" />
-                
+
                 {/* Horizontal Scan line */}
                 <div className="absolute left-[10%] right-[10%] top-1/2 -translate-y-1/2 h-[1px] bg-accent-teal shadow-[0_0_12px_#008080] opacity-80 animate-[ping_1.8s_infinite] pointer-events-none" />
               </div>
@@ -355,9 +433,9 @@ export default function QRScanner({
             {hasTorch && (
               <button
                 onClick={toggleTorch}
-                className={`absolute bottom-4 right-4 p-2 bg-black/50 backdrop-blur-md rounded-xl text-white border border-white/10 active:scale-90 transition-all select-none cursor-pointer ${torchOn ? 'text-yellow-400 border-yellow-400/50 bg-yellow-950/40' : ''}`}
+                className={`absolute bottom-4 right-4 p-2 bg-black/50 backdrop-blur-md rounded-xl text-white border border-white/10 active:scale-90 transition-all select-none cursor-pointer ${torchOn ? "text-yellow-400 border-yellow-400/50 bg-yellow-950/40" : ""}`}
               >
-                <Zap size={14} className={torchOn ? 'fill-yellow-400' : ''} />
+                <Zap size={14} className={torchOn ? "fill-yellow-400" : ""} />
               </button>
             )}
 
@@ -375,12 +453,12 @@ export default function QRScanner({
 
       {/* Hidden processing canvas & file input */}
       <canvas ref={canvasRef} className="hidden" />
-      <input 
-        type="file" 
-        ref={fileInputRef} 
-        onChange={handleImageUpload} 
-        accept="image/*" 
-        className="hidden" 
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleImageUpload}
+        accept="image/*"
+        className="hidden"
       />
     </div>
   );

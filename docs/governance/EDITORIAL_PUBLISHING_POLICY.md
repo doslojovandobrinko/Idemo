@@ -11,7 +11,7 @@ This document establishes the editorial standards, publication workflows, and qu
 Every recommendation, collection, and localized translation MUST pass through the following strict state sequence before becoming visible in the public application:
 
 ```
-[Draft] 
+[Draft]
    │
    ▼
 [Editorial Review] ──► [Fact & Image Verification] ──► [Translation Review]
@@ -36,21 +36,24 @@ Every recommendation, collection, and localized translation MUST pass through th
 ## Quality Gates & Standards
 
 ### 1. The "Quality Over Volume" Imperative
-* IDEMO's luxury position relies on curated excellence. A small, pristine catalogue of verified experiences is strictly preferred over a dense, unverified listing.
+
+- IDEMO's luxury position relies on curated excellence. A small, pristine catalogue of verified experiences is strictly preferred over a dense, unverified listing.
 
 ### 2. Mandatory Verification Gates
-* **Factual Accuracy**: Opening times, location coordinates, and access rules must be verified against official primary sources.
-* **Visual Standards**: All attached images must be high-resolution, professionally licensed, and free of artificial watermarks or low-quality compression artifacts.
-* **Tone & Language**: Descriptions must remain understated, literal, and elegant—strictly avoiding marketing hype, cliches, or self-praising adjectives.
+
+- **Factual Accuracy**: Opening times, location coordinates, and access rules must be verified against official primary sources.
+- **Visual Standards**: All attached images must be high-resolution, professionally licensed, and free of artificial watermarks or low-quality compression artifacts.
+- **Tone & Language**: Descriptions must remain understated, literal, and elegant—strictly avoiding marketing hype, cliches, or self-praising adjectives.
 
 ### 3. Human Approval Requirement
-* AI models (Gemini) MAY draft descriptions, suggest tags, or propose translations.
-* AI models MUST NEVER directly transition a recommendation or translation to `published` status. Publication requires an explicit, authenticated human editor action.
+
+- AI models (Gemini) MAY draft descriptions, suggest tags, or propose translations.
+- AI models MUST NEVER directly transition a recommendation or translation to `published` status. Publication requires an explicit, authenticated human editor action.
 
 ---
 
 ## Cross References
 
-* `/docs/governance/IDEMO_PLATFORM_CONSTITUTION.md` (Section 7, 13)
-* `/docs/governance/AI_INTEGRATION_POLICY.md`
-* `/docs/governance/DATA_MODEL_STANDARD.md`
+- `/docs/governance/IDEMO_PLATFORM_CONSTITUTION.md` (Section 7, 13)
+- `/docs/governance/AI_INTEGRATION_POLICY.md`
+- `/docs/governance/DATA_MODEL_STANDARD.md`

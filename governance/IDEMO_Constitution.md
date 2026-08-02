@@ -1,9 +1,11 @@
 # IDEMO CONSTITUTION
+
 **Level 1: The Highest Governing Document of the IDEMO Ecosystem**
 
 ---
 
 ## 1. Vision & Purpose
+
 This Constitution establishes the absolute, permanent governance, ownership, and decision-making framework for the IDEMO ecosystem. All subordinate documents, architectural designs, visual assets, database records, and software implementations must strictly adhere to and support the principles set forth herein.
 
 ---
@@ -11,12 +13,16 @@ This Constitution establishes the absolute, permanent governance, ownership, and
 ## 2. Creator & Authority Framework
 
 ### The Creator — Sole Constitutional Authority
+
 The IDEMO project has exactly one **Creator**. The Creator is the owner, visionary, and sole constitutional authority of the entire IDEMO ecosystem.
-* No software component, AI model, autonomous agent, developer, system administrator, QA lead, consultant, or third party possesses authority equal to or greater than the Creator.
-* The Creator's latest explicit instruction always takes precedence over all existing rules and constitutional principles.
+
+- No software component, AI model, autonomous agent, developer, system administrator, QA lead, consultant, or third party possesses authority equal to or greater than the Creator.
+- The Creator's latest explicit instruction always takes precedence over all existing rules and constitutional principles.
 
 ### Constitutional Authority
+
 The Creator possesses exclusive, non-delegable authority to:
+
 1. Amend, suspend, or replace any constitutional principle.
 2. Introduce new constitutional principles or override previous architectural/design decisions.
 3. Approve or reject any feature, visual design, user interface, or system modification.
@@ -24,14 +30,17 @@ The Creator possesses exclusive, non-delegable authority to:
 5. Resolve all architectural, design, or operational conflicts.
 
 ### Delegated Authority & Chief Design Guardian
+
 Every other role, system panel, or operational process operates exclusively through **Delegated Authority** granted by the Creator:
-* Delegated authority exists solely because the Creator has explicitly granted it.
-* Delegated authority may be modified, expanded, restricted, or fully revoked at any time by the Creator.
-* No delegated authority is permanent.
+
+- Delegated authority exists solely because the Creator has explicitly granted it.
+- Delegated authority may be modified, expanded, restricted, or fully revoked at any time by the Creator.
+- No delegated authority is permanent.
 
 The **Chief Design Guardian** (and Custodian of the Governance Framework) operates under delegated authority and is responsible for protecting, preserving, and evolving the established IDEMO design language while preventing visual and architectural regression.
-* **Scope of Duty:** Ensure all future updates comply with the IDEMO Design Constitution, keep the documentation hierarchy organized, identify design conflicts, and protect visual consistency.
-* **Limitations:** The Guardian has no independent constitutional authority to override the Creator's decisions. The Guardian recommends; the Creator decides.
+
+- **Scope of Duty:** Ensure all future updates comply with the IDEMO Design Constitution, keep the documentation hierarchy organized, identify design conflicts, and protect visual consistency.
+- **Limitations:** The Guardian has no independent constitutional authority to override the Creator's decisions. The Guardian recommends; the Creator decides.
 
 ---
 
@@ -40,25 +49,29 @@ The **Chief Design Guardian** (and Custodian of the Governance Framework) operat
 To balance absolute long-term stability with continuous improvement and measured evolution, the IDEMO ecosystem is divided into Stable and Flexible Components.
 
 ### Stable Components
+
 Stable Components define IDEMO's core identity, constitutional values, and structural foundations. They are protected by strict change barriers and can be modified **only** through explicit Creator approval:
-* **IDEMO Constitution** (Highest Governing Document)
-* **Creator Authority Framework**
-* **Design Philosophy** & **IDEMO Editorial Luxury Design Language**
-* **Privacy-First Philosophy** (Zero tracking, local execution)
-* **Offline-First Philosophy** & **Local State Management**
-* **Mood Orbit Core Philosophy** (Continuous 2D spatial mapping)
-* **Brand Identity** & **Core User Experience Principles**
-* **Governance Framework** & **Documentation Hierarchy**
-* **Architectural Principles** & **Type-Safety Standards**
+
+- **IDEMO Constitution** (Highest Governing Document)
+- **Creator Authority Framework**
+- **Design Philosophy** & **IDEMO Editorial Luxury Design Language**
+- **Privacy-First Philosophy** (Zero tracking, local execution)
+- **Offline-First Philosophy** & **Local State Management**
+- **Mood Orbit Core Philosophy** (Continuous 2D spatial mapping)
+- **Brand Identity** & **Core User Experience Principles**
+- **Governance Framework** & **Documentation Hierarchy**
+- **Architectural Principles** & **Type-Safety Standards**
 
 ### Flexible Components
+
 Flexible Components represent the operational layers of the ecosystem. They are designed to evolve continuously under delegated authority, provided they satisfy all Quality Gates, validation tests, and Regression Protection checks:
-* **Country Datasets** & **Curation Assets** (Adding or adjusting individual recommendations)
-* **Localizations** & **Translation Improvements** (Refining linguistic and cultural accuracy)
-* **QA Procedures**, **Operations Procedures**, and **Release Processes**
-* **Content Updates** & **Image Asset Selections**
-* **Knowledge Base Articles** & **Decision Register Logs**
-* **Future Platform Integrations**
+
+- **Country Datasets** & **Curation Assets** (Adding or adjusting individual recommendations)
+- **Localizations** & **Translation Improvements** (Refining linguistic and cultural accuracy)
+- **QA Procedures**, **Operations Procedures**, and **Release Processes**
+- **Content Updates** & **Image Asset Selections**
+- **Knowledge Base Articles** & **Decision Register Logs**
+- **Future Platform Integrations**
 
 ---
 
@@ -110,7 +123,7 @@ To prevent duplicate policies, conflicting standards, and architectural drift, t
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-* **The Rule of Precedence:** No subordinate document, code file, database entry, or operational test case may contradict, weaken, or override a constraint defined in a higher-level document.
+- **The Rule of Precedence:** No subordinate document, code file, database entry, or operational test case may contradict, weaken, or override a constraint defined in a higher-level document.
 
 ---
 
@@ -125,7 +138,7 @@ Whenever conflicting instructions or specifications are encountered, the system 
 5. **IDEMO Product Manifest** (Governing Product Standard)
 6. **Local implementation preferences** (User/Developer choice)
 
-* **Mandate:** If any ambiguity or uncertainty remains, developers and AI agents must stop implementation immediately and request clarification from the Creator rather than making assumptions.
+- **Mandate:** If any ambiguity or uncertainty remains, developers and AI agents must stop implementation immediately and request clarification from the Creator rather than making assumptions.
 
 ---
 
@@ -133,15 +146,15 @@ Whenever conflicting instructions or specifications are encountered, the system 
 
 1. **Secure Access:** Creator authentication must be implemented through robust, secure, environment-based mechanisms.
 2. **Credential Protection:** Credentials, secrets, API keys, and secure tokens must **NEVER** be:
-   * Embedded in prompts or user instructions.
-   * Hardcoded into source code, documentation, or static files.
-   * Exposed in log outputs or console messages.
-   * Stored in version control systems or public repositories.
+   - Embedded in prompts or user instructions.
+   - Hardcoded into source code, documentation, or static files.
+   - Exposed in log outputs or console messages.
+   - Stored in version control systems or public repositories.
 3. **Upgradability:** Authentication mechanisms must remain modular and independently replaceable without requiring modifications to this Constitution.
 
 ---
 
 ## 7. Change Control
 
-* **Traceability:** Every modification to a Stable Component must correspond to an approved entry in the **IDEMO Decision Register** (`/governance/IDEMO_DECISION_REGISTER.md`) with explicit Creator approval.
-* **Refinement Focus:** Refinement of Flexible Components is encouraged but must preserve existing quality and pass all operational checks without regression.
+- **Traceability:** Every modification to a Stable Component must correspond to an approved entry in the **IDEMO Decision Register** (`/governance/IDEMO_DECISION_REGISTER.md`) with explicit Creator approval.
+- **Refinement Focus:** Refinement of Flexible Components is encouraged but must preserve existing quality and pass all operational checks without regression.
