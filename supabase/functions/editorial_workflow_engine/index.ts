@@ -194,6 +194,97 @@ serve(async (req: Request) => {
         );
       }
 
+      // POST /recommendations/reserve-draft (WP-14C5D1 Durable Draft Reservation)
+      if (pathname.endsWith("/recommendations/reserve-draft") && req.method === "POST") {
+        const body = await req.json().catch(() => ({}));
+        const {
+          destination_id,
+          idempotency_key = null,
+          correlation_id = null,
+        } = body;
+
+        const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!destination_id || typeof destination_id !== "string" || !destination_id.trim()) {
+          return new Response(
+            JSON.stringify({ success: false, error: "INVALID_REQUEST", message: "destination_id is mandatory for draft reservation." }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (!UUID_REGEX.test(destination_id.trim())) {
+          return new Response(
+            JSON.stringify({ success: false, error: "INVALID_DESTINATION", message: "destination_id must be a valid canonical UUID." }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const effectiveIdempotencyKey = (idempotency_key && typeof idempotency_key === "string" && idempotency_key.trim())
+          ? idempotency_key.trim()
+          : `reserve_${destination_id.trim()}_${user.id}`;
+
+        const effectiveCorrelationId = (correlation_id && UUID_REGEX.test(correlation_id))
+          ? correlation_id
+          : crypto.randomUUID();
+
+        const { data, error } = await supabase.rpc("reserve_recommendation_draft_secure", {
+          p_destination_id: destination_id.trim(),
+          p_reserved_by: user.id,
+          p_idempotency_key: effectiveIdempotencyKey,
+          p_correlation_id: effectiveCorrelationId,
+        });
+
+        if (error) {
+          return new Response(
+            JSON.stringify({ success: false, error: "DATABASE_ERROR", message: error.message }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (data && data.error === "WORKFLOW_ENGINE_DISABLED") {
+          return new Response(
+            JSON.stringify(data),
+            { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify(data),
+          { status: data?.success ? 200 : 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // POST /recommendations/abandon-draft (WP-14C5D1 Abandon Draft Reservation)
+      if (pathname.endsWith("/recommendations/abandon-draft") && req.method === "POST") {
+        const body = await req.json().catch(() => ({}));
+        const { reserved_recommendation_id, reason = null } = body;
+
+        const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!reserved_recommendation_id || typeof reserved_recommendation_id !== "string" || !UUID_REGEX.test(reserved_recommendation_id.trim())) {
+          return new Response(
+            JSON.stringify({ success: false, error: "INVALID_REQUEST", message: "reserved_recommendation_id must be a valid UUID." }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const { data, error } = await supabase.rpc("abandon_recommendation_draft_secure", {
+          p_reserved_recommendation_id: reserved_recommendation_id.trim(),
+          p_reserved_by: user.id,
+          p_reason: reason,
+        });
+
+        if (error) {
+          return new Response(
+            JSON.stringify({ success: false, error: "DATABASE_ERROR", message: error.message }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify(data),
+          { status: data?.success ? 200 : 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       // POST /recommendations/submit
       if (pathname.endsWith("/recommendations/submit") && req.method === "POST") {
         const body = await req.json().catch(() => ({}));
@@ -202,6 +293,7 @@ serve(async (req: Request) => {
           proposed_recommendation = body.recommendation_data || body.proposed_recommendation || {},
           idempotency_key = null,
           correlation_id = null,
+          reserved_recommendation_id = body.reserved_recommendation_id || proposed_recommendation?.reserved_recommendation_id || proposed_recommendation?.id || null,
         } = body;
 
         const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -225,6 +317,7 @@ serve(async (req: Request) => {
           p_proposed_recommendation: proposed_recommendation,
           p_idempotency_key: idempotency_key,
           p_correlation_id: correlation_id,
+          p_reserved_recommendation_id: reserved_recommendation_id,
         });
 
         if (error) {
@@ -243,7 +336,7 @@ serve(async (req: Request) => {
 
         return new Response(
           JSON.stringify(data),
-          { status: data.success ? 200 : 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: data?.success ? 200 : 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
@@ -347,6 +440,356 @@ serve(async (req: Request) => {
         return new Response(
           JSON.stringify(data),
           { status: data.success ? 200 : 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // POST /recommendations/media/authorize-upload (WP-14C5C Upload Authorization)
+      if (pathname.endsWith("/recommendations/media/authorize-upload") && req.method === "POST") {
+        const body = await req.json().catch(() => ({}));
+        const {
+          destination_id,
+          reserved_recommendation_id,
+          mime_type,
+          file_size_bytes,
+          original_filename = null,
+          work_item_id = null,
+          replacement_asset_id = null,
+          idempotency_key = null,
+          correlation_id = null,
+        } = body;
+
+        if (reserved_recommendation_id) {
+          const { data: resRow } = await supabase
+            .from("recommendation_draft_reservations")
+            .select("id, status, reserved_by, destination_id")
+            .eq("reserved_recommendation_id", reserved_recommendation_id)
+            .maybeSingle();
+
+          if (resRow && (resRow.status !== "active" || resRow.reserved_by !== user.id || resRow.destination_id !== destination_id)) {
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: "MEDIA_AUTHORIZATION_INVALID",
+                message: "Draft reservation is inactive or actor/destination mismatched."
+              }),
+              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        }
+
+        const { data, error } = await supabase.rpc("issue_recommendation_media_upload_authorization_secure", {
+          p_author_id: user.id,
+          p_destination_id: destination_id,
+          p_reserved_recommendation_id: reserved_recommendation_id,
+          p_mime_type: mime_type,
+          p_file_size_bytes: file_size_bytes,
+          p_original_filename: original_filename,
+          p_work_item_id: work_item_id,
+          p_replacement_asset_id: replacement_asset_id,
+          p_idempotency_key: idempotency_key,
+          p_correlation_id: correlation_id,
+        });
+
+        if (error) {
+          return new Response(
+            JSON.stringify({ success: false, error: "DATABASE_ERROR", message: error.message }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (data && data.error === "WORKFLOW_ENGINE_DISABLED") {
+          return new Response(
+            JSON.stringify(data),
+            { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (data && data.success && data.object_path) {
+          const { data: signedData, error: signedErr } = await supabase.storage
+            .from("recommendation-media")
+            .createSignedUploadUrl(data.object_path);
+
+          if (signedErr) {
+            return new Response(
+              JSON.stringify({ success: false, error: "STORAGE_AUTHORIZATION_FAILED", message: signedErr.message }),
+              { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+
+          return new Response(
+            JSON.stringify({
+              ...data,
+              bucket: data.bucket || "recommendation-media",
+              allowed_mime_type: data.allowed_mime_type || mime_type,
+              maximum_size_bytes: data.maximum_size_bytes || 5242880,
+              expires_at: data.expires_at || new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+              signed_upload_url: signedData?.signedUrl,
+              token: signedData?.token,
+              path: signedData?.path,
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify(data),
+          { status: data?.success ? 200 : 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // POST /recommendations/media/confirm-upload
+      if (pathname.endsWith("/recommendations/media/confirm-upload") && req.method === "POST") {
+        const body = await req.json().catch(() => ({}));
+        const { asset_id, correlation_id = null } = body;
+
+        if (!asset_id) {
+          return new Response(
+            JSON.stringify({ success: false, error: "INVALID_ARGUMENTS", message: "asset_id parameter is required." }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // 1. Load authoritative asset record from DB
+        const { data: asset, error: fetchError } = await supabase
+          .from("recommendation_media_assets")
+          .select("id, bucket_name, object_path, mime_type, file_size_bytes, status")
+          .eq("id", asset_id)
+          .maybeSingle();
+
+        if (fetchError) {
+          return new Response(
+            JSON.stringify({ success: false, error: "DATABASE_ERROR", message: fetchError.message }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (!asset) {
+          return new Response(
+            JSON.stringify({ success: false, error: "ASSET_NOT_FOUND", message: "Recommendation media asset record not found." }),
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (asset.status !== "authorized") {
+          return new Response(
+            JSON.stringify({ success: false, error: "INVALID_STATE_TRANSITION", message: "Asset is not in authorized status." }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // 2. Verify Storage Object Existence and Metadata in Supabase Storage
+        const folderPath = asset.object_path.substring(0, asset.object_path.lastIndexOf("/"));
+        const fileName = asset.object_path.substring(asset.object_path.lastIndexOf("/") + 1);
+
+        const { data: fileList, error: storageErr } = await supabase.storage
+          .from(asset.bucket_name)
+          .list(folderPath, { search: fileName });
+
+        if (storageErr) {
+          return new Response(
+            JSON.stringify({ success: false, error: "STORAGE_ERROR", message: storageErr.message }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const matchingFile = fileList?.find((f) => f.name === fileName);
+
+        if (!matchingFile) {
+          return new Response(
+            JSON.stringify({ success: false, error: "UPLOAD_OBJECT_NOT_FOUND", message: "Object does not exist in storage." }),
+            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const actualSize = matchingFile.metadata?.size ?? (matchingFile as { size?: number }).size;
+        const actualMime = matchingFile.metadata?.mimetype ?? (matchingFile as { mimetype?: string }).mimetype;
+
+        if (actualSize !== undefined && actualSize !== null) {
+          const sizeDiff = Math.abs(Number(actualSize) - Number(asset.file_size_bytes));
+          if (sizeDiff > 1024 || Number(actualSize) > 5242880) {
+            return new Response(
+              JSON.stringify({ success: false, error: "UPLOAD_METADATA_MISMATCH", message: "Uploaded object size conflicts with authorized asset record." }),
+              { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        }
+
+        if (actualMime && actualMime !== asset.mime_type) {
+          return new Response(
+            JSON.stringify({ success: false, error: "UPLOAD_METADATA_MISMATCH", message: "Uploaded object mime type conflicts with authorized asset record." }),
+            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // 3. State-Transition RPC Call
+        const { data, error } = await supabase.rpc("confirm_recommendation_media_upload_secure", {
+          p_author_id: user.id,
+          p_asset_id: asset_id,
+          p_correlation_id: correlation_id,
+        });
+
+        if (error) {
+          return new Response(
+            JSON.stringify({ success: false, error: "DATABASE_ERROR", message: error.message }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (data && data.error === "WORKFLOW_ENGINE_DISABLED") {
+          return new Response(
+            JSON.stringify(data),
+            { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify(data),
+          { status: data?.success ? 200 : 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // POST /recommendations/media/update-metadata
+      if (pathname.endsWith("/recommendations/media/update-metadata") && req.method === "POST") {
+        const body = await req.json().catch(() => ({}));
+        const {
+          asset_id,
+          alt_text = {},
+          provenance_source = null,
+          acquisition_method = null,
+          licence_type = null,
+          attribution_required = false,
+          attribution_text = null,
+          creator_name = null,
+          source_url = null,
+          correlation_id = null,
+        } = body;
+
+        const { data, error } = await supabase.rpc("update_recommendation_media_metadata_secure", {
+          p_author_id: user.id,
+          p_asset_id: asset_id,
+          p_alt_text: alt_text,
+          p_provenance_source: provenance_source,
+          p_acquisition_method: acquisition_method,
+          p_licence_type: licence_type,
+          p_attribution_required: attribution_required,
+          p_attribution_text: attribution_text,
+          p_creator_name: creator_name,
+          p_source_url: source_url,
+          p_correlation_id: correlation_id,
+        });
+
+        if (error) {
+          return new Response(
+            JSON.stringify({ success: false, error: "DATABASE_ERROR", message: error.message }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (data && data.error === "WORKFLOW_ENGINE_DISABLED") {
+          return new Response(
+            JSON.stringify(data),
+            { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify(data),
+          { status: data?.success ? 200 : 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // POST /recommendations/media/verify
+      if (pathname.endsWith("/recommendations/media/verify") && req.method === "POST") {
+        const body = await req.json().catch(() => ({}));
+        const { asset_id, correlation_id = null } = body;
+
+        const { data, error } = await supabase.rpc("verify_recommendation_media_asset_secure", {
+          p_author_id: user.id,
+          p_asset_id: asset_id,
+          p_correlation_id: correlation_id,
+        });
+
+        if (error) {
+          return new Response(
+            JSON.stringify({ success: false, error: "DATABASE_ERROR", message: error.message }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (data && data.error === "WORKFLOW_ENGINE_DISABLED") {
+          return new Response(
+            JSON.stringify(data),
+            { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify(data),
+          { status: data?.success ? 200 : 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // POST /recommendations/media/attach
+      if (pathname.endsWith("/recommendations/media/attach") && req.method === "POST") {
+        const body = await req.json().catch(() => ({}));
+        const { asset_id, work_item_id = null, correlation_id = null } = body;
+
+        const { data, error } = await supabase.rpc("attach_recommendation_media_asset_secure", {
+          p_author_id: user.id,
+          p_asset_id: asset_id,
+          p_work_item_id: work_item_id,
+          p_correlation_id: correlation_id,
+        });
+
+        if (error) {
+          return new Response(
+            JSON.stringify({ success: false, error: "DATABASE_ERROR", message: error.message }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (data && data.error === "WORKFLOW_ENGINE_DISABLED") {
+          return new Response(
+            JSON.stringify(data),
+            { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify(data),
+          { status: data?.success ? 200 : 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // POST /recommendations/media/abandon
+      if (pathname.endsWith("/recommendations/media/abandon") && req.method === "POST") {
+        const body = await req.json().catch(() => ({}));
+        const { asset_id, reason = null, correlation_id = null } = body;
+
+        const { data, error } = await supabase.rpc("abandon_recommendation_media_asset_secure", {
+          p_author_id: user.id,
+          p_asset_id: asset_id,
+          p_reason: reason,
+          p_correlation_id: correlation_id,
+        });
+
+        if (error) {
+          return new Response(
+            JSON.stringify({ success: false, error: "DATABASE_ERROR", message: error.message }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (data && data.error === "WORKFLOW_ENGINE_DISABLED") {
+          return new Response(
+            JSON.stringify(data),
+            { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify(data),
+          { status: data?.success ? 200 : 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }

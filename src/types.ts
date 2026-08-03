@@ -4,23 +4,23 @@
  */
 
 export enum Category {
-  WELLBEING = "Wellbeing",
-  MEDICAL = "Medical",
-  NATURE = "Nature",
-  HISTORY = "History",
-  GASTRONOMY = "Gastronomy",
-  TRAVEL = "Travel",
-  CLUBBING = "Clubbing",
+  WELLBEING = 'Wellbeing',
+  MEDICAL = 'Medical',
+  NATURE = 'Nature',
+  HISTORY = 'History',
+  GASTRONOMY = 'Gastronomy',
+  TRAVEL = 'Travel',
+  CLUBBING = 'Clubbing',
 }
 
-export type RecommendationLifecycleStatus =
-  | "RESEARCH_CANDIDATE"
-  | "NEEDS_EDITORIAL_IMPROVEMENT"
-  | "NEEDS_ADDITIONAL_RESEARCH"
-  | "CANONICAL"
-  | "PUBLISHED"
-  | "DEFERRED"
-  | "RETIRED";
+export type RecommendationLifecycleStatus = 
+  | 'RESEARCH_CANDIDATE' 
+  | 'NEEDS_EDITORIAL_IMPROVEMENT' 
+  | 'NEEDS_ADDITIONAL_RESEARCH' 
+  | 'CANONICAL' 
+  | 'PUBLISHED' 
+  | 'DEFERRED' 
+  | 'RETIRED';
 
 export interface Recommendation {
   id: string;
@@ -38,7 +38,7 @@ export interface Recommendation {
   estimatedCost: string;
   preferredTransport: string;
   isLiked?: boolean;
-  badge?: "silver" | "gold" | "platinum";
+  badge?: 'silver' | 'gold' | 'platinum';
   scheduledDate?: string; // ISO string
   coordinates?: { lat: number; lng: number };
   coordinateX?: number;
@@ -50,28 +50,58 @@ export interface Recommendation {
   urbanity?: number;
   nature?: number;
   weatherDependency?: number;
-  seasonality?: "all" | "summer" | "winter" | "spring-fall";
+  seasonality?: 'all' | 'summer' | 'winter' | 'spring-fall';
   familySuitability?: boolean;
   accessibility?: boolean;
-  premiumLevel?: "standard" | "premium" | "ultra";
-  budgetLevel?: "free" | "low" | "moderate" | "high" | "exclusive";
+  premiumLevel?: 'standard' | 'premium' | 'ultra';
+  budgetLevel?: 'free' | 'low' | 'moderate' | 'high' | 'exclusive';
   recommendedVisitDuration?: number; // in minutes
   equivalents?: Record<string, string>;
   website?: string;
   phone?: string;
   conciergePhone?: string;
-  translations?: Record<
-    string,
-    {
-      title?: string;
-      shortDescription?: string;
-      longDescription?: string;
-      location?: string;
-      bestTimeToVisit?: string;
-      insiderTip?: string;
-      tagline?: string;
-    }
-  >;
+  serviceAreaId?: string;
+  categories?: string[];
+  expertiseIds?: string[];
+  capabilityIds?: string[];
+  titleEn?: string;
+  titleSr?: string;
+  shortDescriptionEn?: string;
+  shortDescriptionSr?: string;
+  longDescriptionEn?: string;
+  longDescriptionSr?: string;
+  locationEn?: string;
+  locationSr?: string;
+  bestTimeToVisitEn?: string;
+  bestTimeToVisitSr?: string;
+  insiderTipEn?: string;
+  insiderTipSr?: string;
+  moods?: string[];
+  practicalInfo?: {
+    opening_hours?: string;
+    contact_phone?: string;
+    contact_email?: string;
+    website?: string;
+    admission_fee?: string;
+  };
+  provenance?: {
+    source?: string;
+    method?: string;
+    license?: string;
+    attributionRequired?: boolean;
+    attributionText?: string;
+    verificationStatus?: string;
+    altText?: string;
+  };
+  translations?: Record<string, {
+    title?: string;
+    shortDescription?: string;
+    longDescription?: string;
+    location?: string;
+    bestTimeToVisit?: string;
+    insiderTip?: string;
+    tagline?: string;
+  }>;
 }
 
 export interface Partner {
@@ -81,7 +111,7 @@ export interface Partner {
   nameSr: string;
   nameZh: string;
   category: string;
-  partnerType: "Individual" | "Organisation";
+  partnerType: 'Individual' | 'Organisation';
   specialOfferEn?: string;
   specialOfferSr?: string;
   specialOfferZh?: string;
@@ -126,13 +156,10 @@ export interface UsefulTip {
   androidLink?: string;
   iosLink?: string;
   equivalentPhrases?: string;
-  translations?: Record<
-    string,
-    {
-      title?: string;
-      description?: string;
-    }
-  >;
+  translations?: Record<string, {
+    title?: string;
+    description?: string;
+  }>;
 }
 
 export interface DidYouKnow {
@@ -141,24 +168,13 @@ export interface DidYouKnow {
   whyItMatters: string;
   coordinateX?: number;
   coordinateY?: number;
-  translations?: Record<
-    string,
-    {
-      fact?: string;
-      whyItMatters?: string;
-    }
-  >;
+  translations?: Record<string, {
+    fact?: string;
+    whyItMatters?: string;
+  }>;
 }
 
-export type AppScreen =
-  | "landing"
-  | "home"
-  | "details"
-  | "plan"
-  | "explore"
-  | "profile"
-  | "partners"
-  | "studio";
+export type AppScreen = 'landing' | 'home' | 'details' | 'plan' | 'explore' | 'profile' | 'partners' | 'studio';
 
 export interface InquiryRecordV2 {
   local_queue_id: string;
@@ -173,7 +189,7 @@ export interface InquiryRecordV2 {
   requested_end_at: string;
   preferred_date: string;
   preferred_time: string;
-  status: "draft" | "submitting" | "submitted" | "failed";
+  status: 'draft' | 'submitting' | 'submitted' | 'failed';
   server_inquiry_id?: string;
   public_reference_code?: string;
   is_server_authoritative: boolean;
@@ -216,12 +232,12 @@ export interface VisitorActionResult {
 }
 
 export enum EditorialCollectionCategory {
-  HISTORY_HERITAGE = "History & Heritage",
-  SPIRITUAL_CULTURE = "Spiritual & Culture",
-  NATURE_TRAILS = "Nature & Trails",
-  URBAN_MODERN = "Urban & Modern",
-  GASTRONOMY_WINE = "Gastronomy & Wine",
-  SPECIAL_JOURNEY = "Special Journey",
+  HISTORY_HERITAGE = 'History & Heritage',
+  SPIRITUAL_CULTURE = 'Spiritual & Culture',
+  NATURE_TRAILS = 'Nature & Trails',
+  URBAN_MODERN = 'Urban & Modern',
+  GASTRONOMY_WINE = 'Gastronomy & Wine',
+  SPECIAL_JOURNEY = 'Special Journey',
 }
 
 export interface EditorialCollectionMapRouteItem {
@@ -258,18 +274,15 @@ export interface EditorialCollection {
   visitorTakeawaySr?: string;
   visitorTakeawayZh?: string;
   journeyRationale?: Record<string, string>;
-  translations?: Record<
-    string,
-    {
-      title?: string;
-      subtitle?: string;
-      introduction?: string;
-      estimatedDuration?: string;
-      geographicScope?: string;
-      estimatedBudget?: string;
-      visitorTakeaway?: string;
-    }
-  >;
+  translations?: Record<string, {
+    title?: string;
+    subtitle?: string;
+    introduction?: string;
+    estimatedDuration?: string;
+    geographicScope?: string;
+    estimatedBudget?: string;
+    visitorTakeaway?: string;
+  }>;
   isPublished?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -309,13 +322,13 @@ export interface SupabaseEditorialCollectionRow {
   updated_at?: string | null;
 }
 
-export type PublicationWorkflowStage =
-  | "draft"
-  | "editorial_review"
-  | "engineering_validation"
-  | "approved"
-  | "published"
-  | "archived";
+export type PublicationWorkflowStage = 
+  | 'draft'
+  | 'editorial_review'
+  | 'engineering_validation'
+  | 'approved'
+  | 'published'
+  | 'archived';
 
 export interface DestinationManifest {
   destinationId: string;
@@ -348,8 +361,9 @@ export interface SyncStatus {
   latestPackageVersion: string | null;
   lastCheckedAt: string | null;
   lastSyncAt: string | null;
-  syncState:
-    "idle" | "checking" | "downloading" | "validating" | "active" | "error";
+  syncState: 'idle' | 'checking' | 'downloading' | 'validating' | 'active' | 'error';
   syncError: string | null;
   availableDestinations: string[];
 }
+
+

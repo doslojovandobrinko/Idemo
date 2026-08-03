@@ -1,21 +1,21 @@
-import React from "react";
-import {
-  LayoutDashboard,
-  MapPin,
-  Compass,
+import React from 'react';
+import { 
+  LayoutDashboard, 
+  MapPin, 
+  Compass, 
   FileCheck,
-  Users,
-  PackageCheck,
-  Activity,
-  Settings,
-  LogOut,
-  ChevronLeft,
+  Users, 
+  PackageCheck, 
+  Activity, 
+  Settings, 
+  LogOut, 
+  ChevronLeft, 
   ChevronRight,
   ShieldCheck,
-  Building2,
-} from "lucide-react";
-import { StudioTab, StudioUserSession, StudioNavSection } from "./types";
-import IdemoLogo from "../IdemoLogo";
+  Building2
+} from 'lucide-react';
+import { StudioTab, StudioUserSession, StudioNavSection } from './types';
+import IdemoLogo from '../IdemoLogo';
 
 interface StudioSidebarProps {
   activeTab: StudioTab;
@@ -27,39 +27,14 @@ interface StudioSidebarProps {
 }
 
 const NAV_ITEMS: StudioNavSection[] = [
-  { id: "dashboard", label: "Dashboard", iconName: "LayoutDashboard" },
-  {
-    id: "destinations",
-    label: "Destinations",
-    iconName: "MapPin",
-    badge: "5 Active",
-  },
-  {
-    id: "recommendations",
-    label: "Recommendations",
-    iconName: "Compass",
-    badge: "113 Recs",
-  },
-  {
-    id: "editorial-review",
-    label: "Editorial Review",
-    iconName: "FileCheck",
-    badge: "WP-10",
-  },
-  { id: "partners", label: "Partners", iconName: "Users", badge: "5 Verified" },
-  {
-    id: "publications",
-    label: "Publications",
-    iconName: "PackageCheck",
-    badge: "v1.2.0",
-  },
-  {
-    id: "operations",
-    label: "Operations",
-    iconName: "Activity",
-    badge: "Healthy",
-  },
-  { id: "settings", label: "Settings", iconName: "Settings" },
+  { id: 'dashboard', label: 'Dashboard', iconName: 'LayoutDashboard' },
+  { id: 'destinations', label: 'Destinations', iconName: 'MapPin', badge: '5 Active' },
+  { id: 'recommendations', label: 'Recommendations', iconName: 'Compass', badge: '113 Recs' },
+  { id: 'editorial-review', label: 'Editorial Review', iconName: 'FileCheck', badge: 'WP-10' },
+  { id: 'partners', label: 'Partners', iconName: 'Users', badge: '5 Verified' },
+  { id: 'publications', label: 'Publications', iconName: 'PackageCheck', badge: 'v1.2.0' },
+  { id: 'operations', label: 'Operations', iconName: 'Activity', badge: 'Healthy' },
+  { id: 'settings', label: 'Settings', iconName: 'Settings' }
 ];
 
 export function StudioSidebar({
@@ -68,35 +43,26 @@ export function StudioSidebar({
   session,
   onLogout,
   isCollapsed,
-  onToggleCollapse,
+  onToggleCollapse
 }: StudioSidebarProps) {
   const getIcon = (id: StudioTab) => {
     switch (id) {
-      case "dashboard":
-        return <LayoutDashboard size={18} />;
-      case "destinations":
-        return <MapPin size={18} />;
-      case "recommendations":
-        return <Compass size={18} />;
-      case "editorial-review":
-        return <FileCheck size={18} />;
-      case "partners":
-        return <Users size={18} />;
-      case "publications":
-        return <PackageCheck size={18} />;
-      case "operations":
-        return <Activity size={18} />;
-      case "settings":
-        return <Settings size={18} />;
-      default:
-        return <LayoutDashboard size={18} />;
+      case 'dashboard': return <LayoutDashboard size={18} />;
+      case 'destinations': return <MapPin size={18} />;
+      case 'recommendations': return <Compass size={18} />;
+      case 'editorial-review': return <FileCheck size={18} />;
+      case 'partners': return <Users size={18} />;
+      case 'publications': return <PackageCheck size={18} />;
+      case 'operations': return <Activity size={18} />;
+      case 'settings': return <Settings size={18} />;
+      default: return <LayoutDashboard size={18} />;
     }
   };
 
   return (
     <aside
       className={`bg-[#23251E] text-white flex flex-col justify-between border-r border-[#32352B] transition-all duration-300 relative shrink-0 ${
-        isCollapsed ? "w-16" : "w-64"
+        isCollapsed ? 'w-16' : 'w-64'
       }`}
     >
       {/* Top Header */}
@@ -122,14 +88,10 @@ export function StudioSidebar({
           )}
           <button
             onClick={onToggleCollapse}
-            className="p-1 rounded-lg bg-white/5 hover:bg-white/15 text-white/70 hover:text-white transition-colors cursor-pointer hidden sm:flex"
-            title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            className="p-1 rounded-lg bg-white/5 hover:bg-white/15 text-white/70 hover:text-white transition-colors cursor-pointer flex"
+            title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
           >
-            {isCollapsed ? (
-              <ChevronRight size={14} />
-            ) : (
-              <ChevronLeft size={14} />
-            )}
+            {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
           </button>
         </div>
 
@@ -159,11 +121,11 @@ export function StudioSidebar({
                 title={isCollapsed ? item.label : undefined}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-mono text-xs font-semibold tracking-wider transition-all cursor-pointer ${
                   isActive
-                    ? "bg-[#FAF9F5] text-[#23251E] shadow-xs font-bold"
-                    : "text-white/70 hover:text-white hover:bg-white/10"
-                } ${isCollapsed ? "justify-center px-0" : ""}`}
+                    ? 'bg-[#FAF9F5] text-[#23251E] shadow-xs font-bold'
+                    : 'text-white/70 hover:text-white hover:bg-white/10'
+                } ${isCollapsed ? 'justify-center px-0' : ''}`}
               >
-                <div className={isActive ? "text-[#8A1F1F]" : "text-[#C5A059]"}>
+                <div className={isActive ? 'text-[#8A1F1F]' : 'text-[#C5A059]'}>
                   {getIcon(item.id)}
                 </div>
 
@@ -171,13 +133,9 @@ export function StudioSidebar({
                   <div className="flex-1 flex items-center justify-between min-w-0">
                     <span className="truncate">{item.label}</span>
                     {item.badge && (
-                      <span
-                        className={`text-[9px] px-1.5 py-0.5 rounded-md font-mono font-bold uppercase tracking-wider ${
-                          isActive
-                            ? "bg-[#23251E] text-white"
-                            : "bg-white/10 text-white/80"
-                        }`}
-                      >
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-mono font-bold uppercase tracking-wider ${
+                        isActive ? 'bg-[#23251E] text-white' : 'bg-white/10 text-white/80'
+                      }`}>
                         {item.badge}
                       </span>
                     )}
@@ -194,7 +152,7 @@ export function StudioSidebar({
         <button
           onClick={onLogout}
           className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-white/60 hover:text-white hover:bg-white/10 font-mono text-xs font-semibold transition-colors cursor-pointer ${
-            isCollapsed ? "justify-center px-0" : ""
+            isCollapsed ? 'justify-center px-0' : ''
           }`}
           title="Sign Out of Studio"
         >

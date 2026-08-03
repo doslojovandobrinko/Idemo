@@ -1,36 +1,24 @@
-import React, { useState } from "react";
-import { StudioSidebar } from "./StudioSidebar";
-import { StudioDashboard } from "./StudioDashboard";
-import { StudioDestinations } from "./StudioDestinations";
-import { StudioRecommendations } from "./StudioRecommendations";
-import { StudioEditorialReview } from "./StudioEditorialReview";
-import { StudioPartners } from "./StudioPartners";
-import { StudioPublications } from "./StudioPublications";
-import { StudioOperations } from "./StudioOperations";
-import { StudioSettings } from "./StudioSettings";
-import { StudioTab, StudioUserSession } from "./types";
-import { Recommendation } from "../../types";
-import { ShieldCheck, ArrowLeft, Lock, Search } from "lucide-react";
+import React, { useState } from 'react';
+import { StudioSidebar } from './StudioSidebar';
+import { StudioDashboard } from './StudioDashboard';
+import { StudioDestinations } from './StudioDestinations';
+import { StudioRecommendations } from './StudioRecommendations';
+import { StudioEditorialReview } from './StudioEditorialReview';
+import { StudioPartners } from './StudioPartners';
+import { StudioPublications } from './StudioPublications';
+import { StudioOperations } from './StudioOperations';
+import { StudioSettings } from './StudioSettings';
+import { StudioTab, StudioUserSession } from './types';
+import { Recommendation } from '../../types';
+import { ShieldCheck, ArrowLeft, Lock, Search } from 'lucide-react';
 
 interface StudioLayoutProps {
   session: StudioUserSession;
   onLogout: () => void;
   onReturnToApp?: () => void;
   customRecommendations?: Recommendation[];
-  editorialStatuses?: Record<
-    string,
-    "CANDIDATE" | "NEEDS RESEARCH" | "APPROVED" | "MERGE CANDIDATE" | "RETIRED"
-  >;
-  onUpdateEditorialStatuses?: (
-    statuses: Record<
-      string,
-      | "CANDIDATE"
-      | "NEEDS RESEARCH"
-      | "APPROVED"
-      | "MERGE CANDIDATE"
-      | "RETIRED"
-    >,
-  ) => void;
+  editorialStatuses?: Record<string, 'CANDIDATE' | 'NEEDS RESEARCH' | 'APPROVED' | 'MERGE CANDIDATE' | 'RETIRED'>;
+  onUpdateEditorialStatuses?: (statuses: Record<string, 'CANDIDATE' | 'NEEDS RESEARCH' | 'APPROVED' | 'MERGE CANDIDATE' | 'RETIRED'>) => void;
 }
 
 export function StudioLayout({
@@ -39,17 +27,17 @@ export function StudioLayout({
   onReturnToApp,
   customRecommendations = [],
   editorialStatuses = {},
-  onUpdateEditorialStatuses,
+  onUpdateEditorialStatuses
 }: StudioLayoutProps) {
-  const [activeTab, setActiveTab] = useState<StudioTab>("dashboard");
+  const [activeTab, setActiveTab] = useState<StudioTab>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [targetRecId, setTargetRecId] = useState<string | undefined>();
   const [targetPartnerId, setTargetPartnerId] = useState<string | undefined>();
 
   const handleNavigateTab = (tab: StudioTab, itemId?: string) => {
-    if ((tab === "recommendations" || tab === "editorial-review") && itemId) {
+    if ((tab === 'recommendations' || tab === 'editorial-review') && itemId) {
       setTargetRecId(itemId);
-    } else if (tab === "partners" && itemId) {
+    } else if (tab === 'partners' && itemId) {
       setTargetPartnerId(itemId);
     }
     setActiveTab(tab);
@@ -57,16 +45,16 @@ export function StudioLayout({
 
   const renderTabContent = () => {
     switch (activeTab) {
-      case "dashboard":
+      case 'dashboard':
         return (
           <StudioDashboard
             session={session}
             onNavigateTab={(tab) => handleNavigateTab(tab)}
           />
         );
-      case "destinations":
+      case 'destinations':
         return <StudioDestinations />;
-      case "recommendations":
+      case 'recommendations':
         return (
           <StudioRecommendations
             customRecommendations={customRecommendations}
@@ -75,7 +63,7 @@ export function StudioLayout({
             targetRecId={targetRecId}
           />
         );
-      case "editorial-review":
+      case 'editorial-review':
         return (
           <StudioEditorialReview
             customRecommendations={customRecommendations}
@@ -85,21 +73,16 @@ export function StudioLayout({
             targetRecId={targetRecId}
           />
         );
-      case "partners":
+      case 'partners':
         return <StudioPartners targetPartnerId={targetPartnerId} />;
-      case "publications":
+      case 'publications':
         return <StudioPublications onNavigateTab={handleNavigateTab} />;
-      case "operations":
+      case 'operations':
         return <StudioOperations />;
-      case "settings":
+      case 'settings':
         return <StudioSettings session={session} />;
       default:
-        return (
-          <StudioDashboard
-            session={session}
-            onNavigateTab={(t) => handleNavigateTab(t)}
-          />
-        );
+        return <StudioDashboard session={session} onNavigateTab={(t) => handleNavigateTab(t)} />;
     }
   };
 
@@ -146,8 +129,10 @@ export function StudioLayout({
         />
 
         {/* Work Canvas Area */}
-        <main className="flex-1 bg-[#FAF9F5] p-4 sm:p-6 lg:p-8 overflow-y-auto no-scrollbar">
-          <div className="max-w-7xl mx-auto">{renderTabContent()}</div>
+        <main className="flex-1 min-w-0 bg-[#FAF9F5] p-4 sm:p-6 lg:p-8 overflow-y-auto no-scrollbar">
+          <div className="max-w-7xl mx-auto">
+            {renderTabContent()}
+          </div>
         </main>
       </div>
     </div>
