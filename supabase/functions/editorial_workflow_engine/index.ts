@@ -1,7 +1,7 @@
 // IDEMO UNIFIED EDITORIAL WORKFLOW ENGINE - DEDICATED EDGE FUNCTION
 // Target Platform: Supabase Edge Functions (Deno Runtime)
-// Work Package: WP-14B2 Partner Portfolio Workflow Correction
-// Version: v1.1.0
+// Work Package: WP-14B3 Canonical Recommendation Workflow
+// Version: v1.2.0
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.8";
@@ -164,6 +164,191 @@ serve(async (req: Request) => {
         JSON.stringify(data),
         { status: data.success ? 200 : 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // 1C. ROUTES: POST /recommendations/* (WP-14B3 Recommendation Workflow Submissions)
+    if (pathname.includes("/recommendations/")) {
+      const authHeader = req.headers.get("Authorization") || "";
+      if (!authHeader.startsWith("Bearer ")) {
+        return new Response(
+          JSON.stringify({ success: false, error: "UNAUTHORIZED", message: "Missing or invalid authorization header." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const token = authHeader.substring(7).trim();
+      const { data: { user }, error: userErr } = await supabase.auth.getUser(token);
+
+      if (userErr || !user) {
+        return new Response(
+          JSON.stringify({ success: false, error: "UNAUTHORIZED", message: "Invalid access token." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const userRole = user.app_metadata?.role;
+      if (!userRole || !ALLOWED_STUDIO_ROLES.has(userRole)) {
+        return new Response(
+          JSON.stringify({ success: false, error: "FORBIDDEN", message: "Insufficient permissions for recommendation operations." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // POST /recommendations/submit
+      if (pathname.endsWith("/recommendations/submit") && req.method === "POST") {
+        const body = await req.json().catch(() => ({}));
+        const {
+          destination_id,
+          proposed_recommendation = body.recommendation_data || body.proposed_recommendation || {},
+          idempotency_key = null,
+          correlation_id = null,
+        } = body;
+
+        const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!destination_id || typeof destination_id !== "string" || !destination_id.trim()) {
+          return new Response(
+            JSON.stringify({ success: false, error: "INVALID_REQUEST", message: "destination_id is mandatory for recommendation submission." }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (!UUID_REGEX.test(destination_id.trim())) {
+          return new Response(
+            JSON.stringify({ success: false, error: "INVALID_DESTINATION", message: "destination_id must be a valid canonical UUID." }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const { data, error } = await supabase.rpc("submit_recommendation_create_secure", {
+          p_author_id: user.id,
+          p_destination_id: destination_id.trim(),
+          p_proposed_recommendation: proposed_recommendation,
+          p_idempotency_key: idempotency_key,
+          p_correlation_id: correlation_id,
+        });
+
+        if (error) {
+          return new Response(
+            JSON.stringify({ success: false, error: "DATABASE_ERROR", message: error.message }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (data && data.error === "WORKFLOW_ENGINE_DISABLED") {
+          return new Response(
+            JSON.stringify(data),
+            { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify(data),
+          { status: data.success ? 200 : 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // POST /recommendations/amend
+      if (pathname.endsWith("/recommendations/amend") && req.method === "POST") {
+        const body = await req.json().catch(() => ({}));
+        const {
+          recommendation_id,
+          proposed_changes = body.proposed_changes || body.changes || {},
+          base_content_version = 1,
+          idempotency_key = null,
+          correlation_id = null,
+        } = body;
+
+        if (!recommendation_id) {
+          return new Response(
+            JSON.stringify({ success: false, error: "INVALID_REQUEST", message: "recommendation_id is required for amendment." }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const { data, error } = await supabase.rpc("submit_recommendation_amend_secure", {
+          p_author_id: user.id,
+          p_recommendation_id: recommendation_id,
+          p_proposed_changes: proposed_changes,
+          p_base_content_version: base_content_version,
+          p_idempotency_key: idempotency_key,
+          p_correlation_id: correlation_id,
+        });
+
+        if (error) {
+          return new Response(
+            JSON.stringify({ success: false, error: "DATABASE_ERROR", message: error.message }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (data && data.error === "WORKFLOW_ENGINE_DISABLED") {
+          return new Response(
+            JSON.stringify(data),
+            { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        let status = 200;
+        if (!data.success) {
+          if (data.error === "RECOMMENDATION_NOT_FOUND") {
+            status = 404;
+          } else if (data.error === "VERSION_CONFLICT") {
+            status = 409;
+          } else {
+            status = 400;
+          }
+        }
+
+        return new Response(
+          JSON.stringify(data),
+          { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // POST /recommendations/retire
+      if (pathname.endsWith("/recommendations/retire") && req.method === "POST") {
+        const body = await req.json().catch(() => ({}));
+        const {
+          recommendation_id,
+          retirement_reason = null,
+          idempotency_key = null,
+          correlation_id = null,
+        } = body;
+
+        if (!recommendation_id || !retirement_reason) {
+          return new Response(
+            JSON.stringify({ success: false, error: "INVALID_REQUEST", message: "recommendation_id and mandatory retirement_reason are required." }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const { data, error } = await supabase.rpc("submit_recommendation_retire_secure", {
+          p_author_id: user.id,
+          p_recommendation_id: recommendation_id,
+          p_retirement_reason: retirement_reason,
+          p_idempotency_key: idempotency_key,
+          p_correlation_id: correlation_id,
+        });
+
+        if (error) {
+          return new Response(
+            JSON.stringify({ success: false, error: "DATABASE_ERROR", message: error.message }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        if (data && data.error === "WORKFLOW_ENGINE_DISABLED") {
+          return new Response(
+            JSON.stringify(data),
+            { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify(data),
+          { status: data.success ? 200 : 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // 2. ADMIN AUTHENTICATION GUARD FOR /admin/*
@@ -352,6 +537,47 @@ serve(async (req: Request) => {
               if (data.error === "VERSION_CONFLICT" || data.error === "INVALID_STATE_TRANSITION") {
                 status = 409;
               } else if (data.error === "WORK_ITEM_NOT_FOUND") {
+                status = 404;
+              } else {
+                status = 400;
+              }
+            }
+
+            return new Response(
+              JSON.stringify(data),
+              { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          } else if (
+            itemData?.handler_key === "recommendation.create" ||
+            itemData?.handler_key === "recommendation.amend" ||
+            itemData?.handler_key === "recommendation.retire"
+          ) {
+            const { data, error } = await supabase.rpc("approve_recommendation_work_item_secure", {
+              p_work_item_id: work_item_id,
+              p_reviewer_id: user.id,
+              p_reviewer_note: reviewer_note,
+              p_expected_version: expected_version,
+            });
+
+            if (error) {
+              return new Response(
+                JSON.stringify({ success: false, error: "DATABASE_ERROR", message: error.message }),
+                { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
+
+            if (data && data.error === "WORKFLOW_ENGINE_DISABLED") {
+              return new Response(
+                JSON.stringify(data),
+                { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
+            }
+
+            let status = 200;
+            if (!data.success) {
+              if (data.error === "VERSION_CONFLICT" || data.error === "INVALID_STATE_TRANSITION") {
+                status = 409;
+              } else if (data.error === "WORK_ITEM_NOT_FOUND" || data.error === "SNAPSHOT_NOT_FOUND") {
                 status = 404;
               } else {
                 status = 400;
