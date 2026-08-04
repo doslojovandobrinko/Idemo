@@ -335,5 +335,18 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.submit_recommendation_create_secure FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.submit_recommendation_create_secure TO service_role;
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN 
+        SELECT oid::regprocedure::text AS func_sig
+        FROM pg_proc
+        WHERE proname = 'submit_recommendation_create_secure'
+          AND pronamespace = 'public'::regnamespace
+    LOOP
+        EXECUTE 'REVOKE ALL ON FUNCTION ' || r.func_sig || ' FROM PUBLIC, anon, authenticated;';
+        EXECUTE 'GRANT EXECUTE ON FUNCTION ' || r.func_sig || ' TO service_role;';
+    END LOOP;
+END;
+$$;
