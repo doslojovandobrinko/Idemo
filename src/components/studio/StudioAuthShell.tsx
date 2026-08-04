@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Lock, ArrowRight, UserCheck, Sparkles } from 'lucide-react';
+import { ShieldCheck, Lock, Mail, ArrowRight, UserCheck } from 'lucide-react';
 import { StudioRole, StudioUserSession } from './types';
 import IdemoLogo from '../IdemoLogo';
+import { getSupabaseClient, isSupabaseConfigured } from '../../lib/supabaseClient';
 
 interface StudioAuthShellProps {
   onLoginSuccess: (session: StudioUserSession) => void;
@@ -54,33 +55,119 @@ const AVAILABLE_ROLES: RoleConfig[] = [
   }
 ];
 
+/**
+ * Derives and validates an allowed StudioRole strictly from user.app_metadata.role.
+ * Never reads user_metadata, UI selections, or local storage.
+ */
+export function parseAndValidateStudioRole(rawRole: unknown): StudioRole | null {
+  if (!rawRole) return null;
+
+  let roleStr = '';
+  if (typeof rawRole === 'string') {
+    roleStr = rawRole;
+  } else if (Array.isArray(rawRole) && rawRole.length > 0) {
+    roleStr = String(rawRole[0]);
+  } else {
+    return null;
+  }
+
+  const normalized = roleStr.trim().toLowerCase().replace(/[\s_-]+/g, '');
+
+  switch (normalized) {
+    case 'curator':
+      return 'Curator';
+    case 'editor':
+      return 'Editor';
+    case 'translator':
+      return 'Translator';
+    case 'partnermanager':
+    case 'partner':
+      return 'Partner Manager';
+    case 'releasemanager':
+    case 'release':
+      return 'Release Manager';
+    case 'superadmin':
+    case 'admin':
+      return 'Super Admin';
+    default:
+      return null;
+  }
+}
+
 export function StudioAuthShell({ onLoginSuccess, onCancel }: StudioAuthShellProps) {
   const [selectedRoleIndex, setSelectedRoleIndex] = useState(0);
-  const [pinInput, setPinInput] = useState('');
+  const [emailInput, setEmailInput] = useState(AVAILABLE_ROLES[0].defaultEmail);
+  const [passwordInput, setPasswordInput] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const activeRoleConfig = AVAILABLE_ROLES[selectedRoleIndex];
 
-  const handleAuthenticate = (e: React.FormEvent) => {
+  const handleSelectRole = (idx: number) => {
+    setSelectedRoleIndex(idx);
+    setEmailInput(AVAILABLE_ROLES[idx].defaultEmail);
+    setErrorMsg('');
+  };
+
+  const handleAuthenticate = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+
+    const cleanEmail = emailInput.trim();
+    const cleanPassword = passwordInput;
+
+    if (!cleanEmail || !cleanPassword) {
+      setErrorMsg('Operator email and password are required.');
+      return;
+    }
+
+    if (!isSupabaseConfigured()) {
+      setErrorMsg('Supabase environment is not configured. Authoritative Studio authentication requires Supabase.');
+      return;
+    }
+
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      setErrorMsg('Supabase client failed to initialize.');
+      return;
+    }
+
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      // In development / studio shell foundation, accept any 4+ char pin or empty in dev
-      if (pinInput.length === 0 || pinInput.length >= 4) {
-        onLoginSuccess({
-          role: activeRoleConfig.role,
-          name: activeRoleConfig.role,
-          email: activeRoleConfig.defaultEmail,
-          authenticatedAt: new Date().toISOString()
-        });
-      } else {
-        setErrorMsg('Invalid Security PIN. Minimum 4 digits required.');
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: cleanPassword,
+      });
+
+      if (error || !data.user) {
+        setErrorMsg(error?.message || 'Authentication failed. Please check credentials.');
         setIsSubmitting(false);
+        return;
       }
-    }, 400);
+
+      // Authoritative role derivation strictly from user.app_metadata.role
+      const rawAppRole = data.user.app_metadata?.role;
+      const derivedRole = parseAndValidateStudioRole(rawAppRole);
+
+      if (!derivedRole) {
+        setErrorMsg(`Access Denied: Account (${data.user.email}) lacks an authorized Studio role in user.app_metadata.role.`);
+        setIsSubmitting(false);
+        return;
+      }
+
+      const verifiedSession: StudioUserSession = {
+        email: data.user.email || cleanEmail,
+        name: data.user.user_metadata?.name || data.user.user_metadata?.full_name || (data.user.email ? data.user.email.split('@')[0] : derivedRole),
+        role: derivedRole,
+        authenticatedAt: new Date().toISOString()
+      };
+
+      onLoginSuccess(verifiedSession);
+    } catch (err: any) {
+      setErrorMsg(`Authentication exception: ${err?.message || String(err)}`);
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -105,7 +192,7 @@ export function StudioAuthShell({ onLoginSuccess, onCancel }: StudioAuthShellPro
             IDEMO Studio Access
           </h2>
           <p className="text-white/70 text-xs sm:text-sm font-sans mt-1 leading-relaxed">
-            Select your operator persona to access editorial management, partner onboarding, and package release controls.
+            Authenticate with your Supabase Studio operator credentials to access editorial management and package controls.
           </p>
         </div>
 
@@ -114,7 +201,7 @@ export function StudioAuthShell({ onLoginSuccess, onCancel }: StudioAuthShellPro
           {/* Operator Role Selector */}
           <div>
             <label className="block font-mono text-[10px] uppercase tracking-wider text-[#8C8A7D] font-bold mb-3">
-              1. Select Operator Function
+              1. Select Operator Persona Preset
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               {AVAILABLE_ROLES.map((r, idx) => {
@@ -123,7 +210,7 @@ export function StudioAuthShell({ onLoginSuccess, onCancel }: StudioAuthShellPro
                   <button
                     key={r.role}
                     type="button"
-                    onClick={() => setSelectedRoleIndex(idx)}
+                    onClick={() => handleSelectRole(idx)}
                     className={`group rounded-2xl text-left border transition-all cursor-pointer flex flex-col overflow-hidden ${
                       isSelected
                         ? 'bg-[#23251E] text-white border-[#23251E] shadow-md ring-2 ring-[#C5A059]'
@@ -159,28 +246,48 @@ export function StudioAuthShell({ onLoginSuccess, onCancel }: StudioAuthShellPro
             </div>
           </div>
 
-          {/* Security PIN input */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block font-mono text-[10px] uppercase tracking-wider text-[#8C8A7D] font-bold">
-                2. Operator Security PIN / Auth Key
-              </label>
-              <span className="text-[10px] font-mono text-[#8C8A7D]">
-                Dev Bypass Active (Leave blank or enter PIN)
-              </span>
+          {/* Credentials Inputs */}
+          <div className="space-y-4 pt-2">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block font-mono text-[10px] uppercase tracking-wider text-[#8C8A7D] font-bold">
+                  2. Operator Email
+                </label>
+              </div>
+              <div className="relative">
+                <input
+                  type="email"
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  placeholder="operator@idemo.travel"
+                  required
+                  className="w-full h-12 pl-10 pr-4 bg-[#FAF9F5] border border-[#E5E3DB] focus:border-[#23251E] rounded-xl text-sm font-mono text-[#1E2E20] outline-none transition-colors"
+                />
+                <Mail size={16} className="absolute left-3.5 top-3.5 text-[#8C8A7D]" />
+              </div>
             </div>
-            <div className="relative">
-              <input
-                type="password"
-                value={pinInput}
-                onChange={(e) => setPinInput(e.target.value)}
-                placeholder="Enter 4-digit security PIN..."
-                className="w-full h-12 pl-10 pr-4 bg-[#FAF9F5] border border-[#E5E3DB] focus:border-[#23251E] rounded-xl text-sm font-mono text-[#1E2E20] outline-none transition-colors"
-              />
-              <Lock size={16} className="absolute left-3.5 top-3.5 text-[#8C8A7D]" />
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block font-mono text-[10px] uppercase tracking-wider text-[#8C8A7D] font-bold">
+                  3. Operator Password
+                </label>
+              </div>
+              <div className="relative">
+                <input
+                  type="password"
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  placeholder="Enter Supabase account password..."
+                  required
+                  className="w-full h-12 pl-10 pr-4 bg-[#FAF9F5] border border-[#E5E3DB] focus:border-[#23251E] rounded-xl text-sm font-mono text-[#1E2E20] outline-none transition-colors"
+                />
+                <Lock size={16} className="absolute left-3.5 top-3.5 text-[#8C8A7D]" />
+              </div>
             </div>
+
             {errorMsg && (
-              <p className="text-xs text-[#8A1F1F] font-mono mt-1.5 font-bold">
+              <p className="text-xs text-[#8A1F1F] font-mono font-bold bg-[#8A1F1F]/10 p-3 rounded-xl border border-[#8A1F1F]/20">
                 {errorMsg}
               </p>
             )}
@@ -203,7 +310,7 @@ export function StudioAuthShell({ onLoginSuccess, onCancel }: StudioAuthShellPro
               disabled={isSubmitting}
               className="h-12 px-6 bg-[#23251E] hover:bg-[#32352B] text-white rounded-xl font-mono text-xs font-bold uppercase tracking-widest flex items-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95 disabled:opacity-50"
             >
-              <span>{isSubmitting ? 'Authenticating...' : `Enter Studio as ${activeRoleConfig.role}`}</span>
+              <span>{isSubmitting ? 'Authenticating...' : `Sign In to Studio`}</span>
               <ArrowRight size={14} className="text-[#C5A059]" />
             </button>
           </div>
@@ -211,9 +318,10 @@ export function StudioAuthShell({ onLoginSuccess, onCancel }: StudioAuthShellPro
 
         {/* Footer info */}
         <div className="bg-[#FAF9F5] border-t border-[#E5E3DB] p-4 px-6 text-center text-[10px] font-mono text-[#8C8A7D]">
-          IDEMO Studio Operating Governance System • Zero Tracking • Local & Supabase Auth Sync
+          IDEMO Studio Operating Governance System • Zero Tracking • Supabase Auth Sync
         </div>
       </div>
     </div>
   );
 }
+
