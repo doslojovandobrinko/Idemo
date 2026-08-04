@@ -623,3 +623,4 @@ $$;
 
 REVOKE ALL ON FUNCTION public.abandon_recommendation_media_asset_secure FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.abandon_recommendation_media_asset_secure TO service_role;
+

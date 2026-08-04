@@ -41,7 +41,9 @@ import {
   submitCanonicalRecommendationCreate, 
   buildCanonicalRecommendationPayload,
   fetchAuthoritativeServiceAreas,
-  ServiceAreaOption
+  ServiceAreaOption,
+  saveRecommendationDraft,
+  fetchLatestDraftForRecommendation
 } from '../../lib/recommendationWorkflowService';
 import {
   MediaWorkflowState,
@@ -511,6 +513,42 @@ export function RecommendationEditorModal({
     }
     setCurrentStep(1);
     setSubmissionFeedback(null);
+
+    let mounted = true;
+    async function checkForServerDraft() {
+      if (!isOpen || !initialRecommendation) return;
+      const recId = initialRecommendation.dbId || initialRecommendation.id;
+      if (!recId) return;
+
+      const draft = await fetchLatestDraftForRecommendation(recId);
+      if (draft && mounted) {
+        setForm(prev => {
+          const draftTranslations = draft.translations || {};
+          return {
+            ...prev,
+            ...draft,
+            title: draft.title || prev.title,
+            shortDescription: draft.shortDescription || prev.shortDescription,
+            longDescription: draft.longDescription || prev.longDescription,
+            location: draft.location || prev.location,
+            titleSr: draft.titleSr || prev.titleSr || draftTranslations.sr?.title || '',
+            shortDescriptionSr: draft.shortDescriptionSr || prev.shortDescriptionSr || draftTranslations.sr?.shortDescription || '',
+            longDescriptionSr: draft.longDescriptionSr || prev.longDescriptionSr || draftTranslations.sr?.longDescription || '',
+            locationSr: draft.locationSr || prev.locationSr || draftTranslations.sr?.location || '',
+            translations: {
+              ...prev.translations,
+              ...draftTranslations,
+            },
+          };
+        });
+      }
+    }
+
+    if (isOpen && initialRecommendation) {
+      checkForServerDraft();
+    }
+
+    return () => { mounted = false; };
   }, [initialRecommendation, currentStatus, isOpen]);
 
   // Synchronization helper for EN/SR direct fields and translations object
@@ -730,14 +768,43 @@ export function RecommendationEditorModal({
     }
   };
 
-  // Save Draft locally
-  const handleSaveDraft = () => {
-    const savedRec: Recommendation = {
-      ...(form as Recommendation),
-      id: form.id || `rec-draft-${Date.now()}`,
-    };
-    onSave(savedRec, selectedStatus);
-    onClose();
+  // Save Draft durably to PostgreSQL backend via RPC
+  const handleSaveDraft = async () => {
+    setIsSubmitting(true);
+    setSubmissionFeedback({ type: 'info', message: 'Saving recommendation draft to authoritative backend...' });
+
+    try {
+      const res = await saveRecommendationDraft(form, form.serviceAreaId);
+
+      if (res.success === true) {
+        setSubmissionFeedback({
+          type: 'success',
+          message: res.message || 'Draft successfully persisted to authoritative server!'
+        });
+
+        const savedRec: Recommendation = {
+          ...(form as Recommendation),
+          id: res.proposed_recommendation_id || form.id || `rec-draft-${Date.now()}`,
+        };
+
+        setTimeout(() => {
+          onSave(savedRec, selectedStatus);
+          onClose();
+        }, 600);
+      } else {
+        setSubmissionFeedback({
+          type: 'error',
+          message: res.message || res.error || 'Failed to save draft to backend.'
+        });
+      }
+    } catch (err: any) {
+      setSubmissionFeedback({
+        type: 'error',
+        message: `Draft save exception: ${err?.message || String(err)}`
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!isOpen) return null;
