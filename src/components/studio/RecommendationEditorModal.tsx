@@ -513,8 +513,6 @@ export function RecommendationEditorModal({
     setSubmissionFeedback(null);
   }, [initialRecommendation, currentStatus, isOpen]);
 
-  if (!isOpen) return null;
-
   // Synchronization helper for EN/SR direct fields and translations object
   const updateFieldWithSync = (field: string, val: any) => {
     setForm(prev => {
@@ -741,6 +739,8 @@ export function RecommendationEditorModal({
     onSave(savedRec, selectedStatus);
     onClose();
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto font-sans">

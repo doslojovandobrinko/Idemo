@@ -207,7 +207,7 @@ BEGIN
   IF p_original_filename IS NOT NULL AND pg_catalog.trim(p_original_filename) <> '' THEN
     v_safe_filename := pg_catalog.regexp_replace(pg_catalog.trim(p_original_filename), '[^a-zA-Z0-9._-]', '_', 'g');
     IF pg_catalog.length(v_safe_filename) > 100 THEN
-      v_safe_filename := pg_catalog.substring(v_safe_filename FROM 1 FOR 100);
+      v_safe_filename := pg_catalog.substring(v_safe_filename, 1, 100);
     END IF;
   ELSE
     v_safe_filename := 'media_upload.' || v_ext;
