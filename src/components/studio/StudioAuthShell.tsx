@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ShieldCheck, Lock, Mail, ArrowRight, UserCheck } from 'lucide-react';
-import { StudioRole, StudioUserSession } from './types';
+import { StudioRole, StudioUserSession, CANONICAL_STUDIO_ROLE_MAP } from './types';
 import IdemoLogo from '../IdemoLogo';
 import { getSupabaseClient, isSupabaseConfigured } from '../../lib/supabaseClient';
 
@@ -57,41 +57,28 @@ const AVAILABLE_ROLES: RoleConfig[] = [
 
 /**
  * Derives and validates an allowed StudioRole strictly from user.app_metadata.role.
+ * Expects canonical machine role values (e.g. "super_admin", "editorial_lead", "curator", etc.).
+ * Maps canonical machine values to human-readable StudioRole display types.
  * Never reads user_metadata, UI selections, or local storage.
+ * Performs exact canonical lookup without role fallback, case-insensitive guessing, or fabricated sessions.
  */
 export function parseAndValidateStudioRole(rawRole: unknown): StudioRole | null {
   if (!rawRole) return null;
 
   let roleStr = '';
   if (typeof rawRole === 'string') {
-    roleStr = rawRole;
-  } else if (Array.isArray(rawRole) && rawRole.length > 0) {
-    roleStr = String(rawRole[0]);
+    roleStr = rawRole.trim();
+  } else if (Array.isArray(rawRole) && rawRole.length > 0 && typeof rawRole[0] === 'string') {
+    roleStr = rawRole[0].trim();
   } else {
     return null;
   }
 
-  const normalized = roleStr.trim().toLowerCase().replace(/[\s_-]+/g, '');
-
-  switch (normalized) {
-    case 'curator':
-      return 'Curator';
-    case 'editor':
-      return 'Editor';
-    case 'translator':
-      return 'Translator';
-    case 'partnermanager':
-    case 'partner':
-      return 'Partner Manager';
-    case 'releasemanager':
-    case 'release':
-      return 'Release Manager';
-    case 'superadmin':
-    case 'admin':
-      return 'Super Admin';
-    default:
-      return null;
+  if (Object.prototype.hasOwnProperty.call(CANONICAL_STUDIO_ROLE_MAP, roleStr)) {
+    return CANONICAL_STUDIO_ROLE_MAP[roleStr as keyof typeof CANONICAL_STUDIO_ROLE_MAP];
   }
+
+  return null;
 }
 
 export function StudioAuthShell({ onLoginSuccess, onCancel }: StudioAuthShellProps) {
@@ -324,4 +311,3 @@ export function StudioAuthShell({ onLoginSuccess, onCancel }: StudioAuthShellPro
     </div>
   );
 }
-
