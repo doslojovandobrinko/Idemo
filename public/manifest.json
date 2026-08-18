@@ -1,0 +1,20 @@
+{
+  "name": "IDEMO — Premium Belgrade Concierge",
+  "short_name": "IDEMO",
+  "description": "IDEMO is a premium, privacy-first Belgrade concierge app created for international visitors during EXPO 2027.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#F6F5F2",
+  "theme_color": "#F6F5F2",
+  "dir": "ltr",
+  "orientation": "portrait-primary",
+  "categories": ["travel", "utilities"],
+  "icons": [
+    {
+      "src": "assets/images/serbia_bre_suitcase_1778769434178.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

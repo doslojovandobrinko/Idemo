@@ -1,0 +1,141 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", serif;
+  
+  --color-brand-bg: #F9F7F2;
+  --color-brand-sage: #23251E;
+  --color-brand-charcoal: #23251E;
+  --color-brand-pearl: #E2DDD0;
+  --color-accent-red: #8A1F1F;
+  --color-accent-teal: #006666;
+  --color-border-main: #BFBBAF;
+  
+  --shadow-tactile: 0 6px 18px rgba(35, 37, 30, 0.08), 0 1px 3px rgba(35, 37, 30, 0.04);
+  --shadow-tactile-hover: 0 12px 32px rgba(35, 37, 30, 0.12), 0 2px 6px rgba(35, 37, 30, 0.06);
+
+  --animate-shine: shine 4s ease-in-out infinite;
+
+  @keyframes shine {
+    0% { left: -100%; opacity: 0; }
+    15% { opacity: 0.5; }
+    30% { left: 150%; opacity: 0; }
+    100% { left: 150%; opacity: 0; }
+  }
+}
+
+@layer base {
+  body {
+    @apply bg-brand-bg text-brand-charcoal font-sans antialiased overflow-x-hidden;
+    /* Handling mobile safe areas */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  h1, h2, h3, h4, .serif {
+    @apply font-serif;
+  }
+
+  /* Custom scrollbar for premium feel */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-brand-charcoal/10 rounded-full;
+  }
+}
+
+@layer components {
+  .premium-paper {
+    background-color: #FAF9F5;
+    background-image: 
+      radial-gradient(circle at 12% 12%, rgba(255, 255, 255, 0.8) 0%, transparent 55%),
+      radial-gradient(circle at 85% 85%, rgba(226, 221, 208, 0.25) 0%, transparent 60%),
+      url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='paperNoise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.012 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23paperNoise)'/%3E%3C/svg%3E");
+    background-blend-mode: multiply;
+  }
+
+  .btn-pearl {
+    @apply bg-brand-pearl px-6 py-3 rounded-2xl shadow-tactile transition-all duration-500 hover:shadow-tactile-hover active:scale-[0.98] flex items-center justify-center gap-2;
+  }
+  
+  .card-shell {
+    @apply bg-white rounded-[32px] overflow-hidden shadow-tactile border border-border-main;
+  }
+
+  .concierge-text {
+    @apply italic text-[#5C5E54] leading-relaxed;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Print Overrides for EXPO 2027 Itinerary Portfolio */
+@media print {
+  /* Enforce A4 background and color settings */
+  html, body {
+    background-color: #FAF9F5 !important;
+    color: #2F3126 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 210mm !important;
+    height: auto !important;
+    min-height: 297mm !important;
+    overflow: visible !important;
+  }
+
+  #root {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Completely hide all UI wrapper layers and interactive panels */
+  #root > div:not(#print-portfolio-element),
+  #app-main-layout,
+  button,
+  nav,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Force only the premium portfolio container to print */
+  #print-portfolio-element {
+    display: block !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 1.6cm !important;
+    box-sizing: border-box !important;
+    background-color: #FAF9F5 !important;
+    z-index: 99999999 !important;
+  }
+
+  .itinerary-card {
+    page-break-inside: avoid !important;
+  }
+}
+
+/* Screen view block for printing element */
+@media screen {
+  #print-portfolio-element {
+    display: none !important;
+  }
+}
+
+
+

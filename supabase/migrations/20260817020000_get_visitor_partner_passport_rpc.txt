@@ -1,0 +1,148 @@
+-- IDEMO PARTNER ROUTING ENGINE - SINGLE RPC PARTNER PASSPORT RESOLVER
+-- Migration: 20260817020000_get_visitor_partner_passport_rpc.sql
+-- Target Platform: Supabase + PostgreSQL
+-- Purpose: Atomically validates visitor credentials, resolves active partner/response, and projects the approved Partner Passport.
+
+CREATE OR REPLACE FUNCTION public.get_visitor_partner_passport(
+    p_inquiry_id UUID,
+    p_raw_token TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_inquiry public.inquiries%ROWTYPE;
+    v_match RECORD;
+    v_response RECORD;
+    v_partner RECORD;
+    v_profile RECORD;
+    v_eligibility RECORD;
+    v_is_confirmed BOOLEAN := FALSE;
+    v_contact_phone TEXT := NULL;
+    v_contact_email TEXT := NULL;
+BEGIN
+    -- 1. Authoritative visitor credential and inquiry validation
+    v_inquiry := public.validate_and_get_inquiry(p_inquiry_id, p_raw_token);
+
+    -- 2. Inquiry state gate
+    IF v_inquiry.status NOT IN ('awaiting_visitor', 'confirmed', 'in_progress') THEN
+        RETURN jsonb_build_object(
+            'success', TRUE,
+            'introduction_available', FALSE,
+            'message', 'Inquiry is not in an eligible state for partner introduction.'
+        );
+    END IF;
+
+    -- 3. Resolve the active match for this inquiry
+    -- Priority: 'selected' match (confirmed state) > most recent 'responded' match (awaiting visitor state)
+    SELECT im.id, im.partner_id, im.status
+    INTO v_match
+    FROM public.inquiry_matches im
+    WHERE im.inquiry_id = v_inquiry.id
+      AND im.status IN ('responded', 'selected')
+    ORDER BY 
+        CASE WHEN im.status = 'selected' THEN 1 ELSE 2 END ASC,
+        im.created_at DESC
+    LIMIT 1;
+
+    IF v_match.id IS NULL THEN
+        RETURN jsonb_build_object(
+            'success', TRUE,
+            'introduction_available', FALSE,
+            'message', 'No eligible partner match found for this inquiry.'
+        );
+    END IF;
+
+    -- 4. Check that an active partner response exists
+    SELECT pr.id, pr.status, pr.response_type
+    INTO v_response
+    FROM public.partner_responses pr
+    WHERE pr.match_id = v_match.id
+      AND pr.status = 'submitted'::public.partner_response_status
+    LIMIT 1;
+
+    IF v_response.id IS NULL THEN
+        RETURN jsonb_build_object(
+            'success', TRUE,
+            'introduction_available', FALSE,
+            'message', 'No active partner response found for this inquiry.'
+        );
+    END IF;
+
+    -- 5. Retrieve Partner display identity
+    SELECT p.id, p.name, p.public_code
+    INTO v_partner
+    FROM public.partners p
+    WHERE p.id = v_match.partner_id;
+
+    IF v_partner.id IS NULL THEN
+        RETURN jsonb_build_object(
+            'success', TRUE,
+            'introduction_available', FALSE,
+            'message', 'Partner record not found.'
+        );
+    END IF;
+
+    -- 6. Retrieve approved Partner Profile Content
+    SELECT ppc.partner_id, ppc.intro_published, ppc.published_photo_path, ppc.photo_consent_given, ppc.content_version, ppc.review_status
+    INTO v_profile
+    FROM public.partner_profile_content ppc
+    WHERE ppc.partner_id = v_partner.id;
+
+    IF v_profile.partner_id IS NULL 
+       OR v_profile.review_status != 'approved' 
+       OR v_profile.intro_published IS NULL 
+       OR TRIM(v_profile.intro_published) = '' THEN
+        RETURN jsonb_build_object(
+            'success', TRUE,
+            'introduction_available', FALSE,
+            'partner_name', COALESCE(v_partner.name, 'Verified Partner'),
+            'partner_code', COALESCE(v_partner.public_code, 'IDM-PTR'),
+            'contact_phone', NULL,
+            'contact_email', NULL,
+            'message', 'Partner profile introduction is pending or not yet published.'
+        );
+    END IF;
+
+    -- 7. Contact Disclosure Gate
+    -- Contact is disclosed ONLY upon confirmed handoff (inquiry status is 'confirmed' or 'in_progress', or match status is 'selected')
+    IF v_inquiry.status IN ('confirmed', 'in_progress') OR v_match.status = 'selected' THEN
+        v_is_confirmed := TRUE;
+        
+        -- Resolve operational contact from recommendation_partner_eligibility for the specific recommendation
+        SELECT rpe.contact_phone, rpe.contact_email
+        INTO v_eligibility
+        FROM public.recommendation_partner_eligibility rpe
+        WHERE rpe.partner_id = v_partner.id
+          AND rpe.recommendation_id = v_inquiry.recommendation_id
+        LIMIT 1;
+
+        v_contact_phone := v_eligibility.contact_phone;
+        v_contact_email := v_eligibility.contact_email;
+    ELSE
+        v_contact_phone := NULL;
+        v_contact_email := NULL;
+    END IF;
+
+    -- 8. Return structured Passport payload
+    RETURN jsonb_build_object(
+        'success', TRUE,
+        'introduction_available', TRUE,
+        'partner_name', COALESCE(v_partner.name, 'Verified Partner'),
+        'partner_code', COALESCE(v_partner.public_code, 'IDM-PTR'),
+        'introduction', v_profile.intro_published,
+        'photo_available', (v_profile.published_photo_path IS NOT NULL AND v_profile.published_photo_path != ''),
+        'published_photo_path', CASE WHEN v_profile.photo_consent_given IS NOT FALSE THEN v_profile.published_photo_path ELSE NULL END,
+        'photo_consent_given', COALESCE(v_profile.photo_consent_given, FALSE),
+        'contact_phone', v_contact_phone,
+        'contact_email', v_contact_email,
+        'content_version', COALESCE(v_profile.content_version, 1)
+    );
+END;
+$$;
+
+-- Security hardening & privilege lockdown
+REVOKE EXECUTE ON FUNCTION public.get_visitor_partner_passport(UUID, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.get_visitor_partner_passport(UUID, TEXT) TO service_role;

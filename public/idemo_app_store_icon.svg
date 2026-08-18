@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Pure White Background -->
+  <rect width="1024" height="1024" fill="#FFFFFF" />
+  
+  <g fill="#2D3025">
+    <!-- Letter I -->
+    <rect x="133" y="362" width="40" height="300" rx="4" />
+    
+    <!-- Letter D (with white play triangle counter cutout) -->
+    <!-- Outer D shape -->
+    <path d="M 197 362 H 260 C 290 362, 307 395, 307 512 C 307 629, 290 662, 260 662 H 197 Z" />
+    
+    <!-- Letter E -->
+    <path d="M 331 362 H 423 V 412 H 367 V 487 H 413 V 537 H 367 V 612 H 423 V 662 H 331 Z" />
+    
+    <!-- Letter M -->
+    <path d="M 447 662 V 362 H 487 L 507 482 L 527 362 H 567 V 662 H 527 V 470 L 507 590 L 487 470 V 662 Z" />
+  </g>
+  
+  <!-- Inside Play Triangle of D (drawn as white polygon overlay) -->
+  <polygon points="233,400 285,512 233,624" fill="#FFFFFF" />
+  
+  <!-- Letter O (The Globe) -->
+  <g>
+    <!-- Outer circle with thickness 40 identical to I's thickness -->
+    <circle cx="741" cy="512" r="130" stroke="#2D3025" strokeWidth="40" fill="none" />
+    
+    <!-- Clip group for perfect vector curves/seamless edges with no jagged intersections -->
+    <g clip-path="url(#globe-inner-clip)">
+      <!-- Prime Meridian (Center longitude) -->
+      <line x1="741" y1="380" x2="741" y2="644" stroke="#2D3025" strokeWidth="20" stroke-linecap="round" />
+      
+      <!-- Equator (Center latitude) -->
+      <line x1="600" y1="512" x2="880" y2="512" stroke="#2D3025" strokeWidth="20" stroke-linecap="round" />
+      
+      <!-- Symmetrical Longitude curves (rx="55") -->
+      <ellipse cx="741" cy="512" rx="55" ry="110" stroke="#2D3025" strokeWidth="20" fill="none" />
+      <ellipse cx="741" cy="512" rx="95" ry="110" stroke="#2D3025" strokeWidth="20" fill="none" />
+      
+      <!-- Symmetrical Latitude arcs -->
+      <ellipse cx="741" cy="380" rx="110" ry="55" stroke="#2D3025" strokeWidth="20" fill="none" />
+      <ellipse cx="741" cy="644" rx="110" ry="55" stroke="#2D3025" strokeWidth="20" fill="none" />
+    </g>
+  </g>
+  
+  <!-- Clip Path Definition for the Globe Inner Space (cx=741, cy=512, r=110 to sit snugly inside the 40px outer stroke) -->
+  <defs>
+    <clipPath id="globe-inner-clip">
+      <circle cx="741" cy="512" r="110" />
+    </clipPath>
+  </defs>
+</svg>

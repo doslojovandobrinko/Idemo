@@ -1,0 +1,16 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+# IDEMO local working / temporary artifacts
+*_temp/
+*_temp.zip
+*_downloads/
+*.zip
+backup_*.json
+expo_temp.svg
+generate_frula_image.py

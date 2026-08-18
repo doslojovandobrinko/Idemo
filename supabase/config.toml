@@ -1,0 +1,4 @@
+# IDEMO PARTNER ROUTING ENGINE - SUPABASE LOCAL RUNTIME CONFIGURATION
+
+[functions.notification_worker]
+verify_jwt = false
