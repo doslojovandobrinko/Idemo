@@ -17,6 +17,7 @@ import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 import { INITIAL_RECOMMENDATIONS } from '../data/recommendations/serbia';
 import { INITIAL_EDITORIAL_COLLECTIONS } from '../data/editorialCollections';
 import { PARTNERS as INITIAL_PARTNERS } from '../data/partners';
+import { validatePublicationMediaGate, getApprovedPrimaryMedia } from './recommendationMediaService';
 
 const ACTIVE_PACKAGE_STORAGE_KEY = 'idemo_active_destination_package_v1';
 const PREVIOUS_PACKAGE_STORAGE_KEY = 'idemo_previous_destination_package_v1';
@@ -65,7 +66,12 @@ export async function calculatePackageHash(data: { recommendations: Recommendati
  * All 192 mapped recommendations are released for the IDEMO production baseline.
  */
 export function getCanonicalRecommendations(allRecs: Recommendation[] = INITIAL_RECOMMENDATIONS): Recommendation[] {
-  return allRecs.filter(r => Boolean(r && r.id && r.title && r.publicationStatus !== 'RETIRED'));
+  return allRecs
+    .filter(r => Boolean(r && r.id && r.title && r.publicationStatus !== 'RETIRED'))
+    .map(r => ({
+      ...r,
+      image: getApprovedPrimaryMedia(r.id, r.image),
+    }));
 }
 
 /**
@@ -127,6 +133,15 @@ export async function validateDestinationPackage(pkg: DestinationPackage): Promi
 
   if (!Array.isArray(recommendations) || !Array.isArray(editorialCollections) || !Array.isArray(partners)) {
     return { valid: false, reason: 'SCHEMA_INVALID: Recommendation, collection, or partner arrays are missing.' };
+  }
+
+  // Gate 4: Validate human media approval invariant across all recommendations in package
+  const mediaGateRes = validatePublicationMediaGate(recommendations);
+  if (!mediaGateRes.valid) {
+    return {
+      valid: false,
+      reason: `UNAUTHORIZED_MEDIA_DRIFT: Package contains primary media changes without explicit human approval: ${mediaGateRes.errors.join('; ')}`
+    };
   }
 
   // Check SHA-256 / checksum integrity
@@ -325,33 +340,40 @@ export async function checkAndSyncDestinationPackage(destinationId: string = 'se
       .eq('is_published', true);
 
     if (recRows && recRows.length > 0) {
+      const staticRecsMap = new Map(INITIAL_RECOMMENDATIONS.map(r => [r.id, r]));
       // Map recommendations
-      const updatedRecs: Recommendation[] = recRows.map((row: any) => ({
-        id: row.source_id || row.id,
-        dbId: row.id,
-        title: row.title_en,
-        category: row.category || 'Travel',
-        shortDescription: row.short_description_en || '',
-        longDescription: row.long_description_en || row.short_description_en || '',
-        image: row.image_url || '/src/assets/images/uvac_meanders_1778841048759.png',
-        duration: row.duration || '2-4 hours',
-        travelTime: row.travel_time || '1 hour',
-        travelTimeMinutes: row.travel_time_minutes || 60,
-        location: row.location_en || 'Serbia',
-        estimatedCost: row.estimated_cost || 'Moderate',
-        preferredTransport: row.preferred_transport || 'Car',
-        coordinateX: row.coordinate_x ?? 50,
-        coordinateY: row.coordinate_y ?? 50,
-        coordinates: row.latitude != null && row.longitude != null ? { lat: row.latitude, lng: row.longitude } : undefined,
-        translations: {
-          sr: {
-            title: row.title_sr,
-            shortDescription: row.short_description_sr,
-            longDescription: row.long_description_sr,
-            location: row.location_sr,
+      const updatedRecs: Recommendation[] = recRows.map((row: any) => {
+        const recId = row.source_id || row.id;
+        const staticMatch = staticRecsMap.get(recId);
+        const candidateImage = row.image_url || staticMatch?.image || '/src/assets/images/uvac_meanders_1778841048759.png';
+        const approvedImage = getApprovedPrimaryMedia(recId, candidateImage);
+        return {
+          id: recId,
+          dbId: row.id,
+          title: row.title_en,
+          category: row.category || 'Travel',
+          shortDescription: row.short_description_en || '',
+          longDescription: row.long_description_en || row.short_description_en || '',
+          image: approvedImage,
+          duration: row.duration || '2-4 hours',
+          travelTime: row.travel_time || '1 hour',
+          travelTimeMinutes: row.travel_time_minutes || 60,
+          location: row.location_en || 'Serbia',
+          estimatedCost: row.estimated_cost || 'Moderate',
+          preferredTransport: row.preferred_transport || 'Car',
+          coordinateX: row.coordinate_x ?? 50,
+          coordinateY: row.coordinate_y ?? 50,
+          coordinates: row.latitude != null && row.longitude != null ? { lat: row.latitude, lng: row.longitude } : undefined,
+          translations: {
+            sr: {
+              title: row.title_sr,
+              shortDescription: row.short_description_sr,
+              longDescription: row.long_description_sr,
+              location: row.location_sr,
+            },
           },
-        },
-      }));
+        };
+      });
 
       const newPkg: DestinationPackage = {
         manifest: {

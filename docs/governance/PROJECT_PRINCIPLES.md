@@ -74,6 +74,9 @@ The governance foundation of IDEMO is complete, the Core Engine is frozen, the E
 ### 22. Architecture Freeze & Stage-Gated Execution (Principle 38)
 Once a work package receives explicit architectural approval, the approved architecture becomes frozen for that work package. Implementation must execute the frozen specification exactly. No human engineer or AI agent may redesign, reinterpret, simplify, substitute, rename, merge, relocate, optimize, broaden, narrow, or introduce unsolicited "minor improvements" unless a new architectural review is explicitly opened and approved. Any repository, live-schema, runtime, deployment, security, or platform conflict with the frozen architecture mandates an immediate STOP. Every work package progresses through 5 mandatory stage gates: Gate 1 (Verified Baseline), Gate 2 (Architectural Approval & Freeze), Gate 3 (Implementation with Scope Manifest), Gate 4 (Verification with Evidence), and Gate 5 (Deployment Approval). Optional post-freeze refinements are logged in a separate future backlog.
 
+### 23. Human-Only Media Change Authority (Principle 40)
+IDEMO recommendation imagery is a protected part of the visual identity and product quality. No recommendation image may EVER be modified (added, replaced, removed, reordered, or path-changed) without explicit human approval. Automated systems, Gemini, scripts, and publication engines may detect, report, and propose media changes, but MUST NEVER approve, publish, replace, or silently substitute visitor-visible media. If approved canonical media is unavailable or broken, automated systems MUST preserve the approved reference, surface a media integrity warning, block publication, and require human review.
+
 ---
 
 ## Cross References

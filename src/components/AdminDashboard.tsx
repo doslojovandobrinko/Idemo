@@ -3755,7 +3755,7 @@ Schema:
                 
                 {landingImage && (
                   <div className="mt-2 w-32 h-20 rounded-xl overflow-hidden border border-border-main shadow-sm bg-brand-pearl">
-                    <img src={landingImage} className="w-full h-full object-cover" alt="Custom Card Preview" />
+                    <img src={landingImage || undefined} className="w-full h-full object-cover" alt="Custom Card Preview" />
                   </div>
                 )}
               </div>
@@ -4681,7 +4681,7 @@ Schema:
                           {rec.image && (
                             <div className="relative w-full h-36 rounded-xl overflow-hidden border border-border-main/30 my-2 bg-brand-pearl shadow-sm">
                               <img 
-                                src={rec.image} 
+                                src={rec.image || undefined} 
                                 alt={rec.title}
                                 referrerPolicy="no-referrer"
                                 className="w-full h-full object-cover"
@@ -5456,7 +5456,7 @@ Schema:
 
                     <div className="p-3 bg-[#FAF9F5] rounded-xl border border-border-main/50 text-[9.5px] text-brand-charcoal/70 flex gap-3.5 items-center">
                       <div className="w-12 h-12 rounded-lg overflow-hidden bg-brand-pearl shrink-0 border border-border-main">
-                        <img src={target.image} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/src/assets/images/silosi_belgrade_industrial_night_1778842947193.png' }} alt="" />
+                        <img src={target.image || undefined} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/src/assets/images/silosi_belgrade_industrial_night_1778842947193.png' }} alt="" />
                       </div>
                       <div className="text-left min-w-0 flex-1">
                         <p className="font-bold text-brand-charcoal truncate">{target.title} <span className="text-[8px] uppercase tracking-wider font-mono bg-accent-teal/10 text-accent-teal px-1 py-0.2 rounded">{target.scoreMatch || target.category}</span></p>
@@ -5600,7 +5600,7 @@ Schema:
                         <div className="bg-white rounded-[32px] overflow-hidden border border-border-main p-4 space-y-3.5 shadow-sm">
                           <div className="aspect-[16/9] w-full bg-[#FAF9F5] rounded-[24px] overflow-hidden relative">
                             <img 
-                              src={aiParsedRec.image}
+                              src={aiParsedRec.image || undefined}
                               onError={(e) => { (e.target as HTMLImageElement).src = '/src/assets/images/silosi_belgrade_industrial_night_1778842947193.png' }}
                               className="w-full h-full object-cover" 
                               alt="preview"
@@ -6071,7 +6071,7 @@ Schema:
                     <div className="flex justify-between items-center border-b border-border-main/30 pb-2">
                       <span className="text-[8px] font-black uppercase tracking-wider text-brand-charcoal/60">Compare With Live/Approved Curation:</span>
                       <span className="bg-green-100 text-green-800 text-[8px] font-mono px-2 py-0.5 rounded-full uppercase font-black">
-                        {targetRec ? (editorialStatuses[targetRec.id] || 'APPROVED') : '—'}
+                        {targetRec ? (editorialStatuses[targetRec.id] || (allRecommendations.some(i => i.id === targetRec.id && (i.publicationStatus === 'CANONICAL' || i.publicationStatus === 'PUBLISHED')) ? 'APPROVED' : 'CANDIDATE')) : '—'}
                       </span>
                     </div>
 

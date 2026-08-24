@@ -25,7 +25,13 @@ import {
   Info,
   Layers,
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  Building2,
+  MapPin,
+  Edit3,
+  Compass,
+  Users,
+  QrCode
 } from 'lucide-react';
 import { 
   PartnerCoverageRecord, 
@@ -34,30 +40,72 @@ import {
   PassportVerificationState, 
   RoutingPoolState, 
   CoverageHealthStatus,
+  PartnerCoverageViewMode,
   StudioUserSession
 } from './types';
 import { PARTNERS } from '../../data/partners';
 import { INITIAL_RECOMMENDATIONS } from '../../data/recommendations/serbia';
+import { Partner, Recommendation } from '../../types';
 import { 
   fetchPartnerCoverageMatrix, 
   selectAndReleasePartnerCoverage, 
   updatePartnerCoverageStatus,
   replacePartnerCoverage
 } from '../../lib/partnerService';
+import { PartnerEditorModal, PartnerLifecycleStage } from './PartnerEditorModal';
+import { RecommendationEditorModal } from './RecommendationEditorModal';
+
+// Authoritative default PIN resolution adhering strictly to SSOT and V9 security guidelines.
+// Plaintext onboarding PINs are never stored in a secondary duplicate map.
+// The presence of cryptographic pinHash in the canonical Partner entity is reported without storing duplicate maps.
+export function resolveDefaultPartnerPin(
+  partnerId: string, 
+  partnerName?: string, 
+  partnerObj?: Partner
+): string {
+  const p = partnerObj || PARTNERS.find(item => item.id === partnerId || item.nameEn === (partnerName || partnerId));
+  if (p?.pinHash) {
+    return 'Configured (SHA-256)';
+  }
+  return 'Not assigned';
+}
+
+function getPartnerLifecycleBadge(partner: Partner): { label: string; bg: string; text: string; border: string } {
+  const vStatus = (partner.verificationStatus || '').toLowerCase();
+  if (vStatus.includes('archived')) {
+    return { label: 'Archived', bg: 'bg-stone-100', text: 'text-stone-600', border: 'border-stone-200' };
+  }
+  if (vStatus.includes('suspended')) {
+    return { label: 'Suspended', bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-200' };
+  }
+  if (partner.conciergeRoutingEligible === 'Yes') {
+    return { label: 'Active Partner', bg: 'bg-emerald-100', text: 'text-emerald-900', border: 'border-emerald-300' };
+  }
+  if (vStatus.includes('verified')) {
+    return { label: 'Approved', bg: 'bg-blue-100', text: 'text-blue-900', border: 'border-blue-300' };
+  }
+  if (vStatus.includes('unverified') || vStatus.includes('review') || partner.conciergeRoutingEligible === 'Pending qualification') {
+    return { label: 'Verification', bg: 'bg-amber-100', text: 'text-amber-900', border: 'border-amber-300' };
+  }
+  return { label: 'Candidate', bg: 'bg-purple-100', text: 'text-purple-900', border: 'border-purple-200' };
+}
 
 export function StudioPartnerCoverage({ session }: { session?: StudioUserSession }) {
   const isSuperAdmin = session?.role === 'Super Admin';
   const roleTitle = session?.role || 'Admin';
 
+  const [viewMode, setViewMode] = useState<PartnerCoverageViewMode>('BY_RECOMMENDATION');
   const [coverageRecords, setCoverageRecords] = useState<PartnerCoverageRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterHealth, setFilterHealth] = useState<string>('ALL');
+  const [filterPartnerStage, setFilterPartnerStage] = useState<string>('ALL');
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
   const [actionErrorMessage, setActionErrorMessage] = useState<string | null>(null);
+  const [isMutating, setIsMutating] = useState<boolean>(false);
 
-  // Modals
+  // Modals for Coverage Operations
   const [showReleaseModal, setShowReleaseModal] = useState<boolean>(false);
   const [selectedRecForRelease, setSelectedRecForRelease] = useState<string>('');
   const [selectedPartnerForRelease, setSelectedPartnerForRelease] = useState<string>('');
@@ -68,6 +116,13 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
   const [replaceRecId, setReplaceRecId] = useState<string>('');
   const [replaceOldPartnerId, setReplaceOldPartnerId] = useState<string>('');
   const [replaceNewPartnerId, setReplaceNewPartnerId] = useState<string>('');
+
+  // Modals for Direct Entity Inspection/Editing
+  const [isPartnerEditorOpen, setIsPartnerEditorOpen] = useState<boolean>(false);
+  const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
+
+  const [isRecEditorOpen, setIsRecEditorOpen] = useState<boolean>(false);
+  const [editingRecommendation, setEditingRecommendation] = useState<Recommendation | null>(null);
 
   // Load Matrix Data from Supabase RPC or synthesize baseline from static partners
   const loadMatrix = async () => {
@@ -84,14 +139,14 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
     loadMatrix();
   }, []);
 
-  // Merge static recommendations + partners with eligibility records
+  // ─────────────────────────────────────────────────────────────────────────────
+  // VIEW 1 DERIVATION: PROCESSED RECOMMENDATIONS
+  // ─────────────────────────────────────────────────────────────────────────────
   const processedRecommendations = useMemo(() => {
     return INITIAL_RECOMMENDATIONS.map((rec) => {
-      // Find all eligibility records for this recommendation from database matrix
       const recTitle = rec.title || (rec as any).titleEn || '';
       const dbEligibilities = coverageRecords.filter(r => r.recommendation_id === rec.id || r.recommendation_id === recTitle);
 
-      // Also identify static mapped partners from PARTNERS
       const staticPartners = PARTNERS.filter(p => 
         p.linkedRecommendations && (
           p.linkedRecommendations.includes(recTitle) || 
@@ -99,7 +154,6 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
         )
       );
 
-      // Merge DB records and static mapped partners
       const partnerRows: Array<{
         partnerId: string;
         partnerName: string;
@@ -109,6 +163,7 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
         routingState: RoutingPoolState;
         contactEmail?: string;
         contactPhone?: string;
+        defaultPin: string;
         credentialMetadata: {
           pinIssued: boolean;
           mustChangePin: boolean;
@@ -116,21 +171,26 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
           resetRequired: boolean;
         };
         portfolioStatus: 'NOT_STARTED' | 'DRAFT' | 'APPROVED' | 'PUBLISHED';
+        partnerObj?: Partner;
         dbRecord?: PartnerCoverageRecord;
       }> = [];
 
       // Process DB records
       dbEligibilities.forEach(db => {
         const partnerObj = PARTNERS.find(p => p.id === db.partner_id || p.nameEn === db.partner_id);
+        const partnerName = partnerObj?.nameEn || db.partner_id;
+        const defaultPin = resolveDefaultPartnerPin(db.partner_id, partnerName, partnerObj);
+
         partnerRows.push({
           partnerId: db.partner_id,
-          partnerName: partnerObj?.nameEn || db.partner_id,
+          partnerName,
           qualificationState: db.qualification_state,
           participationState: db.participation_state,
           passportState: db.passport_state,
           routingState: db.routing_state,
           contactEmail: db.contact_email || partnerObj?.email || undefined,
           contactPhone: db.contact_phone || partnerObj?.phone || undefined,
+          defaultPin,
           credentialMetadata: {
             pinIssued: true,
             mustChangePin: false,
@@ -138,13 +198,15 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
             resetRequired: false
           },
           portfolioStatus: partnerObj?.verificationStatus === 'VERIFIED' ? 'APPROVED' : 'DRAFT',
+          partnerObj,
           dbRecord: db
         });
       });
 
-      // Include static partners not yet in DB records as Preliminary / Contact Ready / Active baseline
+      // Include static partners not yet in DB records
       staticPartners.forEach(p => {
         if (!partnerRows.some(pr => pr.partnerId === p.id)) {
+          const defaultPin = resolveDefaultPartnerPin(p.id, p.nameEn, p);
           partnerRows.push({
             partnerId: p.id,
             partnerName: p.nameEn,
@@ -154,13 +216,15 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
             routingState: p.conciergeRoutingEligible === 'Yes' ? 'active' : 'inactive',
             contactEmail: p.email || undefined,
             contactPhone: p.phone || undefined,
+            defaultPin,
             credentialMetadata: {
               pinIssued: true,
               mustChangePin: false,
               credentialVersion: 'v1.0-AES256',
               resetRequired: false
             },
-            portfolioStatus: p.verificationStatus === 'VERIFIED' ? 'APPROVED' : 'NOT_STARTED'
+            portfolioStatus: p.verificationStatus === 'VERIFIED' ? 'APPROVED' : 'NOT_STARTED',
+            partnerObj: p
           });
         }
       });
@@ -181,10 +245,107 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
     });
   }, [coverageRecords]);
 
-  // Filter recommendations
+  // ─────────────────────────────────────────────────────────────────────────────
+  // VIEW 2 DERIVATION: PROCESSED PARTNERS (From SAME canonical coverageRecords)
+  // ─────────────────────────────────────────────────────────────────────────────
+  const processedPartners = useMemo(() => {
+    return PARTNERS.map((partner) => {
+      // Find all DB eligibility records for this partner
+      const dbEligibilities = coverageRecords.filter(
+        r => r.partner_id === partner.id || r.partner_id === partner.nameEn
+      );
+
+      // Also collect static recommendations linked to this partner in PARTNERS
+      const staticRecTitles = partner.linkedRecommendations || [];
+
+      const recommendationRows: Array<{
+        recId: string;
+        recTitle: string;
+        category: string;
+        region?: string;
+        qualificationState: QualificationState;
+        participationState: ParticipationState;
+        passportState: PassportVerificationState;
+        routingState: RoutingPoolState;
+        contactEmail?: string;
+        contactPhone?: string;
+        recObj?: Recommendation;
+        dbRecord?: PartnerCoverageRecord;
+      }> = [];
+
+      // 1. Process DB eligibilities
+      dbEligibilities.forEach((db) => {
+        const recObj = INITIAL_RECOMMENDATIONS.find(
+          r => r.id === db.recommendation_id || (r.title || (r as any).titleEn) === db.recommendation_id
+        );
+        const recTitle = recObj ? (recObj.title || (recObj as any).titleEn || recObj.id) : db.recommendation_id;
+        const recId = recObj ? recObj.id : db.recommendation_id;
+        const category = recObj ? recObj.category : 'General';
+        const region = recObj ? (recObj.location || (recObj as any).region || 'Serbia') : 'Serbia';
+
+        recommendationRows.push({
+          recId,
+          recTitle,
+          category,
+          region,
+          qualificationState: db.qualification_state,
+          participationState: db.participation_state,
+          passportState: db.passport_state,
+          routingState: db.routing_state,
+          contactEmail: db.contact_email || partner.email || undefined,
+          contactPhone: db.contact_phone || partner.phone || undefined,
+          recObj,
+          dbRecord: db
+        });
+      });
+
+      // 2. Include static mapped recommendations not yet in DB records
+      staticRecTitles.forEach((recTitleOrId) => {
+        const recObj = INITIAL_RECOMMENDATIONS.find(
+          r => r.id === recTitleOrId || (r.title || (r as any).titleEn) === recTitleOrId
+        );
+        const recId = recObj ? recObj.id : recTitleOrId;
+        const title = recObj ? (recObj.title || (recObj as any).titleEn || recId) : recTitleOrId;
+        const category = recObj ? recObj.category : 'General';
+        const region = recObj ? (recObj.location || (recObj as any).region || 'Serbia') : 'Serbia';
+
+        if (!recommendationRows.some(rr => rr.recId === recId || rr.recTitle === title)) {
+          recommendationRows.push({
+            recId,
+            recTitle: title,
+            category,
+            region,
+            qualificationState: partner.conciergeRoutingEligible === 'Yes' ? 'idemo_selected' : 'preliminary',
+            participationState: (partner.email || partner.phone) ? 'introduction_ready' : 'not_contacted',
+            passportState: partner.verificationStatus === 'VERIFIED' ? 'verified' : 'not_started',
+            routingState: partner.conciergeRoutingEligible === 'Yes' ? 'active' : 'inactive',
+            contactEmail: partner.email || undefined,
+            contactPhone: partner.phone || undefined,
+            recObj
+          });
+        }
+      });
+
+      const activeRecsCount = recommendationRows.filter(rr => rr.routingState === 'active').length;
+      const defaultPin = resolveDefaultPartnerPin(partner.id, partner.nameEn, partner);
+      const lifecycle = getPartnerLifecycleBadge(partner);
+
+      return {
+        partner,
+        recommendationRows,
+        totalAssignedRecs: recommendationRows.length,
+        activeRecsCount,
+        defaultPin,
+        lifecycle
+      };
+    });
+  }, [coverageRecords]);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // FILTERING LOGIC
+  // ─────────────────────────────────────────────────────────────────────────────
   const filteredRecommendations = useMemo(() => {
     return processedRecommendations.filter(({ rec, partnerRows, healthStatus }) => {
-      // Search text match
       const query = searchQuery.toLowerCase().trim();
       const recTitle = rec.title || (rec as any).titleEn || '';
       const textMatch = !query || (
@@ -196,7 +357,6 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
 
       if (!textMatch) return false;
 
-      // Filter category
       if (filterHealth === 'GAPS') return healthStatus === 'GAP';
       if (filterHealth === 'SINGLE_POINT') return healthStatus === 'SINGLE-POINT';
       if (filterHealth === 'COVERED') return healthStatus === 'COVERED' || healthStatus === 'ROBUST';
@@ -207,6 +367,31 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
       return true;
     });
   }, [processedRecommendations, searchQuery, filterHealth]);
+
+  const filteredPartners = useMemo(() => {
+    return processedPartners.filter(({ partner, recommendationRows, lifecycle }) => {
+      const query = searchQuery.toLowerCase().trim();
+      const textMatch = !query || (
+        partner.nameEn.toLowerCase().includes(query) ||
+        (partner.nameSr && partner.nameSr.toLowerCase().includes(query)) ||
+        partner.id.toLowerCase().includes(query) ||
+        partner.category.toLowerCase().includes(query) ||
+        (partner.locationEn && partner.locationEn.toLowerCase().includes(query)) ||
+        (partner.email && partner.email.toLowerCase().includes(query)) ||
+        recommendationRows.some(rr => rr.recTitle.toLowerCase().includes(query) || rr.recId.toLowerCase().includes(query))
+      );
+
+      if (!textMatch) return false;
+
+      if (filterPartnerStage === 'ACTIVE') return partner.conciergeRoutingEligible === 'Yes';
+      if (filterPartnerStage === 'ASSIGNED') return recommendationRows.length > 0;
+      if (filterPartnerStage === 'UNASSIGNED') return recommendationRows.length === 0;
+      if (filterPartnerStage === 'SUSPENDED') return recommendationRows.some(rr => rr.routingState === 'suspended') || lifecycle.label === 'Suspended';
+      if (filterPartnerStage === 'PASSPORT_REQUIRED') return recommendationRows.some(rr => rr.passportState === 'submitted' || rr.passportState === 'review_required');
+
+      return true;
+    });
+  }, [processedPartners, searchQuery, filterPartnerStage]);
 
   // Health Stats Summary
   const healthStats = useMemo(() => {
@@ -221,6 +406,9 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
       passportPending += partnerRows.filter(pr => pr.passportState === 'submitted' || pr.passportState === 'review_required').length;
     });
 
+    const totalPartnersCount = PARTNERS.length;
+    const partnersWithAssignments = processedPartners.filter(p => p.totalAssignedRecs > 0).length;
+
     return {
       totalRecs: processedRecommendations.length,
       robust,
@@ -228,22 +416,34 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
       singlePoint,
       gaps,
       totalActivePartners,
-      passportPending
+      passportPending,
+      totalPartnersCount,
+      partnersWithAssignments
     };
-  }, [processedRecommendations]);
+  }, [processedRecommendations, processedPartners]);
 
-  // Handlers for One-Click Governed Operations
+  // ─────────────────────────────────────────────────────────────────────────────
+  // HANDLERS FOR CANONICAL GOVERNED MUTATIONS
+  // ─────────────────────────────────────────────────────────────────────────────
   const handleSelectAndRelease = async (recId: string, partnerId: string, email?: string, phone?: string) => {
+    if (isMutating) return;
+    setIsMutating(true);
     setActionSuccessMessage(null);
     setActionErrorMessage(null);
 
-    const res = await selectAndReleasePartnerCoverage(recId, partnerId, email, phone);
-    if (res.success) {
-      setActionSuccessMessage(res.message || `Partner ${partnerId} successfully selected & released for ${recId}. Routing pool is now ACTIVE.`);
-      await loadMatrix();
-      setShowReleaseModal(false);
-    } else {
-      setActionErrorMessage(res.error || res.message || 'Select & Release failed.');
+    try {
+      const res = await selectAndReleasePartnerCoverage(recId, partnerId, email, phone);
+      if (res.success) {
+        setActionSuccessMessage(res.message || `Partner ${partnerId} successfully selected & released for ${recId}. Routing pool is now ACTIVE.`);
+        await loadMatrix();
+        setShowReleaseModal(false);
+      } else {
+        setActionErrorMessage(res.error || res.message || 'Select & Release failed.');
+      }
+    } catch (err: any) {
+      setActionErrorMessage(err?.message || 'Select & Release failed unexpectedly.');
+    } finally {
+      setIsMutating(false);
     }
   };
 
@@ -255,15 +455,23 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
     passportState?: PassportVerificationState,
     notes?: string
   ) => {
+    if (isMutating) return;
+    setIsMutating(true);
     setActionSuccessMessage(null);
     setActionErrorMessage(null);
 
-    const res = await updatePartnerCoverageStatus(recId, partnerId, routingState, participationState, passportState, notes);
-    if (res.success) {
-      setActionSuccessMessage(res.message || `Coverage status updated for ${partnerId} in ${recId}.`);
-      await loadMatrix();
-    } else {
-      setActionErrorMessage(res.error || res.message || 'Status update failed.');
+    try {
+      const res = await updatePartnerCoverageStatus(recId, partnerId, routingState, participationState, passportState, notes);
+      if (res.success) {
+        setActionSuccessMessage(res.message || `Coverage status updated for ${partnerId} in ${recId}.`);
+        await loadMatrix();
+      } else {
+        setActionErrorMessage(res.error || res.message || 'Status update failed.');
+      }
+    } catch (err: any) {
+      setActionErrorMessage(err?.message || 'Status update failed unexpectedly.');
+    } finally {
+      setIsMutating(false);
     }
   };
 
@@ -272,47 +480,88 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
       setActionErrorMessage('Please select both the old partner to remove and the replacement partner.');
       return;
     }
+    if (isMutating) return;
+    setIsMutating(true);
+    setActionSuccessMessage(null);
+    setActionErrorMessage(null);
 
-    const newPartnerObj = PARTNERS.find(p => p.id === replaceNewPartnerId);
-    const res = await replacePartnerCoverage(
-      replaceRecId,
-      replaceOldPartnerId,
-      replaceNewPartnerId,
-      newPartnerObj?.email || undefined,
-      newPartnerObj?.phone || undefined,
-      `Replaced by ${replaceNewPartnerId}`
-    );
+    try {
+      const newPartnerObj = PARTNERS.find(p => p.id === replaceNewPartnerId);
+      const res = await replacePartnerCoverage(
+        replaceRecId,
+        replaceOldPartnerId,
+        replaceNewPartnerId,
+        newPartnerObj?.email || undefined,
+        newPartnerObj?.phone || undefined,
+        `Replaced by ${replaceNewPartnerId}`
+      );
 
-    if (res.success) {
-      setActionSuccessMessage(`Successfully replaced partner ${replaceOldPartnerId} with ${replaceNewPartnerId} in ${replaceRecId} via atomic transaction. Zero app release required.`);
-      await loadMatrix();
-      setShowReplaceModal(false);
-    } else {
-      setActionErrorMessage(res.error || res.message || 'Replacement operation failed.');
+      if (res.success) {
+        setActionSuccessMessage(`Successfully replaced partner ${replaceOldPartnerId} with ${replaceNewPartnerId} in ${replaceRecId} via atomic transaction. Zero app release required.`);
+        await loadMatrix();
+        setShowReplaceModal(false);
+      } else {
+        setActionErrorMessage(res.error || res.message || 'Replacement operation failed.');
+      }
+    } catch (err: any) {
+      setActionErrorMessage(err?.message || 'Replacement operation failed unexpectedly.');
+    } finally {
+      setIsMutating(false);
     }
   };
 
   const openReleaseModalForRec = (recId: string) => {
     setSelectedRecForRelease(recId);
+    setSelectedPartnerForRelease('');
+    setReleaseEmail('');
+    setReleasePhone('');
+    setShowReleaseModal(true);
+  };
+
+  const openReleaseModalForPartner = (partnerId: string) => {
+    setSelectedPartnerForRelease(partnerId);
+    setSelectedRecForRelease('');
+    const pObj = PARTNERS.find(p => p.id === partnerId);
+    if (pObj) {
+      setReleaseEmail(pObj.email || '');
+      setReleasePhone(pObj.phone || '');
+    }
     setShowReleaseModal(true);
   };
 
   const openReplaceModalForRec = (recId: string, oldPartnerId: string) => {
     setReplaceRecId(recId);
     setReplaceOldPartnerId(oldPartnerId);
+    setReplaceNewPartnerId('');
     setShowReplaceModal(true);
+  };
+
+  const handleOpenPartnerRecord = (partnerId: string) => {
+    const p = PARTNERS.find(item => item.id === partnerId || item.nameEn === partnerId);
+    if (p) {
+      setEditingPartner(p);
+      setIsPartnerEditorOpen(true);
+    }
+  };
+
+  const handleOpenRecommendationRecord = (recId: string) => {
+    const r = INITIAL_RECOMMENDATIONS.find(item => item.id === recId || (item.title || (item as any).titleEn) === recId);
+    if (r) {
+      setEditingRecommendation(r);
+      setIsRecEditorOpen(true);
+    }
   };
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Header */}
+      {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-stone-200 pb-5">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="p-2 rounded-lg bg-stone-900 text-amber-400">
               <ShieldCheck size={22} />
             </span>
-            <h1 className="text-2xl font-bold text-stone-900 font-display">Studio Partner Coverage Control</h1>
+            <h1 className="text-2xl font-bold text-stone-900 font-display">Studio Recommendation–Partner Coverage Matrix</h1>
             <span className={`ml-2 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${
               isSuperAdmin 
                 ? 'bg-amber-100 text-amber-900 border border-amber-300' 
@@ -322,7 +571,7 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
             </span>
           </div>
           <p className="text-sm text-stone-600 mt-1">
-            Authoritative matrix connecting Recommendations, Qualified Partners, Professional Contact, Passport Verification, and Routing Pool Status.
+            Authoritative governing control surface for Recommendation ↔ Partner eligibility, onboarding credentials, and live routing dispatch pools.
           </p>
         </div>
 
@@ -337,18 +586,24 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
           </button>
 
           <button
-            onClick={() => setShowReleaseModal(true)}
+            onClick={() => {
+              setSelectedRecForRelease('');
+              setSelectedPartnerForRelease('');
+              setReleaseEmail('');
+              setReleasePhone('');
+              setShowReleaseModal(true);
+            }}
             className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-stone-900 bg-amber-400 hover:bg-amber-500 rounded-lg shadow-sm transition"
           >
             <Plus size={16} />
-            Select & Release Partner
+            Assign & Release Eligibility
           </button>
         </div>
       </div>
 
-      {/* Action Messages */}
+      {/* Action Feedback Messages */}
       {actionSuccessMessage && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-medium flex items-center justify-between">
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-medium flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-2">
             <CheckCircle2 size={16} className="text-emerald-600" />
             <span>{actionSuccessMessage}</span>
@@ -358,7 +613,7 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
       )}
 
       {actionErrorMessage && (
-        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs font-medium flex items-center justify-between">
+        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs font-medium flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-2">
             <AlertTriangle size={16} className="text-rose-600" />
             <span>{actionErrorMessage}</span>
@@ -369,198 +624,470 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
 
       {/* Health Metrics Dashboard */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-        <div className="bg-white p-3.5 rounded-xl border border-stone-200 shadow-sm">
+        <div className="bg-white p-3.5 rounded-xl border border-stone-200 shadow-xs">
           <div className="text-[11px] font-medium text-stone-500 uppercase tracking-wider">Total Recs</div>
           <div className="text-xl font-bold text-stone-900 mt-1">{healthStats.totalRecs}</div>
         </div>
 
-        <div className="bg-emerald-50/60 p-3.5 rounded-xl border border-emerald-200 shadow-sm">
+        <div className="bg-emerald-50/60 p-3.5 rounded-xl border border-emerald-200 shadow-xs">
           <div className="text-[11px] font-semibold text-emerald-800 uppercase tracking-wider flex items-center gap-1">
             <CheckCircle2 size={12} /> Robust (3+)
           </div>
           <div className="text-xl font-bold text-emerald-950 mt-1">{healthStats.robust}</div>
         </div>
 
-        <div className="bg-blue-50/60 p-3.5 rounded-xl border border-blue-200 shadow-sm">
+        <div className="bg-blue-50/60 p-3.5 rounded-xl border border-blue-200 shadow-xs">
           <div className="text-[11px] font-semibold text-blue-800 uppercase tracking-wider flex items-center gap-1">
             <ShieldCheck size={12} /> Covered (2)
           </div>
           <div className="text-xl font-bold text-blue-950 mt-1">{healthStats.covered}</div>
         </div>
 
-        <div className="bg-amber-50/60 p-3.5 rounded-xl border border-amber-200 shadow-sm">
+        <div className="bg-amber-50/60 p-3.5 rounded-xl border border-amber-200 shadow-xs">
           <div className="text-[11px] font-semibold text-amber-800 uppercase tracking-wider flex items-center gap-1">
             <AlertTriangle size={12} /> Single Point (1)
           </div>
           <div className="text-xl font-bold text-amber-950 mt-1">{healthStats.singlePoint}</div>
         </div>
 
-        <div className="bg-rose-50/60 p-3.5 rounded-xl border border-rose-200 shadow-sm">
+        <div className="bg-rose-50/60 p-3.5 rounded-xl border border-rose-200 shadow-xs">
           <div className="text-[11px] font-semibold text-rose-800 uppercase tracking-wider flex items-center gap-1">
             <XCircle size={12} /> Gap (0)
           </div>
           <div className="text-xl font-bold text-rose-950 mt-1">{healthStats.gaps}</div>
         </div>
 
-        <div className="bg-stone-900 text-white p-3.5 rounded-xl border border-stone-800 shadow-sm">
+        <div className="bg-stone-900 text-white p-3.5 rounded-xl border border-stone-800 shadow-xs">
           <div className="text-[11px] font-medium text-amber-400 uppercase tracking-wider">Active Pool</div>
           <div className="text-xl font-bold text-white mt-1">{healthStats.totalActivePartners}</div>
         </div>
 
-        <div className="bg-indigo-50/60 p-3.5 rounded-xl border border-indigo-200 shadow-sm">
+        <div className="bg-indigo-50/60 p-3.5 rounded-xl border border-indigo-200 shadow-xs">
           <div className="text-[11px] font-semibold text-indigo-800 uppercase tracking-wider flex items-center gap-1">
-            <FileCheck size={12} /> Passport Rev
+            <Users size={12} /> Partners
           </div>
-          <div className="text-xl font-bold text-indigo-950 mt-1">{healthStats.passportPending}</div>
+          <div className="text-xl font-bold text-indigo-950 mt-1">{healthStats.totalPartnersCount}</div>
         </div>
       </div>
 
-      {/* Governance & Lifecycle Note */}
-      <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200/80 text-amber-950 text-xs leading-relaxed flex items-start gap-3">
-        <Info size={18} className="text-amber-700 shrink-0 mt-0.5" />
-        <div>
-          <span className="font-semibold text-amber-900">IDEMO Partner Release Governance Directive:</span>
-          {' '}
-          Initial release into recommendation routing pools requires IDEMO Preliminary Qualification and requisite contact details (Email OR Mobile/SMS). Partner Passport completion is an ongoing capability verification mechanism and is NOT a prerequisite for initial IDEMO release.
-        </div>
-      </div>
-
-      {/* Filters and Search Bar */}
-      <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="relative w-full md:w-80">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-          <input
-            type="text"
-            placeholder="Search recommendation, partner or ID..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:border-stone-900"
-          />
-        </div>
-
-        <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
-          <Filter size={14} className="text-stone-400 shrink-0" />
-          {[
-            { id: 'ALL', label: 'All Recommendations' },
-            { id: 'GAPS', label: 'Gaps (0 Active)' },
-            { id: 'SINGLE_POINT', label: 'Single Point (1)' },
-            { id: 'COVERED', label: 'Covered (2+)' },
-            { id: 'SUSPENDED', label: 'Has Suspended' },
-            { id: 'PASSPORT_REQUIRED', label: 'Passport Review' },
-            { id: 'NOT_INVITED', label: 'Not Contacted' }
-          ].map(f => (
+      {/* View Switcher & Filter Controls Container */}
+      <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-xs space-y-4">
+        {/* Dual View Mode Tabs */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-stone-100 pb-3">
+          <div className="flex items-center gap-1 p-1 bg-stone-100 rounded-xl w-fit">
             <button
-              key={f.id}
-              onClick={() => setFilterHealth(f.id)}
-              className={`px-3 py-1.5 text-xs rounded-lg font-medium whitespace-nowrap transition ${
-                filterHealth === f.id
-                  ? 'bg-stone-900 text-white shadow-sm'
-                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+              onClick={() => setViewMode('BY_RECOMMENDATION')}
+              className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition ${
+                viewMode === 'BY_RECOMMENDATION'
+                  ? 'bg-white text-stone-900 shadow-xs'
+                  : 'text-stone-600 hover:text-stone-900'
               }`}
             >
-              {f.label}
+              <Compass size={14} className={viewMode === 'BY_RECOMMENDATION' ? 'text-amber-600' : 'text-stone-400'} />
+              By Recommendation ({processedRecommendations.length})
             </button>
-          ))}
+
+            <button
+              onClick={() => setViewMode('BY_PARTNER')}
+              className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg transition ${
+                viewMode === 'BY_PARTNER'
+                  ? 'bg-white text-stone-900 shadow-xs'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <Users size={14} className={viewMode === 'BY_PARTNER' ? 'text-amber-600' : 'text-stone-400'} />
+              By Partner ({processedPartners.length})
+            </button>
+          </div>
+
+          <div className="text-xs text-stone-500 italic">
+            Single Source of Truth: Both perspectives operate over the same canonical eligibility matrix.
+          </div>
+        </div>
+
+        {/* Search & Perspective Filters */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="relative w-full md:w-80">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+            <input
+              type="text"
+              placeholder={viewMode === 'BY_RECOMMENDATION' 
+                ? "Search recommendation, partner or ID..." 
+                : "Search partner, PIN, contact or recommendation..."
+              }
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 text-xs border border-stone-300 rounded-lg focus:outline-none focus:border-stone-900"
+            />
+          </div>
+
+          {/* Perspective 1 Filter Pills */}
+          {viewMode === 'BY_RECOMMENDATION' && (
+            <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
+              <Filter size={14} className="text-stone-400 shrink-0" />
+              {[
+                { id: 'ALL', label: 'All Recommendations' },
+                { id: 'GAPS', label: 'Gaps (0 Active)' },
+                { id: 'SINGLE_POINT', label: 'Single Point (1)' },
+                { id: 'COVERED', label: 'Covered (2+)' },
+                { id: 'SUSPENDED', label: 'Has Suspended' },
+                { id: 'PASSPORT_REQUIRED', label: 'Passport Review' },
+                { id: 'NOT_INVITED', label: 'Not Contacted' }
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setFilterHealth(f.id)}
+                  className={`px-3 py-1.5 text-xs rounded-lg font-medium whitespace-nowrap transition ${
+                    filterHealth === f.id
+                      ? 'bg-stone-900 text-white shadow-xs'
+                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Perspective 2 Filter Pills */}
+          {viewMode === 'BY_PARTNER' && (
+            <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
+              <Filter size={14} className="text-stone-400 shrink-0" />
+              {[
+                { id: 'ALL', label: 'All Partners' },
+                { id: 'ACTIVE', label: 'Active Pool' },
+                { id: 'ASSIGNED', label: 'With Assignments' },
+                { id: 'UNASSIGNED', label: 'Unassigned (0)' },
+                { id: 'SUSPENDED', label: 'Has Suspended' },
+                { id: 'PASSPORT_REQUIRED', label: 'Passport Review' }
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setFilterPartnerStage(f.id)}
+                  className={`px-3 py-1.5 text-xs rounded-lg font-medium whitespace-nowrap transition ${
+                    filterPartnerStage === f.id
+                      ? 'bg-stone-900 text-white shadow-xs'
+                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Recommendations & Coverage Matrix */}
+      {/* Main Content Area */}
       {loading ? (
         <div className="p-12 text-center text-stone-500 bg-white rounded-xl border border-stone-200">
           <RefreshCw size={24} className="animate-spin mx-auto mb-2 text-stone-400" />
-          Loading Partner Coverage Matrix...
-        </div>
-      ) : filteredRecommendations.length === 0 ? (
-        <div className="p-12 text-center text-stone-500 bg-white rounded-xl border border-stone-200">
-          No recommendation coverage records match the selected filter or query.
+          Loading Canonical Partner Coverage Matrix...
         </div>
       ) : (
-        <div className="space-y-4">
-          {filteredRecommendations.map(({ rec, partnerRows, healthStatus, activeCount }) => (
-            <div 
-              key={rec.id} 
-              className={`bg-white rounded-xl border shadow-sm transition overflow-hidden ${
-                healthStatus === 'GAP' ? 'border-rose-300' :
-                healthStatus === 'SINGLE-POINT' ? 'border-amber-300' : 'border-stone-200'
-              }`}
-            >
-              {/* Recommendation Header Row */}
-              <div className="p-4 bg-stone-50/80 border-b border-stone-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <span className="font-mono text-xs font-bold px-2.5 py-1 rounded bg-stone-200 text-stone-800">
-                    {rec.id}
-                  </span>
-                  <div>
-                    <h3 className="text-base font-bold text-stone-900 font-display">
-                      {rec.title || (rec as any).titleEn || 'Untitled Recommendation'}
-                    </h3>
-                    <div className="flex items-center gap-2 mt-0.5 text-xs text-stone-500">
-                      <span>Category: <strong className="text-stone-700">{rec.category}</strong></span>
-                      <span>•</span>
-                      <span>Region: <strong className="text-stone-700">{rec.region || 'Serbia'}</strong></span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  {/* Coverage Health Badge */}
-                  <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${
-                    healthStatus === 'ROBUST' ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' :
-                    healthStatus === 'COVERED' ? 'bg-blue-100 text-blue-900 border border-blue-300' :
-                    healthStatus === 'SINGLE-POINT' ? 'bg-amber-100 text-amber-900 border border-amber-300' :
-                    'bg-rose-100 text-rose-900 border border-rose-300'
-                  }`}>
-                    {healthStatus === 'ROBUST' && <CheckCircle2 size={13} className="text-emerald-700" />}
-                    {healthStatus === 'COVERED' && <ShieldCheck size={13} className="text-blue-700" />}
-                    {healthStatus === 'SINGLE-POINT' && <AlertTriangle size={13} className="text-amber-700" />}
-                    {healthStatus === 'GAP' && <XCircle size={13} className="text-rose-700" />}
-                    <span>{healthStatus}: {activeCount} Active Partner{activeCount === 1 ? '' : 's'}</span>
-                  </div>
-
-                  <button
-                    onClick={() => openReleaseModalForRec(rec.id)}
-                    className="px-3 py-1.5 text-xs font-semibold text-stone-800 bg-amber-300 hover:bg-amber-400 rounded-lg transition flex items-center gap-1"
-                  >
-                    <Plus size={13} />
-                    Add Partner
-                  </button>
-                </div>
+        <>
+          {/* ─────────────────────────────────────────────────────────────────── */}
+          {/* VIEW 1: BY RECOMMENDATION                                            */}
+          {/* ─────────────────────────────────────────────────────────────────── */}
+          {viewMode === 'BY_RECOMMENDATION' && (
+            filteredRecommendations.length === 0 ? (
+              <div className="p-12 text-center text-stone-500 bg-white rounded-xl border border-stone-200">
+                No recommendation coverage records match the selected filter or query.
               </div>
-
-              {/* Partner Rows Matrix */}
-              {partnerRows.length === 0 ? (
-                <div className="p-6 text-center text-xs text-rose-700 bg-rose-50/30 flex items-center justify-center gap-2">
-                  <XCircle size={16} />
-                  <span>Coverage Gap! Zero partners are currently assigned or active for this recommendation.</span>
-                  <button 
-                    onClick={() => openReleaseModalForRec(rec.id)}
-                    className="ml-2 underline font-semibold text-stone-900"
+            ) : (
+              <div className="space-y-4">
+                {filteredRecommendations.map(({ rec, partnerRows, healthStatus, activeCount }) => (
+                  <div 
+                    key={rec.id} 
+                    className={`bg-white rounded-xl border shadow-xs transition overflow-hidden ${
+                      healthStatus === 'GAP' ? 'border-rose-300' :
+                      healthStatus === 'SINGLE-POINT' ? 'border-amber-300' : 'border-stone-200'
+                    }`}
                   >
-                    Select & Release Partner Now
-                  </button>
-                </div>
-              ) : (
-                <div className="divide-y divide-stone-100">
-                  {partnerRows.map((pRow) => {
-                    const isContactReady = Boolean(pRow.contactEmail || pRow.contactPhone);
-
-                    return (
-                      <div key={pRow.partnerId} className="p-4 hover:bg-stone-50/50 transition flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                        {/* Partner Details */}
-                        <div className="space-y-2 lg:w-1/3">
+                    {/* Recommendation Header Row */}
+                    <div className="p-4 bg-stone-50/80 border-b border-stone-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-xs font-bold px-2.5 py-1 rounded bg-stone-200 text-stone-800">
+                          {rec.id}
+                        </span>
+                        <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-[11px] font-semibold text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded">
-                              {pRow.partnerId}
+                            <h3 className="text-base font-bold text-stone-900 font-display">
+                              {rec.title || (rec as any).titleEn || 'Untitled Recommendation'}
+                            </h3>
+                            <button
+                              onClick={() => handleOpenRecommendationRecord(rec.id)}
+                              className="text-stone-400 hover:text-stone-800 transition p-1"
+                              title="Open Recommendation in Editor"
+                            >
+                              <ExternalLink size={13} />
+                            </button>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5 text-xs text-stone-500">
+                            <span>Category: <strong className="text-stone-700">{rec.category}</strong></span>
+                            <span>•</span>
+                            <span>Region: <strong className="text-stone-700">{rec.region || 'Serbia'}</strong></span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        {/* Coverage Health Badge */}
+                        <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${
+                          healthStatus === 'ROBUST' ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' :
+                          healthStatus === 'COVERED' ? 'bg-blue-100 text-blue-900 border border-blue-300' :
+                          healthStatus === 'SINGLE-POINT' ? 'bg-amber-100 text-amber-900 border border-amber-300' :
+                          'bg-rose-100 text-rose-900 border border-rose-300'
+                        }`}>
+                          {healthStatus === 'ROBUST' && <CheckCircle2 size={13} className="text-emerald-700" />}
+                          {healthStatus === 'COVERED' && <ShieldCheck size={13} className="text-blue-700" />}
+                          {healthStatus === 'SINGLE-POINT' && <AlertTriangle size={13} className="text-amber-700" />}
+                          {healthStatus === 'GAP' && <XCircle size={13} className="text-rose-700" />}
+                          <span>{healthStatus}: {activeCount} Active Partner{activeCount === 1 ? '' : 's'}</span>
+                        </div>
+
+                        <button
+                          onClick={() => openReleaseModalForRec(rec.id)}
+                          className="px-3 py-1.5 text-xs font-semibold text-stone-800 bg-amber-300 hover:bg-amber-400 rounded-lg transition flex items-center gap-1"
+                        >
+                          <Plus size={13} />
+                          Add Partner
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Partner Rows Matrix */}
+                    {partnerRows.length === 0 ? (
+                      <div className="p-6 text-center text-xs text-rose-700 bg-rose-50/30 flex items-center justify-center gap-2">
+                        <XCircle size={16} />
+                        <span>Coverage Gap! Zero partners are currently assigned or active for this recommendation.</span>
+                        <button 
+                          onClick={() => openReleaseModalForRec(rec.id)}
+                          className="ml-2 underline font-semibold text-stone-900"
+                        >
+                          Select & Release Partner Now
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-stone-100">
+                        {partnerRows.map((pRow) => {
+                          const isContactReady = Boolean(pRow.contactEmail || pRow.contactPhone);
+
+                          return (
+                            <div key={pRow.partnerId} className="p-4 hover:bg-stone-50/50 transition flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                              {/* Partner Details */}
+                              <div className="space-y-2 lg:w-1/3">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-[11px] font-semibold text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded">
+                                    {pRow.partnerId}
+                                  </span>
+                                  <span className="text-sm font-bold text-stone-900">{pRow.partnerName}</span>
+                                  <button
+                                    onClick={() => handleOpenPartnerRecord(pRow.partnerId)}
+                                    className="text-stone-400 hover:text-stone-800 transition p-0.5"
+                                    title="Open Partner Profile"
+                                  >
+                                    <ExternalLink size={12} />
+                                  </button>
+                                </div>
+
+                                {/* Contact Info & Requisite Method Check */}
+                                <div className="flex flex-wrap items-center gap-3 text-xs text-stone-600">
+                                  {pRow.contactEmail ? (
+                                    <span className="flex items-center gap-1 text-emerald-800 font-medium">
+                                      <Mail size={12} className="text-emerald-600" />
+                                      {pRow.contactEmail}
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-1 text-stone-400">
+                                      <Mail size={12} /> Email: None
+                                    </span>
+                                  )}
+
+                                  {pRow.contactPhone ? (
+                                    <span className="flex items-center gap-1 text-emerald-800 font-medium">
+                                      <Phone size={12} className="text-emerald-600" />
+                                      {pRow.contactPhone}
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-1 text-stone-400">
+                                      <Phone size={12} /> Phone: None
+                                    </span>
+                                  )}
+
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    isContactReady 
+                                      ? 'bg-emerald-100 text-emerald-900 border border-emerald-200' 
+                                      : 'bg-rose-100 text-rose-900 border border-rose-200'
+                                  }`}>
+                                    {isContactReady ? 'INTRO READY' : 'CONTACT REQ'}
+                                  </span>
+                                </div>
+
+                                {/* Access & Default Onboarding PIN */}
+                                <div className="flex items-center gap-2 text-[10px] text-stone-500 pt-1">
+                                  <KeyRound size={11} className="text-stone-400 shrink-0" />
+                                  <span>Default PIN: <strong className="font-mono text-stone-800 bg-stone-100 px-1.5 py-0.2 rounded border border-stone-200">{pRow.defaultPin}</strong></span>
+                                  <span>•</span>
+                                  <span>Version: <strong className="text-stone-700">{pRow.credentialMetadata.credentialVersion}</strong></span>
+                                </div>
+                              </div>
+
+                              {/* Status Dimensions Grid */}
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px] lg:w-1/2">
+                                {/* Qualification State */}
+                                <div className="p-2 rounded-lg bg-stone-50 border border-stone-200">
+                                  <div className="text-[9px] uppercase tracking-wider font-semibold text-stone-400">Qualification</div>
+                                  <div className="font-bold text-stone-800 mt-0.5 capitalize">
+                                    {pRow.qualificationState.replace('_', ' ')}
+                                  </div>
+                                </div>
+
+                                {/* Participation State */}
+                                <div className="p-2 rounded-lg bg-stone-50 border border-stone-200">
+                                  <div className="text-[9px] uppercase tracking-wider font-semibold text-stone-400">Participation</div>
+                                  <div className="font-bold text-stone-800 mt-0.5 capitalize">
+                                    {pRow.participationState.replace('_', ' ')}
+                                  </div>
+                                </div>
+
+                                {/* Passport Verification State */}
+                                <div className={`p-2 rounded-lg border ${
+                                  pRow.passportState === 'verified' ? 'bg-emerald-50 border-emerald-200' :
+                                  pRow.passportState === 'submitted' ? 'bg-indigo-50 border-indigo-200' : 'bg-stone-50 border-stone-200'
+                                }`}>
+                                  <div className="text-[9px] uppercase tracking-wider font-semibold text-stone-400">Passport</div>
+                                  <div className="font-bold text-stone-800 mt-0.5 capitalize">
+                                    {pRow.passportState.replace('_', ' ')}
+                                  </div>
+                                </div>
+
+                                {/* Routing Pool State */}
+                                <div className={`p-2 rounded-lg border ${
+                                  pRow.routingState === 'active' ? 'bg-emerald-50 border-emerald-300' :
+                                  pRow.routingState === 'suspended' ? 'bg-rose-50 border-rose-300' : 'bg-stone-100 border-stone-200'
+                                }`}>
+                                  <div className="text-[9px] uppercase tracking-wider font-semibold text-stone-400">Routing Pool</div>
+                                  <div className={`font-bold mt-0.5 uppercase ${
+                                    pRow.routingState === 'active' ? 'text-emerald-800' :
+                                    pRow.routingState === 'suspended' ? 'text-rose-800' : 'text-stone-600'
+                                  }`}>
+                                    {pRow.routingState}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Governed One-Click Actions */}
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {pRow.routingState !== 'active' ? (
+                                  <button
+                                    onClick={() => handleSelectAndRelease(rec.id, pRow.partnerId, pRow.contactEmail, pRow.contactPhone)}
+                                    className="px-2.5 py-1.5 text-xs font-semibold text-stone-900 bg-amber-400 hover:bg-amber-500 rounded-md transition"
+                                    title="Select & Release partner into active routing pool"
+                                  >
+                                    Release
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleUpdateStatus(rec.id, pRow.partnerId, 'suspended', 'withdrawn', undefined, 'Suspended from Studio Coverage Control')}
+                                    className="px-2.5 py-1.5 text-xs font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-md transition"
+                                    title="Suspend partner from this recommendation's routing pool"
+                                  >
+                                    Suspend
+                                  </button>
+                                )}
+
+                                <button
+                                  onClick={() => openReplaceModalForRec(rec.id, pRow.partnerId)}
+                                  className="px-2.5 py-1.5 text-xs font-medium text-stone-700 bg-white hover:bg-stone-100 border border-stone-300 rounded-md transition flex items-center gap-1"
+                                  title="Replace this partner with another candidate"
+                                >
+                                  <ArrowRightLeft size={12} />
+                                  Replace
+                                </button>
+
+                                {pRow.passportState === 'submitted' && (
+                                  <button
+                                    onClick={() => handleUpdateStatus(rec.id, pRow.partnerId, undefined, undefined, 'verified', 'Passport approved by Studio')}
+                                    className="px-2.5 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 rounded-md transition"
+                                  >
+                                    Approve Passport
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+
+          {/* ─────────────────────────────────────────────────────────────────── */}
+          {/* VIEW 2: BY PARTNER (NEW GOVERNING PERSPECTIVE)                       */}
+          {/* ─────────────────────────────────────────────────────────────────── */}
+          {viewMode === 'BY_PARTNER' && (
+            filteredPartners.length === 0 ? (
+              <div className="p-12 text-center text-stone-500 bg-white rounded-xl border border-stone-200">
+                No partners match the selected filter or search query.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredPartners.map(({ partner, recommendationRows, totalAssignedRecs, activeRecsCount, defaultPin, lifecycle }) => {
+                  const isContactReady = Boolean(partner.email || partner.phone);
+
+                  return (
+                    <div 
+                      key={partner.id}
+                      className={`bg-white rounded-xl border shadow-xs transition overflow-hidden ${
+                        totalAssignedRecs === 0 ? 'border-stone-200' :
+                        activeRecsCount > 0 ? 'border-emerald-200' : 'border-amber-200'
+                      }`}
+                    >
+                      {/* Partner Card Header */}
+                      <div className="p-4 bg-stone-50/80 border-b border-stone-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-stone-200 text-stone-800">
+                              {partner.id}
                             </span>
-                            <span className="text-sm font-bold text-stone-900">{pRow.partnerName}</span>
+                            <h3 className="text-base font-bold text-stone-900 font-display">
+                              {partner.nameEn}
+                            </h3>
+                            <button
+                              onClick={() => handleOpenPartnerRecord(partner.id)}
+                              className="text-stone-400 hover:text-stone-800 transition p-1"
+                              title="Open Partner in Editor"
+                            >
+                              <ExternalLink size={13} />
+                            </button>
+
+                            {/* Lifecycle Badge */}
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${lifecycle.bg} ${lifecycle.text} ${lifecycle.border}`}>
+                              {lifecycle.label}
+                            </span>
                           </div>
 
-                          {/* Contact Info & Requisite Method Check */}
                           <div className="flex flex-wrap items-center gap-3 text-xs text-stone-600">
-                            {pRow.contactEmail ? (
+                            <span>Category: <strong className="text-stone-700">{partner.category}</strong></span>
+                            <span>•</span>
+                            <span>Location: <strong className="text-stone-700">{partner.locationEn || 'Serbia'}</strong></span>
+                            <span>•</span>
+                            <span className="flex items-center gap-1">
+                              <KeyRound size={11} className="text-stone-400" />
+                              Default PIN: <strong className="font-mono text-stone-800 bg-stone-200/70 px-1.5 py-0.2 rounded border border-stone-300">{defaultPin}</strong>
+                            </span>
+                          </div>
+
+                          {/* Contact Info */}
+                          <div className="flex flex-wrap items-center gap-3 text-xs text-stone-600 pt-0.5">
+                            {partner.email ? (
                               <span className="flex items-center gap-1 text-emerald-800 font-medium">
                                 <Mail size={12} className="text-emerald-600" />
-                                {pRow.contactEmail}
+                                {partner.email}
                               </span>
                             ) : (
                               <span className="flex items-center gap-1 text-stone-400">
@@ -568,10 +1095,10 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
                               </span>
                             )}
 
-                            {pRow.contactPhone ? (
+                            {partner.phone ? (
                               <span className="flex items-center gap-1 text-emerald-800 font-medium">
                                 <Phone size={12} className="text-emerald-600" />
-                                {pRow.contactPhone}
+                                {partner.phone}
                               </span>
                             ) : (
                               <span className="flex items-center gap-1 text-stone-400">
@@ -587,118 +1114,135 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
                               {isContactReady ? 'INTRO READY' : 'CONTACT REQ'}
                             </span>
                           </div>
-
-                          {/* Access & Credential Metadata */}
-                          <div className="flex items-center gap-2 text-[10px] text-stone-500 pt-1">
-                            <KeyRound size={11} className="text-stone-400 shrink-0" />
-                            <span>Metadata: <strong className="text-stone-700">PIN Issued</strong></span>
-                            <span>•</span>
-                            <span>Version: <strong className="text-stone-700">{pRow.credentialMetadata.credentialVersion}</strong></span>
-                            <span>•</span>
-                            <span className="text-stone-400 italic">Plaintext PIN isolated</span>
-                          </div>
                         </div>
 
-                        {/* Status Dimensions Grid */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px] lg:w-1/2">
-                          {/* Qualification State */}
-                          <div className="p-2 rounded-lg bg-stone-50 border border-stone-200">
-                            <div className="text-[9px] uppercase tracking-wider font-semibold text-stone-400">Qualification</div>
-                            <div className="font-bold text-stone-800 mt-0.5 capitalize">
-                              {pRow.qualificationState.replace('_', ' ')}
-                            </div>
-                          </div>
-
-                          {/* Participation State */}
-                          <div className="p-2 rounded-lg bg-stone-50 border border-stone-200">
-                            <div className="text-[9px] uppercase tracking-wider font-semibold text-stone-400">Participation</div>
-                            <div className="font-bold text-stone-800 mt-0.5 capitalize">
-                              {pRow.participationState.replace('_', ' ')}
-                            </div>
-                          </div>
-
-                          {/* Passport Verification State */}
-                          <div className={`p-2 rounded-lg border ${
-                            pRow.passportState === 'verified' ? 'bg-emerald-50 border-emerald-200' :
-                            pRow.passportState === 'submitted' ? 'bg-indigo-50 border-indigo-200' : 'bg-stone-50 border-stone-200'
+                        <div className="flex items-center gap-3 shrink-0">
+                          {/* Assigned Recommendations Count Badge */}
+                          <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${
+                            activeRecsCount > 0 ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' :
+                            totalAssignedRecs > 0 ? 'bg-amber-100 text-amber-900 border border-amber-300' :
+                            'bg-stone-100 text-stone-700 border border-stone-300'
                           }`}>
-                            <div className="text-[9px] uppercase tracking-wider font-semibold text-stone-400">Passport</div>
-                            <div className="font-bold text-stone-800 mt-0.5 capitalize">
-                              {pRow.passportState.replace('_', ' ')}
-                            </div>
+                            <Compass size={13} className={activeRecsCount > 0 ? 'text-emerald-700' : 'text-stone-500'} />
+                            <span>{totalAssignedRecs} Assigned ({activeRecsCount} Active)</span>
                           </div>
-
-                          {/* Routing Pool State */}
-                          <div className={`p-2 rounded-lg border ${
-                            pRow.routingState === 'active' ? 'bg-emerald-50 border-emerald-300' :
-                            pRow.routingState === 'suspended' ? 'bg-rose-50 border-rose-300' : 'bg-stone-100 border-stone-200'
-                          }`}>
-                            <div className="text-[9px] uppercase tracking-wider font-semibold text-stone-400">Routing Pool</div>
-                            <div className={`font-bold mt-0.5 uppercase ${
-                              pRow.routingState === 'active' ? 'text-emerald-800' :
-                              pRow.routingState === 'suspended' ? 'text-rose-800' : 'text-stone-600'
-                            }`}>
-                              {pRow.routingState}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Governed One-Click Actions */}
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {pRow.routingState !== 'active' ? (
-                            <button
-                              onClick={() => handleSelectAndRelease(rec.id, pRow.partnerId, pRow.contactEmail, pRow.contactPhone)}
-                              className="px-2.5 py-1.5 text-xs font-semibold text-stone-900 bg-amber-400 hover:bg-amber-500 rounded-md transition"
-                              title="Select & Release partner into active routing pool"
-                            >
-                              Release
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleUpdateStatus(rec.id, pRow.partnerId, 'suspended', 'withdrawn', undefined, 'Suspended from Studio Coverage Control')}
-                              className="px-2.5 py-1.5 text-xs font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-md transition"
-                              title="Suspend partner from this recommendation's routing pool"
-                            >
-                              Suspend
-                            </button>
-                          )}
 
                           <button
-                            onClick={() => openReplaceModalForRec(rec.id, pRow.partnerId)}
-                            className="px-2.5 py-1.5 text-xs font-medium text-stone-700 bg-white hover:bg-stone-100 border border-stone-300 rounded-md transition flex items-center gap-1"
-                            title="Replace this partner with another candidate"
+                            onClick={() => openReleaseModalForPartner(partner.id)}
+                            className="px-3 py-1.5 text-xs font-semibold text-stone-800 bg-amber-300 hover:bg-amber-400 rounded-lg transition flex items-center gap-1"
                           >
-                            <ArrowRightLeft size={12} />
-                            Replace
+                            <Plus size={13} />
+                            Assign Recommendation
                           </button>
-
-                          {pRow.passportState === 'submitted' && (
-                            <button
-                              onClick={() => handleUpdateStatus(rec.id, pRow.partnerId, undefined, undefined, 'verified', 'Passport approved by Studio')}
-                              className="px-2.5 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 rounded-md transition"
-                            >
-                              Approve Passport
-                            </button>
-                          )}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+
+                      {/* Assigned Recommendations List under this Partner */}
+                      {recommendationRows.length === 0 ? (
+                        <div className="p-6 text-center text-xs text-stone-500 bg-stone-50/50 flex items-center justify-center gap-2">
+                          <Info size={15} className="text-stone-400" />
+                          <span>No recommendations are currently linked or assigned to this partner candidate.</span>
+                          <button 
+                            onClick={() => openReleaseModalForPartner(partner.id)}
+                            className="ml-2 underline font-semibold text-stone-900 hover:text-amber-700"
+                          >
+                            Assign Recommendation Now
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-stone-100">
+                          {recommendationRows.map((rRow) => (
+                            <div key={rRow.recId} className="p-3.5 hover:bg-stone-50/50 transition flex flex-col md:flex-row md:items-center justify-between gap-3">
+                              <div className="flex items-center gap-3">
+                                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-stone-100 text-stone-700 border border-stone-200">
+                                  {rRow.recId}
+                                </span>
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-bold text-stone-900">{rRow.recTitle}</span>
+                                    <button
+                                      onClick={() => handleOpenRecommendationRecord(rRow.recId)}
+                                      className="text-stone-400 hover:text-stone-800 transition p-0.5"
+                                      title="Open Recommendation"
+                                    >
+                                      <ExternalLink size={11} />
+                                    </button>
+                                  </div>
+                                  <div className="text-[11px] text-stone-500">
+                                    {rRow.category} • {rRow.region || 'Serbia'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-3">
+                                {/* Routing & Qualification Status Badges */}
+                                <div className="flex items-center gap-2 text-[10px]">
+                                  <span className={`px-2 py-0.5 rounded font-bold uppercase ${
+                                    rRow.routingState === 'active' ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' :
+                                    rRow.routingState === 'suspended' ? 'bg-rose-100 text-rose-900 border border-rose-300' :
+                                    'bg-stone-100 text-stone-600 border border-stone-200'
+                                  }`}>
+                                    Routing: {rRow.routingState}
+                                  </span>
+
+                                  <span className="px-2 py-0.5 rounded bg-stone-100 text-stone-700 font-medium capitalize border border-stone-200">
+                                    Qual: {rRow.qualificationState.replace('_', ' ')}
+                                  </span>
+                                </div>
+
+                                {/* Governed Actions on this Partner-Recommendation relationship */}
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {rRow.routingState !== 'active' ? (
+                                    <button
+                                      onClick={() => handleSelectAndRelease(rRow.recId, partner.id, rRow.contactEmail, rRow.contactPhone)}
+                                      className="px-2.5 py-1 text-xs font-semibold text-stone-900 bg-amber-400 hover:bg-amber-500 rounded-md transition"
+                                      title="Release partner into active routing for this recommendation"
+                                    >
+                                      Release
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleUpdateStatus(rRow.recId, partner.id, 'suspended', 'withdrawn', undefined, 'Suspended from Studio Coverage Control (Partner View)')}
+                                      className="px-2.5 py-1 text-xs font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-md transition"
+                                      title="Suspend partner from this recommendation's routing pool"
+                                    >
+                                      Suspend
+                                    </button>
+                                  )}
+
+                                  <button
+                                    onClick={() => openReplaceModalForRec(rRow.recId, partner.id)}
+                                    className="px-2.5 py-1 text-xs font-medium text-stone-700 bg-white hover:bg-stone-100 border border-stone-300 rounded-md transition flex items-center gap-1"
+                                    title="Replace this partner in this recommendation"
+                                  >
+                                    <ArrowRightLeft size={11} />
+                                    Replace
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          )}
+        </>
       )}
 
-      {/* MODAL 1: Select & Release Partner */}
+      {/* ─────────────────────────────────────────────────────────────────────── */}
+      {/* MODAL 1: SELECT & RELEASE ELIGIBILITY (CANONICAL BACKEND WRITE)          */}
+      {/* ─────────────────────────────────────────────────────────────────────── */}
       {showReleaseModal && (
         <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 border border-stone-200 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-stone-200 pb-3">
               <h3 className="text-lg font-bold text-stone-900 font-display flex items-center gap-2">
                 <ShieldCheck size={20} className="text-amber-500" />
-                Select & Release Partner Coverage
+                Assign & Release Coverage Eligibility
               </h3>
               <button onClick={() => setShowReleaseModal(false)} className="text-stone-400 hover:text-stone-600 text-lg">×</button>
             </div>
@@ -765,7 +1309,7 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
               </div>
 
               <div className="p-3 bg-stone-50 rounded-lg border border-stone-200 text-stone-600 leading-relaxed text-[11px]">
-                <strong>Governance Check:</strong> Either a verified Email OR Mobile/Phone is required before release. Selecting & releasing activates the recommendation eligibility and routing pool immediately. Partner Passport completion is an ongoing capability process and does NOT block initial release.
+                <strong>Governance Check:</strong> Either a verified Email OR Mobile/Phone is required before release. Selecting & releasing activates the canonical recommendation eligibility in <code className="text-stone-800">public.recommendation_partner_eligibility</code> and live routing pool immediately.
               </div>
             </div>
 
@@ -778,10 +1322,11 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
               </button>
 
               <button
-                disabled={!selectedRecForRelease || !selectedPartnerForRelease}
+                disabled={!selectedRecForRelease || !selectedPartnerForRelease || isMutating}
                 onClick={() => handleSelectAndRelease(selectedRecForRelease, selectedPartnerForRelease, releaseEmail, releasePhone)}
-                className="px-4 py-2 text-xs font-semibold text-stone-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-lg shadow-sm transition"
+                className="px-4 py-2 text-xs font-semibold text-stone-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-lg shadow-xs transition flex items-center gap-1.5"
               >
+                {isMutating ? <RefreshCw size={14} className="animate-spin" /> : null}
                 SELECT & RELEASE INTO ROUTING POOL
               </button>
             </div>
@@ -789,7 +1334,9 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
         </div>
       )}
 
-      {/* MODAL 2: Replace Partner */}
+      {/* ─────────────────────────────────────────────────────────────────────── */}
+      {/* MODAL 2: REPLACE PARTNER (CANONICAL ATOMIC MUTATION)                     */}
+      {/* ─────────────────────────────────────────────────────────────────────── */}
       {showReplaceModal && (
         <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 border border-stone-200 shadow-2xl space-y-4">
@@ -834,15 +1381,54 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
               </button>
 
               <button
-                disabled={!replaceNewPartnerId}
+                disabled={!replaceNewPartnerId || isMutating}
                 onClick={handleExecuteReplace}
-                className="px-4 py-2 text-xs font-semibold text-stone-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-lg shadow-sm transition"
+                className="px-4 py-2 text-xs font-semibold text-stone-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-lg shadow-xs transition flex items-center gap-1.5"
               >
+                {isMutating ? <RefreshCw size={14} className="animate-spin" /> : null}
                 EXECUTE ATOMIC REPLACEMENT
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────────── */}
+      {/* MODAL 3: DIRECT PARTNER EDITOR MODAL                                    */}
+      {/* ─────────────────────────────────────────────────────────────────────── */}
+      {isPartnerEditorOpen && editingPartner && (
+        <PartnerEditorModal
+          initialPartner={editingPartner}
+          isOpen={isPartnerEditorOpen}
+          onClose={() => {
+            setIsPartnerEditorOpen(false);
+            setEditingPartner(null);
+          }}
+          onSave={(_savedPartner, _stage) => {
+            setIsPartnerEditorOpen(false);
+            setEditingPartner(null);
+            loadMatrix();
+          }}
+        />
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────────── */}
+      {/* MODAL 4: DIRECT RECOMMENDATION EDITOR MODAL                             */}
+      {/* ─────────────────────────────────────────────────────────────────────── */}
+      {isRecEditorOpen && editingRecommendation && (
+        <RecommendationEditorModal
+          initialRecommendation={editingRecommendation}
+          isOpen={isRecEditorOpen}
+          onClose={() => {
+            setIsRecEditorOpen(false);
+            setEditingRecommendation(null);
+          }}
+          onSave={(_savedRec, _status) => {
+            setIsRecEditorOpen(false);
+            setEditingRecommendation(null);
+            loadMatrix();
+          }}
+        />
       )}
     </div>
   );

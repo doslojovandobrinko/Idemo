@@ -387,6 +387,8 @@ Every task must preserve the following:
 20. Principle 36 — Single Source of Truth (SSOT): Every business object managed by IDEMO (Recommendations, Partners, Editorial Collections, Destinations, Translations, Image Assets, Mood Orbit Calibrations, Geographic Coordinates, Contact Details, Editorial Notes, Package Manifests, Category Definitions, Taxonomies, Service Areas, Language Definitions) shall have exactly one authoritative record stored in Supabase. No duplicated business data shall exist as independently maintained copies. Mobile applications, destination packages, search indexes, analytics, APIs, offline caches, partner portals, and translation workspaces consume authoritative data as generated or cached views.
 21. Principle 37 — Platform Maturation Phase & Operational Governance: Future development transitions from architectural expansion to disciplined operational execution. Engineering priority is restricted to production readiness, operational excellence, editorial quality, partner quality, reliability, performance, and maintainability across the 5 approved streams (Editorial Operations, Partner Operations, Destination Operations, Platform Operations, and Production Operations). Redesign of stable components or unnecessary feature expansion is strictly prohibited.
 22. Principle 38 — Architecture Freeze & Stage-Gated Execution: Once a work package receives explicit architectural approval, the approved architecture becomes frozen. Implementation must execute the frozen specification exactly without redesigning, reinterpreting, substituting, renaming, merging, relocating, optimizing, or introducing unapproved "minor improvements". Any conflict with repository baseline, live schema, security, or runtime dependencies mandates an immediate STOP and report. Architecture, implementation, verification, and deployment operate as separate, sequential approval gates. Optional post-freeze ideas must be recorded in a separate future backlog.
+23. Principle 39 — Partner Profile Lifecycle Management Invariant: Every IDEMO Partner Profile remains explicitly human-governed throughout its lifecycle. An authorized Admin must always be able to CREATE, MODIFY, VERIFY, ACTIVATE, SUSPEND, REACTIVATE, or RETIRE / DELETE both new and existing Partner records. Unknown or missing state must strictly fail safe toward CANDIDATE / UNVERIFIED / INACTIVE and NEVER toward VERIFIED, ACTIVE, or CONCIERGE-ROUTABLE. Profile Review / Verification, Operational Partner Status, and Routing Eligibility are distinct concepts and shall not be automatically inferred from one another. No Partner may become concierge-routable without explicit Admin action.
+24. Principle 40 — Human-Only Media Change Authority Invariant: IDEMO recommendation imagery is a protected part of the visual identity and product quality. No recommendation image may EVER be modified (added, replaced, removed, reordered, or path-changed) without explicit human approval. Automated systems, Gemini, scripts, and publication engines may detect, report, and propose media changes, but MUST NEVER approve, publish, replace, or silently substitute visitor-visible media. If approved canonical media is unavailable or broken, automated systems MUST preserve the approved reference, surface a media integrity warning, block publication, and require human review.
 
 ---
 
@@ -421,3 +423,91 @@ No repository implementation may begin until:
 5. the proposed modification scope is explicit.
 
 This boot sequence is mandatory for every future Gemini-assisted IDEMO repository task.
+
+---
+
+# QUOTA SAFETY GATE
+
+Before executing any substantial IDEMO task, first assess expected Gemini/agent consumption.
+
+The assessment must consider, where relevant:
+
+* repository/context size
+* number of files likely to be inspected
+* expected model calls
+* expected tool/grounding calls
+* parallelism
+* retries
+* repeated transmission of large context
+* multi-language generation
+* batch research
+* whole-repository audits
+* chained/agentic workflows
+* long multi-phase prompts
+
+Classify expected execution impact as:
+
+* LOW
+* MODERATE
+* HIGH
+* VERY HIGH
+
+### Mandatory pause
+
+If expected impact is **HIGH** or **VERY HIGH**:
+
+DO NOT START THE TASK.
+
+Return only:
+
+## QUOTA IMPACT WARNING
+
+* Expected execution impact:
+* Main consumption drivers:
+* Estimated model/tool-call amplification, if measurable:
+* Estimated token amplification, if measurable:
+* Lower-cost execution plan that preserves correctness:
+
+Then state:
+
+**EXECUTION PAUSED — APPROVAL REQUIRED**
+
+Wait for explicit approval before proceeding.
+
+### Optimization requirement
+
+Before warning, identify the smallest safe execution strategy, including where appropriate:
+
+* inspect only relevant files
+* split large audits into evidence-driven phases
+* reuse already verified facts
+* avoid resending unchanged context
+* avoid unnecessary grounding
+* avoid unnecessary parallel fan-out
+* combine language work when safe
+* cap retries
+* stop once sufficient evidence exists
+
+Do not reduce verification quality merely to save tokens.
+
+### Unexpected amplification
+
+If actual execution unexpectedly exceeds the planned consumption envelope:
+
+STOP.
+
+Return:
+
+**UNEXPECTED QUOTA AMPLIFICATION DETECTED — EXECUTION STOPPED**
+
+Report:
+
+* expected vs actual behavior
+* suspected trigger
+* calls/tokens if measurable
+* recommended revised execution plan
+
+### Zero-silent-burst rule
+
+No high-consumption IDEMO engineering task may knowingly start without this pre-execution assessment.
+

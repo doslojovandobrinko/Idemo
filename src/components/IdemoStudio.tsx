@@ -82,7 +82,47 @@ export function IdemoStudio({
     }
 
     restoreAuthSession();
-    return () => { mounted = false; };
+
+    let authListener: { subscription?: { unsubscribe: () => void } } | null = null;
+    if (isSupabaseConfigured()) {
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        const { data: listener } = supabase.auth.onAuthStateChange((_event, newSbSession) => {
+          if (!mounted) return;
+          if (newSbSession?.user) {
+            const derivedRole = parseAndValidateStudioRole(newSbSession.user.app_metadata?.role);
+            if (derivedRole) {
+              const updatedSession: StudioUserSession = {
+                email: newSbSession.user.email || '',
+                name: newSbSession.user.user_metadata?.name || newSbSession.user.user_metadata?.full_name || (newSbSession.user.email ? newSbSession.user.email.split('@')[0] : derivedRole),
+                role: derivedRole,
+                authenticatedAt: new Date().toISOString()
+              };
+              setSession(updatedSession);
+              try {
+                safeStorage.setItem(STUDIO_SESSION_KEY, JSON.stringify(updatedSession));
+              } catch (e) {
+                console.warn('Failed to persist Studio session on auth state change:', e);
+              }
+            } else {
+              setSession(null);
+              safeStorage.removeItem(STUDIO_SESSION_KEY);
+            }
+          } else {
+            setSession(null);
+            safeStorage.removeItem(STUDIO_SESSION_KEY);
+          }
+        });
+        authListener = listener;
+      }
+    }
+
+    return () => {
+      mounted = false;
+      if (authListener?.subscription) {
+        authListener.subscription.unsubscribe();
+      }
+    };
   }, []);
 
   const handleLoginSuccess = (newSession: StudioUserSession) => {

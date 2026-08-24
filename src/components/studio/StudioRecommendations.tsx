@@ -1,10 +1,12 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Compass, Search, Filter, Edit, Eye, CheckCircle2, AlertCircle, Sparkles, Tag, Plus, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Compass, Search, Filter, Edit, Eye, CheckCircle2, AlertCircle, Sparkles, Tag, Plus, ShieldCheck, AlertTriangle, X } from 'lucide-react';
 import { Recommendation, Category } from '../../types';
 import { INITIAL_RECOMMENDATIONS } from '../../constants';
 import { draftExpansionPool } from '../../data/recommendations/serbia/draft_expansion';
 import { RecommendationEditorModal } from './RecommendationEditorModal';
 import { calculateRecommendationCompleteness } from './utils/scoring';
+import { getLocalStudioDrafts, saveLocalStudioDraft, removeLocalStudioDraft, sanitizeStudioDraft, STUDIO_DRAFT_SCHEMA_VERSION, STORAGE_KEY_DRAFT_SCHEMA_VERSION } from '../../lib/recommendationWorkflowService';
+import { safeStorage } from '../../lib/safeStorage';
 
 interface StudioRecommendationsProps {
   customRecommendations?: Recommendation[];
@@ -27,6 +29,17 @@ export function StudioRecommendations({
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [selectedRecId, setSelectedRecId] = useState<string | null>(null);
+  const [toastNotification, setToastNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Auto-dismiss parent toast notification after 3 seconds
+  useEffect(() => {
+    if (toastNotification) {
+      const timer = setTimeout(() => {
+        setToastNotification(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastNotification]);
 
   useEffect(() => {
     if (targetRecId) {
@@ -41,12 +54,74 @@ export function StudioRecommendations({
   const [editingRec, setEditingRec] = useState<Recommendation | null>(null);
   const [localCustomRecs, setLocalCustomRecs] = useState<Recommendation[]>([]);
 
-  // Combine recommendations
+  // Load persisted Studio recommendation drafts on mount
+  useEffect(() => {
+    try {
+      const drafts = getLocalStudioDrafts();
+      if (drafts && drafts.length > 0) {
+        let dirty = false;
+        const parsedRecs: Recommendation[] = drafts.map((d: any) => {
+          const sanitized = sanitizeStudioDraft(d);
+          if (sanitized !== d) {
+            dirty = true;
+          }
+          const item = sanitized;
+          return {
+            ...item,
+            id: item.id || `rec-draft-${Date.now()}`,
+            dbId: item.dbId,
+            title: item.title || 'Untitled Draft Proposal',
+            category: (item.category as Category) || Category.GASTRONOMY,
+            location: item.location || 'Serbia',
+            shortDescription: item.shortDescription || item.short_description || item.description || '',
+            longDescription: item.longDescription || item.long_description || '',
+            image: item.image || item.imageUrl || 'https://images.unsplash.com/photo-1516483638261-f4dbaf036963?auto=format&fit=crop&q=80&w=1200',
+            duration: item.duration !== undefined ? item.duration : '1-2 hours',
+            travelTime: typeof item.travelTime === 'string' ? item.travelTime : (typeof item.travel_time === 'string' ? item.travel_time : ''),
+            travelTimeMinutes: typeof item.travelTimeMinutes === 'number' ? item.travelTimeMinutes : (typeof item.travel_time_minutes === 'number' ? item.travel_time_minutes : undefined),
+            estimatedCost: item.estimatedCost || '$$',
+            preferredTransport: item.preferredTransport || 'Taxi / Walk',
+            coordinates: (item.coordinates && typeof item.coordinates.lat === 'number' && typeof item.coordinates.lng === 'number')
+              ? item.coordinates
+              : (typeof item.latitude === 'number' && typeof item.longitude === 'number'
+                ? { lat: item.latitude, lng: item.longitude }
+                : (typeof item.lat === 'number' && typeof item.lng === 'number'
+                  ? { lat: item.lat, lng: item.lng }
+                  : undefined)),
+            publicationStatus: item.publicationStatus || 'RESEARCH_CANDIDATE',
+            serviceAreaId: item.serviceAreaId || 'sa-serbia-belgrade',
+          };
+        });
+
+        if (dirty) {
+          try {
+            parsedRecs.forEach((r) => {
+              saveLocalStudioDraft(r);
+            });
+          } catch (e) {
+            console.warn('[StudioRecommendations] Failed to write sanitized draft:', e);
+          }
+        }
+
+        try {
+          safeStorage.setItem(STORAGE_KEY_DRAFT_SCHEMA_VERSION, String(STUDIO_DRAFT_SCHEMA_VERSION));
+        } catch (e) {}
+
+        setLocalCustomRecs(parsedRecs);
+      }
+    } catch (err) {
+      console.warn('[StudioRecommendations] Error loading local Studio drafts:', err);
+    }
+  }, []);
+
+  // Combine recommendations (local drafts take precedence to preserve local AMBER edits)
   const allRecs = useMemo(() => {
-    const combined = [...INITIAL_RECOMMENDATIONS, ...draftExpansionPool, ...customRecommendations, ...localCustomRecs];
+    const combined = [...localCustomRecs, ...customRecommendations, ...INITIAL_RECOMMENDATIONS, ...draftExpansionPool];
     const map = new Map<string, Recommendation>();
     combined.forEach(r => {
-      if (!map.has(r.id)) map.set(r.id, r);
+      if (r && r.id && !map.has(r.id)) {
+        map.set(r.id, r);
+      }
     });
     return Array.from(map.values());
   }, [customRecommendations, localCustomRecs]);
@@ -59,8 +134,20 @@ export function StudioRecommendations({
       
       const catMatch = selectedCategory === 'ALL' || r.category === selectedCategory;
       
-      const currentStat = editorialStatuses[r.id] || (INITIAL_RECOMMENDATIONS.some(i => i.id === r.id) ? 'APPROVED' : 'CANDIDATE');
-      const statusMatch = selectedStatus === 'ALL' || currentStat === selectedStatus;
+      const currentStat = editorialStatuses[r.id] || (INITIAL_RECOMMENDATIONS.some(i => i.id === r.id && (i.publicationStatus === 'CANONICAL' || i.publicationStatus === 'PUBLISHED')) ? 'APPROVED' : 'CANDIDATE');
+
+      let statusMatch = false;
+      if (selectedStatus === 'RETIRED') {
+        statusMatch = currentStat === 'RETIRED';
+      } else {
+        if (currentStat === 'RETIRED') {
+          statusMatch = false;
+        } else if (selectedStatus === 'ALL') {
+          statusMatch = true;
+        } else {
+          statusMatch = currentStat === selectedStatus;
+        }
+      }
 
       return titleMatch && catMatch && statusMatch;
     });
@@ -90,7 +177,19 @@ export function StudioRecommendations({
   };
 
   const handleSaveFromEditor = (savedRec: Recommendation, status: 'CANDIDATE' | 'NEEDS RESEARCH' | 'APPROVED' | 'RETIRED') => {
-    // Add to local custom recs if not present
+    if (status === 'RETIRED') {
+      handleDeleteFromEditor(savedRec.id);
+      return;
+    }
+
+    // Persist to safeStorage as Studio draft
+    try {
+      saveLocalStudioDraft(savedRec);
+    } catch (err) {
+      console.warn('[StudioRecommendations] Failed to save local draft:', err);
+    }
+
+    // Add to local custom recs state if not present
     setLocalCustomRecs(prev => {
       const idx = prev.findIndex(r => r.id === savedRec.id);
       if (idx >= 0) {
@@ -110,10 +209,56 @@ export function StudioRecommendations({
     }
 
     setSelectedRecId(savedRec.id);
+
+    // Show persistent notification on Recommendations Desk for 3 seconds
+    setToastNotification({
+      message: 'Draft saved successfully — AMBER / NEEDS RESEARCH',
+      type: 'success'
+    });
+  };
+
+  const handleDeleteFromEditor = (draftId: string) => {
+    try {
+      removeLocalStudioDraft(draftId);
+    } catch (err) {
+      console.warn('[StudioRecommendations] Failed to remove local draft:', err);
+    }
+
+    if (onUpdateEditorialStatuses) {
+      onUpdateEditorialStatuses({ ...editorialStatuses, [draftId]: 'RETIRED' });
+    }
+
+    setLocalCustomRecs(prev => prev.filter(r => r.id !== draftId && r.dbId !== draftId));
+
+    if (selectedRecId === draftId) {
+      setSelectedRecId(null);
+    }
+
+    setToastNotification({
+      message: 'Recommendation retired and removed from active desk',
+      type: 'info'
+    });
   };
 
   return (
     <div className="space-y-6">
+      {/* Toast Notification Banner */}
+      {toastNotification && (
+        <div className="p-4 bg-[#1E2E20] text-white border border-[#2D4530] rounded-2xl shadow-lg flex items-center justify-between gap-3 transition-all animate-in fade-in slide-in-from-top duration-200">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 size={18} className="text-[#C5A059] shrink-0" />
+            <span className="font-mono text-xs font-bold">{toastNotification.message}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setToastNotification(null)}
+            className="p-1 hover:bg-[#2D4530] rounded-lg transition-colors cursor-pointer text-[#8C8A7D] hover:text-white"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* Header & Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -188,7 +333,7 @@ export function StudioRecommendations({
           <div className="max-h-[600px] overflow-y-auto no-scrollbar divide-y divide-[#E5E3DB]">
             {filteredRecs.map(rec => {
               const isSelected = activeRec && activeRec.id === rec.id;
-              const status = editorialStatuses[rec.id] || (INITIAL_RECOMMENDATIONS.some(i => i.id === rec.id) ? 'APPROVED' : 'CANDIDATE');
+              const status = editorialStatuses[rec.id] || (INITIAL_RECOMMENDATIONS.some(i => i.id === rec.id && (i.publicationStatus === 'CANONICAL' || i.publicationStatus === 'PUBLISHED')) ? 'APPROVED' : 'CANDIDATE');
               const completeness = calculateRecommendationCompleteness(rec, status);
 
               return (
@@ -247,7 +392,7 @@ export function StudioRecommendations({
 
         {/* Inspector Panel */}
         {activeRec && (() => {
-          const activeStatus = editorialStatuses[activeRec.id] || (INITIAL_RECOMMENDATIONS.some(i => i.id === activeRec.id) ? 'APPROVED' : 'CANDIDATE');
+          const activeStatus = editorialStatuses[activeRec.id] || (INITIAL_RECOMMENDATIONS.some(i => i.id === activeRec.id && (i.publicationStatus === 'CANONICAL' || i.publicationStatus === 'PUBLISHED')) ? 'APPROVED' : 'CANDIDATE');
           const completeness = calculateRecommendationCompleteness(activeRec, activeStatus);
 
           return (
@@ -357,7 +502,7 @@ export function StudioRecommendations({
               </label>
               <div className="grid grid-cols-2 gap-1.5 font-mono text-[10px]">
                 {(['APPROVED', 'CANDIDATE', 'NEEDS RESEARCH', 'RETIRED'] as const).map(st => {
-                  const currentSt = editorialStatuses[activeRec.id] || (INITIAL_RECOMMENDATIONS.some(i => i.id === activeRec.id) ? 'APPROVED' : 'CANDIDATE');
+                  const currentSt = editorialStatuses[activeRec.id] || (INITIAL_RECOMMENDATIONS.some(i => i.id === activeRec.id && (i.publicationStatus === 'CANONICAL' || i.publicationStatus === 'PUBLISHED')) ? 'APPROVED' : 'CANDIDATE');
                   const isCurrent = currentSt === st;
                   return (
                     <button
@@ -415,9 +560,10 @@ export function StudioRecommendations({
       <RecommendationEditorModal
         isOpen={isEditorOpen}
         initialRecommendation={editingRec}
-        currentStatus={editingRec ? (editorialStatuses[editingRec.id] as any || 'APPROVED') : 'CANDIDATE'}
+        currentStatus={editingRec ? (editorialStatuses[editingRec.id] as any || (INITIAL_RECOMMENDATIONS.some(i => i.id === editingRec.id && (i.publicationStatus === 'CANONICAL' || i.publicationStatus === 'PUBLISHED')) ? 'APPROVED' : 'CANDIDATE')) : 'CANDIDATE'}
         onClose={() => setIsEditorOpen(false)}
         onSave={handleSaveFromEditor}
+        onDeleteDraft={handleDeleteFromEditor}
       />
     </div>
   );

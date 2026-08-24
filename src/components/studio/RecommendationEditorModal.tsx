@@ -36,15 +36,35 @@ import {
   FileImage
 } from 'lucide-react';
 import { Recommendation, Category } from '../../types';
+import { INITIAL_RECOMMENDATIONS } from '../../data/recommendations/serbia';
+import { draftExpansionPool } from '../../data/recommendations/serbia/draft_expansion';
+
+function findStaticSeedForRecommendation(recId?: string, rec?: Partial<Recommendation>): Partial<Recommendation> | undefined {
+  if (!recId && !rec) return undefined;
+  const cleanId = recId || rec?.id;
+  const searchPool = [...INITIAL_RECOMMENDATIONS, ...draftExpansionPool];
+  return searchPool.find(r =>
+    (cleanId && r.id === cleanId) ||
+    (r.draftReservationId && rec?.draftReservationId && r.draftReservationId === rec.draftReservationId)
+  );
+}
 import { calculateRecommendationCompleteness } from './utils/scoring';
+import { getDraftSaveConfirmationMessage } from './utils/saveConfirmation';
 import { 
   submitCanonicalRecommendationCreate, 
   buildCanonicalRecommendationPayload,
   fetchAuthoritativeServiceAreas,
   ServiceAreaOption,
   saveRecommendationDraft,
-  fetchLatestDraftForRecommendation
+  fetchLatestDraftForRecommendation,
+  sanitizeStudioDraft,
+  resolveCanonicalRecommendationIdentity,
+  resolveServiceAreaUuid,
+  isUuid,
+  removeLocalStudioDraft,
+  retireRecommendation,
 } from '../../lib/recommendationWorkflowService';
+import { localizeRecommendation } from '../../lib/recommendationAgentService';
 import {
   MediaWorkflowState,
   validateLocalMediaFile,
@@ -57,13 +77,23 @@ import {
   attachRecommendationMediaAsset,
   abandonRecommendationMediaAsset,
   getCanonicalMediaReference,
+  resolveMediaDisplayUrl,
+  invalidateMediaCache,
 } from '../../lib/recommendationMediaService';
+import { getOptimizedImageUrl } from '../../utils/assetHelper';
+import { AIRecommendationAgentModal } from './AIRecommendationAgentModal';
+import { PartnerIntelligenceReview } from './PartnerIntelligenceReview';
+import { evaluatePartnerSuitability, PartnerIntelligenceResult, StagedPartner } from '../../lib/partnerIntelligenceService';
+import { AgentCompilationResult, compileRecommendationProposal, AgentProposalInput } from '../../lib/recommendationAgentService';
+
 
 interface RecommendationEditorModalProps {
   initialRecommendation?: Recommendation | null;
+  initialServiceAreaId?: string;
   isOpen: boolean;
   onClose: () => void;
   onSave: (recommendation: Recommendation, status: 'CANDIDATE' | 'NEEDS RESEARCH' | 'APPROVED' | 'RETIRED') => void;
+  onDeleteDraft?: (draftId: string) => void;
   currentStatus?: 'CANDIDATE' | 'NEEDS RESEARCH' | 'APPROVED' | 'RETIRED';
 }
 
@@ -95,17 +125,541 @@ const CANONICAL_LANGUAGES = [
   { code: 'zh', name: 'Chinese (中文)' },
 ] as const;
 
+/**
+ * Lookup map for case-insensitive validation against the canonical Category enum.
+ */
+export const CANONICAL_CATEGORY_LOOKUP: Record<string, Category> = Object.values(Category).reduce((acc, cat) => {
+  acc[cat.toLowerCase()] = cat;
+  return acc;
+}, {} as Record<string, Category>);
+
+/**
+ * Generic normalization boundary for recommendation category taxonomy.
+ * - Validates tokens against the canonical Category enum.
+ * - Splits legacy composite strings (e.g., "History, Travel" -> ["History", "Travel"]).
+ * - Sets first valid Category enum as primaryCategory.
+ * - Preserves all valid category tokens in categories array without duplicates.
+ * - If no valid enum matches and a raw string exists, preserves it without falling back silently to Wellbeing.
+ */
+export function normalizeRecommendationCategories(
+  rawCategory?: string | Category | null,
+  rawCategories?: (string | Category)[] | null
+): { primaryCategory: Category | string; categories: string[] } {
+  const validCategoriesList: Category[] = [];
+  const seenValid = new Set<string>();
+
+  const extractTokens = (val: any) => {
+    if (!val || typeof val !== 'string') return;
+    const parts = val.split(',').map((s: string) => s.trim()).filter(Boolean);
+    for (const part of parts) {
+      const canonical = CANONICAL_CATEGORY_LOOKUP[part.toLowerCase()];
+      if (canonical && !seenValid.has(canonical)) {
+        seenValid.add(canonical);
+        validCategoriesList.push(canonical);
+      }
+    }
+  };
+
+  // 1. Extract from rawCategory first to prioritize primary intent
+  extractTokens(rawCategory);
+
+  // 2. Extract from rawCategories array
+  if (Array.isArray(rawCategories)) {
+    for (const catItem of rawCategories) {
+      extractTokens(catItem);
+    }
+  }
+
+  let primaryCategory: Category | string;
+  let categories: string[];
+
+  if (validCategoriesList.length > 0) {
+    primaryCategory = validCategoriesList[0];
+    categories = [...validCategoriesList];
+  } else {
+    // Fallback if no Category enum token was found
+    const rawTrimmed = typeof rawCategory === 'string' ? rawCategory.trim() : '';
+    if (rawTrimmed) {
+      primaryCategory = rawTrimmed;
+      categories = [rawTrimmed];
+    } else {
+      primaryCategory = Category.GASTRONOMY;
+      categories = [Category.GASTRONOMY];
+    }
+  }
+
+  return { primaryCategory, categories };
+}
+
+export function buildInitialForm(initialRecommendation?: Recommendation | null, initialServiceAreaId?: string): Partial<Recommendation> {
+  if (initialRecommendation) {
+    const existingTranslations = initialRecommendation.translations || {};
+    const normalizedTaxonomy = normalizeRecommendationCategories(
+      initialRecommendation.category,
+      initialRecommendation.categories
+    );
+
+    const resolvedServiceAreaId =
+      initialRecommendation.serviceAreaId ||
+      (initialRecommendation as any)?.service_area_id ||
+      initialServiceAreaId ||
+      '';
+
+    return {
+      ...initialRecommendation,
+      serviceAreaId: resolvedServiceAreaId,
+      category: normalizedTaxonomy.primaryCategory,
+      categories: normalizedTaxonomy.categories,
+      expertiseIds: initialRecommendation.expertiseIds || [],
+      capabilityIds: initialRecommendation.capabilityIds || [],
+      moods: initialRecommendation.moods || ['Serene'],
+      title: initialRecommendation.title || '',
+      titleSr: initialRecommendation.titleSr || existingTranslations.sr?.title || '',
+      shortDescription: initialRecommendation.shortDescription || '',
+      shortDescriptionSr: initialRecommendation.shortDescriptionSr || existingTranslations.sr?.shortDescription || '',
+      longDescription: initialRecommendation.longDescription || '',
+      longDescriptionSr: initialRecommendation.longDescriptionSr || existingTranslations.sr?.longDescription || '',
+      location: initialRecommendation.location || '',
+      locationSr: initialRecommendation.locationSr || existingTranslations.sr?.location || '',
+      image: initialRecommendation.image || '',
+      duration: initialRecommendation.duration !== undefined ? initialRecommendation.duration : '',
+      travelTime: typeof initialRecommendation.travelTime === 'string' ? initialRecommendation.travelTime : '',
+      travelTimeMinutes: typeof initialRecommendation.travelTimeMinutes === 'number' ? initialRecommendation.travelTimeMinutes : undefined,
+      preferredTransport: initialRecommendation.preferredTransport || '',
+      estimatedCost: initialRecommendation.estimatedCost || '',
+      coordinateX: initialRecommendation.coordinateX ?? 0,
+      coordinateY: initialRecommendation.coordinateY ?? 0,
+      energy: initialRecommendation.energy ?? 0.5,
+      social: initialRecommendation.social ?? 0.5,
+      luxury: initialRecommendation.luxury ?? 0.5,
+      urbanity: initialRecommendation.urbanity ?? 0.5,
+      nature: initialRecommendation.nature ?? 0.5,
+      weatherDependency: initialRecommendation.weatherDependency ?? 0.2,
+      seasonality: initialRecommendation.seasonality || 'all',
+      familySuitability: initialRecommendation.familySuitability ?? true,
+      accessibility: initialRecommendation.accessibility ?? true,
+      coordinates: (initialRecommendation.coordinates && typeof initialRecommendation.coordinates.lat === 'number' && typeof initialRecommendation.coordinates.lng === 'number')
+        ? initialRecommendation.coordinates
+        : ((typeof (initialRecommendation as any).latitude === 'number' && typeof (initialRecommendation as any).longitude === 'number')
+          ? { lat: (initialRecommendation as any).latitude, lng: (initialRecommendation as any).longitude }
+          : undefined),
+      practicalInfo: {
+        opening_hours: initialRecommendation.practicalInfo?.opening_hours || '',
+        contact_phone: initialRecommendation.practicalInfo?.contact_phone || initialRecommendation.phone || '',
+        contact_email: initialRecommendation.practicalInfo?.contact_email || '',
+        website: initialRecommendation.practicalInfo?.website || initialRecommendation.website || '',
+        admission_fee: initialRecommendation.practicalInfo?.admission_fee || initialRecommendation.estimatedCost || '',
+      },
+      provenance: {
+        source: initialRecommendation.provenance?.source || 'Curator Archive',
+        method: initialRecommendation.provenance?.method || 'original',
+        license: initialRecommendation.provenance?.license || 'CC-BY-4.0',
+        attributionRequired: initialRecommendation.provenance?.attributionRequired ?? false,
+        attributionText: initialRecommendation.provenance?.attributionText || '',
+        verificationStatus: initialRecommendation.provenance?.verificationStatus || 'Verified',
+        altText: initialRecommendation.provenance?.altText || initialRecommendation.title || '',
+      },
+      translations: {
+        en: {
+          title: existingTranslations.en?.title || initialRecommendation.title || '',
+          shortDescription: existingTranslations.en?.shortDescription || initialRecommendation.shortDescription || '',
+          longDescription: existingTranslations.en?.longDescription || initialRecommendation.longDescription || '',
+          location: existingTranslations.en?.location || initialRecommendation.location || '',
+          bestTimeToVisit: existingTranslations.en?.bestTimeToVisit || (initialRecommendation as any).bestTimeToVisitEn || '',
+          insiderTip: existingTranslations.en?.insiderTip || (initialRecommendation as any).insiderTipEn || '',
+        },
+        sr: {
+          title: existingTranslations.sr?.title || initialRecommendation.titleSr || '',
+          shortDescription: existingTranslations.sr?.shortDescription || initialRecommendation.shortDescriptionSr || '',
+          longDescription: existingTranslations.sr?.longDescription || initialRecommendation.longDescriptionSr || '',
+          location: existingTranslations.sr?.location || initialRecommendation.locationSr || '',
+          bestTimeToVisit: existingTranslations.sr?.bestTimeToVisit || (initialRecommendation as any).bestTimeToVisitSr || '',
+          insiderTip: existingTranslations.sr?.insiderTip || (initialRecommendation as any).insiderTipSr || '',
+        },
+        de: existingTranslations.de || {},
+        ru: existingTranslations.ru || {},
+        es: existingTranslations.es || {},
+        zh: existingTranslations.zh || {},
+      },
+    };
+  }
+
+  return {
+    id: `rec-temp-${Date.now()}`,
+    serviceAreaId: initialServiceAreaId || '',
+    title: '',
+    titleSr: '',
+    category: Category.GASTRONOMY,
+    categories: [Category.GASTRONOMY],
+    expertiseIds: ['exp-gastronomy-fine'],
+    capabilityIds: ['cap-english-fluent'],
+    shortDescription: '',
+    shortDescriptionSr: '',
+    longDescription: '',
+    longDescriptionSr: '',
+    image: '',
+    location: '',
+    locationSr: '',
+    duration: '2-3 hours',
+    travelTime: '',
+    travelTimeMinutes: 0,
+    estimatedCost: '€€',
+    preferredTransport: 'Car / Regional Transit',
+    coordinateX: 0,
+    coordinateY: 0,
+    coordinates: undefined,
+    energy: 0.5,
+    social: 0.5,
+    luxury: 0.5,
+    urbanity: 0.5,
+    nature: 0.5,
+    weatherDependency: 0.2,
+    seasonality: 'all',
+    familySuitability: true,
+    accessibility: true,
+    premiumLevel: 'standard',
+    budgetLevel: 'moderate',
+    moods: ['Serene'],
+    website: '',
+    phone: '',
+    practicalInfo: {
+      opening_hours: '',
+      contact_phone: '',
+      contact_email: '',
+      website: '',
+      admission_fee: '',
+    },
+    provenance: {
+      source: 'Studio Editorial Team',
+      method: 'original',
+      license: 'CC-BY-4.0',
+      attributionRequired: false,
+      attributionText: 'IDEMO Serbia Curations',
+      verificationStatus: 'Unverified',
+      altText: '',
+    },
+    translations: {
+      en: { title: '', shortDescription: '', longDescription: '', location: '' },
+      sr: { title: '', shortDescription: '', longDescription: '', location: '' },
+      de: { title: '', shortDescription: '', longDescription: '', location: '' },
+      ru: { title: '', shortDescription: '', longDescription: '', location: '' },
+      es: { title: '', shortDescription: '', longDescription: '', location: '' },
+      zh: { title: '', shortDescription: '', longDescription: '', location: '' },
+    }
+  };
+}
+
+export type GovernanceGateType = 'GATE_A' | 'GATE_B' | 'GATE_C';
+
+export interface GovernanceValidationError {
+  gate: GovernanceGateType;
+  code: string;
+  message: string;
+}
+
+export interface GovernanceGateParams {
+  form: {
+    serviceAreaId?: string;
+    title?: string;
+    shortDescription?: string;
+    longDescription?: string;
+    coordinates?: { lat?: number; lng?: number };
+    travelTimeMinutes?: number;
+    practicalInfo?: {
+      contact_email?: string;
+      contact_phone?: string;
+      website?: string;
+      opening_hours?: string;
+    };
+    image?: string;
+    translations?: Record<string, { title?: string; shortDescription?: string; longDescription?: string; location?: string }>;
+    lifecycleStatus?: string;
+  };
+  displayUrlResolutionError?: boolean;
+  selectedFile?: File | null;
+  fileLocalPreview?: string | null;
+  mediaState?: string;
+  agentProposalMetadata?: {
+    executionMode?: string;
+    fallbackReason?: string;
+    quotaExceeded?: boolean;
+    researchStatus?: string;
+    usedAi?: boolean;
+  } | null;
+  agentEvidenceReport?: {
+    unresolvedFields?: string[];
+    fieldStatuses?: Array<{ fieldName: string; status: string }>;
+  } | null;
+  researchStatus?: string;
+  fallbackReason?: string;
+}
+
+export interface GovernanceGateEvaluation {
+  errors: GovernanceValidationError[];
+  errorMessages: string[];
+  gateA: { pass: boolean; errors: GovernanceValidationError[] };
+  gateB: { pass: boolean; errors: GovernanceValidationError[] };
+  gateC: { pass: boolean; errors: GovernanceValidationError[] };
+}
+
+export function isDraftNeedingResearch(
+  form: any,
+  selectedStatus?: string,
+  agentProposalMetadata?: any,
+  agentEvidenceReport?: any
+): boolean {
+  if (selectedStatus === 'APPROVED' && agentProposalMetadata?.executionMode === 'GEMINI_GROUNDED') {
+    return false;
+  }
+
+  const status = selectedStatus || form?.lifecycleStatus || 'CANDIDATE';
+  const isAmber = status === 'CANDIDATE' || status === 'NEEDS RESEARCH' || status === 'AMBER';
+
+  const isUnresearched =
+    Boolean(form?.shortDescription?.includes('[Unresearched Structural Draft]')) ||
+    Boolean(form?.longDescription?.includes('[Unresearched Structural Draft]')) ||
+    Boolean(form?.title?.includes('[Unresearched Structural Draft]')) ||
+    Object.values(form?.translations || {}).some(
+      (t: any) => t?.shortDescription?.includes('[Unresearched Structural Draft]') || t?.longDescription?.includes('[Unresearched Structural Draft]')
+    );
+
+  const isFallbackMode =
+    agentProposalMetadata?.executionMode === 'DETERMINISTIC_FALLBACK' ||
+    agentProposalMetadata?.executionMode === 'FALLBACK' ||
+    agentProposalMetadata?.executionMode === 'DETERMINISTIC_SEMANTIC_RECOVERY' ||
+    agentProposalMetadata?.usedAi === false ||
+    Boolean(agentProposalMetadata?.quotaExceeded);
+
+  const hasFallbackReason = Boolean(
+    agentProposalMetadata?.fallbackReason &&
+    agentProposalMetadata.fallbackReason.trim().length > 0 &&
+    agentProposalMetadata.fallbackReason !== 'NONE'
+  );
+
+  const hasUnresolvedAgentResearch = Boolean(
+    agentEvidenceReport?.unresolvedFields?.some((f: string) => f === 'shortDescription' || f === 'longDescription' || f === 'research')
+  );
+
+  return isAmber && (isUnresearched || isFallbackMode || hasFallbackReason || hasUnresolvedAgentResearch || !agentProposalMetadata);
+}
+
+export function evaluateRecommendationGovernanceGates(params: GovernanceGateParams): GovernanceGateEvaluation {
+  const errors: GovernanceValidationError[] = [];
+  const { form, displayUrlResolutionError, selectedFile, fileLocalPreview, mediaState, agentProposalMetadata, agentEvidenceReport, researchStatus, fallbackReason } = params;
+
+  // Gate C Hardening: Unresearched / Fallback Draft checks
+  const isUnresearchedDraft =
+    Boolean(form.shortDescription?.includes('[Unresearched Structural Draft]')) ||
+    Boolean(form.longDescription?.includes('[Unresearched Structural Draft]')) ||
+    Boolean(form.title?.includes('[Unresearched Structural Draft]')) ||
+    Object.values(form.translations || {}).some(
+      t => t?.shortDescription?.includes('[Unresearched Structural Draft]') || t?.longDescription?.includes('[Unresearched Structural Draft]')
+    );
+
+  const hasFallbackStatus =
+    researchStatus === 'FALLBACK' ||
+    agentProposalMetadata?.executionMode === 'DETERMINISTIC_FALLBACK' ||
+    agentProposalMetadata?.executionMode === 'FALLBACK' ||
+    agentProposalMetadata?.executionMode === 'DETERMINISTIC_SEMANTIC_RECOVERY' ||
+    agentProposalMetadata?.researchStatus === 'FALLBACK' ||
+    agentProposalMetadata?.usedAi === false;
+
+  const hasFallbackReason =
+    Boolean(fallbackReason && fallbackReason.trim().length > 0 && fallbackReason !== 'NONE') ||
+    Boolean(agentProposalMetadata?.fallbackReason && agentProposalMetadata.fallbackReason.trim().length > 0 && agentProposalMetadata.fallbackReason !== 'NONE');
+
+  const hasUnresolvedAgentResearch =
+    Boolean(agentEvidenceReport?.unresolvedFields?.some(f => f === 'shortDescription' || f === 'longDescription' || f === 'research')) ||
+    Boolean(agentEvidenceReport?.fieldStatuses?.some(f => f.status === 'UNRESOLVED' && (f.fieldName === 'shortDescription' || f.fieldName === 'longDescription')));
+
+  if (isUnresearchedDraft || hasFallbackStatus || hasFallbackReason || hasUnresolvedAgentResearch) {
+    errors.push({
+      gate: 'GATE_C',
+      code: 'UNRESEARCHED_FALLBACK_CONTENT',
+      message: 'Recommendation contains fallback or unresearched structural content ([Unresearched Structural Draft]). Grounded research execution is required before canonical submission.'
+    });
+  }
+
+  // Gate C: Media Storage Resolution Failure
+  if (displayUrlResolutionError) {
+    errors.push({
+      gate: 'GATE_C',
+      code: 'MEDIA_UNRESOLVABLE',
+      message: 'Attached media object cannot be resolved from storage (re-upload required).'
+    });
+  }
+
+  // Gate B: Required Fields & Completeness
+  if (!form.serviceAreaId || !form.serviceAreaId.trim()) {
+    errors.push({
+      gate: 'GATE_B',
+      code: 'SERVICE_AREA_REQUIRED',
+      message: 'Destination service area selection is required.'
+    });
+  }
+  if (!form.title || !form.title.trim()) {
+    errors.push({
+      gate: 'GATE_B',
+      code: 'TITLE_REQUIRED',
+      message: 'English Title is required.'
+    });
+  }
+
+  // Gate A: Schema & Format Constraints
+  if (form.title && form.title.length > 255) {
+    errors.push({
+      gate: 'GATE_A',
+      code: 'TITLE_TOO_LONG',
+      message: 'Title exceeds maximum allowed length of 255 characters.'
+    });
+  }
+  if (form.shortDescription && form.shortDescription.length > 500) {
+    errors.push({
+      gate: 'GATE_A',
+      code: 'SHORT_DESC_TOO_LONG',
+      message: 'Short description exceeds maximum allowed length of 500 characters.'
+    });
+  }
+  if (form.longDescription && form.longDescription.length > 5000) {
+    errors.push({
+      gate: 'GATE_A',
+      code: 'LONG_DESC_TOO_LONG',
+      message: 'Long description exceeds maximum allowed length of 5000 characters.'
+    });
+  }
+  if (form.coordinates?.lat !== undefined) {
+    if (isNaN(form.coordinates.lat) || form.coordinates.lat < -90 || form.coordinates.lat > 90) {
+      errors.push({
+        gate: 'GATE_A',
+        code: 'INVALID_LATITUDE',
+        message: 'Latitude must be a valid number between -90 and 90.'
+      });
+    }
+  }
+  if (form.coordinates?.lng !== undefined) {
+    if (isNaN(form.coordinates.lng) || form.coordinates.lng < -180 || form.coordinates.lng > 180) {
+      errors.push({
+        gate: 'GATE_A',
+        code: 'INVALID_LONGITUDE',
+        message: 'Longitude must be a valid number between -180 and 180.'
+      });
+    }
+  }
+  if (form.travelTimeMinutes !== undefined && form.travelTimeMinutes < 0) {
+    errors.push({
+      gate: 'GATE_A',
+      code: 'INVALID_TRAVEL_TIME',
+      message: 'Travel time in minutes cannot be negative.'
+    });
+  }
+  if (form.practicalInfo?.contact_email && form.practicalInfo.contact_email.trim().length > 0) {
+    if (!form.practicalInfo.contact_email.includes('@')) {
+      errors.push({
+        gate: 'GATE_A',
+        code: 'INVALID_EMAIL_FORMAT',
+        message: 'Contact email format is invalid.'
+      });
+    }
+  }
+
+  // Gate C: Semantic & Evidence Integrity checks (Placeholders & Media)
+  const bannedPlaceholders = [
+    'experience.rs',
+    '+381 11 328 1234',
+    '09:00 - 22:00 Daily',
+    'Free entry / Ala carte',
+    'concierge@experience.rs',
+  ];
+
+  if (form.practicalInfo?.website && bannedPlaceholders.some(p => form.practicalInfo?.website?.includes(p))) {
+    errors.push({
+      gate: 'GATE_C',
+      code: 'DUMMY_WEBSITE_PLACEHOLDER',
+      message: 'Website contains synthetic dummy placeholder (experience.rs). Provide genuine official URL.'
+    });
+  }
+  if (form.practicalInfo?.contact_phone && bannedPlaceholders.some(p => form.practicalInfo?.contact_phone?.includes(p))) {
+    errors.push({
+      gate: 'GATE_C',
+      code: 'DUMMY_PHONE_PLACEHOLDER',
+      message: 'Contact phone contains synthetic dummy placeholder (+381 11 328 1234). Provide genuine phone or leave unresolved.'
+    });
+  }
+  if (form.practicalInfo?.contact_email && bannedPlaceholders.some(p => form.practicalInfo?.contact_email?.includes(p))) {
+    errors.push({
+      gate: 'GATE_C',
+      code: 'DUMMY_EMAIL_PLACEHOLDER',
+      message: 'Contact email contains synthetic dummy placeholder (concierge@experience.rs). Provide genuine email or leave unresolved.'
+    });
+  }
+  if (form.practicalInfo?.opening_hours && bannedPlaceholders.some(p => form.practicalInfo?.opening_hours?.includes(p))) {
+    errors.push({
+      gate: 'GATE_C',
+      code: 'DUMMY_HOURS_PLACEHOLDER',
+      message: 'Opening hours contains synthetic dummy placeholder (09:00 - 22:00 Daily).'
+    });
+  }
+
+  if (selectedFile || fileLocalPreview || (mediaState && mediaState !== 'empty')) {
+    if (mediaState !== 'attached') {
+      errors.push({
+        gate: 'GATE_C',
+        code: 'INCOMPLETE_MEDIA_UPLOAD',
+        message: 'Media upload pipeline must complete backend verification and attachment before submission.'
+      });
+    }
+  }
+
+  if (form.image) {
+    if (form.image.startsWith('blob:') || form.image.startsWith('data:')) {
+      errors.push({
+        gate: 'GATE_C',
+        code: 'BLOB_MEDIA_URL',
+        message: 'Local preview images (blob URLs) cannot be submitted as permanent recommendation media.'
+      });
+    }
+    if (form.image.includes('/storage/v1/object/public/')) {
+      errors.push({
+        gate: 'GATE_C',
+        code: 'PUBLIC_STORAGE_URL',
+        message: 'Recommendation media bucket is private and cannot be referenced via public storage URL.'
+      });
+    }
+    if (form.image.includes('token=') || form.image.includes('signed_upload_url')) {
+      errors.push({
+        gate: 'GATE_C',
+        code: 'SIGNED_TOKEN_URL',
+        message: 'Signed upload URLs or tokens cannot be persisted as permanent media references.'
+      });
+    }
+  }
+
+  const gateAErrors = errors.filter(e => e.gate === 'GATE_A');
+  const gateBErrors = errors.filter(e => e.gate === 'GATE_B');
+  const gateCErrors = errors.filter(e => e.gate === 'GATE_C');
+
+  return {
+    errors,
+    errorMessages: errors.map(e => e.message),
+    gateA: { pass: gateAErrors.length === 0, errors: gateAErrors },
+    gateB: { pass: gateBErrors.length === 0, errors: gateBErrors },
+    gateC: { pass: gateCErrors.length === 0, errors: gateCErrors },
+  };
+}
+
 export function RecommendationEditorModal({
   initialRecommendation,
+  initialServiceAreaId,
   isOpen,
   onClose,
   onSave,
+  onDeleteDraft,
   currentStatus = 'CANDIDATE'
 }: RecommendationEditorModalProps) {
   const isEditing = !!initialRecommendation;
 
   // Form State
-  const [form, setForm] = useState<Partial<Recommendation>>({});
+  const [form, setForm] = useState<Partial<Recommendation>>(() => buildInitialForm(initialRecommendation, initialServiceAreaId));
   const [selectedStatus, setSelectedStatus] = useState<'CANDIDATE' | 'NEEDS RESEARCH' | 'APPROVED' | 'RETIRED'>(currentStatus);
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
   const [activeLangTab, setActiveLangTab] = useState<'en' | 'sr' | 'de' | 'ru' | 'es' | 'zh'>('en');
@@ -117,12 +671,201 @@ export function RecommendationEditorModal({
   // Submission State
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionFeedback, setSubmissionFeedback] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+
+  // AI Recommendation Proposal Agent State (WP-14C5 & V9-STUDIO-AI-REC-01)
+  const [isAIAgentModalOpen, setIsAIAgentModalOpen] = useState(false);
+  const [agentEvidenceReport, setAgentEvidenceReport] = useState<AgentCompilationResult['evidenceReport'] | null>(null);
+  const [agentProposalMetadata, setAgentProposalMetadata] = useState<AgentCompilationResult['metadata'] | null>(null);
+  const [partnerIntelligence, setPartnerIntelligence] = useState<PartnerIntelligenceResult | null>(null);
+  const [stagedPartners, setStagedPartners] = useState<StagedPartner[]>(() => {
+    if ((initialRecommendation as any)?.stagedPartners && Array.isArray((initialRecommendation as any).stagedPartners)) {
+      return (initialRecommendation as any).stagedPartners;
+    }
+    return [];
+  });
+
+  // Apply AI Recommendation Proposal to canonical editor
+  const handleApplyAgentProposal = (result: AgentCompilationResult) => {
+    setForm(prev => ({
+      ...prev,
+      ...result.recommendation,
+      translations: {
+        ...(prev.translations || {}),
+        ...(result.recommendation.translations || {}),
+      },
+      provenance: {
+        ...(prev.provenance || {}),
+        ...(result.recommendation.provenance || {}),
+      },
+    }));
+
+    if (result.recommendation.image) {
+      setResolvedDisplayUrl(result.recommendation.image);
+      setMediaState('attached');
+    } else {
+      setResolvedDisplayUrl('');
+      setMediaState('empty');
+    }
+
+    const nextStatus = result.evidenceReport.lifecycleStatus || 'CANDIDATE';
+    setSelectedStatus(nextStatus);
+    setAgentEvidenceReport(result.evidenceReport);
+    setAgentProposalMetadata(result.metadata || null);
+    setPartnerIntelligence(result.partnerIntelligence);
+
+    const isFallback = result.metadata?.executionMode === 'DETERMINISTIC_FALLBACK' || !result.metadata?.usedAi;
+
+    setSubmissionFeedback({
+      type: isFallback ? 'info' : 'success',
+      message: isFallback
+        ? `[FALLBACK DRAFT] AI Proposal "${result.recommendation.title}" compiled in AMBER (${nextStatus}). Live research was unavailable (${result.metadata?.fallbackReason || 'Conservative Fallback'}). Review unverified fields before approval.`
+        : `AI Proposal "${result.recommendation.title}" compiled into canonical 6-step editor! Status initialized in AMBER (${nextStatus}). Please review and validate all fields before final Admin approval.`
+    });
+  };
+
+  const [isRerunningResearch, setIsRerunningResearch] = useState(false);
+
+  // State-Aware Tab 6 Action: Re-Run Grounded Research for current saved recommendation draft
+  const handleRerunGroundedResearch = async () => {
+    if (isRerunningResearch) return;
+    setIsRerunningResearch(true);
+
+    setSubmissionFeedback({
+      type: 'info',
+      message: 'Research in progress… Querying Gemini Grounded Web Search...'
+    });
+
+    try {
+      const cleanTitle = (form.title || form.nameEn || initialRecommendation?.title || 'Recommendation')
+        .replace(/\[Unresearched Structural Draft\]/g, '')
+        .trim();
+
+      const cleanLocation = (form.location || form.locationEn || form.translations?.en?.location || '')
+        .replace(/\[Unresearched Structural Draft\]/g, '')
+        .trim();
+
+      const input: AgentProposalInput = {
+        nameOrTitle: cleanTitle,
+        destinationOrLocation: cleanLocation || undefined,
+        targetServiceAreaId: form.serviceAreaId || initialServiceAreaId || undefined,
+        descriptionOrNotes: form.shortDescription?.includes('[Unresearched Structural Draft]') ? undefined : form.shortDescription,
+        referenceUrl: form.website || form.practicalInfo?.website || undefined,
+        humanProvidedMedia: (form.image || fileLocalPreview) ? {
+          url: form.image || fileLocalPreview || '',
+          source: form.provenance?.source || 'Curator Field Photography',
+          license: form.provenance?.license || 'Editorial Rights Approved',
+          altText: cleanTitle,
+        } : undefined,
+      };
+
+      const result = await compileRecommendationProposal(input, serviceAreas);
+
+      const isQuotaExceeded =
+        Boolean(result.metadata?.quotaExceeded) ||
+        result.metadata?.classification === 'GEMINI_QUOTA_EXCEEDED' ||
+        Boolean(result.metadata?.fallbackReason?.includes('429')) ||
+        Boolean(result.metadata?.fallbackReason?.includes('RESOURCE_EXHAUSTED'));
+
+      if (isQuotaExceeded) {
+        setAgentProposalMetadata(prev => ({
+          ...(prev || {}),
+          usedAi: false,
+          executionMode: 'DETERMINISTIC_FALLBACK',
+          model: 'deterministic_semantic_engine',
+          sources: prev?.sources || [],
+          quotaExceeded: true,
+          fallbackReason: '429 RESOURCE_EXHAUSTED',
+        }));
+        setSubmissionFeedback({
+          type: 'error',
+          message: 'Gemini research quota exceeded. Existing draft preserved. Try again later.'
+        });
+        return;
+      }
+
+      // Update current draft IN PLACE
+      setForm(prev => {
+        const updated = {
+          ...prev,
+          id: prev.id || form.dbId || initialRecommendation?.id,
+          dbId: prev.dbId || initialRecommendation?.dbId,
+          serviceAreaId: prev.serviceAreaId || result.recommendation.serviceAreaId,
+          title: result.recommendation.title || prev.title,
+          titleSr: result.recommendation.titleSr || prev.titleSr,
+          category: result.recommendation.category || prev.category,
+          subCategory: (result.recommendation as any).subCategory || (prev as any).subCategory,
+          shortDescription: result.recommendation.shortDescription || prev.shortDescription,
+          shortDescriptionSr: result.recommendation.shortDescriptionSr || prev.shortDescriptionSr,
+          longDescription: result.recommendation.longDescription || prev.longDescription,
+          longDescriptionSr: result.recommendation.longDescriptionSr || prev.longDescriptionSr,
+          location: result.recommendation.location || prev.location,
+          locationSr: result.recommendation.locationSr || prev.locationSr,
+          coordinates: result.recommendation.coordinates || prev.coordinates,
+          practicalInfo: {
+            ...(prev.practicalInfo || {}),
+            ...(result.recommendation.practicalInfo || {}),
+          },
+          duration: result.recommendation.duration || prev.duration,
+          travelTime: result.recommendation.travelTime || prev.travelTime,
+          travelTimeMinutes: result.recommendation.travelTimeMinutes ?? prev.travelTimeMinutes,
+          estimatedCost: result.recommendation.estimatedCost || prev.estimatedCost,
+          preferredTransport: result.recommendation.preferredTransport || prev.preferredTransport,
+          image: prev.image || result.recommendation.image,
+          provenance: {
+            ...(result.recommendation.provenance || {}),
+            ...(prev.provenance || {}),
+          },
+          translations: {
+            ...(prev.translations || {}),
+            ...(result.recommendation.translations || {}),
+          },
+          lifecycleStatus: prev.lifecycleStatus === 'APPROVED' ? 'NEEDS RESEARCH' : (prev.lifecycleStatus || 'NEEDS RESEARCH'),
+        };
+        return updated;
+      });
+
+      setAgentEvidenceReport(result.evidenceReport);
+      setAgentProposalMetadata(result.metadata || null);
+      if (result.partnerIntelligence) {
+        setPartnerIntelligence(result.partnerIntelligence);
+      }
+
+      // Remain AMBER
+      setSelectedStatus('NEEDS RESEARCH');
+
+      setSubmissionFeedback({
+        type: 'success',
+        message: 'Grounded research refreshed — review all tabs before approval.'
+      });
+    } catch (err: any) {
+      const errStr = String(err?.message || err);
+      if (errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED')) {
+        setSubmissionFeedback({
+          type: 'error',
+          message: '429 RESOURCE_EXHAUSTED — Quota limit reached. Current draft preserved unchanged. Please try again later.'
+        });
+      } else {
+        setSubmissionFeedback({
+          type: 'error',
+          message: `Research rerun failed: ${errStr}. Current draft preserved.`
+        });
+      }
+    } finally {
+      setIsRerunningResearch(false);
+    }
+  };
 
   // WP-14C5D Primary Recommendation Media State
   const [mediaState, setMediaState] = useState<MediaWorkflowState>('empty');
   const reservationIdempotencyKeyRef = useRef<string>(`res_key_${crypto.randomUUID()}`);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const activeBlobUrlRef = useRef<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileLocalPreview, setFileLocalPreview] = useState<string | null>(null);
+  const [resolvedDisplayUrl, setResolvedDisplayUrl] = useState<string>('');
+  const [isResolvingDisplayUrl, setIsResolvingDisplayUrl] = useState<boolean>(false);
+  const [displayUrlResolutionError, setDisplayUrlResolutionError] = useState<string | null>(null);
   const [currentAssetId, setCurrentAssetId] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [mediaStepStatus, setMediaStepStatus] = useState<{
@@ -146,17 +889,29 @@ export function RecommendationEditorModal({
   // Handle local image file selection
   const handleSelectFile = (file: File) => {
     setMediaError(null);
+    setDisplayUrlResolutionError(null);
     const valResult = validateLocalMediaFile(file);
     if (!valResult.valid) {
       setMediaError(valResult.error || 'Invalid file selection.');
       setMediaState('error');
       setSelectedFile(null);
+      if (activeBlobUrlRef.current) {
+        try { URL.revokeObjectURL(activeBlobUrlRef.current); } catch (_) {}
+        activeBlobUrlRef.current = null;
+      }
       setFileLocalPreview(null);
       return;
     }
 
+    // Revoke previous blob if any
+    if (activeBlobUrlRef.current) {
+      try { URL.revokeObjectURL(activeBlobUrlRef.current); } catch (_) {}
+      activeBlobUrlRef.current = null;
+    }
+
     setSelectedFile(file);
     const objectUrl = URL.createObjectURL(file);
+    activeBlobUrlRef.current = objectUrl;
     setFileLocalPreview(objectUrl);
     setMediaState('selected');
     setMediaStepStatus({
@@ -170,6 +925,7 @@ export function RecommendationEditorModal({
     });
   };
 
+
   // Handle execution of the 6-step governed media upload pipeline
   const handleStartMediaPipeline = async () => {
     if (!selectedFile) {
@@ -179,31 +935,57 @@ export function RecommendationEditorModal({
 
     setMediaError(null);
 
-    const destId = form.serviceAreaId || serviceAreas[0]?.id;
-    if (!destId || !destId.trim()) {
+    const rawDestId = form.serviceAreaId || serviceAreas[0]?.id;
+    if (!rawDestId || !rawDestId.trim()) {
       setMediaError('Canonical Service Area (Destination ID) is required in Step 1 before uploading media.');
       return;
     }
 
-    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    let reservedRecId = (form.id && UUID_REGEX.test(form.id)) ? form.id : '';
+    // Resolve canonical service area UUID before calling UUID database parameters
+    const resolvedDestUuid = await resolveServiceAreaUuid(rawDestId);
+    if (!resolvedDestUuid) {
+      setMediaError('Canonical service area UUID could not be resolved.');
+      setMediaState('error');
+      setMediaStepStatus(s => ({ ...s, authorize: 'error' }));
+      return;
+    }
 
-    if (!reservedRecId) {
+    // Resolve canonical recommendation identity without overwriting display ID (e.g., "97")
+    const identity = await resolveCanonicalRecommendationIdentity({
+      id: form.id,
+      dbId: form.dbId || initialRecommendation?.dbId,
+      serviceAreaId: resolvedDestUuid,
+    });
+
+    let targetMediaRecId = (identity.canonicalUuid && isUuid(identity.canonicalUuid))
+      ? identity.canonicalUuid
+      : (form.draftReservationId && isUuid(form.draftReservationId))
+        ? form.draftReservationId
+        : '';
+
+    if (!targetMediaRecId || !isUuid(targetMediaRecId)) {
       setMediaState('authorizing');
       setMediaStepStatus(s => ({ ...s, authorize: 'pending' }));
-      const reserveRes = await reserveRecommendationDraft(destId, reservationIdempotencyKeyRef.current);
-      if (!reserveRes.success || !reserveRes.reserved_recommendation_id) {
-        if (reserveRes.error === 'MEDIA_AUTH_REQUIRED' || reserveRes.error === 'UNAUTHORIZED') {
-          setMediaError('MEDIA_AUTH_REQUIRED: Valid Studio user session access token is required to reserve a draft.');
-        } else {
-          setMediaError(reserveRes.message || reserveRes.error || 'Server draft reservation failed.');
-        }
+      const reserveRes = await reserveRecommendationDraft(resolvedDestUuid, reservationIdempotencyKeyRef.current);
+      if (reserveRes.success && reserveRes.reserved_recommendation_id && isUuid(reserveRes.reserved_recommendation_id)) {
+        targetMediaRecId = reserveRes.reserved_recommendation_id;
+        setForm(prev => ({
+          ...prev,
+          draftReservationId: targetMediaRecId,
+        }));
+      } else if (reserveRes.error === 'MEDIA_AUTH_REQUIRED' || reserveRes.error === 'UNAUTHORIZED') {
+        setMediaError('Studio authentication session expired or missing. Please sign in with an authorized Studio account.');
         setMediaState('error');
         setMediaStepStatus(s => ({ ...s, authorize: 'error' }));
         return;
       }
-      reservedRecId = reserveRes.reserved_recommendation_id;
-      setForm(prev => ({ ...prev, id: reservedRecId }));
+    }
+
+    if (!targetMediaRecId || !isUuid(targetMediaRecId)) {
+      setMediaError('Draft reservation UUID could not be established. Media upload was not started.');
+      setMediaState('error');
+      setMediaStepStatus(s => ({ ...s, authorize: 'error' }));
+      return;
     }
 
     // 1. Local Validation
@@ -221,14 +1003,39 @@ export function RecommendationEditorModal({
     setMediaState('authorizing');
     setMediaStepStatus(s => ({ ...s, authorize: 'pending' }));
 
-    const authRes = await authorizeRecommendationMediaUpload({
-      destination_id: destId,
-      reserved_recommendation_id: reservedRecId,
+    let authRes = await authorizeRecommendationMediaUpload({
+      destination_id: resolvedDestUuid,
+      reserved_recommendation_id: targetMediaRecId,
       mime_type: selectedFile.type,
       file_size_bytes: selectedFile.size,
       original_filename: selectedFile.name,
       replacement_asset_id: currentAssetId || undefined,
     });
+
+    // Auto-healing: If reservation is inactive or destination-mismatched (MEDIA_AUTHORIZATION_INVALID),
+    // clear stale reservation, request a fresh server-authoritative reservation for resolvedDestUuid, update draftReservationId, and retry authorization exactly once.
+    if (!authRes.success && authRes.error === 'MEDIA_AUTHORIZATION_INVALID') {
+      setForm(prev => ({ ...prev, draftReservationId: undefined }));
+      const freshKey = `reserve_${resolvedDestUuid}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const freshReserveRes = await reserveRecommendationDraft(resolvedDestUuid, freshKey);
+
+      if (freshReserveRes.success && freshReserveRes.reserved_recommendation_id) {
+        targetMediaRecId = freshReserveRes.reserved_recommendation_id;
+        setForm(prev => ({
+          ...prev,
+          draftReservationId: targetMediaRecId,
+        }));
+
+        authRes = await authorizeRecommendationMediaUpload({
+          destination_id: resolvedDestUuid,
+          reserved_recommendation_id: targetMediaRecId,
+          mime_type: selectedFile.type,
+          file_size_bytes: selectedFile.size,
+          original_filename: selectedFile.name,
+          replacement_asset_id: currentAssetId || undefined,
+        });
+      }
+    }
 
     if (!authRes.success) {
       if (authRes.error === 'MEDIA_AUTH_REQUIRED' || authRes.error === 'UNAUTHORIZED') {
@@ -236,7 +1043,7 @@ export function RecommendationEditorModal({
       } else if (authRes.error === 'MEDIA_SERVICE_UNAVAILABLE' || authRes.error === 'NO_SUPABASE' || authRes.error === 'NO_SUPABASE_CLIENT') {
         setMediaError('MEDIA_SERVICE_UNAVAILABLE: Editorial workflow engine backend is unavailable. Selected file preserved for retry.');
       } else if (authRes.error === 'MEDIA_AUTHORIZATION_INVALID') {
-        setMediaError('MEDIA_AUTHORIZATION_INVALID: Upload authorization response is missing required fields or invalid.');
+        setMediaError(authRes.message ? `MEDIA_AUTHORIZATION_INVALID: ${authRes.message}` : 'MEDIA_AUTHORIZATION_INVALID: Upload authorization response is missing required fields or invalid.');
       } else {
         setMediaError(authRes.message || authRes.error || 'Upload authorization failed.');
       }
@@ -294,8 +1101,8 @@ export function RecommendationEditorModal({
         en: form.title || selectedFile.name,
         sr: form.titleSr || form.title || selectedFile.name,
       },
-      provenanceSource: form.provenance?.source || 'Studio Verified Upload',
-      acquisitionMethod: form.provenance?.method === 'Direct Curation' || form.provenance?.method === 'Direct Inspection' || form.provenance?.method === 'Direct Verification' ? 'original' : (form.provenance?.method || 'original'),
+      provenanceSource: form.provenance?.source && form.provenance.source !== 'Pending Human Upload' ? form.provenance.source : 'Studio Verified Upload',
+      acquisitionMethod: 'original',
       licenceType: form.provenance?.license === 'CC-BY 4.0' ? 'CC-BY-4.0' : (form.provenance?.license || 'CC-BY-4.0'),
       attributionRequired: form.provenance?.attributionRequired || false,
       attributionText: form.provenance?.attributionText || '',
@@ -338,31 +1145,94 @@ export function RecommendationEditorModal({
 
     const canonicalRef = attachRes.canonical_url || (attachRes.object_path ? getCanonicalMediaReference(attachRes.object_path) : (authRes.object_path ? getCanonicalMediaReference(authRes.object_path) : ''));
 
-    setForm(prev => ({
-      ...prev,
-      id: reservedRecId,
+    // Safe replacement ordering: Abandon old asset ONLY AFTER new asset is verified and attached
+    const previousAssetToAbandon = currentAssetId && currentAssetId !== authRes.asset_id ? currentAssetId : null;
+    if (previousAssetToAbandon) {
+      abandonRecommendationMediaAsset(previousAssetToAbandon, 'Superseded by newly verified replacement image').catch((e) => {
+        console.warn('[RecommendationEditorModal] Non-blocking abandonment warning:', e);
+      });
+    }
+
+    setCurrentAssetId(authRes.asset_id!);
+    setSelectedFile(null);
+
+    // Keep active local blob preview as immediate display URL while transitioning canonical state
+    const immediateBlobUrl = fileLocalPreview;
+    if (immediateBlobUrl) {
+      setResolvedDisplayUrl(immediateBlobUrl);
+    }
+
+    const updatedFormState: Partial<Recommendation> = {
+      ...form,
+      dbId: identity.canonicalUuid || form.dbId,
+      draftReservationId: !identity.canonicalUuid ? targetMediaRecId : form.draftReservationId,
       image: canonicalRef,
       provenance: {
-        ...prev.provenance,
-        source: prev.provenance?.source || 'Studio Verified Upload',
-        method: prev.provenance?.method || 'original',
-        license: prev.provenance?.license || 'CC-BY-4.0',
+        ...form.provenance,
+        source: form.provenance?.source && form.provenance.source !== 'Pending Human Upload' ? form.provenance.source : 'Studio Verified Upload',
+        method: 'original',
+        license: form.provenance?.license || 'CC-BY-4.0',
+        verificationStatus: 'verified',
       }
-    }));
+    };
 
+    setForm(updatedFormState);
     setMediaState('attached');
+
+    // Auto-persist the verified replacement media into the active server draft amendment
+    saveRecommendationDraft(updatedFormState, resolvedDestUuid)
+      .then((draftRes) => {
+        if (draftRes.success) {
+          setSubmissionFeedback({
+            type: 'success',
+            message: 'Media verified, attached, and persisted to active editorial draft amendment.',
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn('[RecommendationEditorModal] Draft auto-persist notice:', err);
+      });
+
+    // Invalidate stale cache for this path and resolve permanent signed read URL
+    invalidateMediaCache(canonicalRef);
+    resolveMediaDisplayUrl(canonicalRef)
+      .then((signedUrl) => {
+        if (signedUrl) {
+          setResolvedDisplayUrl(signedUrl);
+          setDisplayUrlResolutionError(null);
+          // Revoke temporary blob preview only after permanent display URL is secured
+          if (activeBlobUrlRef.current && activeBlobUrlRef.current.startsWith('blob:')) {
+            try { URL.revokeObjectURL(activeBlobUrlRef.current); } catch (_) {}
+            activeBlobUrlRef.current = null;
+          }
+          setFileLocalPreview(null);
+        }
+      })
+      .catch((err) => {
+        console.warn('[RecommendationEditorModal] Post-attach signed URL resolution notice:', err);
+        // If immediate local blob preview is active in this session, keep showing it
+        if (!immediateBlobUrl) {
+          setDisplayUrlResolutionError(err?.message || 'Failed to resolve display URL for attached media.');
+        }
+      });
   };
 
-  // Handle replace or abandon media
-  const handleAbandonOrReplace = async () => {
+  // Safe Removal: Clears image reference and disassociates asset
+  const handleRemoveImage = async () => {
     if (currentAssetId) {
       setMediaState('abandoning');
-      await abandonRecommendationMediaAsset(currentAssetId, 'User requested image replacement in Studio');
+      await abandonRecommendationMediaAsset(currentAssetId, 'User explicitly removed image from recommendation draft');
+    }
+    if (activeBlobUrlRef.current && activeBlobUrlRef.current.startsWith('blob:')) {
+      try { URL.revokeObjectURL(activeBlobUrlRef.current); } catch (_) {}
+      activeBlobUrlRef.current = null;
     }
     setSelectedFile(null);
     setFileLocalPreview(null);
     setCurrentAssetId(null);
     setMediaError(null);
+    setResolvedDisplayUrl('');
+    setDisplayUrlResolutionError(null);
     setMediaState('empty');
     setForm(prev => ({ ...prev, image: '' }));
     setMediaStepStatus({
@@ -375,6 +1245,88 @@ export function RecommendationEditorModal({
       attach: 'idle',
     });
   };
+
+  // Safe Replace Trigger: Resets file input value and triggers OS file chooser without clearing existing active image
+  const handleTriggerReplaceImage = () => {
+    setMediaError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+      fileInputRef.current.click();
+    }
+  };
+
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (activeBlobUrlRef.current && activeBlobUrlRef.current.startsWith('blob:')) {
+        try { URL.revokeObjectURL(activeBlobUrlRef.current); } catch (_) {}
+        activeBlobUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  // Display URL Resolution Effect: Authoritative SSOT for resolving form.image into a displayable URL
+  useEffect(() => {
+    let mounted = true;
+    if (!isOpen || !form.image) {
+      if (!form.image) {
+        setResolvedDisplayUrl('');
+        setDisplayUrlResolutionError(null);
+      }
+      return;
+    }
+
+    const currentImg = form.image;
+
+    // 1. Direct displayable URLs
+    if (currentImg.startsWith('blob:') || currentImg.startsWith('data:') || currentImg.startsWith('http://') || currentImg.startsWith('https://')) {
+      setResolvedDisplayUrl(currentImg);
+      setDisplayUrlResolutionError(null);
+      return;
+    }
+
+    // 2. Bundled static assets
+    if (
+      currentImg.startsWith('/src/assets/images/') ||
+      currentImg.startsWith('src/assets/images/') ||
+      currentImg.startsWith('assets/images/') ||
+      currentImg.startsWith('/assets/images/')
+    ) {
+      setResolvedDisplayUrl(getOptimizedImageUrl(currentImg));
+      setDisplayUrlResolutionError(null);
+      return;
+    }
+
+    // 3. Governed private storage references ('recommendation-media/...')
+    if (currentImg.startsWith('recommendation-media/') || currentImg.startsWith('/recommendation-media/')) {
+      // If we already have an active local blob preview for this session, keep displaying it without disruption
+      if (!fileLocalPreview) {
+        setIsResolvingDisplayUrl(true);
+      }
+      setDisplayUrlResolutionError(null);
+
+      resolveMediaDisplayUrl(currentImg)
+        .then((signedUrl) => {
+          if (mounted) {
+            setResolvedDisplayUrl(signedUrl);
+            setIsResolvingDisplayUrl(false);
+            setDisplayUrlResolutionError(null);
+          }
+        })
+        .catch((err) => {
+          if (mounted) {
+            setIsResolvingDisplayUrl(false);
+            if (!fileLocalPreview) {
+              setDisplayUrlResolutionError(err?.message || 'Failed to resolve private media storage URL.');
+            }
+          }
+        });
+    }
+
+    return () => {
+      mounted = false;
+    };
+  }, [form.image, isOpen, fileLocalPreview]);
 
   // Load service areas from public.service_areas
   useEffect(() => {
@@ -393,154 +1345,97 @@ export function RecommendationEditorModal({
 
   // Initialize or reset form state
   useEffect(() => {
+    setForm(buildInitialForm(initialRecommendation, initialServiceAreaId));
+    setShowDiscardConfirm(false);
     if (initialRecommendation) {
-      const existingTranslations = initialRecommendation.translations || {};
-      setForm({
-        ...initialRecommendation,
-        serviceAreaId: initialRecommendation.serviceAreaId || '',
-        categories: initialRecommendation.categories || [String(initialRecommendation.category || Category.GASTRONOMY)],
-        expertiseIds: initialRecommendation.expertiseIds || [],
-        capabilityIds: initialRecommendation.capabilityIds || [],
-        moods: initialRecommendation.moods || ['Serene'],
-        titleSr: initialRecommendation.titleSr || existingTranslations.sr?.title || '',
-        shortDescriptionSr: initialRecommendation.shortDescriptionSr || existingTranslations.sr?.shortDescription || '',
-        longDescriptionSr: initialRecommendation.longDescriptionSr || existingTranslations.sr?.longDescription || '',
-        locationSr: initialRecommendation.locationSr || existingTranslations.sr?.location || '',
-        practicalInfo: {
-          opening_hours: initialRecommendation.practicalInfo?.opening_hours || '',
-          contact_phone: initialRecommendation.practicalInfo?.contact_phone || initialRecommendation.phone || '',
-          contact_email: initialRecommendation.practicalInfo?.contact_email || '',
-          website: initialRecommendation.practicalInfo?.website || initialRecommendation.website || '',
-          admission_fee: initialRecommendation.practicalInfo?.admission_fee || initialRecommendation.estimatedCost || '',
-        },
-        provenance: {
-          source: initialRecommendation.provenance?.source || 'Curator Archive',
-          method: initialRecommendation.provenance?.method || 'original',
-          license: initialRecommendation.provenance?.license || 'CC-BY-4.0',
-          attributionRequired: initialRecommendation.provenance?.attributionRequired ?? false,
-          attributionText: initialRecommendation.provenance?.attributionText || '',
-          verificationStatus: initialRecommendation.provenance?.verificationStatus || 'Verified',
-          altText: initialRecommendation.provenance?.altText || initialRecommendation.title || '',
-        },
-        translations: {
-          en: {
-            title: existingTranslations.en?.title || initialRecommendation.title || '',
-            shortDescription: existingTranslations.en?.shortDescription || initialRecommendation.shortDescription || '',
-            longDescription: existingTranslations.en?.longDescription || initialRecommendation.longDescription || '',
-            location: existingTranslations.en?.location || initialRecommendation.location || '',
-            bestTimeToVisit: existingTranslations.en?.bestTimeToVisit || initialRecommendation.bestTimeToVisitEn || '',
-            insiderTip: existingTranslations.en?.insiderTip || initialRecommendation.insiderTipEn || '',
-          },
-          sr: {
-            title: existingTranslations.sr?.title || initialRecommendation.titleSr || '',
-            shortDescription: existingTranslations.sr?.shortDescription || initialRecommendation.shortDescriptionSr || '',
-            longDescription: existingTranslations.sr?.longDescription || initialRecommendation.longDescriptionSr || '',
-            location: existingTranslations.sr?.location || initialRecommendation.locationSr || '',
-            bestTimeToVisit: existingTranslations.sr?.bestTimeToVisit || initialRecommendation.bestTimeToVisitSr || '',
-            insiderTip: existingTranslations.sr?.insiderTip || initialRecommendation.insiderTipSr || '',
-          },
-          de: existingTranslations.de || {},
-          ru: existingTranslations.ru || {},
-          es: existingTranslations.es || {},
-          zh: existingTranslations.zh || {},
-        },
-      });
       setSelectedStatus(currentStatus);
     } else {
-      // Default empty form for creation
-      setForm({
-        id: `rec-temp-${Date.now()}`,
-        serviceAreaId: '',
-        title: '',
-        titleSr: '',
-        category: Category.GASTRONOMY,
-        categories: [Category.GASTRONOMY],
-        expertiseIds: ['exp-gastronomy-fine'],
-        capabilityIds: ['cap-english-fluent'],
-        shortDescription: '',
-        longDescription: '',
-        image: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=1200',
-        location: 'Belgrade, Serbia',
-        locationSr: 'Београд, Србија',
-        duration: '2-3 hours',
-        travelTime: '15 mins',
-        travelTimeMinutes: 15,
-        estimatedCost: '€€',
-        preferredTransport: 'Taxi / Walking',
-        coordinateX: 0.5,
-        coordinateY: 0.5,
-        coordinates: { lat: 44.8176, lng: 20.4569 },
-        energy: 0.5,
-        social: 0.5,
-        luxury: 0.5,
-        urbanity: 0.5,
-        nature: 0.5,
-        weatherDependency: 0.2,
-        seasonality: 'all',
-        familySuitability: true,
-        accessibility: true,
-        premiumLevel: 'standard',
-        budgetLevel: 'moderate',
-        moods: ['Serene', 'Gastronomic'],
-        website: '',
-        phone: '',
-        practicalInfo: {
-          opening_hours: '09:00 - 22:00 Daily',
-          contact_phone: '+381 11 328 1234',
-          contact_email: 'concierge@experience.rs',
-          website: 'https://experience.rs',
-          admission_fee: 'Free entry / Ala carte',
-        },
-        provenance: {
-          source: 'Studio Editorial Team',
-          method: 'original',
-          license: 'CC-BY-4.0',
-          attributionRequired: false,
-          attributionText: 'IDEMO Serbia Curations',
-          verificationStatus: 'Verified',
-          altText: 'Belgrade Gastronomy Experience',
-        },
-        translations: {
-          en: { title: '', shortDescription: '', longDescription: '', location: 'Belgrade, Serbia' },
-          sr: { title: '', shortDescription: '', longDescription: '', location: 'Београд, Србија' },
-          de: { title: '', shortDescription: '', longDescription: '', location: '' },
-          ru: { title: '', shortDescription: '', longDescription: '', location: '' },
-          es: { title: '', shortDescription: '', longDescription: '', location: '' },
-          zh: { title: '', shortDescription: '', longDescription: '', location: '' },
-        }
-      });
       setSelectedStatus('CANDIDATE');
     }
+    if (activeBlobUrlRef.current && activeBlobUrlRef.current.startsWith('blob:')) {
+      try { URL.revokeObjectURL(activeBlobUrlRef.current); } catch (_) {}
+      activeBlobUrlRef.current = null;
+    }
+    setSelectedFile(null);
+    setFileLocalPreview(null);
+    setMediaError(null);
+    setDisplayUrlResolutionError(null);
+    setMediaState(initialRecommendation?.image ? 'attached' : 'empty');
     setCurrentStep(1);
     setSubmissionFeedback(null);
 
     let mounted = true;
     async function checkForServerDraft() {
       if (!isOpen || !initialRecommendation) return;
-      const recId = initialRecommendation.dbId || initialRecommendation.id;
-      if (!recId) return;
+      const recId = initialRecommendation.id || initialRecommendation.dbId;
+      const explicitDbId = initialRecommendation.dbId;
+      if (!recId && !explicitDbId) return;
 
-      const draft = await fetchLatestDraftForRecommendation(recId);
+      const draft = await fetchLatestDraftForRecommendation(recId, explicitDbId);
       if (draft && mounted) {
         setForm(prev => {
           const draftTranslations = draft.translations || {};
+          const normalizedTaxonomy = (draft.category || draft.categories)
+            ? normalizeRecommendationCategories(draft.category, draft.categories)
+            : null;
+
+          // Check whether local prev state is tied to the exact same workflowWorkItemId and has newer unsaved edits
+          const isSameWorkItem = Boolean(
+            prev.workflowWorkItemId &&
+            draft.workflowWorkItemId &&
+            prev.workflowWorkItemId === draft.workflowWorkItemId
+          );
+
+          const localUpdatedAt = (prev as any).updatedAt || (prev as any).updated_at || 0;
+          const serverUpdatedAt = (draft as any).updatedAt || (draft as any).updated_at || 0;
+          const isLocalNewer = localUpdatedAt > serverUpdatedAt;
+
+          if (isSameWorkItem && isLocalNewer) {
+            // Local unsaved user edits for the exact same work item override server proposal
+            return {
+              ...draft,
+              ...prev,
+              workflowWorkItemId: draft.workflowWorkItemId,
+            };
+          }
+
+          // Otherwise, server proposal content is authoritative and wins completely
           return {
             ...prev,
             ...draft,
-            title: draft.title || prev.title,
-            shortDescription: draft.shortDescription || prev.shortDescription,
-            longDescription: draft.longDescription || prev.longDescription,
-            location: draft.location || prev.location,
-            titleSr: draft.titleSr || prev.titleSr || draftTranslations.sr?.title || '',
-            shortDescriptionSr: draft.shortDescriptionSr || prev.shortDescriptionSr || draftTranslations.sr?.shortDescription || '',
-            longDescriptionSr: draft.longDescriptionSr || prev.longDescriptionSr || draftTranslations.sr?.longDescription || '',
-            locationSr: draft.locationSr || prev.locationSr || draftTranslations.sr?.location || '',
+            id: prev.id || initialRecommendation.id,
+            dbId: draft.dbId || prev.dbId || initialRecommendation.dbId,
+            draftReservationId: draft.draftReservationId || prev.draftReservationId || initialRecommendation.draftReservationId,
+            workflowWorkItemId: draft.workflowWorkItemId || prev.workflowWorkItemId || initialRecommendation.workflowWorkItemId,
+            category: normalizedTaxonomy ? normalizedTaxonomy.primaryCategory : (draft.category || prev.category),
+            categories: normalizedTaxonomy ? normalizedTaxonomy.categories : (draft.categories || prev.categories),
+            title: draft.title ?? prev.title,
+            shortDescription: draft.shortDescription ?? prev.shortDescription,
+            longDescription: draft.longDescription ?? prev.longDescription,
+            location: draft.location ?? prev.location,
+            titleSr: draft.titleSr || draftTranslations.sr?.title || prev.titleSr || '',
+            shortDescriptionSr: draft.shortDescriptionSr || draftTranslations.sr?.shortDescription || prev.shortDescriptionSr || '',
+            longDescriptionSr: draft.longDescriptionSr || draftTranslations.sr?.longDescription || prev.longDescriptionSr || '',
+            locationSr: draft.locationSr || draftTranslations.sr?.location || prev.locationSr || '',
+            image: draft.image ?? prev.image,
+            travelTime: typeof draft.travelTime === 'string' ? draft.travelTime : (prev.travelTime || ''),
+            travelTimeMinutes: typeof draft.travelTimeMinutes === 'number' ? draft.travelTimeMinutes : prev.travelTimeMinutes,
+            coordinates: draft.coordinates ?? prev.coordinates,
             translations: {
               ...prev.translations,
               ...draftTranslations,
             },
           };
         });
+
+        if (draft.image) {
+          setMediaState('attached');
+          resolveMediaDisplayUrl(draft.image)
+            .then(url => {
+              if (url && mounted) setResolvedDisplayUrl(url);
+            })
+            .catch(() => {});
+        }
       }
     }
 
@@ -549,7 +1444,7 @@ export function RecommendationEditorModal({
     }
 
     return () => { mounted = false; };
-  }, [initialRecommendation, currentStatus, isOpen]);
+  }, [initialRecommendation, initialServiceAreaId, currentStatus, isOpen]);
 
   // Synchronization helper for EN/SR direct fields and translations object
   const updateFieldWithSync = (field: string, val: any) => {
@@ -630,71 +1525,29 @@ export function RecommendationEditorModal({
   };
 
   // Validation checks & completeness
-  const completeness = calculateRecommendationCompleteness(form, selectedStatus);
+  const completeness = calculateRecommendationCompleteness(form, selectedStatus, {
+    isMediaUnresolvable: Boolean(displayUrlResolutionError)
+  });
 
   // Field validation errors
-  const validationErrors = useMemo(() => {
-    const errors: string[] = [];
-    if (!form.serviceAreaId || !form.serviceAreaId.trim()) {
-      errors.push('Destination service area selection is required.');
-    }
-    if (!form.title || form.title.trim().length === 0) {
-      errors.push('English Title is required.');
-    } else if (form.title.length > 255) {
-      errors.push('Title exceeds maximum allowed length of 255 characters.');
-    }
+  const governanceEvaluation = useMemo(() => {
+    return evaluateRecommendationGovernanceGates({
+      form,
+      displayUrlResolutionError: Boolean(displayUrlResolutionError),
+      selectedFile,
+      fileLocalPreview,
+      mediaState,
+      agentProposalMetadata,
+      agentEvidenceReport,
+    });
+  }, [form, displayUrlResolutionError, selectedFile, fileLocalPreview, mediaState, agentProposalMetadata, agentEvidenceReport]);
 
-    if (form.shortDescription && form.shortDescription.length > 500) {
-      errors.push('Short description exceeds maximum allowed length of 500 characters.');
-    }
+  const validationErrors = governanceEvaluation.errorMessages;
 
-    if (form.longDescription && form.longDescription.length > 5000) {
-      errors.push('Long description exceeds maximum allowed length of 5000 characters.');
-    }
-
-    if (form.coordinates?.lat !== undefined) {
-      if (isNaN(form.coordinates.lat) || form.coordinates.lat < -90 || form.coordinates.lat > 90) {
-        errors.push('Latitude must be a valid number between -90 and 90.');
-      }
-    }
-
-    if (form.coordinates?.lng !== undefined) {
-      if (isNaN(form.coordinates.lng) || form.coordinates.lng < -180 || form.coordinates.lng > 180) {
-        errors.push('Longitude must be a valid number between -180 and 180.');
-      }
-    }
-
-    if (form.travelTimeMinutes !== undefined && form.travelTimeMinutes < 0) {
-      errors.push('Travel time in minutes cannot be negative.');
-    }
-
-    if (form.practicalInfo?.contact_email && form.practicalInfo.contact_email.trim().length > 0) {
-      if (!form.practicalInfo.contact_email.includes('@')) {
-        errors.push('Contact email format is invalid.');
-      }
-    }
-
-    // Defect 5: Submission Gate - Media Validation Rules
-    if (selectedFile || fileLocalPreview || mediaState !== 'empty') {
-      if (mediaState !== 'attached') {
-        errors.push('Media upload pipeline must complete backend verification and attachment before submission.');
-      }
-    }
-
-    if (form.image) {
-      if (form.image.startsWith('blob:') || form.image.startsWith('data:')) {
-        errors.push('Local preview images (blob URLs) cannot be submitted as permanent recommendation media.');
-      }
-      if (form.image.includes('/storage/v1/object/public/')) {
-        errors.push('Recommendation media bucket is private and cannot be referenced via public storage URL.');
-      }
-      if (form.image.includes('token=') || form.image.includes('signed_upload_url')) {
-        errors.push('Signed upload URLs or tokens cannot be persisted as permanent media references.');
-      }
-    }
-
-    return errors;
-  }, [form, selectedFile, fileLocalPreview, mediaState]);
+  // Determine if recommendation draft requires grounded research refresh
+  const needsResearch = useMemo(() => {
+    return isDraftNeedingResearch(form, selectedStatus, agentProposalMetadata, agentEvidenceReport);
+  }, [form, selectedStatus, agentProposalMetadata, agentEvidenceReport]);
 
   // Overall localization completeness percentage
   const localizationProgress = useMemo(() => {
@@ -707,6 +1560,12 @@ export function RecommendationEditorModal({
     });
     return Math.round((completedCount / CANONICAL_LANGUAGES.length) * 100);
   }, [form.translations]);
+
+  // Dynamic Partner Intelligence memo
+  const currentPartnerIntelligence = useMemo(() => {
+    if (partnerIntelligence) return partnerIntelligence;
+    return evaluatePartnerSuitability(form);
+  }, [partnerIntelligence, form]);
 
   // Handle Form Submission via RPC / Handler
   const handleSubmitCanonical = async (e: React.FormEvent) => {
@@ -724,8 +1583,8 @@ export function RecommendationEditorModal({
     setSubmissionFeedback({ type: 'info', message: 'Validating canonical recommendation payload and submitting via RPC...' });
 
     try {
-      const destinationId = form.serviceAreaId;
-      if (!destinationId || !destinationId.trim()) {
+      const rawDestId = form.serviceAreaId;
+      if (!rawDestId || !rawDestId.trim()) {
         setSubmissionFeedback({
           type: 'error',
           message: 'A valid destination service area selection is strictly required before submission.'
@@ -733,7 +1592,18 @@ export function RecommendationEditorModal({
         setIsSubmitting(false);
         return;
       }
-      const res = await submitCanonicalRecommendationCreate(form, destinationId);
+
+      const resolvedDestUuid = await resolveServiceAreaUuid(rawDestId);
+      if (!resolvedDestUuid) {
+        setSubmissionFeedback({
+          type: 'error',
+          message: 'Canonical service area UUID could not be resolved.'
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      const res = await submitCanonicalRecommendationCreate(form, resolvedDestUuid);
 
       if (res.success) {
         setSubmissionFeedback({
@@ -744,7 +1614,9 @@ export function RecommendationEditorModal({
         // Construct clean recommendation object for UI state
         const savedRec: Recommendation = {
           ...(form as Recommendation),
-          id: form.id || `rec-${Date.now()}`,
+          stagedPartners,
+          id: form.id || (res.proposed_recommendation_id && !isUuid(form.id) ? form.id : res.proposed_recommendation_id) || `rec-${Date.now()}`,
+          dbId: form.dbId || (isUuid(form.id) ? form.id : undefined) || (res.proposed_recommendation_id && isUuid(res.proposed_recommendation_id) ? res.proposed_recommendation_id : undefined),
           publicationStatus: selectedStatus === 'APPROVED' ? 'CANONICAL' : 'RESEARCH_CANDIDATE',
         };
 
@@ -770,71 +1642,166 @@ export function RecommendationEditorModal({
 
   // Save Draft durably to PostgreSQL backend via RPC
   const handleSaveDraft = async () => {
+    if (isSubmitting) return;
     setIsSubmitting(true);
     setSubmissionFeedback({ type: 'info', message: 'Saving recommendation draft to authoritative backend...' });
 
     try {
-      const res = await saveRecommendationDraft(form, form.serviceAreaId);
-
-      if (res.success === true) {
-        setSubmissionFeedback({
-          type: 'success',
-          message: res.message || 'Draft successfully persisted to authoritative server!'
-        });
-
-        const savedRec: Recommendation = {
-          ...(form as Recommendation),
-          id: res.proposed_recommendation_id || form.id || `rec-draft-${Date.now()}`,
-        };
-
-        setTimeout(() => {
-          onSave(savedRec, selectedStatus);
-          onClose();
-        }, 600);
-      } else {
+      const rawDestId = form.serviceAreaId;
+      const resolvedDestUuid = await resolveServiceAreaUuid(rawDestId);
+      if (!resolvedDestUuid && rawDestId) {
         setSubmissionFeedback({
           type: 'error',
-          message: res.message || res.error || 'Failed to save draft to backend.'
+          message: 'DRAFT SAVE FAILED — Canonical service area UUID could not be resolved.'
         });
+        setIsSubmitting(false);
+        return;
+      }
+
+      const res = await saveRecommendationDraft(form, resolvedDestUuid || rawDestId);
+      const confirmation = getDraftSaveConfirmationMessage(res);
+      setSubmissionFeedback(confirmation);
+
+      if (res.serverPersisted === true) {
+        const isBaselineCanonical = INITIAL_RECOMMENDATIONS.some(
+          i => i.id === form.id && (i.publicationStatus === 'CANONICAL' || i.publicationStatus === 'PUBLISHED')
+        );
+        const savedRec: Recommendation = {
+          ...(form as Recommendation),
+          stagedPartners,
+          id: form.id || `rec-draft-${Date.now()}`,
+          dbId: isBaselineCanonical ? (form.dbId || (isUuid(form.id) ? form.id : undefined)) : undefined,
+          draftReservationId: form.draftReservationId || (res.proposed_recommendation_id && isUuid(res.proposed_recommendation_id) ? res.proposed_recommendation_id : undefined),
+        };
+
+        const draftStatus = (selectedStatus === 'APPROVED' && !isBaselineCanonical)
+          ? 'NEEDS RESEARCH'
+          : (selectedStatus || 'NEEDS RESEARCH');
+
+        onSave(savedRec, draftStatus);
+        setTimeout(() => {
+          onClose();
+        }, 1200);
       }
     } catch (err: any) {
       setSubmissionFeedback({
         type: 'error',
-        message: `Draft save exception: ${err?.message || String(err)}`
+        message: 'DRAFT SAVE FAILED'
       });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // Check if current item is an unpublished draft (safety check to strictly hide/block for canonical/published items)
+  const isCanonicalOrPublished =
+    form.publicationStatus === 'CANONICAL' ||
+    form.publicationStatus === 'PUBLISHED' ||
+    selectedStatus === 'APPROVED' ||
+    currentStatus === 'APPROVED' ||
+    initialRecommendation?.publicationStatus === 'CANONICAL' ||
+    initialRecommendation?.publicationStatus === 'PUBLISHED';
+
+  const isUnpublishedDraft = !isCanonicalOrPublished && (
+    form.publicationStatus === 'RESEARCH_CANDIDATE' ||
+    form.publicationStatus === 'NEEDS_EDITORIAL_IMPROVEMENT' ||
+    form.publicationStatus === 'NEEDS_ADDITIONAL_RESEARCH' ||
+    selectedStatus === 'CANDIDATE' ||
+    selectedStatus === 'NEEDS RESEARCH' ||
+    currentStatus === 'CANDIDATE' ||
+    currentStatus === 'NEEDS RESEARCH' ||
+    !form.publicationStatus
+  );
+
+  const executeDiscardDraft = async () => {
+    setIsSubmitting(true);
+    const targetId = form.id || form.dbId || initialRecommendation?.id || initialRecommendation?.dbId;
+    if (targetId) {
+      removeLocalStudioDraft(targetId);
+      if (form.id) removeLocalStudioDraft(form.id);
+      if (form.dbId) removeLocalStudioDraft(form.dbId);
+      if (initialRecommendation?.id) removeLocalStudioDraft(initialRecommendation.id);
+      if (initialRecommendation?.dbId) removeLocalStudioDraft(initialRecommendation.dbId);
+
+      try {
+        await retireRecommendation(targetId, 'Admin deleted recommendation from Studio');
+      } catch (err) {
+        console.warn('[EditorModal] Retire RPC warning:', err);
+      }
+
+      if (onDeleteDraft) {
+        onDeleteDraft(targetId);
+      }
+      if (onSave) {
+        onSave({ ...form, id: targetId, publicationStatus: 'RETIRED', isPublished: false } as Recommendation, 'RETIRED');
+      }
+    }
+    setIsSubmitting(false);
+    setShowDiscardConfirm(false);
+    onClose();
+  };
+
   if (!isOpen) return null;
 
+  const isApproved = selectedStatus === 'APPROVED';
+  const isRetired = selectedStatus === 'RETIRED';
+  const isAmberReview = selectedStatus === 'CANDIDATE' || selectedStatus === 'NEEDS RESEARCH';
+
+  const headerBgClass = isApproved 
+    ? 'bg-[#23251E] border-[#32352B]' 
+    : isRetired
+    ? 'bg-[#334155] border-[#475569]'
+    : 'bg-[#854D0E] border-[#A16207]'; // Rich Warm Amber for AI-Assisted Draft / Admin Review
+
+  const headerBadgeClass = isApproved
+    ? 'bg-white/10 text-[#C5A059]'
+    : isRetired
+    ? 'bg-white/10 text-slate-300'
+    : 'bg-black/30 text-[#FEF08A]';
+
+  const headerTagLabel = isApproved
+    ? (isEditing ? `CANONICAL REC #${form.id} (APPROVED)` : 'CANONICAL RECOMMENDATION (APPROVED)')
+    : isRetired
+    ? 'RETIRED RECOMMENDATION (ARCHIVE)'
+    : (agentEvidenceReport ? 'AI-ASSISTED DRAFT — HUMAN REVIEW IN PROGRESS (AMBER)' : 'RESEARCH CANDIDATE / DRAFT (AMBER)');
+
   return (
-    <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto font-sans">
-      <div className="w-full max-w-5xl bg-white border border-[#E5E3DB] rounded-3xl shadow-2xl overflow-hidden my-4 sm:my-8 flex flex-col max-h-[92vh]">
-        {/* Modal Header */}
-        <div className="bg-[#23251E] text-white p-4 sm:p-5 px-6 flex items-center justify-between border-b border-[#32352B] shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-white/10 text-[#C5A059]">
-              <Sparkles size={18} />
+    <>
+      <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto font-sans">
+        <div className="w-full max-w-5xl bg-white border border-[#E5E3DB] rounded-3xl shadow-2xl overflow-hidden my-4 sm:my-8 flex flex-col max-h-[92vh]">
+          {/* Modal Header */}
+          <div className={`${headerBgClass} text-white p-4 sm:p-5 px-6 flex items-center justify-between border-b shrink-0 transition-colors duration-300`}>
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-xl ${headerBadgeClass}`}>
+                <Sparkles size={18} />
+              </div>
+              <div>
+                <span className="font-mono text-[9.5px] uppercase tracking-widest text-[#FEF08A] font-bold block">
+                  {headerTagLabel}
+                </span>
+                <h2 className="font-serif text-base sm:text-lg font-bold text-white leading-tight">
+                  {isEditing ? `Edit: ${form.title || 'Untitled'}` : (form.title ? form.title : 'Create Recommendation')}
+                </h2>
+              </div>
             </div>
-            <div>
-              <span className="font-mono text-[9px] uppercase tracking-widest text-[#C5A059] font-bold block">
-                {isEditing ? `EDITING CANONICAL REC #${form.id}` : 'CREATE CANONICAL RECOMMENDATION (WP-14C5B)'}
-              </span>
-              <h2 className="font-serif text-base sm:text-lg font-bold text-white leading-tight">
-                {isEditing ? `Edit: ${form.title || 'Untitled'}` : 'Create Recommendation'}
-              </h2>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsAIAgentModalOpen(true)}
+                className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-mono text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border border-white/20 shadow-xs active:scale-95"
+              >
+                <Sparkles size={14} className="text-[#FEF08A]" />
+                <span className="hidden sm:inline">AI Proposal Agent</span>
+              </button>
+              <button
+                onClick={onClose}
+                className="p-2 rounded-xl bg-white/5 hover:bg-white/15 text-white/70 hover:text-white transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
             </div>
           </div>
-
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl bg-white/5 hover:bg-white/15 text-white/70 hover:text-white transition-colors cursor-pointer"
-          >
-            <X size={18} />
-          </button>
-        </div>
 
         {/* 6-Step Governed Wizard Bar */}
         <div className="bg-[#FAF9F5] border-b border-[#E5E3DB] px-4 sm:px-6 py-2.5 flex items-center justify-between overflow-x-auto shrink-0 font-mono text-xs gap-2">
@@ -872,13 +1839,17 @@ export function RecommendationEditorModal({
         <form onSubmit={handleSubmitCanonical} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
           {/* Feedback banner */}
           {submissionFeedback && (
-            <div className={`p-4 rounded-2xl border font-mono text-xs flex items-center gap-3 ${
-              submissionFeedback.type === 'error' ? 'bg-[#FFEBEE] border-[#FFCDD2] text-[#C62828]' :
-              submissionFeedback.type === 'success' ? 'bg-[#E8F5E9] border-[#C8E6C9] text-[#2E7D32]' :
-              'bg-[#E3F2FD] border-[#BBDEFB] text-[#1565C0]'
+            <div className={`p-4 rounded-2xl border font-mono text-xs flex items-center gap-3 shadow-xs ${
+              submissionFeedback.type === 'error' ? 'bg-[#FFEBEE] border-[#FFCDD2] text-[#C62828] font-bold' :
+              submissionFeedback.type === 'success' ? 'bg-[#E8F5E9] border-[#C8E6C9] text-[#2E7D32] font-bold' :
+              'bg-[#E3F2FD] border-[#BBDEFB] text-[#1565C0] font-bold'
             }`}>
-              <AlertCircle size={18} className="shrink-0" />
-              <span>{submissionFeedback.message}</span>
+              {submissionFeedback.type === 'success' ? (
+                <CheckCircle2 size={18} className="shrink-0 text-[#2E7D32]" />
+              ) : (
+                <AlertCircle size={18} className="shrink-0" />
+              )}
+              <span className="text-xs sm:text-sm font-bold tracking-wide uppercase">{submissionFeedback.message}</span>
             </div>
           )}
 
@@ -895,7 +1866,19 @@ export function RecommendationEditorModal({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Service Area UUID */}
-                  <div className="sm:col-span-2">
+                  <div className="sm:col-span-2 space-y-2">
+                    {agentEvidenceReport?.serviceAreaResolution?.requiresAdminReview && !form.serviceAreaId && (
+                      <div className="p-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-xl text-xs font-mono text-[#92400E] flex items-start gap-2.5">
+                        <AlertCircle size={16} className="text-[#D97706] shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-bold uppercase block">⚠️ SERVICE AREA UNRESOLVED — ADMIN ACTION REQUIRED</span>
+                          <p className="text-[11px] text-[#78350F] mt-0.5">
+                            {agentEvidenceReport.serviceAreaResolution.resolutionNote}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     <label className="block font-mono text-[10px] uppercase font-bold text-[#8C8A7D] mb-1">
                       Canonical Service Area / Destination (UUID) *
                     </label>
@@ -911,7 +1894,7 @@ export function RecommendationEditorModal({
                     ) : (
                       <select
                         value={form.serviceAreaId || ''}
-                        onChange={(e) => setForm({ ...form, serviceAreaId: e.target.value })}
+                        onChange={(e) => setForm({ ...form, serviceAreaId: e.target.value, draftReservationId: undefined })}
                         className="w-full h-11 px-3.5 bg-white border border-[#E5E3DB] focus:border-[#23251E] rounded-xl text-xs font-mono font-bold text-[#1E2E20] outline-none cursor-pointer"
                         required
                       >
@@ -997,6 +1980,11 @@ export function RecommendationEditorModal({
                       }}
                       className="w-full h-11 px-3 bg-white border border-[#E5E3DB] focus:border-[#23251E] rounded-xl text-xs font-mono font-bold text-[#1E2E20] outline-none"
                     >
+                      {form.category && !Object.values(Category).includes(form.category as Category) && (
+                        <option value={form.category} disabled>
+                          {form.category} (Unrecognized Category)
+                        </option>
+                      )}
                       {Object.values(Category).map((cat) => (
                         <option key={cat} value={cat}>{cat}</option>
                       ))}
@@ -1050,7 +2038,7 @@ export function RecommendationEditorModal({
                   </label>
                   <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1 font-mono text-xs">
                     {EXPERTISE_OPTIONS.map((exp) => {
-                      const isChecked = form.expertiseIds?.includes(exp.id);
+                      const isChecked = Boolean(form.expertiseIds?.includes(exp.id));
                       return (
                         <label key={exp.id} className="flex items-center gap-2 cursor-pointer hover:text-[#1E2E20]">
                           <input
@@ -1077,7 +2065,7 @@ export function RecommendationEditorModal({
                   </label>
                   <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1 font-mono text-xs">
                     {CAPABILITY_OPTIONS.map((cap) => {
-                      const isChecked = form.capabilityIds?.includes(cap.id);
+                      const isChecked = Boolean(form.capabilityIds?.includes(cap.id));
                       return (
                         <label key={cap.id} className="flex items-center gap-2 cursor-pointer hover:text-[#1E2E20]">
                           <input
@@ -1252,6 +2240,21 @@ export function RecommendationEditorModal({
 
               {/* Primary Image & Governed Media Pipeline Workspace (WP-14C5D) */}
               <div className="p-5 bg-[#FAF9F5] border border-[#E5E3DB] rounded-2xl space-y-5">
+                {/* Authoritative Hidden File Input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  id="recommendation-media-file-input"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      handleSelectFile(file);
+                    }
+                  }}
+                />
+
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-[#E5E3DB] pb-3">
                   <div className="flex items-center gap-2">
@@ -1319,16 +2322,19 @@ export function RecommendationEditorModal({
                     <p className="font-mono text-[10px] text-[#8C8A7D] mt-1 mb-4">
                       JPEG, PNG, or WebP up to 5 MB. Strictly governed storage contract.
                     </p>
-                    <label className="px-4 py-2 bg-[#23251E] hover:bg-[#32352B] text-white rounded-xl font-mono text-xs font-bold uppercase tracking-wider inline-flex items-center gap-2 cursor-pointer transition-all shadow-sm">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (fileInputRef.current) {
+                          fileInputRef.current.value = '';
+                          fileInputRef.current.click();
+                        }
+                      }}
+                      className="px-4 py-2 bg-[#23251E] hover:bg-[#32352B] text-white rounded-xl font-mono text-xs font-bold uppercase tracking-wider inline-flex items-center gap-2 cursor-pointer transition-all shadow-sm"
+                    >
                       <FileImage size={14} className="text-[#C5A059]" />
                       <span>Browse Image File</span>
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        className="hidden"
-                        onChange={(e) => e.target.files?.[0] && handleSelectFile(e.target.files[0])}
-                      />
-                    </label>
+                    </button>
                   </div>
                 )}
 
@@ -1338,7 +2344,7 @@ export function RecommendationEditorModal({
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         {fileLocalPreview && (
-                          <img src={fileLocalPreview} alt="Selected preview" className="w-14 h-14 object-cover rounded-lg border border-[#E5E3DB]" />
+                          <img src={fileLocalPreview || undefined} alt="Selected preview" className="w-14 h-14 object-cover rounded-lg border border-[#E5E3DB]" />
                         )}
                         <div>
                           <p className="font-mono text-xs font-bold text-[#1E2E20]">{selectedFile.name}</p>
@@ -1351,7 +2357,14 @@ export function RecommendationEditorModal({
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => { setSelectedFile(null); setFileLocalPreview(null); setMediaState('empty'); }}
+                          onClick={() => {
+                            setSelectedFile(null);
+                            setFileLocalPreview(null);
+                            setMediaState(form.image ? 'attached' : 'empty');
+                            if (fileInputRef.current) {
+                              fileInputRef.current.value = '';
+                            }
+                          }}
                           className="px-3 py-1.5 border border-[#E5E3DB] hover:bg-[#FAF9F5] text-[#8C8A7D] hover:text-[#1E2E20] rounded-lg font-mono text-[10px] uppercase font-bold cursor-pointer"
                         >
                           Clear
@@ -1399,15 +2412,61 @@ export function RecommendationEditorModal({
                 {(form.image || mediaState === 'attached') && (
                   <div className="p-4 bg-white border border-[#E5E3DB] rounded-xl space-y-3">
                     <div className="relative h-48 rounded-xl overflow-hidden border border-[#E5E3DB] bg-black/5 group">
-                      <img
-                        src={form.image}
-                        alt={form.provenance?.altText || 'Primary Recommendation Image'}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=1200';
-                        }}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex items-end justify-between p-3">
+                      {displayUrlResolutionError ? (
+                        <div className="w-full h-full flex flex-col items-center justify-center bg-[#FFEBEE] p-4 text-center">
+                          <AlertTriangle size={24} className="text-[#C62828] mb-1.5" />
+                          <span className="text-xs font-mono font-bold text-[#C62828] uppercase">Media Display Resolution Failed — Re-upload Required</span>
+                          <span className="text-[10px] font-mono text-[#8C8A7D] mt-1 max-w-sm">{displayUrlResolutionError}</span>
+                          <div className="flex items-center gap-2 mt-2.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (form.image) {
+                                  setDisplayUrlResolutionError(null);
+                                  setIsResolvingDisplayUrl(true);
+                                  resolveMediaDisplayUrl(form.image)
+                                    .then(u => {
+                                      setResolvedDisplayUrl(u);
+                                      setIsResolvingDisplayUrl(false);
+                                    })
+                                    .catch(e => {
+                                      setIsResolvingDisplayUrl(false);
+                                      setDisplayUrlResolutionError(e?.message || 'Resolution failed');
+                                    });
+                                }
+                              }}
+                              className="px-3 py-1 bg-white border border-[#EF9A9A] hover:bg-[#FFEBEE] text-[#C62828] font-mono text-[10px] font-bold rounded-lg uppercase cursor-pointer transition-colors shadow-xs"
+                            >
+                              Retry Loading
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleTriggerReplaceImage}
+                              className="px-3 py-1 bg-[#23251E] hover:bg-[#32352B] text-white font-mono text-[10px] font-bold rounded-lg uppercase cursor-pointer transition-colors shadow-xs flex items-center gap-1"
+                            >
+                              <Upload size={10} className="text-[#C5A059]" />
+                              <span>Upload Replacement Image</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : isResolvingDisplayUrl && !resolvedDisplayUrl ? (
+                        <div className="w-full h-full flex flex-col items-center justify-center bg-[#FAF9F5]">
+                          <Loader2 size={24} className="animate-spin text-[#C5A059] mb-2" />
+                          <span className="text-[10px] font-mono text-[#8C8A7D] uppercase font-bold">Loading Governed Media Asset...</span>
+                        </div>
+                      ) : (
+                        <img
+                          src={resolvedDisplayUrl || fileLocalPreview || getOptimizedImageUrl(form.image || '') || undefined}
+                          alt={form.provenance?.altText || 'Primary Recommendation Image'}
+                          className="w-full h-full object-cover"
+                          onError={() => {
+                            if (form.image && (form.image.startsWith('recommendation-media/') || form.image.startsWith('/recommendation-media/'))) {
+                              setDisplayUrlResolutionError('Governed media asset could not be rendered in browser.');
+                            }
+                          }}
+                        />
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex items-end justify-between p-3 pointer-events-none">
                         <div className="flex items-center gap-2">
                           <span className="px-2 py-0.5 rounded bg-black/70 backdrop-blur-xs text-white font-mono text-[9px]">
                             Canonical Media Object Path
@@ -1417,14 +2476,24 @@ export function RecommendationEditorModal({
                           </span>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={handleAbandonOrReplace}
-                          className="px-2.5 py-1 bg-white/90 hover:bg-white text-[#C62828] font-mono text-[10px] font-bold uppercase rounded-lg shadow-sm flex items-center gap-1 transition-all cursor-pointer"
-                        >
-                          <RefreshCw size={11} />
-                          <span>Replace Image</span>
-                        </button>
+                        <div className="flex items-center gap-1.5 pointer-events-auto">
+                          <button
+                            type="button"
+                            onClick={handleTriggerReplaceImage}
+                            className="px-2.5 py-1 bg-white/90 hover:bg-white text-[#23251E] font-mono text-[10px] font-bold uppercase rounded-lg shadow-sm flex items-center gap-1 transition-all cursor-pointer"
+                          >
+                            <RefreshCw size={11} />
+                            <span>Replace</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleRemoveImage}
+                            className="px-2.5 py-1 bg-white/90 hover:bg-white text-[#C62828] font-mono text-[10px] font-bold uppercase rounded-lg shadow-sm flex items-center gap-1 transition-all cursor-pointer"
+                          >
+                            <Trash2 size={11} />
+                            <span>Remove</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -1434,6 +2503,7 @@ export function RecommendationEditorModal({
                     </div>
                   </div>
                 )}
+
 
                 {/* Provenance Metadata Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 text-xs font-mono">
@@ -1633,8 +2703,14 @@ export function RecommendationEditorModal({
                     <input
                       type="number"
                       min="0"
-                      value={form.travelTimeMinutes ?? 15}
-                      onChange={(e) => setForm({ ...form, travelTimeMinutes: parseInt(e.target.value, 10) || 0 })}
+                      value={typeof form.travelTimeMinutes === 'number' ? form.travelTimeMinutes : ''}
+                      onChange={(e) => {
+                        const val = e.target.value.trim();
+                        setForm({
+                          ...form,
+                          travelTimeMinutes: val === '' ? undefined : (isNaN(parseInt(val, 10)) ? 0 : Math.max(0, parseInt(val, 10)))
+                        });
+                      }}
                       className="w-full h-10 px-3 bg-white border border-[#E5E3DB] rounded-xl text-xs font-mono text-[#1E2E20] outline-none"
                     />
                   </div>
@@ -1660,11 +2736,29 @@ export function RecommendationEditorModal({
                       step="0.000001"
                       min="-90"
                       max="90"
-                      value={form.coordinates?.lat ?? 44.8176}
-                      onChange={(e) => setForm({
-                        ...form,
-                        coordinates: { lat: parseFloat(e.target.value) || 0, lng: form.coordinates?.lng || 20.4569 }
-                      })}
+                      placeholder="e.g. 44.8176 (blank if unresolved)"
+                      value={typeof form.coordinates?.lat === 'number' ? form.coordinates.lat : ''}
+                      onChange={(e) => {
+                        const val = e.target.value.trim();
+                        if (val === '') {
+                          const currentLng = typeof form.coordinates?.lng === 'number' ? form.coordinates.lng : undefined;
+                          if (currentLng === undefined) {
+                            setForm({ ...form, coordinates: undefined });
+                          } else {
+                            setForm({ ...form, coordinates: { lat: undefined as any, lng: currentLng } });
+                          }
+                        } else {
+                          const parsed = parseFloat(val);
+                          const currentLng = typeof form.coordinates?.lng === 'number' ? form.coordinates.lng : undefined;
+                          setForm({
+                            ...form,
+                            coordinates: {
+                              lat: isNaN(parsed) ? (undefined as any) : parsed,
+                              lng: currentLng as any,
+                            },
+                          });
+                        }
+                      }}
                       className="w-full h-10 px-3 bg-white border border-[#E5E3DB] focus:border-[#23251E] rounded-xl text-xs font-mono text-[#1E2E20] outline-none"
                     />
                   </div>
@@ -1678,11 +2772,29 @@ export function RecommendationEditorModal({
                       step="0.000001"
                       min="-180"
                       max="180"
-                      value={form.coordinates?.lng ?? 20.4569}
-                      onChange={(e) => setForm({
-                        ...form,
-                        coordinates: { lat: form.coordinates?.lat || 44.8176, lng: parseFloat(e.target.value) || 0 }
-                      })}
+                      placeholder="e.g. 20.4569 (blank if unresolved)"
+                      value={typeof form.coordinates?.lng === 'number' ? form.coordinates.lng : ''}
+                      onChange={(e) => {
+                        const val = e.target.value.trim();
+                        if (val === '') {
+                          const currentLat = typeof form.coordinates?.lat === 'number' ? form.coordinates.lat : undefined;
+                          if (currentLat === undefined) {
+                            setForm({ ...form, coordinates: undefined });
+                          } else {
+                            setForm({ ...form, coordinates: { lat: currentLat, lng: undefined as any } });
+                          }
+                        } else {
+                          const parsed = parseFloat(val);
+                          const currentLat = typeof form.coordinates?.lat === 'number' ? form.coordinates.lat : undefined;
+                          setForm({
+                            ...form,
+                            coordinates: {
+                              lat: currentLat as any,
+                              lng: isNaN(parsed) ? (undefined as any) : parsed,
+                            },
+                          });
+                        }
+                      }}
                       className="w-full h-10 px-3 bg-white border border-[#E5E3DB] focus:border-[#23251E] rounded-xl text-xs font-mono text-[#1E2E20] outline-none"
                     />
                   </div>
@@ -1704,46 +2816,48 @@ export function RecommendationEditorModal({
                     </h3>
                   </div>
                   <span className="font-mono text-[11px] font-bold text-[#1E2E20]">
-                    X: {(form.coordinateX ?? 0.5).toFixed(2)}, Y: {(form.coordinateY ?? 0.5).toFixed(2)}
+                    X: {(form.coordinateX ?? 0).toFixed(1)}, Y: {(form.coordinateY ?? 0).toFixed(1)}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
                     <label className="block font-mono text-[10px] uppercase font-bold text-[#8C8A7D] mb-1">
-                      X Axis (Serene 0.0 vs Vibrant 1.0)
+                      X Axis (-5.0 Serene/Tranquil ↔ +5.0 High Energy/Vibrant)
                     </label>
                     <input
                       type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={form.coordinateX ?? 0.5}
+                      min="-5"
+                      max="5"
+                      step="0.5"
+                      value={form.coordinateX ?? 0}
                       onChange={(e) => setForm({ ...form, coordinateX: parseFloat(e.target.value) })}
                       className="w-full accent-[#23251E] cursor-pointer"
                     />
                     <div className="flex justify-between text-[9px] font-mono text-[#8C8A7D] mt-1">
-                      <span>0.0 Serene Calm</span>
-                      <span>1.0 High Vibrant</span>
+                      <span>-5.0 Serene Calm</span>
+                      <span>0.0 Center</span>
+                      <span>+5.0 High Vibrant</span>
                     </div>
                   </div>
 
                   <div>
                     <label className="block font-mono text-[10px] uppercase font-bold text-[#8C8A7D] mb-1">
-                      Y Axis (Heritage/Nature 0.0 vs Urban/Social 1.0)
+                      Y Axis (-5.0 Remote Nature/Heritage ↔ +5.0 Metropolitan/Urban)
                     </label>
                     <input
                       type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={form.coordinateY ?? 0.5}
+                      min="-5"
+                      max="5"
+                      step="0.5"
+                      value={form.coordinateY ?? 0}
                       onChange={(e) => setForm({ ...form, coordinateY: parseFloat(e.target.value) })}
                       className="w-full accent-[#23251E] cursor-pointer"
                     />
                     <div className="flex justify-between text-[9px] font-mono text-[#8C8A7D] mt-1">
-                      <span>0.0 Heritage/Nature</span>
-                      <span>1.0 Urban/Social</span>
+                      <span>-5.0 Remote Nature</span>
+                      <span>0.0 Center</span>
+                      <span>+5.0 Dense Urban</span>
                     </div>
                   </div>
                 </div>
@@ -1968,7 +3082,8 @@ export function RecommendationEditorModal({
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-[#E5E3DB]">
                   {CANONICAL_LANGUAGES.map((lang) => {
                     const trans = form.translations?.[lang.code];
-                    const isComplete = Boolean(trans?.title && trans?.shortDescription);
+                    const isPending = trans?.shortDescription === 'PENDING LOCALIZATION';
+                    const isComplete = Boolean(trans?.title && trans?.shortDescription && !isPending);
                     return (
                       <button
                         key={lang.code}
@@ -1981,7 +3096,9 @@ export function RecommendationEditorModal({
                         }`}
                       >
                         <span>{lang.name}</span>
-                        {isComplete ? (
+                        {isPending ? (
+                          <span className="px-1 py-0.5 text-[9px] bg-[#FEF3C7] text-[#92400E] rounded font-mono font-bold">PENDING</span>
+                        ) : isComplete ? (
                           <span className="w-2 h-2 rounded-full bg-[#2E7D32]" />
                         ) : (
                           <span className="w-2 h-2 rounded-full bg-[#C5A059]" />
@@ -1990,6 +3107,49 @@ export function RecommendationEditorModal({
                     );
                   })}
                 </div>
+
+                {/* Deferred Localizations Action Panel */}
+                {['de', 'ru', 'es', 'zh'].some(l => form.translations?.[l]?.shortDescription === 'PENDING LOCALIZATION') && (
+                  <div className="p-3 bg-[#FFFBEB] border border-[#FCD34D] rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={16} className="text-[#D97706]" />
+                      <span className="font-mono text-xs text-[#92400E] font-medium">
+                        Additional localizations (DE, RU, ES, ZH) are pending.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const res = await localizeRecommendation(form as Recommendation);
+                          if (res.success && res.recommendation?.translations) {
+                            setForm(prev => ({
+                              ...prev,
+                              translations: {
+                                ...prev.translations,
+                                ...res.recommendation.translations,
+                              }
+                            }));
+                          } else if (res.error) {
+                            setSubmissionFeedback({
+                              type: 'error',
+                              message: `Localization error: ${res.error}`
+                            });
+                          }
+                        } catch (e: any) {
+                          setSubmissionFeedback({
+                            type: 'error',
+                            message: `Localization failed: ${e?.message || String(e)}`
+                          });
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-[#D97706] hover:bg-[#B45309] text-white rounded-lg font-mono text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <RefreshCw size={12} />
+                      <span>Generate DE, RU, ES, ZH</span>
+                    </button>
+                  </div>
+                )}
 
                 {/* Localized Form Fields for selected language */}
                 {(() => {
@@ -2071,15 +3231,31 @@ export function RecommendationEditorModal({
                 <div className="bg-white border border-[#E5E3DB] rounded-2xl overflow-hidden shadow-xs p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                   {/* Image */}
                   <div className="relative h-48 md:h-full min-h-[160px] rounded-xl overflow-hidden bg-black/5">
-                    <img
-                      src={form.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=1200'}
-                      alt={form.title || 'Preview'}
-                      className="w-full h-full object-cover"
-                    />
+                    {displayUrlResolutionError ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-[#FFEBEE] p-3 text-center">
+                        <AlertTriangle size={18} className="text-[#C62828] mb-1" />
+                        <span className="text-[10px] font-mono text-[#C62828] font-bold uppercase">Image Error</span>
+                      </div>
+                    ) : isResolvingDisplayUrl && !resolvedDisplayUrl ? (
+                      <div className="w-full h-full flex items-center justify-center bg-[#FAF9F5]">
+                        <Loader2 size={16} className="animate-spin text-[#C5A059]" />
+                      </div>
+                    ) : (resolvedDisplayUrl || fileLocalPreview || form.image) ? (
+                      <img
+                        src={resolvedDisplayUrl || fileLocalPreview || getOptimizedImageUrl(form.image) || undefined}
+                        alt={form.title || 'Preview'}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-[#FAF9F5] p-3 text-center border border-dashed border-[#E5E3DB]">
+                        <span className="font-mono text-[10px] text-[#8C8A7D] font-bold uppercase">NO MEDIA ATTACHED</span>
+                      </div>
+                    )}
                     <div className="absolute top-2 left-2 px-2 py-0.5 bg-[#23251E] text-white font-mono text-[9px] font-bold rounded-md uppercase">
                       {form.category || 'Gastronomy'}
                     </div>
                   </div>
+
 
                   {/* Details */}
                   <div className="md:col-span-2 space-y-2">
@@ -2103,22 +3279,184 @@ export function RecommendationEditorModal({
 
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-[#E5E3DB] text-[10.5px] font-mono text-[#8C8A7D]">
                       <div>⏱ {form.duration || '2-3 hours'}</div>
-                      <div>🚗 {form.travelTime || '15 mins'}</div>
+                      <div>🚗 {form.travelTime || 'Unresolved'}</div>
                       <div>📍 Lat: {form.coordinates?.lat?.toFixed(2)}, Lng: {form.coordinates?.lng?.toFixed(2)}</div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Validation Audit */}
+              {/* Admin Lifecycle Review & Promotion Selector */}
+              <div className="p-4 bg-[#FAF9F5] border border-[#E5E3DB] rounded-2xl space-y-3">
+                <div className="flex items-center justify-between border-b border-[#E5E3DB] pb-2">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck size={16} className="text-[#C5A059]" />
+                    <h3 className="font-mono text-xs uppercase font-bold text-[#1E2E20]">
+                      Admin Lifecycle Review & Promotion Gate
+                    </h3>
+                  </div>
+                  <span className={`px-2.5 py-0.5 rounded-full font-mono text-[10px] font-bold uppercase border ${
+                    selectedStatus === 'APPROVED' ? 'bg-[#1E2E20] text-[#C5A059] border-[#C5A059]' :
+                    'bg-[#854D0E] text-white border-[#A16207]'
+                  }`}>
+                    {selectedStatus === 'APPROVED' ? 'CANONICAL / APPROVED (BLACK)' : 'HUMAN REVIEW IN PROGRESS (AMBER)'}
+                  </span>
+                </div>
+
+                <p className="text-xs text-[#57534E] font-sans">
+                  All AI proposals initialize in the governed <strong>AMBER</strong> review state. Selecting <strong>APPROVED</strong> transitions this recommendation to <strong>BLACK</strong> and certifies full canonical eligibility in the IDEMO engine.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                  {[
+                    { status: 'CANDIDATE', label: 'Candidate (Amber)', desc: 'Research candidate under review' },
+                    { status: 'NEEDS RESEARCH', label: 'Needs Research (Amber)', desc: 'Requires field or fact verification' },
+                    { status: 'APPROVED', label: 'Approved (Black / Canonical)', desc: 'Human-approved canonical status' },
+                  ].map((item) => {
+                    const isSelected = selectedStatus === item.status;
+                    return (
+                      <button
+                        key={item.status}
+                        type="button"
+                        onClick={() => setSelectedStatus(item.status as any)}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          isSelected
+                            ? item.status === 'APPROVED'
+                              ? 'bg-[#1E2E20] text-white border-[#1E2E20] shadow-sm'
+                              : 'bg-[#854D0E] text-white border-[#A16207] shadow-sm'
+                            : 'bg-white text-[#57534E] border-[#E5E3DB] hover:bg-[#FAF9F5]'
+                        }`}
+                      >
+                        <div className="font-mono text-xs font-bold uppercase mb-0.5">{item.label}</div>
+                        <div className={`text-[10px] font-sans ${isSelected ? 'text-white/80' : 'text-[#8C8A7D]'}`}>{item.desc}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* AI Proposal Evidence & Uncertainty Report */}
+              {agentEvidenceReport && (
+                <div className="p-4 bg-white border border-[#E5E3DB] rounded-2xl space-y-3">
+                  <div className="flex items-center justify-between border-b border-[#E5E3DB] pb-2">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={16} className="text-[#C5A059]" />
+                      <h3 className="font-mono text-xs uppercase font-bold text-[#1E2E20]">
+                        AI Proposal Evidence & Source-of-Truth Report
+                      </h3>
+                    </div>
+                    <span className="font-mono text-[10px] text-[#8C8A7D]">
+                      {agentEvidenceReport.verifiedFields.length} Verified | {agentEvidenceReport.supportedFields.length} Supported | {agentEvidenceReport.unresolvedFields.length} Unresolved
+                    </span>
+                  </div>
+
+                  {/* Provenance & Execution Mode Banner */}
+                  {agentProposalMetadata && (
+                    <div className={`p-2.5 rounded-xl border text-[11px] font-mono flex items-center justify-between ${
+                      agentProposalMetadata.executionMode === 'GEMINI_GROUNDED'
+                        ? 'bg-[#E8F5E9] border-[#C8E6C9] text-[#2E7D32]'
+                        : 'bg-[#FFFBEB] border-[#FDE68A] text-[#92400E]'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck size={14} className="shrink-0" />
+                        <span>
+                          <strong>Mode:</strong> {agentProposalMetadata.executionMode === 'GEMINI_GROUNDED' ? 'Live Gemini + Google Search Grounded' : 'Conservative Deterministic Fallback'}
+                          {agentProposalMetadata.model && <span className="opacity-75"> ({agentProposalMetadata.model})</span>}
+                        </span>
+                      </div>
+                      {agentProposalMetadata.quotaExceeded && (
+                        <span className="px-2 py-0.5 rounded bg-[#FEF3C7] text-[#B45309] font-bold text-[9.5px]">
+                          QUOTA EXCEEDED (429) — FALLBACK PRESERVED
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div className="space-y-1.5">
+                      <span className="font-mono text-[10px] uppercase font-bold text-[#2E7D32] block">
+                        ✓ Verified Fields ({agentEvidenceReport.verifiedFields.length}):
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {agentEvidenceReport.verifiedFields.map(f => (
+                          <span key={f} className="px-2 py-0.5 rounded bg-[#E8F5E9] text-[#2E7D32] font-mono text-[9.5px] font-bold">
+                            {f}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <span className="font-mono text-[10px] uppercase font-bold text-[#1565C0] block">
+                        ℹ Supported Fields ({agentEvidenceReport.supportedFields.length}):
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {agentEvidenceReport.supportedFields.map(f => (
+                          <span key={f} className="px-2 py-0.5 rounded bg-[#E3F2FD] text-[#1565C0] font-mono text-[9.5px] font-bold">
+                            {f}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {agentEvidenceReport.unresolvedFields.length > 0 && (
+                    <div className="p-2.5 bg-[#FFFBEB] border border-[#FDE68A] rounded-xl text-xs font-mono text-[#92400E]">
+                      <span className="font-bold uppercase block mb-1">Unresolved Fields Awaiting Review:</span>
+                      <div className="flex flex-wrap gap-1">
+                        {agentEvidenceReport.unresolvedFields.map(f => (
+                          <span key={f} className="px-2 py-0.5 rounded bg-[#FEF3C7] text-[#92400E] font-mono text-[9.5px] font-bold">
+                            {f}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Media Precedence Badge */}
+                  <div className="pt-2 border-t border-[#E5E3DB] flex items-center justify-between text-[11px] font-mono text-[#57534E]">
+                    <span>Media Handling: <strong>{agentEvidenceReport.mediaHandling.type}</strong></span>
+                    <span className="text-[#2E7D32] font-bold">
+                      {agentEvidenceReport.mediaHandling.precedenceEnforced ? '✓ Human Media Precedence Enforced' : '✓ Curated Asset Assigned'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Partner Intelligence & Concierge Suitability */}
+              <PartnerIntelligenceReview 
+                partnerIntelligence={currentPartnerIntelligence} 
+                onRefreshEvaluation={() => {
+                  const refreshed = evaluatePartnerSuitability(form);
+                  setPartnerIntelligence(refreshed);
+                }}
+                stagedPartners={stagedPartners}
+                onUpdateStagedPartners={setStagedPartners}
+                recommendationId={form.id || form.dbId}
+                isExistingCanonical={Boolean(form.dbId && isUuid(form.dbId))}
+              />
+
+              {/* 4-Tier Readiness Gate Audit */}
               <div className="p-5 bg-white border border-[#E5E3DB] rounded-2xl space-y-4">
+                {needsResearch && (
+                  <div className="p-4 bg-[#FFF8E1] border border-[#FFE082] rounded-2xl flex items-start gap-3 text-xs font-mono text-[#8D6E63] mb-3">
+                    <AlertTriangle size={18} className="text-[#F57F17] shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <span className="font-bold text-[#F57F17] block uppercase">Grounded Research Required</span>
+                      <p className="text-[#5D4037]">
+                        This recommendation draft contains fallback or unresearched structural content. Grounded web research is required before canonical submission.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between border-b border-[#E5E3DB] pb-3">
                   <div>
                     <span className="font-mono text-[9.5px] uppercase font-bold text-[#8C8A7D] block">
-                      Canonical Validation Audit & Quality Check
+                      Canonical 4-Tier Governance Readiness Gate
                     </span>
                     <span className="font-serif font-bold text-sm text-[#1E2E20]">
-                      Payload Integrity Status
+                      Review & Approval Gate Status
                     </span>
                   </div>
 
@@ -2127,13 +3465,54 @@ export function RecommendationEditorModal({
                       ? 'bg-[#E8F5E9] text-[#2E7D32] border-[#C8E6C9]'
                       : 'bg-[#FFEBEE] text-[#C62828] border-[#FFCDD2]'
                   }`}>
-                    {validationErrors.length === 0 ? 'READY FOR SUBMISSION' : 'BLOCKING ERRORS FOUND'}
+                    {validationErrors.length === 0 ? 'READY FOR ADMIN APPROVAL' : 'BLOCKING GATES OPEN'}
                   </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs">
+                  {/* Gate A: Schema */}
+                  <div className={`p-3 rounded-xl border ${
+                    governanceEvaluation.gateA.pass
+                      ? 'bg-[#F0FDF4] border-[#BBF7D0] text-[#166534]'
+                      : 'bg-[#FEF2F2] border-[#FECACA] text-[#991B1B]'
+                  }`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-[10px] uppercase">Gate A: Schema</span>
+                      <span>{governanceEvaluation.gateA.pass ? '✓ PASS' : '✗ FAIL'}</span>
+                    </div>
+                    <p className="text-[10px] opacity-80">Types, lengths, character whitelist limits.</p>
+                  </div>
+
+                  {/* Gate B: Required Fields */}
+                  <div className={`p-3 rounded-xl border ${
+                    governanceEvaluation.gateB.pass
+                      ? 'bg-[#F0FDF4] border-[#BBF7D0] text-[#166534]'
+                      : 'bg-[#FEF2F2] border-[#FECACA] text-[#991B1B]'
+                  }`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-[10px] uppercase">Gate B: Required</span>
+                      <span>{governanceEvaluation.gateB.pass ? '✓ PASS' : '✗ FAIL'}</span>
+                    </div>
+                    <p className="text-[10px] opacity-80">Title, service area, descriptions.</p>
+                  </div>
+
+                  {/* Gate C: Semantic & Evidence */}
+                  <div className={`p-3 rounded-xl border ${
+                    governanceEvaluation.gateC.pass
+                      ? 'bg-[#F0FDF4] border-[#BBF7D0] text-[#166534]'
+                      : 'bg-[#FEF2F2] border-[#FECACA] text-[#991B1B]'
+                  }`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-[10px] uppercase">Gate C: Evidence</span>
+                      <span>{governanceEvaluation.gateC.pass ? '✓ PASS' : '✗ FAIL'}</span>
+                    </div>
+                    <p className="text-[10px] opacity-80">Zero fabrication, genuine data & media.</p>
+                  </div>
                 </div>
 
                 {validationErrors.length > 0 ? (
                   <div className="p-3.5 bg-[#FFEBEE] border border-[#FFCDD2] rounded-xl text-xs font-mono text-[#C62828] space-y-1">
-                    <span className="font-bold block uppercase">Blocking Validation Errors:</span>
+                    <span className="font-bold block uppercase">Blocking Governance Issues:</span>
                     <ul className="list-disc list-inside space-y-0.5">
                       {validationErrors.map((err, idx) => (
                         <li key={idx}>{err}</li>
@@ -2143,7 +3522,7 @@ export function RecommendationEditorModal({
                 ) : (
                   <div className="p-3.5 bg-[#E8F5E9] border border-[#C8E6C9] rounded-xl text-xs font-mono text-[#2E7D32] flex items-center gap-2">
                     <CheckCircle2 size={16} />
-                    <span>Payload complies with top-level whitelist, character limits, coordinate ranges, and canonical schema rules.</span>
+                    <span>All automated gates passed. Ready for human Admin review and canonical submission.</span>
                   </div>
                 )}
               </div>
@@ -2152,13 +3531,55 @@ export function RecommendationEditorModal({
 
           {/* Footer Navigation & Submissions */}
           <div className="flex items-center justify-between pt-4 border-t border-[#E5E3DB]">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2.5 rounded-xl border border-[#E5E3DB] text-xs font-mono uppercase font-bold text-[#8C8A7D] hover:text-[#1E2E20]"
-            >
-              Cancel
-            </button>
+            {showDiscardConfirm ? (
+              <div className="flex flex-col sm:flex-row items-center justify-between w-full p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-mono text-red-900 gap-3">
+                <div className="flex items-center gap-2">
+                  <Trash2 size={16} className="text-red-600 shrink-0" />
+                  <span>
+                    {isCanonicalOrPublished || form.publicationStatus === 'CANONICAL' || form.publicationStatus === 'PUBLISHED' || selectedStatus === 'APPROVED' || initialRecommendation?.publicationStatus === 'CANONICAL' || initialRecommendation?.publicationStatus === 'PUBLISHED'
+                      ? 'Remove this published recommendation from active IDEMO use? It will be unpublished and excluded from future active packages, while its historical record, identifiers, partner history, media provenance, and prior package references will be preserved.'
+                      : 'Remove this recommendation from active IDEMO use? It will be retired and removed from active Recommendations Desk.'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowDiscardConfirm(false)}
+                    className="px-3 py-1.5 rounded-lg border border-red-200 bg-white hover:bg-gray-50 text-gray-700 font-mono text-xs font-bold uppercase tracking-wide cursor-pointer transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={executeDiscardDraft}
+                    className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-mono text-xs font-bold uppercase tracking-wide cursor-pointer transition-all shadow-2xs"
+                  >
+                    Confirm Delete
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2.5 rounded-xl border border-[#E5E3DB] text-xs font-mono uppercase font-bold text-[#8C8A7D] hover:text-[#1E2E20] cursor-pointer"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => setShowDiscardConfirm(true)}
+                  className="px-4 py-2.5 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 font-mono text-xs font-bold uppercase tracking-wide transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                >
+                  <Trash2 size={13} className="text-red-600" />
+                  <span>Delete Recommendation</span>
+                </button>
+              </div>
+            )}
 
             <div className="flex items-center gap-2">
               {currentStep > 1 && (
@@ -2183,20 +3604,33 @@ export function RecommendationEditorModal({
                 <>
                   <button
                     type="button"
+                    disabled={isSubmitting || isRerunningResearch}
                     onClick={handleSaveDraft}
-                    className="px-4 py-2.5 rounded-xl border border-[#23251E] bg-[#FAF9F5] hover:bg-white text-[#1E2E20] font-mono text-xs font-bold uppercase transition-all cursor-pointer"
+                    className="px-4 py-2.5 rounded-xl border border-[#23251E] bg-[#FAF9F5] hover:bg-white disabled:opacity-50 text-[#1E2E20] font-mono text-xs font-bold uppercase transition-all cursor-pointer"
                   >
-                    Save as Draft
+                    {isSubmitting ? 'Saving Draft...' : 'Save as Draft'}
                   </button>
 
-                  <button
-                    type="submit"
-                    disabled={isSubmitting || validationErrors.length > 0}
-                    className="px-6 py-2.5 rounded-xl bg-[#23251E] hover:bg-[#32352B] disabled:opacity-50 text-white font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95"
-                  >
-                    <Send size={14} className="text-[#C5A059]" />
-                    <span>{isSubmitting ? 'Submitting RPC...' : 'Submit Canonical Recommendation'}</span>
-                  </button>
+                  {needsResearch ? (
+                    <button
+                      type="button"
+                      disabled={isSubmitting || isRerunningResearch}
+                      onClick={handleRerunGroundedResearch}
+                      className="px-6 py-2.5 rounded-xl bg-[#C5A059] hover:bg-[#B38F48] disabled:opacity-50 text-white font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95"
+                    >
+                      <Sparkles size={14} className={isRerunningResearch ? 'animate-spin text-white' : 'text-white'} />
+                      <span>{isRerunningResearch ? 'Researching Gemini...' : 'RE-RUN GROUNDED RESEARCH'}</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      disabled={isSubmitting || validationErrors.length > 0}
+                      className="px-6 py-2.5 rounded-xl bg-[#23251E] hover:bg-[#32352B] disabled:opacity-50 text-white font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer shadow-sm active:scale-95"
+                    >
+                      <Send size={14} className="text-[#C5A059]" />
+                      <span>{isSubmitting ? 'Submitting RPC...' : 'Submit Canonical Recommendation'}</span>
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -2204,5 +3638,14 @@ export function RecommendationEditorModal({
         </form>
       </div>
     </div>
+
+    {/* AI Recommendation Proposal Agent Modal */}
+    <AIRecommendationAgentModal
+      isOpen={isAIAgentModalOpen}
+      onClose={() => setIsAIAgentModalOpen(false)}
+      serviceAreas={serviceAreas}
+      onApplyProposal={handleApplyAgentProposal}
+    />
+  </>
   );
 }

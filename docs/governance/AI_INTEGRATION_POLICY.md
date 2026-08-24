@@ -28,6 +28,7 @@ Gemini MAY be utilized for:
 
 Gemini MUST NEVER be permitted to:
 * Publish recommendations or approve editorial content.
+* Modify, replace, approve, or publish recommendation media/images, or perform silent fallback media substitutions (Human-Only Media Change Authority invariant).
 * Activate, approve, or suspend partners.
 * Select, assign, or route inquiries to partners independently.
 * Accept or decline partner offers on behalf of partners or visitors.

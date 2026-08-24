@@ -1130,6 +1130,12 @@ export default function ProfileScreen({
               setShowCorrelationModal(true);
               playHaptic(6);
             }}
+            onOpenFineTuning={() => {
+              setRefineOpen(true);
+              setTimeout(() => {
+                document.getElementById('fine-tuning-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }, 120);
+            }}
           />
         </div>
 
@@ -1289,7 +1295,7 @@ export default function ProfileScreen({
         </div>
 
         {/* 2A. Collapsible Refine Preferences (Fine-Tuning sliders inside or below profile) */}
-        <div className="border-t border-[#2D3025]/5 pt-4">
+        <div className="border-t border-[#2D3025]/5 pt-4" id="fine-tuning-section">
           <button
             onClick={() => {
               setRefineOpen(!refineOpen);
@@ -1359,7 +1365,7 @@ export default function ProfileScreen({
                   </div>
 
                   {/* Primary Interests Multi-select */}
-                  <div className="space-y-3 bg-white/60 rounded-2xl border border-[#2D3025]/5 p-4">
+                  <div className="space-y-3 bg-white/60 rounded-2xl border border-[#2D3025]/5 p-4" id="interests-container">
                     <div className="flex justify-between items-center leading-none">
                       <span className="text-[10px] uppercase tracking-widest text-[#2D3025]/45 font-black">
                         {isSr ? 'GLAVNA INTERESOVANJA' : isZh ? '重点关注领域' : 'PRIMARY INTERESTS'}
@@ -1399,13 +1405,13 @@ export default function ProfileScreen({
                   </div>
 
                   {/* Budget Slider */}
-                  <div className="space-y-2 bg-white/60 rounded-2xl border border-[#2D3025]/5 p-4">
+                  <div className="space-y-2 bg-white/60 rounded-2xl border border-[#2D3025]/5 p-4" id="budget-slider-container">
                     <div className="flex justify-between items-center leading-none">
                       <span className="text-[10px] uppercase tracking-widest text-[#2D3025]/45 font-black">
                         {isSr ? 'BUDŽET ZA DANAS' : isZh ? '日均预算上限' : 'DAILY BUDGET CAP'}
                       </span>
                       <span className="text-xs font-mono font-black text-brand-charcoal">
-                        €{budget}{budget >= 500 ? '+' : ''}
+                        €{stagedBudget ?? budget}{(stagedBudget ?? budget) >= 500 ? '+' : ''}
                       </span>
                     </div>
                     <input 
@@ -1413,10 +1419,12 @@ export default function ProfileScreen({
                       min="50" 
                       max="500" 
                       step="25"
-                      value={budget}
+                      value={stagedBudget ?? budget}
                       onChange={(e) => {
-                        setBudget(parseInt(e.target.value));
-                        if (parseInt(e.target.value) % 100 === 0) playHaptic(3);
+                        const val = parseInt(e.target.value);
+                        setBudget(val);
+                        setStagedBudget(val);
+                        if (val % 100 === 0) playHaptic(3);
                       }}
                       className="w-full h-1 bg-[#2D3025]/10 rounded-lg appearance-none cursor-pointer accent-[#2D3025]"
                     />
@@ -1428,13 +1436,13 @@ export default function ProfileScreen({
                   </div>
 
                   {/* Time Slider */}
-                  <div className="space-y-2 bg-white/60 rounded-2xl border border-[#2D3025]/5 p-4">
+                  <div className="space-y-2 bg-white/60 rounded-2xl border border-[#2D3025]/5 p-4" id="time-slider-container">
                     <div className="flex justify-between items-center leading-none">
                       <span className="text-[10px] uppercase tracking-widest text-[#2D3025]/45 font-black">
                         {isSr ? 'RASPOLOŽIVO VREME' : isZh ? '单日可用时长' : 'SINGLE-DAY TIME BUDGET'}
                       </span>
                       <span className="text-xs font-mono font-black text-brand-charcoal">
-                        {getTimeTag(language, time)}
+                        {getTimeTag(language, stagedTime ?? time)}
                       </span>
                     </div>
                     <input 
@@ -1442,10 +1450,12 @@ export default function ProfileScreen({
                       min="2" 
                       max="48" 
                       step="2"
-                      value={time}
+                      value={stagedTime ?? time}
                       onChange={(e) => {
-                        setTime(parseInt(e.target.value));
-                        if (parseInt(e.target.value) % 12 === 0) playHaptic(3);
+                        const val = parseInt(e.target.value);
+                        setTime(val);
+                        setStagedTime(val);
+                        if (val % 12 === 0) playHaptic(3);
                       }}
                       className="w-full h-1 bg-[#2D3025]/10 rounded-lg appearance-none cursor-pointer accent-[#2D3025]"
                     />
@@ -1600,7 +1610,7 @@ export default function ProfileScreen({
           </div>
         </div>
 
-        {/* Dynamic Contextual Assistance: Human-centric Footprint Confirmation (Appears only when there are pending Candidates) */}
+        {/* Dynamic Contextual Assistance: Place Accuracy Feedback from Recent Visits (Appears only when there are pending Candidates) */}
         <AnimatePresence>
           {pendingCandidates.length > 0 && (
             <motion.div
@@ -1614,15 +1624,31 @@ export default function ProfileScreen({
               <div className="flex items-center gap-2 border-b border-brand-pearl/10 pb-2">
                 <MapPin className="text-accent-teal w-4 h-4 flex-shrink-0" />
                 <span className="text-[10px] uppercase tracking-widest font-black leading-none text-brand-pearl/80">
-                  {isSr ? 'POTVRDITE VAŠU POSETU' : isZh ? '确认您的行程足迹' : 'CONFIRM YOUR VISIT'}
+                  {isSr 
+                    ? 'PROVERA TAČNOSTI PODATAKA' 
+                    : isZh 
+                    ? '地点信息客观校验' 
+                    : isEs 
+                    ? 'VERIFICACIÓN DE DATOS' 
+                    : isDe 
+                    ? 'DATENGENAUIGKEIT PRÜFEN' 
+                    : isRu 
+                    ? 'ПРОВЕРКА ТОЧНОСТИ ДАННЫХ' 
+                    : 'VERIFY PLACE DETAILS'}
                 </span>
               </div>
               <p className="text-[11px] leading-relaxed text-brand-pearl/70 font-medium">
                 {isSr 
-                  ? 'Primetili smo da ste nedavno bili u blizini ovih beogradskih mesta. Dodajte ih u svoj dnevnik kako biste obogatili svoju mapu istraživanja i pomogli drugim putnicima.' 
+                  ? 'Bili ste nedavno u blizini ovih mesta? Pomozite kustosima i putnicima brzom potvrdom da li su podaci o lokaciji, radnom vremenu i cenama i dalje tačni.' 
                   : isZh 
-                  ? '我们注意到您近期曾前往以下贝尔格莱德地标。将它们添加至您的个人旅行日志，不仅能丰富您的探索足迹，更能帮助到其他旅行者。' 
-                  : 'We noticed you were recently near these iconic locations. Add them to your travel journal to enrich your personal exploration map and help fellow travelers.'}
+                  ? '您近期曾前往以下贝尔格莱德地点？请协助编辑团队与其他旅行者，快速确认营业时间、价格及地点信息是否依然准确。' 
+                  : isEs 
+                  ? '¿Ha visitado estos lugares recientemente? Ayude a los editores y viajeros confirmando si los horarios, precios y ubicación siguen siendo precisos.' 
+                  : isDe 
+                  ? 'Waren Sie kürzlich in der Nähe dieser Orte? Helfen Sie Kuratoren und Reisenden, indem Sie bestätigen, ob Öffnungszeiten, Preise und Standort noch aktuell sind.' 
+                  : isRu 
+                  ? 'Недавно были рядом с этими местами? Помогите кураторам и путешественникам, подтвердив актуальность часов работы, цен и адреса.' 
+                  : 'Visited near these locations recently? Help curators and fellow travelers by confirming whether hours, prices, and place details are still accurate.'}
               </p>
               
               <div className="space-y-2 pt-1">
@@ -1644,9 +1670,19 @@ export default function ProfileScreen({
                         onConfirmAccuracy(exp);
                         playHaptic([20, 10, 20]);
                       }}
-                      className="bg-accent-teal text-white text-[10px] font-black uppercase px-3 h-8 rounded-lg hover:bg-accent-teal/90 transition-all cursor-pointer active:scale-95"
+                      className="bg-accent-teal text-white text-[10px] font-black uppercase px-3 h-8 rounded-lg hover:bg-accent-teal/90 transition-all cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
                     >
-                      {isSr ? 'DODAJ U DNEVNIK' : isZh ? '收录日志' : 'ADD TO JOURNAL'}
+                      {isSr 
+                        ? 'POTVRDI TAČNOST' 
+                        : isZh 
+                        ? '校验信息' 
+                        : isEs 
+                        ? 'VERIFICAR' 
+                        : isDe 
+                        ? 'ÜBERPRÜFEN' 
+                        : isRu 
+                        ? 'ПРОВЕРИТЬ' 
+                        : 'VERIFY DETAILS'}
                     </button>
                   </div>
                 ))}

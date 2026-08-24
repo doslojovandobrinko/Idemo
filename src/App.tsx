@@ -61,6 +61,7 @@ import {
   DID_YOU_KNOW
 } from './constants';
 import { loadRecommendations } from './lib/recommendationsLoader';
+import { getApprovedPrimaryMedia } from './lib/recommendationMediaService';
 import PremiumCarousel from './components/PremiumCarousel';
 import PremiumBadge from './components/PremiumBadge';
 import PlanCard from './components/PlanCard';
@@ -123,20 +124,36 @@ const IdemoStudio = React.lazy(() => import('./components/IdemoStudio').then(m =
 import { draftExpansionPool } from './data/recommendations/serbia/draft_expansion';
 import IdemoLogo from './components/IdemoLogo';
 import { safeStorage } from './lib/safeStorage';
+import { 
+  getAllInquiriesV2, 
+  getVisitorCredential, 
+  updateInquiryCachedProposalV2, 
+  updateInquiryServerStatusV2, 
+  clearCachedProposalV2, 
+  checkHasUnreadProposals 
+} from './lib/inquiryStorage';
+import { fetchActiveProposal } from './lib/inquiryService';
 
 // Available travel durations steps
 export const ALLOWED_TIMES = [4, 8, 12, 24, 28, 48];
 
-function NavButton({ icon, label, active, onClick, isQuiet }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void; isQuiet?: boolean }) {
+function NavButton({ icon, label, active, onClick, isQuiet, showIndicator }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void; isQuiet?: boolean; showIndicator?: boolean }) {
   return (
     <button
       onClick={onClick}
-      className={`flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+      aria-label={label + (showIndicator ? ' (New partner response)' : '')}
+      className={`flex flex-col items-center justify-center gap-1 transition-all cursor-pointer relative ${
         active ? 'text-brand-charcoal font-bold scale-105' : isQuiet ? 'text-brand-charcoal/30 hover:text-brand-charcoal/60' : 'text-brand-charcoal/40 hover:text-brand-charcoal/70'
       }`}
     >
-      {icon}
+      <div className="relative flex items-center justify-center">
+        {icon}
+        {showIndicator && (
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-accent-red border-2 border-white animate-pulse shrink-0" />
+        )}
+      </div>
       <span className="text-[10px] uppercase font-mono tracking-wider">{label}</span>
+      {showIndicator && <span className="sr-only">New partner response</span>}
     </button>
   );
 }
@@ -753,8 +770,91 @@ function resolvePlannerItems(storedItems: Recommendation[], userFacingRecs: Reco
   });
 }
 
+interface NavigationHistoryEntry {
+  screen: AppScreen;
+  recId?: string | null;
+  previousScreen?: AppScreen;
+  modal?: 'accuracy' | 'externalLink' | 'adminLogin' | 'detailNested' | null;
+  depth: number;
+}
+
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('landing');
+  const [selectedRecId, setSelectedRecId] = useState<string | null>(null);
+  const [isPreviewMode, setIsPreviewMode] = useState<boolean>(false);
+  const [previewPreviousScreen, setPreviewPreviousScreen] = useState<AppScreen>('home');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(true);
+  const [hasUnreadPartnerProposal, setHasUnreadPartnerProposal] = useState<boolean>(() => checkHasUnreadProposals());
+
+  // Synchronous state refs for rock-solid history event handling
+  const currentScreenRef = useRef<AppScreen>(currentScreen);
+  currentScreenRef.current = currentScreen;
+
+  const selectedRecIdRef = useRef<string | null>(selectedRecId);
+  selectedRecIdRef.current = selectedRecId;
+
+  const previewPreviousScreenRef = useRef<AppScreen>(previewPreviousScreen);
+  previewPreviousScreenRef.current = previewPreviousScreen;
+
+  const accuracyModalOpenRef = useRef<boolean>(false);
+
+  const pendingExternalLinkRef = useRef<string | null>(null);
+
+  const showAdminLoginRef = useRef<boolean>(showAdminLogin);
+  showAdminLoginRef.current = showAdminLogin;
+
+  const detailNestedModalCloseRef = useRef<(() => void) | null>(null);
+  const onboardingBackHandlerRef = useRef<(() => boolean) | null>(null);
+  const isPoppingStateRef = useRef<boolean>(false);
+
+  const navigateToScreen = useCallback((screen: AppScreen, options?: { replace?: boolean }) => {
+    if (currentScreenRef.current === screen && !selectedRecIdRef.current) {
+      return;
+    }
+
+    if (selectedRecIdRef.current) {
+      setSelectedRecId(null);
+    }
+
+    setCurrentScreen(screen);
+
+    if (!isPoppingStateRef.current) {
+      const currentDepth = typeof window.history.state?.depth === 'number' ? window.history.state.depth : 0;
+      const nextDepth = screen === 'home' && currentDepth > 0 ? 0 : currentDepth + 1;
+      const entry: NavigationHistoryEntry = {
+        screen,
+        depth: nextDepth
+      };
+      if (options?.replace) {
+        window.history.replaceState(entry, document.title);
+      } else {
+        window.history.pushState(entry, document.title);
+      }
+    }
+  }, []);
+
+  const handleBackFromDetails = useCallback(() => {
+    if (typeof window.history.state?.depth === 'number' && window.history.state.depth > 0) {
+      window.history.back();
+    } else {
+      setSelectedRecId(null);
+      setCurrentScreen(previewPreviousScreenRef.current || 'home');
+    }
+  }, []);
+
+  const handleDetailNestedModalStateChange = useCallback((isOpen: boolean, closeFn: (() => void) | null) => {
+    detailNestedModalCloseRef.current = closeFn;
+    if (isOpen && !isPoppingStateRef.current) {
+      const currentDepth = typeof window.history.state?.depth === 'number' ? window.history.state.depth : 0;
+      window.history.pushState({ modal: 'detailNested', depth: currentDepth + 1 } as NavigationHistoryEntry, document.title);
+    }
+  }, []);
+
+  const handleRegisterOnboardingBackHandler = useCallback((handler: (() => boolean) | null) => {
+    onboardingBackHandlerRef.current = handler;
+  }, []);
 
   const studioTapCountRef = useRef(0);
   const studioLastTapTimeRef = useRef(0);
@@ -771,19 +871,27 @@ export default function App() {
     if (studioTapCountRef.current >= 7) {
       studioTapCountRef.current = 0;
       studioLastTapTimeRef.current = 0;
-      setCurrentScreen('studio');
+      navigateToScreen('studio');
     }
-  }, []);
-  const [selectedRecId, setSelectedRecId] = useState<string | null>(null);
-  const [isPreviewMode, setIsPreviewMode] = useState<boolean>(false);
-  const [previewPreviousScreen, setPreviewPreviousScreen] = useState<AppScreen>('home');
+  }, [navigateToScreen]);
 
   const handlePreviewInTravelerApp = useCallback((recId: string) => {
     setPreviewPreviousScreen(currentScreen);
     setIsPreviewMode(true);
     setSelectedRecId(recId);
     setCurrentScreen('details');
+
+    if (!isPoppingStateRef.current) {
+      const currentDepth = typeof window.history.state?.depth === 'number' ? window.history.state.depth : 0;
+      window.history.pushState({
+        screen: 'details',
+        recId,
+        previousScreen: currentScreen,
+        depth: currentDepth + 1
+      } as NavigationHistoryEntry, document.title);
+    }
   }, [currentScreen]);
+
   const [landingImage, setLandingImage] = useState<string>(() => {
     try {
       return safeStorage.getItem('idemo_custom_landing_image_v1') || '';
@@ -800,9 +908,6 @@ export default function App() {
       console.error("Storage failed:", err);
     }
   };
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [showAdminLogin, setShowAdminLogin] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState<boolean>(true);
   
   const [customRecommendations, setCustomRecommendations] = useState<Recommendation[]>(() => {
     try {
@@ -816,7 +921,27 @@ export default function App() {
   const [modifiedRecommendations, setModifiedRecommendations] = useState<Record<string, Recommendation>>(() => {
     try {
       const saved = safeStorage.getItem('idemo_modified_recommendations_v1');
-      return saved ? JSON.parse(saved) : {};
+      if (!saved) return {};
+      const parsed: Record<string, Recommendation> = JSON.parse(saved);
+      const cleaned: Record<string, Recommendation> = {};
+      let sanitizedAny = false;
+      for (const [id, rec] of Object.entries(parsed)) {
+        if (!rec) continue;
+        const approved = getApprovedPrimaryMedia(id, rec.image);
+        if (rec.image && approved && rec.image !== approved) {
+          rec.image = approved;
+          sanitizedAny = true;
+        }
+        cleaned[id] = rec;
+      }
+      if (sanitizedAny) {
+        try {
+          safeStorage.setItem('idemo_modified_recommendations_v1', JSON.stringify(cleaned));
+        } catch (e) {
+          console.warn('Could not resave sanitized modified recommendations:', e);
+        }
+      }
+      return cleaned;
     } catch {
       return {};
     }
@@ -834,7 +959,17 @@ export default function App() {
   const [editorialStatuses, setEditorialStatuses] = useState<Record<string, 'CANDIDATE' | 'NEEDS RESEARCH' | 'APPROVED' | 'MERGE CANDIDATE' | 'RETIRED'>>(() => {
     try {
       const saved = safeStorage.getItem('idemo_editorial_statuses_v1');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Clean false persisted APPROVED status for non-canonical draft rec-draft-zestival-uzice
+        if (parsed['rec-draft-zestival-uzice'] === 'APPROVED') {
+          parsed['rec-draft-zestival-uzice'] = 'CANDIDATE';
+          try {
+            safeStorage.setItem('idemo_editorial_statuses_v1', JSON.stringify(parsed));
+          } catch {}
+        }
+        return parsed;
+      }
     } catch {}
 
     const initial: Record<string, 'CANDIDATE' | 'NEEDS RESEARCH' | 'APPROVED' | 'MERGE CANDIDATE' | 'RETIRED'> = {};
@@ -896,18 +1031,24 @@ export default function App() {
     const approvedDrafts = draftExpansionPool.filter(r => editorialStatuses[r.id] === 'APPROVED');
     
     const baseItems = [...baseRecommendationsList, ...approvedDrafts].map(item => {
+      let merged = item;
       if (modifiedRecommendations[item.id]) {
-        return { ...item, ...modifiedRecommendations[item.id] };
+        merged = { ...item, ...modifiedRecommendations[item.id] };
       }
-      return item;
+      const candidateImage = merged.image;
+      const approvedImage = getApprovedPrimaryMedia(item.id, candidateImage);
+      return { ...merged, image: approvedImage };
     });
 
     // Plus customRecommendations (with overrides)
     const customItems = customRecommendations.map(item => {
+      let merged = item;
       if (modifiedRecommendations[item.id]) {
-        return { ...item, ...modifiedRecommendations[item.id] };
+        merged = { ...item, ...modifiedRecommendations[item.id] };
       }
-      return item;
+      const candidateImage = merged.image;
+      const approvedImage = getApprovedPrimaryMedia(item.id, candidateImage);
+      return { ...merged, image: approvedImage };
     });
 
     const combined = [...baseItems, ...customItems];
@@ -927,17 +1068,23 @@ export default function App() {
     
     // Include BOTH base recommendations and draftExpansionPool for admin review desk
     const baseItems = [...baseRecommendationsList, ...draftExpansionPool].map(item => {
+      let merged = item;
       if (modifiedRecommendations[item.id]) {
-        return { ...item, ...modifiedRecommendations[item.id] };
+        merged = { ...item, ...modifiedRecommendations[item.id] };
       }
-      return item;
+      const candidateImage = merged.image;
+      const approvedImage = getApprovedPrimaryMedia(item.id, candidateImage);
+      return { ...merged, image: approvedImage };
     });
 
     const customItems = customRecommendations.map(item => {
+      let merged = item;
       if (modifiedRecommendations[item.id]) {
-        return { ...item, ...modifiedRecommendations[item.id] };
+        merged = { ...item, ...modifiedRecommendations[item.id] };
       }
-      return item;
+      const candidateImage = merged.image;
+      const approvedImage = getApprovedPrimaryMedia(item.id, candidateImage);
+      return { ...merged, image: approvedImage };
     });
 
     const combined = [...baseItems, ...customItems];
@@ -970,6 +1117,8 @@ export default function App() {
   });
 
   const [accuracyModalOpen, setAccuracyModalOpen] = useState(false);
+  accuracyModalOpenRef.current = accuracyModalOpen;
+
   const [accuracySelectedItem, setAccuracySelectedItem] = useState<any | null>(null);
   const [accuracyQuestionStep, setAccuracyQuestionStep] = useState<1 | 2 | 'success'>(1);
   const [accuracyAnswers, setAccuracyAnswers] = useState<{ accurate: 'Yes' | 'Mostly' | 'NeedsUpdate' | null, categories: string[], note: string }>({
@@ -978,6 +1127,33 @@ export default function App() {
     note: ''
   });
   const [showAccuracyNoteField, setShowAccuracyNoteField] = useState(false);
+
+  const handleOpenAccuracyModal = useCallback((rec: any) => {
+    setAccuracySelectedItem(rec);
+    setAccuracyQuestionStep(1);
+    setAccuracyAnswers({ accurate: null, categories: [], note: '' });
+    setShowAccuracyNoteField(false);
+    setAccuracyModalOpen(true);
+    triggerHaptic(5);
+
+    if (!isPoppingStateRef.current) {
+      const currentDepth = typeof window.history.state?.depth === 'number' ? window.history.state.depth : 0;
+      window.history.pushState({
+        screen: currentScreenRef.current,
+        recId: selectedRecIdRef.current,
+        modal: 'accuracy',
+        depth: currentDepth + 1
+      } as NavigationHistoryEntry, document.title);
+    }
+  }, []);
+
+  const handleCloseAccuracyModal = useCallback(() => {
+    if (window.history.state?.modal === 'accuracy') {
+      window.history.back();
+    } else {
+      setAccuracyModalOpen(false);
+    }
+  }, []);
 
   const handleConfirmAccuracySubmit = () => {
     if (!accuracySelectedItem) return;
@@ -1002,7 +1178,7 @@ export default function App() {
             ? '您在过去 24 小时内已提交过该地点的验证。' 
             : 'You have already submitted a confirmation for this location in the last 24 hours.'
         );
-        setAccuracyModalOpen(false);
+        handleCloseAccuracyModal();
         return;
       }
     }
@@ -1032,7 +1208,16 @@ export default function App() {
       console.log("Ignored identical duplicate submission");
       setAccuracyQuestionStep('success');
       setTimeout(() => {
-        setAccuracyModalOpen(false);
+        handleCloseAccuracyModal();
+      }, 2500);
+      return;
+    }
+
+    // If draft item or mock, store in simulated store
+    if (recId.startsWith('draft-') || recId.startsWith('custom-')) {
+      setAccuracyQuestionStep('success');
+      setTimeout(() => {
+        handleCloseAccuracyModal();
       }, 2500);
       return;
     }
@@ -1074,7 +1259,7 @@ export default function App() {
 
     setAccuracyQuestionStep('success');
     setTimeout(() => {
-      setAccuracyModalOpen(false);
+      handleCloseAccuracyModal();
     }, 2500);
   };
 
@@ -1186,6 +1371,82 @@ export default function App() {
     };
   }, [isAdmin]);
 
+  React.useEffect(() => {
+    // Synchronize proposal unread state with local event bus
+    const handleProposalStateChange = () => {
+      setHasUnreadPartnerProposal(checkHasUnreadProposals());
+    };
+
+    window.addEventListener('idemo_proposal_state_change', handleProposalStateChange);
+
+    // Background proposal status refresh for active inquiries (runs outside PlanCard)
+    const refreshActiveInquiryProposals = async () => {
+      try {
+        const allInquiries = getAllInquiriesV2();
+        let stateChanged = false;
+
+        for (const inq of allInquiries) {
+          const serverId = inq.server_inquiry_id || inq.local_queue_id;
+          if (!serverId) continue;
+
+          const cred = getVisitorCredential(serverId);
+          if (!cred || inq.status === 'failed') {
+            continue;
+          }
+
+          try {
+            const proposalRes = await fetchActiveProposal(serverId);
+            if (proposalRes.success && proposalRes.proposal_found && proposalRes.match_id && proposalRes.response_id) {
+              updateInquiryCachedProposalV2(serverId, {
+                schema_version: 1,
+                match_id: proposalRes.match_id,
+                response_id: proposalRes.response_id,
+                response_type: proposalRes.response_type || 'accept_as_requested',
+                message: proposalRes.message || '',
+                proposed_start_at: proposalRes.proposed_start_at || null,
+                proposed_end_at: proposalRes.proposed_end_at || null,
+                cached_at: Date.now(),
+              });
+              updateInquiryServerStatusV2(serverId, 'Waiting for confirmation');
+              stateChanged = true;
+            } else if (proposalRes.success && !proposalRes.proposal_found) {
+              if (inq.cached_proposal) {
+                clearCachedProposalV2(serverId);
+                stateChanged = true;
+              }
+            }
+          } catch (e) {
+            // Background sync resilience
+          }
+        }
+
+        if (stateChanged) {
+          setHasUnreadPartnerProposal(checkHasUnreadProposals());
+          window.dispatchEvent(new Event('idemo_proposal_state_change'));
+        }
+      } catch (e) {
+        // Ignore background error
+      }
+    };
+
+    refreshActiveInquiryProposals();
+    const intervalId = setInterval(refreshActiveInquiryProposals, 45000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshActiveInquiryProposals();
+        setHasUnreadPartnerProposal(checkHasUnreadProposals());
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('idemo_proposal_state_change', handleProposalStateChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(intervalId);
+    };
+  }, []);
+
   const [lowSignalMode, setLowSignalMode] = useState<boolean>(() => {
     try {
       const saved = safeStorage.getItem('idemo_low_signal');
@@ -1201,6 +1462,28 @@ export default function App() {
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [networkToast, setNetworkToast] = useState<'online' | 'offline' | null>(null);
   const [pendingExternalLink, setPendingExternalLink] = useState<string | null>(null);
+  pendingExternalLinkRef.current = pendingExternalLink;
+
+  const handleOpenPendingExternalLink = useCallback((url: string) => {
+    setPendingExternalLink(url);
+    if (!isPoppingStateRef.current) {
+      const currentDepth = typeof window.history.state?.depth === 'number' ? window.history.state.depth : 0;
+      window.history.pushState({
+        screen: currentScreenRef.current,
+        recId: selectedRecIdRef.current,
+        modal: 'externalLink',
+        depth: currentDepth + 1
+      } as NavigationHistoryEntry, document.title);
+    }
+  }, []);
+
+  const handleClosePendingExternalLink = useCallback(() => {
+    if (window.history.state?.modal === 'externalLink') {
+      window.history.back();
+    } else {
+      setPendingExternalLink(null);
+    }
+  }, []);
 
   useEffect(() => {
     if (networkToast) {
@@ -1229,6 +1512,7 @@ export default function App() {
     setBudget(100);
     setTime(24);
     setDays('All');
+    setCustomOrbit(null);
     try {
       const h = new Date().getHours();
       setTimeOfDay((h >= 9 && h < 18) ? 'Working hours' : 'Evening');
@@ -1566,7 +1850,9 @@ export default function App() {
     setLpeProfile(getPreferenceProfile());
   };
 
-  const handleSelectRec = (id: string) => {
+  const handleSelectRec = useCallback((id: string) => {
+    const fromScreen = currentScreenRef.current === 'details' ? previewPreviousScreenRef.current : currentScreenRef.current;
+    setPreviewPreviousScreen(fromScreen);
     setSelectedRecId(id);
     const rec = allRecommendations.find(r => r.id === id);
     if (rec) {
@@ -1575,7 +1861,96 @@ export default function App() {
       recordViewDetailsSignal(rec);
     }
     setCurrentScreen('details');
-  };
+
+    if (!isPoppingStateRef.current) {
+      const currentDepth = typeof window.history.state?.depth === 'number' ? window.history.state.depth : 0;
+      window.history.pushState({
+        screen: 'details',
+        recId: id,
+        previousScreen: fromScreen,
+        depth: currentDepth + 1
+      } as NavigationHistoryEntry, document.title);
+    }
+  }, [allRecommendations]);
+
+  // Centralized Android Back / Edge Gesture & Browser PopState Navigation Engine
+  useEffect(() => {
+    // Ensure initial entry has valid navigation state
+    if (!window.history.state || typeof window.history.state.depth !== 'number') {
+      window.history.replaceState({ screen: 'landing', depth: 0 } as NavigationHistoryEntry, document.title);
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      isPoppingStateRef.current = true;
+      const state = event.state as NavigationHistoryEntry | null;
+
+      // 1. Onboarding Overlay Card Navigation (Card 3 -> Card 2 -> Card 1)
+      if (onboardingBackHandlerRef.current) {
+        const handled = onboardingBackHandlerRef.current();
+        if (handled) {
+          setTimeout(() => { isPoppingStateRef.current = false; }, 50);
+          return;
+        }
+      }
+
+      // 2. Nested modal inside DetailsScreen (Partner modal, concierge, driver card, etc.)
+      if (detailNestedModalCloseRef.current) {
+        const closeFn = detailNestedModalCloseRef.current;
+        detailNestedModalCloseRef.current = null;
+        closeFn();
+        setTimeout(() => { isPoppingStateRef.current = false; }, 50);
+        return;
+      }
+
+      // 3. Pending external link modal
+      if (pendingExternalLinkRef.current) {
+        setPendingExternalLink(null);
+        setTimeout(() => { isPoppingStateRef.current = false; }, 50);
+        return;
+      }
+
+      // 4. Accuracy feedback modal
+      if (accuracyModalOpenRef.current) {
+        setAccuracyModalOpen(false);
+        setTimeout(() => { isPoppingStateRef.current = false; }, 50);
+        return;
+      }
+
+      // 5. Admin login popup
+      if (showAdminLoginRef.current) {
+        setShowAdminLogin(false);
+        setTimeout(() => { isPoppingStateRef.current = false; }, 50);
+        return;
+      }
+
+      // 6. DetailsScreen -> return to previous screen
+      if (currentScreenRef.current === 'details') {
+        setSelectedRecId(null);
+        const targetScreen = (state?.screen && state.screen !== 'details')
+          ? state.screen
+          : (previewPreviousScreenRef.current || 'home');
+        setCurrentScreen(targetScreen);
+        setTimeout(() => { isPoppingStateRef.current = false; }, 50);
+        return;
+      }
+
+      // 7. Subscreen/Tab (explore, plan, partners, profile, studio) -> return to home or target screen
+      if (currentScreenRef.current !== 'home' && currentScreenRef.current !== 'landing') {
+        const targetScreen = state?.screen || 'home';
+        setCurrentScreen(targetScreen);
+        setTimeout(() => { isPoppingStateRef.current = false; }, 50);
+        return;
+      }
+
+      // 8. At root (home / landing with depth 0) -> let Android / browser execute default exit/background
+      setTimeout(() => { isPoppingStateRef.current = false; }, 50);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
 
   // Calculate current coordinate representation for MoodOrbit
   const { orbitX, orbitY } = useMemo(() => {
@@ -1609,6 +1984,20 @@ export default function App() {
 
     return { orbitX: ox, orbitY: oy };
   }, [selectedCats, budget, time, customOrbit]);
+
+  // Synchronize canonical orbit coordinates and budget/time preferences to safeStorage
+  useEffect(() => {
+    try {
+      safeStorage.setItem('idemo_custom_orbit_v1', JSON.stringify({
+        orbitX: customOrbit?.orbitX ?? orbitX,
+        orbitY: customOrbit?.orbitY ?? orbitY,
+        budget,
+        time
+      }));
+    } catch (e) {
+      console.warn('Failed to persist custom orbit and budget/time preferences:', e);
+    }
+  }, [customOrbit, orbitX, orbitY, budget, time]);
 
   const prefs: UserPreferences = {
     budget,
@@ -1996,11 +2385,11 @@ export default function App() {
           <LandingScreen 
             key="landing"
             onStart={() => {
-              setCurrentScreen('home');
+              navigateToScreen('home');
             }} 
             onEmblemTap={handleStudioEmblemTap}
             onNavigateToProfile={() => {
-              setCurrentScreen('profile');
+              navigateToScreen('profile');
             }}
             language={language}
             setLanguage={setLanguage}
@@ -2015,7 +2404,7 @@ export default function App() {
             likedIds={likedIds}
             language={language}
             recommendations={rankedRecommendations}
-            onNavigateToProfile={() => setCurrentScreen('profile')}
+            onNavigateToProfile={() => navigateToScreen('profile')}
             seasonalTips={SEASONAL_TIPS}
             onSelectRec={handleSelectRec}
             vibeSettings={currentArchetype.targetVibe}
@@ -2033,9 +2422,9 @@ export default function App() {
             language={language}
             isLiked={likedIds.has(selectedRec.id)}
             onToggleLike={() => toggleLike(selectedRec.id)}
-            onBack={() => setCurrentScreen(previewPreviousScreen || 'home')}
+            onBack={handleBackFromDetails}
             onSchedule={(date, preventRedirect) => scheduleItem(selectedRec, date, preventRedirect)}
-            onNavigate={(screen: string) => setCurrentScreen(screen)}
+            onNavigate={(screen: string) => navigateToScreen(screen as AppScreen)}
             onRemove={() => removeScheduledItem(selectedRec.id)}
             rating={ratings[selectedRec.id]}
             onSaveRating={(vibe: any, tags: string[]) => saveRating(selectedRec.id, vibe, tags)}
@@ -2044,14 +2433,8 @@ export default function App() {
             lowSignalMode={lowSignalMode}
             allRecommendations={isPreviewMode || currentScreen === 'studio' ? allRecommendations : userFacingRecommendations}
             isAdminPreview={isPreviewMode || isAdmin}
-            onConfirmAccuracy={() => {
-              setAccuracySelectedItem(selectedRec);
-              setAccuracyQuestionStep(1);
-              setAccuracyAnswers({ accurate: null, categories: [], note: '' });
-              setShowAccuracyNoteField(false);
-              setAccuracyModalOpen(true);
-              triggerHaptic(5);
-            }}
+            onConfirmAccuracy={() => handleOpenAccuracyModal(selectedRec)}
+            onNestedModalStateChange={handleDetailNestedModalStateChange}
           />
         )}
 
@@ -2065,7 +2448,7 @@ export default function App() {
             onSelectRec={handleSelectRec}
             onUpdateDate={updateScheduledDate}
             onRemove={removeScheduledItem}
-            onExplore={() => setCurrentScreen('explore')}
+            onExplore={() => navigateToScreen('explore')}
             onAddBundle={addBundleToPlan}
             lowSignalMode={lowSignalMode}
             allRecommendations={userFacingRecommendations}
@@ -2084,7 +2467,7 @@ export default function App() {
             key="explore"
             language={language}
             recommendations={rankedRecommendations}
-            onNavigateToProfile={() => setCurrentScreen('profile')}
+            onNavigateToProfile={() => navigateToScreen('profile')}
             onSelectRec={handleSelectRec}
             vibeSettings={currentArchetype.targetVibe}
             ratings={ratings}
@@ -2121,9 +2504,9 @@ export default function App() {
             key="partners"
             language={language}
             triggerHaptic={triggerHaptic}
-            onNavigateToProfile={() => setCurrentScreen('profile')}
+            onNavigateToProfile={() => navigateToScreen('profile')}
             onSelectRec={handleSelectRec}
-            onNavigate={(screen: string) => setCurrentScreen(screen)}
+            onNavigate={(screen: string) => navigateToScreen(screen as AppScreen)}
           />
         )}
 
@@ -2149,7 +2532,7 @@ export default function App() {
                 setShowAdminLogin(true);
               }
             }}
-            onNavigate={(screen: string) => setCurrentScreen(screen)}
+            onNavigate={(screen: string) => navigateToScreen(screen as AppScreen)}
             onAddCustomRecommendations={(recs: Recommendation[]) => {
               setCustomRecommendations(prev => {
                 const updated = [...prev];
@@ -2185,14 +2568,7 @@ export default function App() {
               }
             }}
             confirmedAccuracyRecs={confirmedAccuracyRecs}
-            onConfirmAccuracy={(exp: any) => {
-              setAccuracySelectedItem(exp);
-              setAccuracyQuestionStep(1);
-              setAccuracyAnswers({ accurate: null, categories: [], note: '' });
-              setShowAccuracyNoteField(false);
-              setAccuracyModalOpen(true);
-              triggerHaptic(5);
-            }}
+            onConfirmAccuracy={(exp: any) => handleOpenAccuracyModal(exp)}
           />
         )}
       </AnimatePresence>
@@ -2201,17 +2577,17 @@ export default function App() {
       {currentScreen !== 'landing' && (
         <nav className="fixed bottom-0 left-0 right-0 max-w-[420px] mx-auto bg-white/90 backdrop-blur-xl border-t border-border-main px-4 pt-4 pb-10 flex justify-between items-center z-[110] rounded-t-[40px] shadow-[0_-8px_40px_rgba(0,0,0,0.08)]">
           <div className="flex justify-between items-center flex-1 pr-6">
-            <NavButton icon={<HomeIcon size={25} />} label={t.home} active={currentScreen === 'home'} onClick={() => { triggerHaptic(8); setCurrentScreen('home'); }} />
-            <NavButton icon={<Search size={25} />} label={t.explore} active={currentScreen === 'explore'} onClick={() => { triggerHaptic(8); setCurrentScreen('explore'); }} />
-            <NavButton icon={<CalendarIcon size={25} />} label={t.plan} active={currentScreen === 'plan'} onClick={() => { triggerHaptic(8); setCurrentScreen('plan'); }} />
-            <NavButton icon={<User size={25} />} label={t.profile} active={currentScreen === 'profile'} onClick={() => { triggerHaptic(8); setCurrentScreen('profile'); }} />
+            <NavButton icon={<HomeIcon size={25} />} label={t.home} active={currentScreen === 'home'} onClick={() => { triggerHaptic(8); navigateToScreen('home'); }} />
+            <NavButton icon={<Search size={25} />} label={t.explore} active={currentScreen === 'explore'} onClick={() => { triggerHaptic(8); navigateToScreen('explore'); }} />
+            <NavButton icon={<CalendarIcon size={25} />} label={t.plan} active={currentScreen === 'plan'} onClick={() => { triggerHaptic(8); navigateToScreen('plan'); }} showIndicator={hasUnreadPartnerProposal} />
+            <NavButton icon={<User size={25} />} label={t.profile} active={currentScreen === 'profile'} onClick={() => { triggerHaptic(8); navigateToScreen('profile'); }} />
           </div>
           <div className="pl-6 border-l border-transparent shrink-0 flex items-center justify-center">
             <NavButton 
               icon={<ShieldCheck size={25} />} 
               label={t.partners || 'Partners'} 
               active={currentScreen === 'partners'} 
-              onClick={() => { triggerHaptic(8); setCurrentScreen('partners'); }} 
+              onClick={() => { triggerHaptic(8); navigateToScreen('partners'); }} 
               isQuiet={currentScreen !== 'partners'}
             />
           </div>
@@ -2246,7 +2622,7 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setAccuracyModalOpen(false)}
+              onClick={handleCloseAccuracyModal}
             />
             {/* Modal Container */}
             <motion.div 
@@ -2264,7 +2640,7 @@ export default function App() {
                   </span>
                 </div>
                 <button 
-                  onClick={() => setAccuracyModalOpen(false)}
+                  onClick={handleCloseAccuracyModal}
                   className="w-7 h-7 rounded-full bg-white border border-border-main/60 flex items-center justify-center text-brand-charcoal/60 hover:text-brand-charcoal active:scale-90 transition-all cursor-pointer"
                 >
                   ✕
@@ -2273,176 +2649,209 @@ export default function App() {
 
               {/* Content Panel (Scrollable) */}
               <div className="flex-1 overflow-y-auto py-5 no-scrollbar space-y-5 text-left">
-                {accuracyQuestionStep === 1 && (
-                  <div className="space-y-4 animate-fade-in">
-                    <div className="space-y-1">
-                      <span className="text-[10px] font-mono font-extrabold uppercase text-[#6C5A4D] tracking-wider">
-                        {accuracySelectedItem.visited}
-                      </span>
-                      <h4 className="font-serif text-lg font-black text-brand-charcoal leading-snug">
-                        {accuracySelectedItem.title}
-                      </h4>
-                    </div>
+                {accuracyQuestionStep === 1 && (() => {
+                  const accuracyRecFull = (allRecommendations && accuracySelectedItem)
+                    ? (allRecommendations.find((r: any) => r.id === accuracySelectedItem.id) || accuracySelectedItem)
+                    : accuracySelectedItem;
 
-                    <div className="p-4 bg-white border border-border-main/40 rounded-2xl space-y-1">
-                      <h5 className="text-[12.5px] font-serif font-bold text-brand-charcoal leading-snug">
-                        {language === 'sr' ? 'Da li je ova preporuka i dalje tačna?' : language === 'zh' ? '该推荐地点的信息目前依然准确吗？' : 'Is this recommendation still accurate?'}
-                      </h5>
-                      <p className="text-[10.5px] leading-relaxed text-brand-charcoal/60">
-                        {language === 'sr'
-                          ? 'Vaša činjenična potvrda direktno jača IDEMO kustos-standard. Ako se bilo šta promenilo, slobodno nam javite.'
-                          : language === 'zh'
-                            ? '您的客观反馈将直接协助 IDEMO 独立编辑团队维护信息准确度。若信息有变动，请告诉我们。'
-                            : 'Your factual confirmation directly strengthens the IDEMO curation. If anything has changed, please let us know.'}
-                      </p>
-                    </div>
+                  return (
+                    <div className="space-y-4 animate-fade-in">
+                      <div className="space-y-1">
+                        <span className="text-[10px] font-mono font-extrabold uppercase text-[#6C5A4D] tracking-wider">
+                          {accuracySelectedItem.visited || (language === 'sr' ? 'PREPORUKA' : language === 'zh' ? '推荐地点' : 'RECOMMENDATION')}
+                        </span>
+                        <h4 className="font-serif text-lg font-black text-brand-charcoal leading-snug">
+                          {accuracyRecFull.title}
+                        </h4>
+                      </div>
 
-                    {/* Quiet Confirmation Choices */}
-                    <div className="space-y-2 pt-2">
-                      <button
-                        onClick={() => {
-                          triggerHaptic(5);
-                          setAccuracyAnswers(prev => ({ ...prev, accurate: 'Yes' }));
-                          // Yes is a quiet confirmation signal
-                          const timestamp = new Date().toISOString();
-                          const recId = accuracySelectedItem.id;
+                      {/* Key Place Details Being Verified */}
+                      <div className="bg-white/80 border border-border-main/50 rounded-2xl p-3.5 space-y-2 text-[11px]">
+                        <div className="text-[9.5px] font-mono font-extrabold uppercase text-brand-charcoal/50 tracking-wider">
+                          {language === 'sr' ? 'PODACI ZA PROVERU' : language === 'zh' ? '待核对事实数据' : 'PLACE DETAILS TO VERIFY'}
+                        </div>
+                        <div className="grid grid-cols-1 gap-1.5 text-brand-charcoal">
+                          {accuracyRecFull.location && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-accent-teal font-bold shrink-0">📍</span>
+                              <span className="font-medium truncate">{accuracyRecFull.location}</span>
+                            </div>
+                          )}
+                          {accuracyRecFull.estimatedCost && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-accent-teal font-bold shrink-0">💶</span>
+                              <span className="font-medium">{accuracyRecFull.estimatedCost}</span>
+                            </div>
+                          )}
+                          {(accuracyRecFull.operatingHours || accuracyRecFull.duration) && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-accent-teal font-bold shrink-0">⏱</span>
+                              <span className="font-medium">{accuracyRecFull.operatingHours || accuracyRecFull.duration}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
 
-                          // ANTI-ABUSE: One submission per recommendation per device per 24 hours
-                          const now = Date.now();
-                          const existingConf = confirmedAccuracyRecs[recId];
-                          if (existingConf && existingConf.timestamp) {
-                            const confTime = new Date(existingConf.timestamp).getTime();
-                            const diffHrs = (now - confTime) / (1000 * 60 * 60);
-                            if (diffHrs < 24) {
-                              alert(
-                                language === 'sr' 
-                                  ? 'Već ste poslali potvrdu za ovu lokaciju u poslednja 24 sata.' 
-                                  : language === 'zh' 
-                                  ? '您在过去 24 小时内已提交过该地点的验证。' 
-                                  : 'You have already submitted a confirmation for this location in the last 24 hours.'
-                              );
-                              setAccuracyModalOpen(false);
+                      <div className="p-3.5 bg-white/60 border border-border-main/40 rounded-2xl space-y-1">
+                        <h5 className="text-[12px] font-serif font-bold text-brand-charcoal leading-snug">
+                          {language === 'sr' ? 'Da li su podaci o ovom mestu i dalje tačni?' : language === 'zh' ? '该地点的各项信息目前依然准确吗？' : 'Are the details for this place still accurate?'}
+                        </h5>
+                        <p className="text-[10px] leading-relaxed text-brand-charcoal/60">
+                          {language === 'sr'
+                            ? 'Potvrdite da li su radno vreme, cene i lokacija i dalje tačni. Vaša potvrda direktno pomaže kustosima i putnicima.'
+                            : language === 'zh'
+                              ? '请确认营业时间、消费价格与位置信息是否依然准确。您的客观反馈直接协助编辑部与旅行者。'
+                              : 'Confirm whether the hours, prices, and location remain accurate. Your feedback directly helps curators and travelers.'}
+                        </p>
+                      </div>
+
+                      {/* Quiet Confirmation Choices */}
+                      <div className="space-y-2 pt-2">
+                        <button
+                          onClick={() => {
+                            triggerHaptic(5);
+                            setAccuracyAnswers(prev => ({ ...prev, accurate: 'Yes' }));
+                            // Yes is a quiet confirmation signal
+                            const timestamp = new Date().toISOString();
+                            const recId = accuracySelectedItem.id;
+
+                            // ANTI-ABUSE: One submission per recommendation per device per 24 hours
+                            const now = Date.now();
+                            const existingConf = confirmedAccuracyRecs[recId];
+                            if (existingConf && existingConf.timestamp) {
+                              const confTime = new Date(existingConf.timestamp).getTime();
+                              const diffHrs = (now - confTime) / (1000 * 60 * 60);
+                              if (diffHrs < 24) {
+                                alert(
+                                  language === 'sr' 
+                                    ? 'Već ste poslali potvrdu za ovu lokaciju u poslednja 24 sata.' 
+                                    : language === 'zh' 
+                                    ? '您在过去 24 小时内已提交过该地点的验证。' 
+                                    : 'You have already submitted a confirmation for this location in the last 24 hours.'
+                                );
+                                setAccuracyModalOpen(false);
+                                return;
+                              }
+                            }
+
+                            // ANTI-ABUSE: Ignore identical duplicate submissions
+                            let list: any[] = [];
+                            try {
+                              const saved = safeStorage.getItem('idemo_editorial_observations_v1');
+                              list = saved ? JSON.parse(saved) : [];
+                            } catch (e) {
+                              console.warn(e);
+                            }
+
+                            const isDuplicate = list.some((s: any) => 
+                              s.recId === recId && 
+                              s.category === 'Yes' && 
+                              s.note === ''
+                            );
+
+                            if (isDuplicate) {
+                              console.log("Ignored identical duplicate submission");
+                              setAccuracyQuestionStep('success');
+                              setTimeout(() => {
+                                setAccuracyModalOpen(false);
+                              }, 2500);
                               return;
                             }
-                          }
 
-                          // ANTI-ABUSE: Ignore identical duplicate submissions
-                          let list: any[] = [];
-                          try {
-                            const saved = safeStorage.getItem('idemo_editorial_observations_v1');
-                            list = saved ? JSON.parse(saved) : [];
-                          } catch (e) {
-                            console.warn(e);
-                          }
+                            const updatedConfirmations = {
+                              ...confirmedAccuracyRecs,
+                              [recId]: {
+                                timestamp,
+                                result: 'Yes'
+                              }
+                            };
+                            setConfirmedAccuracyRecs(updatedConfirmations);
+                            try {
+                              safeStorage.setItem('idemo_accuracy_confirmations_v1', JSON.stringify(updatedConfirmations));
+                            } catch (e) {
+                              console.warn("Storage failed:", e);
+                            }
 
-                          const isDuplicate = list.some((s: any) => 
-                            s.recId === recId && 
-                            s.category === 'Yes' && 
-                            s.note === ''
-                          );
+                            // Add to CEMS Editorial Inbox
+                            try {
+                              list.push({
+                                id: 'sub-' + Math.random().toString(36).substring(2, 9),
+                                recId,
+                                recTitle: accuracyRecFull.title || accuracySelectedItem.title,
+                                category: 'Yes',
+                                note: '',
+                                language,
+                                appVersion: '1.0.0',
+                                timestamp,
+                                status: 'New'
+                              });
+                              safeStorage.setItem('idemo_editorial_observations_v1', JSON.stringify(list));
+                            } catch (e) {
+                              console.warn(e);
+                            }
 
-                          if (isDuplicate) {
-                            console.log("Ignored identical duplicate submission");
                             setAccuracyQuestionStep('success');
                             setTimeout(() => {
                               setAccuracyModalOpen(false);
                             }, 2500);
-                            return;
-                          }
+                          }}
+                          className="w-full p-4 bg-white hover:bg-white/80 border border-border-main rounded-2xl flex items-center justify-between text-left active:scale-[0.99] transition-all cursor-pointer group shadow-sm"
+                        >
+                          <div className="space-y-0.5">
+                            <span className="text-[12.5px] font-bold text-brand-charcoal flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-[#2E7D32]" />
+                              {language === 'sr' ? 'Da, sve je tačno' : language === 'zh' ? '是的，准确无误' : "Yes, it's accurate"}
+                            </span>
+                            <span className="text-[10px] text-brand-charcoal/50 block font-medium">
+                              {language === 'sr' ? 'Radno vreme, cene i lokacija u potpunosti odgovaraju' : language === 'zh' ? '营业时间、价格与位置完全符合事实' : 'Hours, price & location match reality'}
+                            </span>
+                          </div>
+                          <span className="text-brand-charcoal/30 group-hover:text-brand-charcoal transition-colors">➔</span>
+                        </button>
 
-                          const updatedConfirmations = {
-                            ...confirmedAccuracyRecs,
-                            [recId]: {
-                              timestamp,
-                              result: 'Yes'
-                            }
-                          };
-                          setConfirmedAccuracyRecs(updatedConfirmations);
-                          try {
-                            safeStorage.setItem('idemo_accuracy_confirmations_v1', JSON.stringify(updatedConfirmations));
-                          } catch (e) {
-                            console.warn("Storage failed:", e);
-                          }
+                        <button
+                          onClick={() => {
+                            triggerHaptic(5);
+                            setAccuracyAnswers(prev => ({ ...prev, accurate: 'Mostly' }));
+                            setAccuracyQuestionStep(2);
+                          }}
+                          className="w-full p-4 bg-white hover:bg-white/80 border border-border-main rounded-2xl flex items-center justify-between text-left active:scale-[0.99] transition-all cursor-pointer group shadow-sm"
+                        >
+                          <div className="space-y-0.5">
+                            <span className="text-[12.5px] font-bold text-brand-charcoal flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-[#E65100]" />
+                              {language === 'sr' ? 'Uglavnom tačno' : language === 'zh' ? '基本准确' : 'Mostly accurate'}
+                            </span>
+                            <span className="text-[10px] text-brand-charcoal/50 block font-medium">
+                              {language === 'sr' ? 'Mala odstupanja (npr. neznatno promenjene cene ili radno vreme)' : language === 'zh' ? '基本符合，仅有微小价格或时段变动' : 'Minor variations in prices, hours, or description'}
+                            </span>
+                          </div>
+                          <span className="text-brand-charcoal/30 group-hover:text-brand-charcoal transition-colors">➔</span>
+                        </button>
 
-                          // Add to CEMS Editorial Inbox
-                          try {
-                            list.push({
-                              id: 'sub-' + Math.random().toString(36).substring(2, 9),
-                              recId,
-                              recTitle: accuracySelectedItem.title,
-                              category: 'Yes',
-                              note: '',
-                              language,
-                              appVersion: '1.0.0',
-                              timestamp,
-                              status: 'New'
-                            });
-                            safeStorage.setItem('idemo_editorial_observations_v1', JSON.stringify(list));
-                          } catch (e) {
-                            console.warn(e);
-                          }
-
-                          setAccuracyQuestionStep('success');
-                          setTimeout(() => {
-                            setAccuracyModalOpen(false);
-                          }, 2500);
-                        }}
-                        className="w-full p-4 bg-white hover:bg-white/80 border border-border-main rounded-2xl flex items-center justify-between text-left active:scale-[0.99] transition-all cursor-pointer group shadow-sm"
-                      >
-                        <div className="space-y-0.5">
-                          <span className="text-[12.5px] font-bold text-brand-charcoal flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-[#2E7D32]" />
-                            {language === 'sr' ? 'Da, sve je tačno' : language === 'zh' ? '是的，准确无误' : "Yes, it's accurate"}
-                          </span>
-                          <span className="text-[10px] text-brand-charcoal/50 block font-medium">
-                            {language === 'sr' ? 'Potvrdite detalje lokacije bez izmena' : language === 'zh' ? '验证位置、价格、营业时间等完整信息' : 'Confirm hours, location & details as is'}
-                          </span>
-                        </div>
-                        <span className="text-brand-charcoal/30 group-hover:text-brand-charcoal transition-colors">➔</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          triggerHaptic(5);
-                          setAccuracyAnswers(prev => ({ ...prev, accurate: 'Mostly' }));
-                          setAccuracyQuestionStep(2);
-                        }}
-                        className="w-full p-4 bg-white hover:bg-white/80 border border-border-main rounded-2xl flex items-center justify-between text-left active:scale-[0.99] transition-all cursor-pointer group shadow-sm"
-                      >
-                        <div className="space-y-0.5">
-                          <span className="text-[12.5px] font-bold text-brand-charcoal flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-[#E65100]" />
-                            {language === 'sr' ? 'Uglavnom tačno' : language === 'zh' ? '基本准确' : 'Mostly accurate'}
-                          </span>
-                          <span className="text-[10px] text-brand-charcoal/50 block font-medium">
-                            {language === 'sr' ? 'Baza je dobra, ali mali detalji se razlikuju' : language === 'zh' ? '基本信息符合，但个别微小信息有变' : 'The core is right, but minor detail differs'}
-                          </span>
-                        </div>
-                        <span className="text-brand-charcoal/30 group-hover:text-brand-charcoal transition-colors">➔</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          triggerHaptic(5);
-                          setAccuracyAnswers(prev => ({ ...prev, accurate: 'NeedsUpdate' }));
-                          setAccuracyQuestionStep(2);
-                        }}
-                        className="w-full p-4 bg-white hover:bg-white/80 border border-border-main rounded-2xl flex items-center justify-between text-left active:scale-[0.99] transition-all cursor-pointer group shadow-sm"
-                      >
-                        <div className="space-y-0.5">
-                          <span className="text-[12.5px] font-bold text-brand-charcoal flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-[#C62828]" />
-                            {language === 'sr' ? 'Nešto treba ažurirati' : language === 'zh' ? '信息需要更新' : 'Something needs updating'}
-                          </span>
-                          <span className="text-[10px] text-brand-charcoal/50 block font-medium">
-                            {language === 'sr' ? 'Važna promena radnog vremena, cena ili lokacije' : language === 'zh' ? '营业时间、消费情况或位置有较明显变化' : 'Critical updates needed for hours, price, etc.'}
-                          </span>
-                        </div>
-                        <span className="text-brand-charcoal/30 group-hover:text-brand-charcoal transition-colors">➔</span>
-                      </button>
+                        <button
+                          onClick={() => {
+                            triggerHaptic(5);
+                            setAccuracyAnswers(prev => ({ ...prev, accurate: 'NeedsUpdate' }));
+                            setAccuracyQuestionStep(2);
+                          }}
+                          className="w-full p-4 bg-white hover:bg-white/80 border border-border-main rounded-2xl flex items-center justify-between text-left active:scale-[0.99] transition-all cursor-pointer group shadow-sm"
+                        >
+                          <div className="space-y-0.5">
+                            <span className="text-[12.5px] font-bold text-brand-charcoal flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-[#C62828]" />
+                              {language === 'sr' ? 'Nešto treba ažurirati' : language === 'zh' ? '信息需要更新' : 'Something needs updating'}
+                            </span>
+                            <span className="text-[10px] text-brand-charcoal/50 block font-medium">
+                              {language === 'sr' ? 'Važna promena radnog vremena, cena, lokacije ili zatvoreno' : language === 'zh' ? '营业时间、价格、位置有重大变动或已停业' : 'Important changes in hours, prices, location, or status'}
+                            </span>
+                          </div>
+                          <span className="text-brand-charcoal/30 group-hover:text-brand-charcoal transition-colors">➔</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                   {accuracyQuestionStep === 2 && (
                     <div className="space-y-4 animate-fade-in">
@@ -2598,7 +3007,7 @@ export default function App() {
                     <button
                       onClick={() => {
                         triggerHaptic(5);
-                        setAccuracyModalOpen(false);
+                        handleCloseAccuracyModal();
                       }}
                       className="w-full h-11 rounded-xl bg-brand-charcoal text-white hover:bg-brand-charcoal/90 text-[10px] uppercase tracking-widest font-extrabold active:scale-95 transition-all cursor-pointer"
                     >
@@ -2707,7 +3116,7 @@ export default function App() {
                 onToggleLike={() => toggleLike(rec.id)}
                 onBack={onBack}
                 onSchedule={(date, preventRedirect) => scheduleItem(rec, date, preventRedirect)}
-                onNavigate={(screen: string) => setCurrentScreen(screen)}
+                onNavigate={(screen: string) => navigateToScreen(screen as AppScreen)}
                 onRemove={() => removeScheduledItem(rec.id)}
                 rating={ratings[rec.id]}
                 onSaveRating={(vibe: any, tags: string[]) => saveRating(rec.id, vibe, tags)}
@@ -2716,14 +3125,8 @@ export default function App() {
                 lowSignalMode={lowSignalMode}
                 allRecommendations={userFacingRecommendations}
                 isAdminPreview={true}
-                onConfirmAccuracy={() => {
-                  setAccuracySelectedItem(rec);
-                  setAccuracyQuestionStep(1);
-                  setAccuracyAnswers({ accurate: null, categories: [], note: '' });
-                  setShowAccuracyNoteField(false);
-                  setAccuracyModalOpen(true);
-                  triggerHaptic(5);
-                }}
+                onConfirmAccuracy={() => handleOpenAccuracyModal(rec)}
+                onNestedModalStateChange={handleDetailNestedModalStateChange}
               />
             )}
           />
@@ -2762,12 +3165,14 @@ export default function App() {
         {showOnboarding && currentScreen !== 'landing' && (
           <OnboardingOverlay 
             language={language}
+            recommendations={userFacingRecommendations}
             onClose={() => {
               setShowOnboarding(false);
               try {
                 safeStorage.setItem('idemo_onboarded_v3', 'true');
               } catch (e) {}
             }}
+            onRegisterBackHandler={handleRegisterOnboardingBackHandler}
           />
         )}
       </AnimatePresence>
@@ -2780,9 +3185,7 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="absolute inset-0 bg-black/45 backdrop-blur-md z-[150] flex items-center justify-center p-6"
-            onClick={() => {
-              setPendingExternalLink(null);
-            }}
+            onClick={handleClosePendingExternalLink}
           >
             <motion.div
               initial={{ scale: 0.95, y: 15 }}
@@ -2829,7 +3232,7 @@ export default function App() {
 
               <div className="flex gap-2">
                 <button
-                  onClick={() => setPendingExternalLink(null)}
+                  onClick={handleClosePendingExternalLink}
                   className="flex-1 py-3 text-[11px] uppercase tracking-wider font-extrabold text-brand-charcoal bg-white hover:bg-[#EAE8DF]/40 border border-[#D5D3C8] rounded-xl active:scale-[0.98] transition-all cursor-pointer select-none"
                 >
                   {language === 'sr' ? 'Nazad' : language === 'zh' ? '取消' : 'Cancel'}
@@ -2839,7 +3242,7 @@ export default function App() {
                     if (pendingExternalLink) {
                       window.open(pendingExternalLink, '_blank', 'noopener,noreferrer');
                     }
-                    setPendingExternalLink(null);
+                    handleClosePendingExternalLink();
                   }}
                   className="flex-1 py-3 text-[11px] uppercase tracking-wider font-extrabold text-white bg-[#1E2E20] hover:bg-[#152016] border border-transparent rounded-xl active:scale-[0.98] transition-all cursor-pointer select-none"
                 >
@@ -3195,21 +3598,14 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
       exit={{ opacity: 0, scale: 0.95 }}
       className="flex-1 flex flex-col justify-center items-center py-4 px-5 relative h-full overflow-y-auto overflow-x-hidden no-scrollbar premium-paper select-none gap-y-4"
     >
-      {/* Group top section (Brand / Texts) with confident, elegant rhythm */}
-      <div className="flex-shrink-0 flex flex-col justify-center items-center gap-y-1.5 max-w-[340px] mx-auto w-full">
-        {/* 1. Serbia’s Hidden Corners - Main Title */}
-        <div className="text-center w-full">
-          <h1 className="text-[29px] xs:text-[32px] sm:text-[35px] font-serif text-brand-charcoal font-medium tracking-tight leading-snug">
-            {t.serbia_headline}
-          </h1>
-        </div>
-
-        {/* 2. Tagline Refinement */}
-        <div className="text-center w-full flex flex-col justify-center items-center gap-y-0.5 mt-1">
-          <p className="font-sans text-[14.3px] xs:text-[15.6px] sm:text-[16.9px] text-[#800020] font-bold uppercase tracking-[0.12em] xs:tracking-[0.14em] sm:tracking-[0.16em] opacity-95 whitespace-nowrap">
+      {/* Group top section (Promotional Statement) with confident, elegant rhythm */}
+      <div className="flex-shrink-0 flex flex-col justify-center items-center max-w-[340px] mx-auto w-full pt-1">
+        {/* Main 2-line promotional statement */}
+        <div className="text-center w-full flex flex-col justify-center items-center gap-y-1">
+          <p className="font-sans text-[15px] xs:text-[16.5px] sm:text-[18px] text-[#800020] font-bold uppercase tracking-[0.06em] xs:tracking-[0.08em] sm:tracking-[0.1em] text-center leading-[1.3] whitespace-nowrap">
             {t.serbia_subheadline_line1_l1}
           </p>
-          <p className="font-sans text-[14.3px] xs:text-[15.6px] sm:text-[16.9px] text-[#800020] font-bold uppercase tracking-[0.12em] xs:tracking-[0.14em] sm:tracking-[0.16em] opacity-95 whitespace-nowrap">
+          <p className="font-sans text-[15px] xs:text-[16.5px] sm:text-[18px] text-[#800020] font-bold uppercase tracking-[0.06em] xs:tracking-[0.08em] sm:tracking-[0.1em] text-center leading-[1.3] whitespace-nowrap">
             {t.serbia_subheadline_line1_l2}
           </p>
         </div>
@@ -5149,7 +5545,7 @@ function DetailsCTA({
   );
 }
 
-function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedule, onNavigate, onRemove, language, rating, onSaveRating, vibeSettings, onSelectRec, lowSignalMode, allRecommendations, isAdminPreview = false, onConfirmAccuracy }: any) {
+function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedule, onNavigate, onRemove, language, rating, onSaveRating, vibeSettings, onSelectRec, lowSignalMode, allRecommendations, isAdminPreview = false, onConfirmAccuracy, onNestedModalStateChange }: any) {
   const [expanded, setExpanded] = useState(false);
   const [activeAccordion, setActiveAccordion] = useState<string | null>(null);
   const [scrolledPast, setScrolledPast] = useState(false);
@@ -5200,6 +5596,22 @@ function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedu
   const [showPartnerModal, setShowPartnerModal] = useState(false);
   const [showDriverCard, setShowDriverCard] = useState(false);
   const [taxiCopied, setTaxiCopied] = useState(false);
+
+  // Synchronize nested modal state with App-level navigation authority
+  useEffect(() => {
+    const hasOpenNestedModal = showPartnerModal || showConcierge || showDriverCard || showPronunciation || showAssistanceChannels;
+    if (hasOpenNestedModal && onNestedModalStateChange) {
+      onNestedModalStateChange(true, () => {
+        if (showPartnerModal) setShowPartnerModal(false);
+        else if (showDriverCard) setShowDriverCard(false);
+        else if (showPronunciation) setShowPronunciation(false);
+        else if (showAssistanceChannels) setShowAssistanceChannels(false);
+        else if (showConcierge) setShowConcierge(false);
+      });
+    } else if (onNestedModalStateChange) {
+      onNestedModalStateChange(false, null);
+    }
+  }, [showPartnerModal, showConcierge, showDriverCard, showPronunciation, showAssistanceChannels, onNestedModalStateChange]);
 
   const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
 
@@ -10434,7 +10846,17 @@ const CARD1_ARCHETYPES: Record<string, {
   }
 };
 
-function OnboardingOverlay({ language, onClose }: { language: string; onClose: () => void }) {
+function OnboardingOverlay({
+  language,
+  recommendations,
+  onClose,
+  onRegisterBackHandler
+}: {
+  language: string;
+  recommendations?: Recommendation[];
+  onClose: () => void;
+  onRegisterBackHandler?: (handler: (() => boolean) | null) => void;
+}) {
   const [cardIndex, setCardIndex] = useState(0);
   const [direction, setDirection] = useState(1);
   const [activeStepAnim, setActiveStepAnim] = useState<number>(1);
@@ -10448,6 +10870,9 @@ function OnboardingOverlay({ language, onClose }: { language: string; onClose: (
   const t = ONBOARDING_TRANSLATIONS[language] || ONBOARDING_TRANSLATIONS['en'];
   const archData = CARD1_ARCHETYPES[language] || CARD1_ARCHETYPES['en'];
   const current = t.cards[cardIndex];
+  const recList = recommendations && recommendations.length > 0 ? recommendations : INITIAL_RECOMMENDATIONS;
+  const uvacRec = recList.find(r => r.id === '1');
+  const uvacImage = getApprovedPrimaryMedia('1', uvacRec?.image);
 
   // Handle manual step selection with temporary pause before resuming cycle
   const handleStepClick = useCallback((stepNum: number) => {
@@ -10455,6 +10880,43 @@ function OnboardingOverlay({ language, onClose }: { language: string; onClose: (
     setActiveStepAnim(stepNum);
     setPauseAutoCycle(true);
   }, []);
+
+  const handleNext = () => {
+    triggerHaptic(5);
+    if (cardIndex < 2) {
+      setDirection(1);
+      setCardIndex(cardIndex + 1);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleBack = useCallback(() => {
+    triggerHaptic(5);
+    if (cardIndex > 0) {
+      setDirection(-1);
+      setCardIndex(prev => prev - 1);
+      return true;
+    }
+    return false;
+  }, [cardIndex]);
+
+  useEffect(() => {
+    if (onRegisterBackHandler) {
+      if (cardIndex > 0) {
+        onRegisterBackHandler(() => {
+          return handleBack();
+        });
+      } else {
+        onRegisterBackHandler(null);
+      }
+    }
+    return () => {
+      if (onRegisterBackHandler) {
+        onRegisterBackHandler(null);
+      }
+    };
+  }, [cardIndex, handleBack, onRegisterBackHandler]);
 
   // Continuous 1 -> 2 -> 3 loop engine across all onboarding cards
   useEffect(() => {
@@ -10553,24 +11015,6 @@ function OnboardingOverlay({ language, onClose }: { language: string; onClose: (
       case 'CheckCircle': return <CheckCircle size={26} className={className} />;
       case 'User': return <User size={26} className={className} />;
       default: return <Sparkles size={26} className={className} />;
-    }
-  };
-
-  const handleNext = () => {
-    triggerHaptic(5);
-    if (cardIndex < 2) {
-      setDirection(1);
-      setCardIndex(cardIndex + 1);
-    } else {
-      onClose();
-    }
-  };
-
-  const handleBack = () => {
-    triggerHaptic(5);
-    if (cardIndex > 0) {
-      setDirection(-1);
-      setCardIndex(cardIndex - 1);
     }
   };
 
@@ -11172,7 +11616,7 @@ function OnboardingOverlay({ language, onClose }: { language: string; onClose: (
                     className="absolute inset-0 w-full h-full"
                   >
                     <LazyImage 
-                      src="assets/images/uvac_meanders_1778841048759.webp" 
+                      src={uvacImage} 
                       alt="Uvac Meanders" 
                       containerClassName="w-full h-full"
                       className="w-full h-full object-cover object-center"
@@ -11256,7 +11700,7 @@ function OnboardingOverlay({ language, onClose }: { language: string; onClose: (
                     {/* Proposal Thumbnail & Details Row */}
                     <div className="flex items-start gap-3 pt-0.5">
                       <LazyImage 
-                        src="assets/images/uvac_meanders_1778841048759.webp" 
+                        src={uvacImage} 
                         alt="Uvac Thumbnail" 
                         containerClassName="w-14 h-14 rounded-[12px] shrink-0 border border-border-main/40 overflow-hidden shadow-xs"
                         className="w-full h-full object-cover"

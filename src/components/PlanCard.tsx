@@ -1311,7 +1311,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                     <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 border-2 border-[#C5A059] bg-[#3E5037]/10 flex items-center justify-center shadow-sm">
                       {introData?.photo_url && !passportPhotoError ? (
                         <img
-                          src={introData.photo_url}
+                          src={introData.photo_url || undefined}
                           alt={confirmedArrangement.partner_name}
                           onError={() => setPassportPhotoError(true)}
                           className="w-full h-full object-cover"
@@ -1454,7 +1454,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                             <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 border-2 border-[#C5A059] bg-[#3E5037]/10 flex items-center justify-center shadow-sm">
                               {introData.photo_url && !passportPhotoError ? (
                                 <img
-                                  src={introData.photo_url}
+                                  src={introData.photo_url || undefined}
                                   alt={introData.partner_name || 'Partner Profile'}
                                   onError={() => setPassportPhotoError(true)}
                                   className="w-full h-full object-cover"

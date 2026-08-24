@@ -8,6 +8,7 @@
  */
 
 import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient';
+import { resolveServiceAreaUuid } from './recommendationWorkflowService';
 
 export type MediaWorkflowState =
   | 'empty'
@@ -31,6 +32,31 @@ export interface LocalMediaValidationResult {
   error?: string;
 }
 
+export const CANONICAL_ACQUISITION_METHODS = [
+  'original',
+  'commissioned',
+  'partner_supplied',
+  'licensed',
+  'public_domain',
+  'tourism_board',
+] as const;
+
+export type CanonicalAcquisitionMethod = typeof CANONICAL_ACQUISITION_METHODS[number];
+
+/**
+ * Normalizes input acquisition method to authoritative database enum or null.
+ * Prevents non-media research descriptors (e.g. ai_grounded_research, editorial_research)
+ * from being submitted to the database media RPC.
+ */
+export function normalizeAcquisitionMethod(method?: string | null): CanonicalAcquisitionMethod | null {
+  if (!method) return null;
+  const trimmed = method.trim().toLowerCase();
+  if ((CANONICAL_ACQUISITION_METHODS as readonly string[]).includes(trimmed)) {
+    return trimmed as CanonicalAcquisitionMethod;
+  }
+  return null;
+}
+
 export interface RecommendationMediaMetadata {
   altText?: Record<string, string>;
   provenanceSource?: string;
@@ -40,6 +66,278 @@ export interface RecommendationMediaMetadata {
   attributionText?: string;
   creatorName?: string;
   sourceUrl?: string;
+}
+
+export interface HumanMediaApprovalRecord {
+  recommendationId: string;
+  recommendation_id?: string;
+  currentImage: string;
+  previousMediaRef?: string;
+  proposedImage: string;
+  proposedMediaRef?: string;
+  reasonForChange: string;
+  reason_for_change?: string;
+  changeNote?: string;
+  approvingHuman: string;
+  approving_human?: string;
+  approvalTimestamp: string;
+  approval_timestamp?: string;
+  canonicalMediaRef: string;
+  canonical_media_ref?: string;
+}
+
+export interface MediaIntegrityWarning {
+  code: 'MEDIA_MISSING_OR_BROKEN' | 'UNAUTHORIZED_MEDIA_CHANGE_ATTEMPT' | 'FALLBACK_OVERRIDE_BLOCKED';
+  recommendationId: string;
+  approvedReference: string;
+  attemptedReference?: string;
+  message: string;
+  actionBlocked: boolean;
+  publicationBlocked: boolean;
+}
+
+export interface MediaAuthorityValidationResult {
+  authorized: boolean;
+  activeCanonicalRef: string;
+  warning?: MediaIntegrityWarning;
+  approvalRecord?: HumanMediaApprovalRecord | null;
+}
+
+export interface MediaIntegrityCheckResult {
+  valid: boolean;
+  canonicalRef: string;
+  warning?: MediaIntegrityWarning;
+}
+
+export interface PublicationMediaGateResult {
+  valid: boolean;
+  blockedRecommendations: string[];
+  errors: string[];
+}
+
+export interface AssetSyncGateResult {
+  allowed: boolean;
+  activeCanonicalRef: string;
+  error?: string;
+}
+
+// In-memory SSOT store for human media approvals
+const humanMediaApprovals = new Map<string, HumanMediaApprovalRecord>();
+
+/**
+ * Resets human media approval store (used for test isolation).
+ */
+export function clearHumanMediaApprovalsForTesting(): void {
+  humanMediaApprovals.clear();
+}
+
+/**
+ * Returns the currently human-approved primary media for a recommendation.
+ */
+export function getApprovedPrimaryMedia(recommendationId: string, defaultImage?: string): string {
+  const approvalRecord = humanMediaApprovals.get(recommendationId);
+  if (approvalRecord) {
+    return approvalRecord.canonicalMediaRef || approvalRecord.proposedImage || approvalRecord.proposedMediaRef || '';
+  }
+  if (recommendationId === '1' || recommendationId === 'rec-uvac-1') {
+    return '/src/assets/images/uvac_meanders_1778841048759.png';
+  }
+  return defaultImage || '';
+}
+
+/**
+ * Registers an explicit human approval action for a media change in IDEMO Studio.
+ */
+export function approveMediaChangeSecure(rawRecord: Omit<HumanMediaApprovalRecord, 'canonicalMediaRef'> & { canonicalMediaRef?: string; [key: string]: any }): { success: boolean; record: HumanMediaApprovalRecord } {
+  const recId = rawRecord.recommendationId || rawRecord.recommendation_id;
+  const currentImg = rawRecord.currentImage || rawRecord.previousMediaRef || rawRecord.previous_media_ref || '';
+  const proposedImg = rawRecord.proposedImage || rawRecord.proposedMediaRef || rawRecord.proposed_media_ref || '';
+  const approvingHuman = rawRecord.approvingHuman || rawRecord.approving_human || '';
+  const approvalTimestamp = rawRecord.approvalTimestamp || rawRecord.approval_timestamp || new Date().toISOString();
+  const reason = rawRecord.reasonForChange || rawRecord.reason_for_change || rawRecord.changeNote || 'Explicit human media approval';
+
+  if (!recId || !proposedImg || !approvingHuman || !approvalTimestamp) {
+    throw new Error('HUMAN_MEDIA_APPROVAL_INVALID: Missing required approval metadata (recommendationId, proposedImage, approvingHuman, approvalTimestamp).');
+  }
+
+  const canonicalRef = rawRecord.canonicalMediaRef || rawRecord.canonical_media_ref || getCanonicalMediaReference(proposedImg) || proposedImg;
+
+  const fullRecord: HumanMediaApprovalRecord = {
+    recommendationId: recId,
+    recommendation_id: recId,
+    currentImage: currentImg,
+    previousMediaRef: currentImg,
+    proposedImage: proposedImg,
+    proposedMediaRef: proposedImg,
+    reasonForChange: reason,
+    reason_for_change: reason,
+    changeNote: reason,
+    approvingHuman: approvingHuman,
+    approving_human: approvingHuman,
+    approvalTimestamp: approvalTimestamp,
+    approval_timestamp: approvalTimestamp,
+    canonicalMediaRef: canonicalRef,
+    canonical_media_ref: canonicalRef,
+  };
+
+  humanMediaApprovals.set(recId, fullRecord);
+  return { success: true, record: fullRecord };
+}
+
+/**
+ * Validates whether a media change or substitution attempt has explicit human approval authority.
+ * Prevents AI models, automated scripts, or fallbacks from modifying approved canonical media.
+ */
+export function validateMediaChangeAuthority(
+  recommendationId: string,
+  currentApprovedRef: string | null | undefined,
+  proposedRef: string,
+  approvalRecord?: HumanMediaApprovalRecord | null
+): MediaAuthorityValidationResult {
+  const activeApproved = currentApprovedRef || getApprovedPrimaryMedia(recommendationId);
+
+  // If no current approved media exists or proposed matches current, no change attempt
+  if (!activeApproved || activeApproved.trim() === '' || proposedRef === activeApproved) {
+    return {
+      authorized: true,
+      activeCanonicalRef: proposedRef || activeApproved || '',
+      approvalRecord: approvalRecord || null,
+    };
+  }
+
+  // A media change is requested on an existing approved media reference.
+  // Check for explicit human approval record (passed in or registered in SSOT store)
+  const existingRecord = approvalRecord || humanMediaApprovals.get(recommendationId);
+
+  const isValidHumanApproval = Boolean(
+    existingRecord &&
+    existingRecord.recommendationId === recommendationId &&
+    existingRecord.approvingHuman &&
+    existingRecord.approvingHuman.trim().length > 0 &&
+    existingRecord.approvalTimestamp &&
+    (existingRecord.proposedImage === proposedRef || existingRecord.proposedMediaRef === proposedRef || existingRecord.canonicalMediaRef === proposedRef)
+  );
+
+  if (!isValidHumanApproval) {
+    return {
+      authorized: false,
+      activeCanonicalRef: activeApproved, // CANONICAL IMMUTABILITY: Preserve approved reference
+      warning: {
+        code: 'UNAUTHORIZED_MEDIA_CHANGE_ATTEMPT',
+        recommendationId,
+        approvedReference: activeApproved,
+        attemptedReference: proposedRef,
+        message: `UNAUTHORIZED_MEDIA_CHANGE: Image modification from "${activeApproved}" to "${proposedRef}" rejected. No explicit human approval record found for recommendation "${recommendationId}". Automated media changes are strictly prohibited under IDEMO Governance.`,
+        actionBlocked: true,
+        publicationBlocked: true,
+      },
+    };
+  }
+
+  return {
+    authorized: true,
+    activeCanonicalRef: existingRecord?.canonicalMediaRef || proposedRef,
+    approvalRecord: existingRecord,
+  };
+}
+
+/**
+ * Validation Gate 4: Validation gate before publication / package generation.
+ * If canonical primary media differs from last human-approved media mapping, publication is BLOCKED.
+ */
+export function validatePublicationMediaGate(
+  recommendations: Array<{ id: string; image?: string; dbId?: string }>
+): PublicationMediaGateResult {
+  const blockedRecommendations: string[] = [];
+  const errors: string[] = [];
+
+  for (const rec of recommendations) {
+    if (!rec || !rec.id) continue;
+    const currentApproved = getApprovedPrimaryMedia(rec.id, rec.image);
+    const candidateImage = rec.image || '';
+
+    if (candidateImage && currentApproved && candidateImage !== currentApproved) {
+      const authorityRes = validateMediaChangeAuthority(rec.id, currentApproved, candidateImage);
+      if (!authorityRes.authorized) {
+        blockedRecommendations.push(rec.id);
+        errors.push(
+          `PUBLICATION_BLOCKED: Primary media drift detected on recommendation "${rec.id}". Attempted image "${candidateImage}" differs from approved canonical image "${currentApproved}" without an explicit human approval record.`
+        );
+      }
+    }
+  }
+
+  return {
+    valid: blockedRecommendations.length === 0,
+    blockedRecommendations,
+    errors,
+  };
+}
+
+/**
+ * Validation Gate 5: Validation gate for static/public asset synchronization.
+ * Copying or replacing a visitor-visible recommendation asset is allowed ONLY when its reference/hash
+ * matches the currently human-approved media mapping.
+ */
+export function validateAssetSyncGate(
+  recommendationId: string,
+  attemptedAssetPath: string,
+  attemptedAssetHash?: string
+): AssetSyncGateResult {
+  const approvedRef = getApprovedPrimaryMedia(recommendationId);
+
+  if (!approvedRef || attemptedAssetPath === approvedRef || attemptedAssetPath.includes(approvedRef) || approvedRef.includes(attemptedAssetPath)) {
+    return {
+      allowed: true,
+      activeCanonicalRef: approvedRef || attemptedAssetPath,
+    };
+  }
+
+  const authorityCheck = validateMediaChangeAuthority(recommendationId, approvedRef, attemptedAssetPath);
+  if (!authorityCheck.authorized) {
+    return {
+      allowed: false,
+      activeCanonicalRef: approvedRef,
+      error: `ASSET_SYNC_BLOCKED: Asset synchronization for recommendation "${recommendationId}" attempted path "${attemptedAssetPath}" which conflicts with human-approved canonical asset "${approvedRef}". Sync blocked under IDEMO Governance.`,
+    };
+  }
+
+  return {
+    allowed: true,
+    activeCanonicalRef: authorityCheck.activeCanonicalRef,
+  };
+}
+
+/**
+ * Fail-Safe Rule: Checks whether an approved canonical media asset is available/valid.
+ * If broken/missing/unavailable, preserves the approved media reference, surfaces a warning, and blocks publication.
+ * Prohibits silent fallback substitution.
+ */
+export function checkCanonicalMediaIntegrity(
+  recommendationId: string,
+  approvedRef: string,
+  isAssetAvailable: boolean
+): MediaIntegrityCheckResult {
+  if (isAssetAvailable) {
+    return {
+      valid: true,
+      canonicalRef: approvedRef,
+    };
+  }
+
+  // Asset is missing or broken
+  return {
+    valid: false,
+    canonicalRef: approvedRef, // FAIL-SAFE RULE 1: Preserve approved media reference
+    warning: {
+      code: 'MEDIA_MISSING_OR_BROKEN',
+      recommendationId,
+      approvedReference: approvedRef,
+      message: `MEDIA_INTEGRITY_WARNING: Approved canonical media "${approvedRef}" for recommendation "${recommendationId}" is unavailable or unresolvable. Silent fallback substitution is strictly prohibited by IDEMO Governance. Publication is blocked until human review and approval.`,
+      actionBlocked: true, // FAIL-SAFE RULE 3: block automated action
+      publicationBlocked: true, // FAIL-SAFE RULE 3: block publication
+    },
+  };
 }
 
 export interface AuthorizeUploadParams {
@@ -197,9 +495,18 @@ export async function reserveRecommendationDraft(
   error?: string;
   message?: string;
 }> {
+  const destUuid = await resolveServiceAreaUuid(destinationId);
+  if (!destUuid) {
+    return {
+      success: false,
+      error: 'CANONICAL_SERVICE_AREA_UNRESOLVED',
+      message: 'Canonical service area UUID could not be resolved.',
+    };
+  }
+
   return callWorkflowEngineRoute('/recommendations/reserve-draft', {
-    destination_id: destinationId,
-    idempotency_key: idempotencyKey || `reserve_${destinationId}`,
+    destination_id: destUuid,
+    idempotency_key: idempotencyKey || `reserve_${destUuid}`,
     correlation_id: correlationId,
   });
 }
@@ -230,15 +537,47 @@ export async function abandonRecommendationDraft(
 export async function authorizeRecommendationMediaUpload(
   params: AuthorizeUploadParams
 ): Promise<AuthorizeUploadResult> {
-  const result = await callWorkflowEngineRoute('authorize-upload', params);
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  if (
+    !params.reserved_recommendation_id ||
+    typeof params.reserved_recommendation_id !== 'string' ||
+    !params.reserved_recommendation_id.trim() ||
+    !UUID_REGEX.test(params.reserved_recommendation_id.trim())
+  ) {
+    return {
+      success: false,
+      error: 'INVALID_RESERVATION_ID',
+      message: 'reserved_recommendation_id must be a valid UUID',
+    };
+  }
+
+  let destUuid = params.destination_id;
+  if (destUuid) {
+    const resolved = await resolveServiceAreaUuid(destUuid);
+    if (!resolved) {
+      return {
+        success: false,
+        error: 'CANONICAL_SERVICE_AREA_UNRESOLVED',
+        message: 'Canonical service area UUID could not be resolved.',
+      };
+    }
+    destUuid = resolved;
+  }
+
+  const updatedParams = { ...params, destination_id: destUuid };
+  const result = await callWorkflowEngineRoute('authorize-upload', updatedParams);
   if (!result.success) {
     return result;
   }
 
-  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  const objectPath = result.object_path || result.path;
+  // Normalize paths for consistent comparison
+  const normalizePath = (p?: string) => (p ? p.replace(/^\/+/, '').replace(/^recommendation-media\//, '') : '');
+  const cleanPath = normalizePath(result.path);
+  const cleanObjectPath = normalizePath(result.object_path);
+  const objectPath = cleanObjectPath || cleanPath;
 
-  // DEFECT 2: Fail-closed validation of server authorization response
+  // Fail-closed validation of server authorization response
   if (
     !result.bucket ||
     result.bucket !== 'recommendation-media' ||
@@ -246,28 +585,41 @@ export async function authorizeRecommendationMediaUpload(
     !result.asset_id ||
     !UUID_REGEX.test(result.asset_id) ||
     !result.token ||
-    (result.path && result.object_path && result.path !== result.object_path)
+    (cleanPath && cleanObjectPath && cleanPath !== cleanObjectPath)
   ) {
+    const missingFields: string[] = [];
+    if (!result.bucket || result.bucket !== 'recommendation-media') missingFields.push('valid bucket (recommendation-media)');
+    if (!objectPath) missingFields.push('object_path');
+    if (!result.asset_id || !UUID_REGEX.test(result.asset_id)) missingFields.push('valid UUID asset_id');
+    if (!result.token) missingFields.push('storage upload token');
+    if (cleanPath && cleanObjectPath && cleanPath !== cleanObjectPath) missingFields.push('matching path/object_path');
+
     return {
       success: false,
       error: 'MEDIA_AUTHORIZATION_INVALID',
-      message: 'Server authorization payload is missing required fields (bucket, object_path, asset_id, token) or bucket/path/token/asset_id is invalid.',
+      message: `Server authorization payload validation failed: [${missingFields.join(', ')}].`,
     };
   }
 
   if (result.expires_at) {
-    const expiryTime = new Date(result.expires_at).getTime();
+    let dateStr = String(result.expires_at).trim();
+    if (!dateStr.includes('T') && dateStr.includes(' ')) {
+      dateStr = dateStr.replace(' ', 'T') + 'Z';
+    } else if (dateStr.includes('T') && !dateStr.endsWith('Z') && !dateStr.includes('+')) {
+      dateStr = dateStr + 'Z';
+    }
+    const expiryTime = new Date(dateStr).getTime();
     if (isNaN(expiryTime) || expiryTime <= Date.now()) {
       return {
         success: false,
         error: 'MEDIA_AUTHORIZATION_INVALID',
-        message: 'Upload authorization token has expired.',
+        message: `Upload authorization token has expired (expires_at: ${result.expires_at}).`,
       };
     }
   }
 
-  if (result.object_path && !result.canonical_url) {
-    result.canonical_url = getCanonicalMediaReference(result.object_path);
+  if (objectPath && !result.canonical_url) {
+    result.canonical_url = getCanonicalMediaReference(objectPath);
   }
 
   return result;
@@ -352,7 +704,7 @@ export async function updateRecommendationMediaMetadata(
     asset_id: assetId,
     alt_text: metadata.altText || {},
     provenance_source: metadata.provenanceSource || null,
-    acquisition_method: metadata.acquisitionMethod || null,
+    acquisition_method: normalizeAcquisitionMethod(metadata.acquisitionMethod),
     licence_type: metadata.licenceType || null,
     attribution_required: Boolean(metadata.attributionRequired),
     attribution_text: metadata.attributionText || null,
@@ -398,3 +750,7 @@ export async function abandonRecommendationMediaAsset(
     abandonment_reason: reason || 'User abandoned draft upload',
   });
 }
+
+// Re-export media resolution authority from assetHelper (SSOT)
+export { resolveMediaDisplayUrl, invalidateMediaCache } from '../utils/assetHelper';
+

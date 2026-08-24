@@ -419,4 +419,27 @@ export function removeSeenProposal(inquiryId: string): void {
   }
 }
 
+export function checkHasUnreadProposals(): boolean {
+  try {
+    const all = getAllInquiriesV2();
+    for (const inq of all) {
+      const serverId = inq.server_inquiry_id || inq.local_queue_id;
+      if (!serverId) continue;
+
+      if (inq.cached_proposal) {
+        const cached = inq.cached_proposal;
+        if (cached.match_id && cached.response_id) {
+          const sig = `${cached.match_id}_${cached.response_id || 'active'}`;
+          if (!isProposalSeen(serverId, sig)) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 

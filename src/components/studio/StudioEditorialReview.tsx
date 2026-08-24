@@ -987,7 +987,7 @@ export function StudioEditorialReview({
                     <div className="space-y-3">
                       <div className="relative rounded-2xl overflow-hidden border border-[#E5E3DB] bg-[#23251E] aspect-video">
                         <img
-                          src={activeRec.image}
+                          src={activeRec.image || undefined}
                           alt={activeRec.title}
                           className="w-full h-full object-cover"
                           onError={(e) => {
@@ -1305,7 +1305,7 @@ export function StudioEditorialReview({
                                 {selectedPassportProfile.photo_available && selectedPassportProfile.photo_url ? (
                                   <div className="mt-2 text-center">
                                     <img
-                                      src={selectedPassportProfile.photo_url}
+                                      src={selectedPassportProfile.photo_url || undefined}
                                       alt={selectedPassportProfile.partner_name}
                                       referrerPolicy="no-referrer"
                                       className="max-h-48 rounded-xl object-cover border border-[#E5E3DB] mx-auto shadow-sm"
@@ -1659,7 +1659,7 @@ export function StudioEditorialReview({
             {/* Simulated Mobile Device Body */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
               <div className="relative rounded-2xl overflow-hidden aspect-video border border-[#E5E3DB] bg-[#23251E]">
-                <img src={activeRec.image} alt={activeRec.title} className="w-full h-full object-cover" />
+                <img src={activeRec.image || undefined} alt={activeRec.title} className="w-full h-full object-cover" />
                 <span className="absolute bottom-2 left-2 bg-[#23251E]/80 text-white font-mono text-[9px] px-2 py-0.5 rounded-md uppercase font-bold">
                   {activeRec.category}
                 </span>

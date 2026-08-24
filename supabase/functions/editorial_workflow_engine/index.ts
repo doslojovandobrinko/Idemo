@@ -458,36 +458,70 @@ serve(async (req: Request) => {
           correlation_id = null,
         } = body;
 
-        if (reserved_recommendation_id) {
-          const { data: resRow } = await supabase
-            .from("recommendation_draft_reservations")
-            .select("id, status, reserved_by, destination_id")
-            .eq("reserved_recommendation_id", reserved_recommendation_id)
-            .maybeSingle();
+        const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-          if (resRow && (resRow.status !== "active" || resRow.reserved_by !== user.id || resRow.destination_id !== destination_id)) {
-            return new Response(
-              JSON.stringify({
-                success: false,
-                error: "MEDIA_AUTHORIZATION_INVALID",
-                message: "Draft reservation is inactive or actor/destination mismatched."
-              }),
-              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
+        if (
+          !reserved_recommendation_id ||
+          typeof reserved_recommendation_id !== "string" ||
+          !reserved_recommendation_id.trim() ||
+          !UUID_REGEX.test(reserved_recommendation_id.trim())
+        ) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: "INVALID_RESERVATION_ID",
+              message: "reserved_recommendation_id must be a valid UUID",
+            }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        const normReservedRecId = reserved_recommendation_id.trim();
+
+        // Defensively normalize optional UUID inputs
+        const normWorkItemId =
+          typeof work_item_id === "string" && work_item_id.trim() && UUID_REGEX.test(work_item_id.trim())
+            ? work_item_id.trim()
+            : null;
+
+        const normReplacementAssetId =
+          typeof replacement_asset_id === "string" && replacement_asset_id.trim() && UUID_REGEX.test(replacement_asset_id.trim())
+            ? replacement_asset_id.trim()
+            : null;
+
+        const normCorrelationId =
+          typeof correlation_id === "string" && correlation_id.trim() && UUID_REGEX.test(correlation_id.trim())
+            ? correlation_id.trim()
+            : null;
+
+        const { data: resRow } = await supabase
+          .from("recommendation_draft_reservations")
+          .select("id, status, reserved_by, destination_id")
+          .eq("reserved_recommendation_id", normReservedRecId)
+          .maybeSingle();
+
+        if (resRow && (resRow.status !== "active" || resRow.reserved_by !== user.id || resRow.destination_id !== destination_id)) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: "MEDIA_AUTHORIZATION_INVALID",
+              message: "Draft reservation is inactive or actor/destination mismatched."
+            }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
 
         const { data, error } = await supabase.rpc("issue_recommendation_media_upload_authorization_secure", {
           p_author_id: user.id,
           p_destination_id: destination_id,
-          p_reserved_recommendation_id: reserved_recommendation_id,
+          p_reserved_recommendation_id: normReservedRecId,
           p_mime_type: mime_type,
           p_file_size_bytes: file_size_bytes,
           p_original_filename: original_filename,
-          p_work_item_id: work_item_id,
-          p_replacement_asset_id: replacement_asset_id,
+          p_work_item_id: normWorkItemId,
+          p_replacement_asset_id: normReplacementAssetId,
           p_idempotency_key: idempotency_key,
-          p_correlation_id: correlation_id,
+          p_correlation_id: normCorrelationId,
         });
 
         if (error) {
@@ -516,16 +550,31 @@ serve(async (req: Request) => {
             );
           }
 
+          let expiresAtIso: string;
+          if (data.expires_at) {
+            const rawStr = String(data.expires_at).trim();
+            if (rawStr.includes("T")) {
+              expiresAtIso = (!rawStr.endsWith("Z") && !rawStr.includes("+")) ? rawStr + "Z" : rawStr;
+            } else if (rawStr.includes(" ")) {
+              expiresAtIso = rawStr.replace(" ", "T") + "Z";
+            } else {
+              expiresAtIso = new Date(data.expires_at).toISOString();
+            }
+          } else {
+            expiresAtIso = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+          }
+
           return new Response(
             JSON.stringify({
               ...data,
               bucket: data.bucket || "recommendation-media",
               allowed_mime_type: data.allowed_mime_type || mime_type,
               maximum_size_bytes: data.maximum_size_bytes || 5242880,
-              expires_at: data.expires_at || new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+              expires_at: expiresAtIso,
               signed_upload_url: signedData?.signedUrl,
               token: signedData?.token,
-              path: signedData?.path,
+              path: signedData?.path || data.object_path,
+              object_path: data.object_path,
             }),
             { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );

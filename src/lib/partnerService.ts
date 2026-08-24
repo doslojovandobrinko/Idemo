@@ -661,6 +661,41 @@ export async function authorizePhotoUpload(
   }
 }
 
+export async function uploadPhotoToSignedUrl(
+  uploadUrl: string,
+  file: File
+): Promise<{ success: boolean; error?: string }> {
+  if (!uploadUrl) {
+    return { success: false, error: 'INVALID_UPLOAD_URL: Missing signed upload URL.' };
+  }
+
+  try {
+    const res = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': file.type,
+      },
+      body: file,
+    });
+
+    if (res.ok) {
+      return { success: true };
+    }
+
+    const errData = await res.json().catch(() => null);
+    const errText = errData?.message || errData?.error || (await res.text().catch(() => ''));
+    return {
+      success: false,
+      error: `STORAGE_UPLOAD_FAILED: HTTP ${res.status}${errText ? ` - ${errText}` : ''}`,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: `NETWORK_FAILURE: ${err?.message || String(err)}`,
+    };
+  }
+}
+
 export async function savePartnerProfileDraft(
   introDraft: string | null,
   draftPhotoPath: string | null,
@@ -943,10 +978,32 @@ export async function updatePartnerProfessionalContact(
     });
 
     const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.success) {
+      // Robust fallback if /me/contact returns 404 on edge router
+      if (res.status === 404) {
+        const profileContentRes = await getPartnerProfileContent();
+        const currentContent = profileContentRes.content;
+        return await savePartnerProfileDraft(
+          currentContent?.intro_draft || null,
+          currentContent?.draft_photo_path || null,
+          currentContent?.draft_photo_mime || null,
+          currentContent?.photo_consent_given || false,
+          contactPhone,
+          contactEmail
+        );
+      }
+      return {
+        success: false,
+        message: data.message,
+        error: data.message || data.error || `HTTP ${res.status}: Failed to update contact details.`,
+      };
+    }
+
     return {
       success: !!data.success,
-      message: data.message,
-      error: data.message || data.error,
+      message: data.message || 'Professional contact details saved.',
+      error: data.error,
     };
   } catch (err: any) {
     return { success: false, error: `NETWORK_FAILURE: ${err?.message || String(err)}` };

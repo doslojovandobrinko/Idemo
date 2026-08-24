@@ -2370,6 +2370,112 @@ export const wave2CanonicalRecommendations: Recommendation[] = [
       "location": "Veliko Gradište & Ram"
     }
   }
+},
+{
+  "id": "rec-draft-zestival-uzice",
+  "draftReservationId": "c813ec58-84b0-487f-9c67-49f71a88230b",
+  "workflowWorkItemId": "20771354-e72a-42ab-9f35-c58f23e150ce",
+  "title": "Žestival Užice",
+  "titleSr": "Жестивал Ужице",
+  category: Category.GASTRONOMY,
+  "categories": [Category.GASTRONOMY, Category.HISTORY],
+  "expertiseIds": ["exp-culture-museums", "exp-gastronomy-wine"],
+  "capabilityIds": ["cap-english-fluent"],
+  "publicationStatus": "RESEARCH_CANDIDATE",
+  "headerVisualState": "AMBER",
+  "serviceAreaId": "sa-west-003",
+  "shortDescription": "An international gathering celebrating Western Serbia’s heritage of fruit cultivation, artisanal distillation, and regional gastronomy. Set against the historic backdrop of Užice, Žestival presents an immersive encounter with the living traditions of rakija craft, traditional coppersmithing, and authentic highland hospitality.",
+  "shortDescriptionSr": "Међународни фестивал природе и традиције у Ужицу посвећен воћарству, традиционалном дестилисању ракије и гастрономском наслеђу Западне Србије. Кроз изложбе, стручна оцењивања и боемске вечери, Жестивал пружа аутентичан увид у деценијске обичаје и локално гостопримство.",
+  "longDescription": "Originating as a dedicated fruit brandy exhibition in 2006 and revived as an expanded cultural festival in 2016, Žestival has established itself as Western Serbia's premier celebration of rural tradition and culinary heritage. Held annually in late summer at the central town square of Užice, the festival brings together master distillers, local artisans, and gastronomic producers from across Serbia, Montenegro, and Bosnia and Herzegovina.\n\nVisitors wander among wooden pavilions showcasing small-batch plum, pear, and quince rakijas evaluated by sensory juries, alongside heirloom jams, mountain cheeses, Zlakusa pottery, and traditional coppersmithing tools. Beyond tasting and trade, the evening program transforms Užice into a vibrant cultural stage with 'Bohemian Evenings' paying tribute to old tavern lore, traditional 'singing from the throat' (pevanje iz vika), and live folk performances. Pairing a glass of aged šljivovica with the legendary regional komplet lepinja offers a sensory entrance into the agricultural soul and enduring hospitality of Užice.",
+  "longDescriptionSr": "Настао 2006. године као смотра воћних ракија и обновљен 2016. као међународни фестивал природе и традиције, Жестивал је постао централна културно-гастрономска манифестација Западне Србије. Сваког касного лета на Градском тргу у Ужицу, фестивал окупља врхунске дестилере, занатлије и произвођаче хране из Србије, Црне Горе и Босне и Херцеговине.\n\nПосетиоци могу дегустирати награђиване ракије од шљиве, крушке и дуње, али и истражити богату понуду домаћих џемова, планинских сирева, Злакушке грнчарије и казанџијског заната. Вечерњи програм доноси атмосферу старих кафана кроз 'Боемске вечери', наступе фолклорних ансамбала и певање из вика. Спој врхунске ракије и чувене комплет лепиње пружа посебни увид у живу традицију воћарства и срдачно гостопримство Ужичког краја.",
+  "image": "/src/assets/images/distillery_zaric_modern_1778841217471.webp",
+  "bestTimeToVisitEn": "Late August / early autumn during the annual multi-day festival events on Užice's town square.",
+  "insiderTipEn": "Do not miss the 'Bohemian Evening' segment at the festival square, where local storytellers and musicians recreate the tavern atmosphere of old Užice. Pair your rakija tasting with a hot komplet lepinja prepared fresh from nearby bakeries.",
+  "additionalCuratorNotes": "Žestival offers far more than a spirit competition; it serves as a living portrait of Užice's agricultural heritage. Here, the ritual of distillation intersects with centuries of orchard husbandry, Zlakusa pottery, and highland gastronomy, inviting travelers directly into the genuine warmth of Western Serbian hospitality.",
+  "curatorNote": "Žestival offers far more than a spirit competition; it serves as a living portrait of Užice's agricultural heritage. Here, the ritual of distillation intersects with centuries of orchard husbandry, Zlakusa pottery, and highland gastronomy, inviting travelers directly into the genuine warmth of Western Serbian hospitality.",
+  "location": "City Square, Užice, Western Serbia",
+  "locationSr": "Градски трг, Ужице, Западна Србија",
+  "coordinates": {
+    "lat": 43.8556,
+    "lng": 19.8425
+  },
+  "coordinateX": -3.5,
+  "coordinateY": -2.0,
+  "energy": 0.6,
+  "social": 0.8,
+  "luxury": 0.5,
+  "urbanity": 0.6,
+  "nature": 0.7,
+  "weatherDependency": 0.6,
+  "duration": "Full day / Evening program",
+  "travelTime": "2.5 - 3 hours from Belgrade",
+  "travelTimeMinutes": 160,
+  "estimatedCost": "Free entry for square events; €10 - €25 for tastings & regional food",
+  "preferredTransport": "Car or Intercity Bus to Užice",
+  "seasonality": "spring-fall",
+  "familySuitability": true,
+  "accessibility": true,
+  "premiumLevel": "standard",
+  "budgetLevel": "moderate",
+  "recommendedVisitDuration": 180,
+  "website": "https://turizamuzica.org.rs",
+  "phone": "+381 31 513 555",
+  "practicalInfo": {
+    "opening_hours": "Late August annual festival dates; square events 10:00 - 22:00",
+    "contact_phone": "+381 31 513 555",
+    "contact_email": "info@turizamuzica.org.rs",
+    "website": "https://turizamuzica.org.rs",
+    "admission_fee": "Free entry to open-air square exhibitions and cultural programs"
+  },
+  "provenance": {
+    "source": "Turistička Organizacija Užice / Human Curator",
+    "license": "CC-BY-4.0",
+    "verificationStatus": "Verified",
+    "altText": "Žestival Užice"
+  },
+  "moods": ["Cultural", "Gastronomic", "Authentic", "Vibrant"],
+  "translations": {
+    "en": {
+      "title": "Žestival Užice",
+      "shortDescription": "An international gathering celebrating Western Serbia’s heritage of fruit cultivation, artisanal distillation, and regional gastronomy. Set against the historic backdrop of Užice, Žestival presents an immersive encounter with the living traditions of rakija craft, traditional coppersmithing, and authentic highland hospitality.",
+      "longDescription": "Originating as a dedicated fruit brandy exhibition in 2006 and revived as an expanded cultural festival in 2016, Žestival has established itself as Western Serbia's premier celebration of rural tradition and culinary heritage. Held annually in late summer at the central town square of Užice, the festival brings together master distillers, local artisans, and gastronomic producers from across Serbia, Montenegro, and Bosnia and Herzegovina.\n\nVisitors wander among wooden pavilions showcasing small-batch plum, pear, and quince rakijas evaluated by sensory juries, alongside heirloom jams, mountain cheeses, Zlakusa pottery, and traditional coppersmithing tools. Beyond tasting and trade, the evening program transforms Užice into a vibrant cultural stage with 'Bohemian Evenings' paying tribute to old tavern lore, traditional 'singing from the throat' (pevanje iz vika), and live folk performances. Pairing a glass of aged šljivovica with the legendary regional komplet lepinja offers a sensory entrance into the agricultural soul and enduring hospitality of Užice.",
+      "location": "City Square, Užice, Western Serbia",
+      "bestTimeToVisit": "Late August / early autumn during the annual multi-day festival events on Užice's town square.",
+      "insiderTip": "Do not miss the 'Bohemian Evening' segment at the festival square, where local storytellers and musicians recreate the tavern atmosphere of old Užice. Pair your rakija tasting with a hot komplet lepinja prepared fresh from nearby bakeries."
+    },
+    "sr": {
+      "title": "Жестивал Ужице",
+      "shortDescription": "Међународни фестивал природе и традиције у Ужицу посвећен воћарству, традиционалном дестилисању ракије и гастрономском наслеђу Западне Србије. Кроз изложбе, стручна оцењивања и боемске вечери, Жестивал пружа аутентичан увид у деценијске обичаје и локално гостопримство.",
+      "longDescription": "Настао 2006. године као смотра воћних ракија и обновљен 2016. као међународни фестивал природе и традиције, Жестивал је постао централна културно-гастрономска манифестација Западне Србије. Сваког касного лета на Градском тргу у Ужицу, фестивал окупља врхунске дестилере, занатлије и произвођаче хране из Србије, Црне Горе и Босне и Херцеговине.\n\nПосетиоци могу дегустирати награђиване ракије од шљиве, крушке и дуње, али и истражити богату понуду домаћих џемова, планинских сирева, Злакушке грнчарије и казанџијског заната. Вечерњи програм доноси атмосферу старих кафана кроз 'Боемске вечери', наступе фолклорних ансамбала и певање из вика. Спој врхунске ракије и чувене комплет лепиње пружа посебни увид у живу традицију воћарства и срдачно гостопримство Ужичког краја.",
+      "location": "Градски трг, Ужице, Западна Србија",
+      "bestTimeToVisit": "Крајем августа током годишњег вишедневног фестивала на Градском тргу у Ужицу.",
+      "insiderTip": "Не пропустите 'Боемско вече' на градском тргу, где локални музичари и приповедачи оживавају атмосферу старих ужичких кафана. Уз дегустацију ракије обавезно пробајте топлу комплет лепињу."
+    },
+    "de": {
+      "title": "Žestival Užice",
+      "shortDescription": "Ein internationales Festival in Užice, das das kulturelle Erbe Westserbiens, die Kunst der Obstbrand-Destillation und die regionale Gastronomie feiert.",
+      "longDescription": "Das Žestival wurde 2006 ins Leben gerufen und ist heute Westserbiens führendes Fest der ländlichen Traditionen und Kulinarik. Jedes Jahr im Spätsommer verwandelt sich der Stadtplatz von Užice in eine lebendige Bühne für Meisterdestilleure, Zlakusa-Töpfer und traditionelle Kunsthandwerker.",
+      "location": "Stadtplatz, Užice, Westserbien"
+    },
+    "ru": {
+      "title": "Жестивал Ужице",
+      "shortDescription": "Международный фестиваль в Ужице, посвященный традициям дистилляции ракии, гастрономии и культурному наследию Западной Сербии.",
+      longDescription: "Основанный в 2006 году и возрожденный в 2016-м, «Жестивал» является главным праздником фруктовых традиций и кулинарного наследия Западной Сербии. Ежегодно на центральной площади Ужице собираются лучшие мастера-дистилляторы, ремесленники и производители фермерских продуктов.",
+      location: "Городская площадь, Ужице, Западная Сербия"
+    },
+    "es": {
+      "title": "Žestival Užice",
+      shortDescription: "Un festival internacional en Užice que celebra el patrimonio cultural, la destilación artesanal de rakija y la gastronomía de Serbia Occidental.",
+      longDescription: "Iniciado en 2006 y revitalizado en 2016, Žestival es la principal celebración de las tradiciones rurales y gastronómicas de Serbia Occidental. Cada año a finales de verano, la plaza central de Užice reúne a maestros destiladores, artesanos de cerámica de Zlakusa y productores locales.",
+      location: "Plaza Central, Užice, Serbia Occidental"
+    },
+    "zh": {
+      "title": "乌日采Žestival烈酒与传统节",
+      shortDescription: "乌日采举办的国际自然与传统节，旨在展现塞尔维亚西部的果园种植、手工白兰地酿造与地方美食遗产。",
+      longDescription: "Žestival始于2006年，是塞尔维亚西部最具代表性的乡村传统与美食盛会。每年晚夏，乌日采中心广场聚集了来自塞尔维亚及周边地区的酿酒大师、兹拉库萨制陶匠人和传统手工艺人，呈现充满活力的民俗风情与待客之道。",
+      location: "城市广场，乌日采，塞尔维亚西部"
+    }
+  }
 }
 ];
 

@@ -25,9 +25,12 @@ export type RecommendationLifecycleStatus =
 export interface Recommendation {
   id: string;
   dbId?: string;
+  draftReservationId?: string;
+  workflowWorkItemId?: string;
   title: string;
   category: Category | string;
   publicationStatus?: RecommendationLifecycleStatus;
+  headerVisualState?: 'GREEN' | 'AMBER' | 'RED' | string;
   shortDescription: string; // ~50 words
   longDescription: string; // up to 200 words
   image: string;
@@ -76,6 +79,8 @@ export interface Recommendation {
   bestTimeToVisitSr?: string;
   insiderTipEn?: string;
   insiderTipSr?: string;
+  curatorNote?: string;
+  additionalCuratorNotes?: string;
   moods?: string[];
   practicalInfo?: {
     opening_hours?: string;
@@ -102,6 +107,7 @@ export interface Recommendation {
     insiderTip?: string;
     tagline?: string;
   }>;
+  stagedPartners?: any[];
 }
 
 export interface Partner {
@@ -143,6 +149,10 @@ export interface Partner {
   directBookingUrl?: string;
   directBookingNotes?: string;
   linkedRecommendations?: string[];
+  serviceAreas?: string[];
+  is_open_for_inquiries?: boolean | string;
+  stage?: 'Candidate' | 'Verification' | 'Approved' | 'Active' | 'Suspended' | 'Archived' | string;
+  status?: 'invited' | 'active' | 'paused' | 'suspended' | 'closed' | string;
 }
 
 export interface UsefulTip {

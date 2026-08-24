@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   KeyRound, CheckCircle2, Globe, Phone, MapPin, Sparkles, Lock, Unlock, X, 
@@ -30,6 +30,7 @@ import {
   submitPartnerProfile,
   withdrawPartnerProfileContent,
   authorizePhotoUpload,
+  uploadPhotoToSignedUrl,
   updatePartnerProfessionalContact
 } from '../lib/partnerService';
 import { partnerSessionStorage } from '../lib/partnerSessionStorage';
@@ -950,27 +951,84 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   const [profContactSaving, setProfContactSaving] = useState<boolean>(false);
   const [profContactMsg, setProfContactMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  useEffect(() => {
-    if (authenticatedPartnerProfile) {
-      setProfContactPhone(authenticatedPartnerProfile.contact_phone || '');
-      setProfContactEmail(authenticatedPartnerProfile.contact_email || '');
-    }
-  }, [authenticatedPartnerProfile]);
+  const prevPartnerIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (portalRole === 'partner' && activePartnerId) {
+    let isCancelled = false;
+    const currentPartnerId = activePartnerId;
+
+    // ONLY RESET DRAFT STATE WHEN PARTNER IDENTITY OR ROLE ACTUALLY SWITCHES
+    if (prevPartnerIdRef.current !== currentPartnerId) {
+      prevPartnerIdRef.current = currentPartnerId;
+      setPassportIntroDraft('');
+      setPassportPhotoPath(null);
+      setPassportPhotoMime(null);
+      setPassportPhotoConsent(false);
+      setPassportReviewStatus('draft');
+      setPassportReviewNote(null);
+      setPassportSaving(false);
+      setPassportMsg(null);
+      setProfContactSaving(false);
+      setProfContactMsg(null);
+    }
+
+    if (authenticatedPartnerProfile && (
+      authenticatedPartnerProfile.id === currentPartnerId ||
+      authenticatedPartnerProfile.public_code.toUpperCase() === currentPartnerId?.toUpperCase()
+    )) {
+      setProfContactPhone(authenticatedPartnerProfile.contact_phone || '');
+      setProfContactEmail(authenticatedPartnerProfile.contact_email || '');
+    } else if (prevPartnerIdRef.current !== currentPartnerId) {
+      setProfContactPhone('');
+      setProfContactEmail('');
+    }
+
+    if (portalRole === 'partner' && currentPartnerId) {
       getPartnerProfileContent().then((res) => {
+        // Ignore stale async response if active partner switched or component unmounted
+        if (isCancelled) {
+          return;
+        }
+
         if (res.success && res.content) {
+          const resIdLower = res.partner_id ? res.partner_id.trim().toLowerCase() : '';
+          const currIdLower = currentPartnerId ? currentPartnerId.trim().toLowerCase() : '';
+          const authIdLower = authenticatedPartnerProfile?.id ? authenticatedPartnerProfile.id.trim().toLowerCase() : '';
+          const authCodeLower = authenticatedPartnerProfile?.public_code ? authenticatedPartnerProfile.public_code.trim().toLowerCase() : '';
+
+          const isResponseForCurrentPartner =
+            !res.partner_id ||
+            resIdLower === currIdLower ||
+            (authIdLower && resIdLower === authIdLower) ||
+            (authCodeLower && resIdLower === authCodeLower) ||
+            (currIdLower === 'uno1' && (resIdLower.includes('uno1') || resIdLower.startsWith('a0000000-0000-0000-0000-000000000091'))) ||
+            (currIdLower === 'uno2' && (resIdLower.includes('uno2') || resIdLower.startsWith('a0000000-0000-0000-0000-000000000092')));
+
+          if (!isResponseForCurrentPartner) {
+            return;
+          }
+
           setPassportIntroDraft(res.content.intro_draft || res.content.intro_published || '');
           setPassportPhotoPath(res.content.draft_photo_path || res.content.published_photo_path || null);
           setPassportPhotoMime(res.content.draft_photo_mime || res.content.published_photo_mime || null);
           setPassportPhotoConsent(res.content.photo_consent_given || false);
           setPassportReviewStatus(res.content.review_status || 'draft');
           setPassportReviewNote(res.content.review_note || null);
+
+          if (res.content.draft_contact_phone || res.content.published_contact_phone) {
+            setProfContactPhone(res.content.draft_contact_phone || res.content.published_contact_phone || '');
+          }
+          if (res.content.draft_contact_email || res.content.published_contact_email) {
+            setProfContactEmail(res.content.draft_contact_email || res.content.published_contact_email || '');
+          }
         }
       });
     }
-  }, [portalRole, activePartnerId]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [portalRole, activePartnerId, authenticatedPartnerProfile]);
 
   const handleUpdatePortalPin = () => {
     setPortalPinError('');
@@ -2132,7 +2190,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                   {/* PANORAMIC EDITORIAL HERO HEADER */}
                   <div className="relative w-full h-48 sm:h-56 overflow-hidden bg-[#23251E] rounded-[32px] shadow-sm">
                     <img 
-                      src="/src/assets/images/uvac_meanders_1778841048759.webp" 
+                      src="/src/assets/images/uvac_meanders_1778841048759.png" 
                       alt="Uvac Meanders Serbia Landscape" 
                       loading="lazy"
                       className="w-full h-full object-cover object-center"
@@ -3046,14 +3104,38 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                               setPassportMsg({ type: 'error', text: 'Photo size must not exceed 5 MB.' });
                               return;
                             }
+                            const targetId = activePartnerId;
                             setPassportSaving(true);
+                            setPassportMsg(null);
+
+                            // 1. Request upload authorization
                             const authRes = await authorizePhotoUpload(file.name, file.type, file.size);
-                            if (authRes.success && authRes.path) {
+                            if (activePartnerId !== targetId) {
+                              setPassportSaving(false);
+                              return;
+                            }
+
+                            if (!authRes.success || !authRes.upload_url || !authRes.path) {
+                              setPassportMsg({ type: 'error', text: authRes.error || 'Failed to authorize photo upload.' });
+                              setPassportSaving(false);
+                              return;
+                            }
+
+                            // 2. Execute binary upload to authorized storage signed URL
+                            const uploadRes = await uploadPhotoToSignedUrl(authRes.upload_url, file);
+                            if (activePartnerId !== targetId) {
+                              setPassportSaving(false);
+                              return;
+                            }
+
+                            if (uploadRes.success) {
+                              // Only populate local path and show attached AFTER upload succeeds
                               setPassportPhotoPath(authRes.path);
                               setPassportPhotoMime(authRes.mime_type || file.type);
-                              setPassportMsg({ type: 'success', text: 'Photo uploaded for draft review.' });
+                              setPassportMsg({ type: 'success', text: 'Photo uploaded successfully to partner storage.' });
                             } else {
-                              setPassportMsg({ type: 'error', text: authRes.error || 'Failed to authorize photo upload.' });
+                              // UX Invariant: Do NOT mark attached if upload failed
+                              setPassportMsg({ type: 'error', text: uploadRes.error || 'Failed to upload photo to storage.' });
                             }
                             setPassportSaving(false);
                           }}
@@ -3128,9 +3210,14 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                         <button
                           type="button"
                           onClick={async () => {
+                            const targetId = activePartnerId;
                             setProfContactSaving(true);
                             setProfContactMsg(null);
                             const res = await updatePartnerProfessionalContact(profContactPhone || null, profContactEmail || null);
+                            if (activePartnerId !== targetId) {
+                              setProfContactSaving(false);
+                              return;
+                            }
                             if (res.success) {
                               setProfContactMsg({ type: 'success', text: 'Professional contact details updated.' });
                             } else {
@@ -3157,14 +3244,21 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                         type="button"
                         disabled={passportSaving}
                         onClick={async () => {
+                          const targetId = activePartnerId;
                           setPassportSaving(true);
                           setPassportMsg(null);
                           const res = await savePartnerProfileDraft(
                             passportIntroDraft,
                             passportPhotoPath,
                             passportPhotoMime,
-                            passportPhotoConsent
+                            passportPhotoConsent,
+                            profContactPhone || null,
+                            profContactEmail || null
                           );
+                          if (activePartnerId !== targetId) {
+                            setPassportSaving(false);
+                            return;
+                          }
                           setPassportSaving(false);
                           if (res.success) {
                             setPassportReviewStatus('draft');
@@ -3182,6 +3276,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                         type="button"
                         disabled={passportSaving || (passportIntroDraft.trim() ? passportIntroDraft.trim().split(/\s+/).length : 0) > 200}
                         onClick={async () => {
+                          const targetId = activePartnerId;
                           setPassportSaving(true);
                           setPassportMsg(null);
                           // First save draft
@@ -3189,10 +3284,20 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             passportIntroDraft,
                             passportPhotoPath,
                             passportPhotoMime,
-                            passportPhotoConsent
+                            passportPhotoConsent,
+                            profContactPhone || null,
+                            profContactEmail || null
                           );
+                          if (activePartnerId !== targetId) {
+                            setPassportSaving(false);
+                            return;
+                          }
                           // Submit
                           const subRes = await submitPartnerProfile();
+                          if (activePartnerId !== targetId) {
+                            setPassportSaving(false);
+                            return;
+                          }
                           setPassportSaving(false);
                           if (subRes.success) {
                             setPassportReviewStatus('pending_review');

@@ -7,6 +7,7 @@ import { Recommendation } from '../types';
 import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 import { INITIAL_RECOMMENDATIONS } from '../data/recommendations/serbia';
 import { getActiveDestinationPackage } from './destinationPackageManager';
+import { getApprovedPrimaryMedia } from './recommendationMediaService';
 
 const staticRecsMap = new Map(INITIAL_RECOMMENDATIONS.map(r => [r.id, r]));
 
@@ -126,6 +127,9 @@ export const loadRecommendations = async (): Promise<LoadRecommendationsResult> 
       const coordX = (row as any).coordinate_x ?? (row as any).coordinateX ?? staticMatch?.coordinateX ?? 0;
       const coordY = (row as any).coordinate_y ?? (row as any).coordinateY ?? staticMatch?.coordinateY ?? 0;
 
+      const candidateImage = row.image_url || staticMatch?.image || '/src/assets/images/uvac_meanders_1778841048759.png';
+      const approvedImage = getApprovedPrimaryMedia(recId, candidateImage);
+
       mappedRecommendations.push({
         id: recId,
         dbId: row.id,
@@ -133,7 +137,7 @@ export const loadRecommendations = async (): Promise<LoadRecommendationsResult> 
         category: row.category,
         shortDescription: row.short_description_en,
         longDescription: row.long_description_en || row.short_description_en || staticMatch?.longDescription,
-        image: row.image_url || staticMatch?.image || '/src/assets/images/uvac_meanders_1778841048759.png',
+        image: approvedImage,
         duration: row.duration || staticMatch?.duration || '2-4 hours',
         travelTime: row.travel_time || staticMatch?.travelTime || '1-2 hours',
         travelTimeMinutes: row.travel_time_minutes ?? staticMatch?.travelTimeMinutes ?? 60,

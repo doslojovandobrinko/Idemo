@@ -79,7 +79,7 @@ export function StudioLayout({
           />
         );
       case 'partners':
-        return <StudioPartners targetPartnerId={targetPartnerId} />;
+        return <StudioPartners session={session} targetPartnerId={targetPartnerId} />;
       case 'partner-coverage':
         return <StudioPartnerCoverage session={session} />;
       case 'publications':

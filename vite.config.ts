@@ -83,9 +83,6 @@ export default defineConfig(({mode, command}) => {
   return {
     base: './',
     plugins: [react(), tailwindcss(), copyImagesPlugin(), devImagesPlugin()],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

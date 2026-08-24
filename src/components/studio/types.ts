@@ -57,6 +57,7 @@ export interface PartnerCoverageRecord {
 
 export type CoverageHealthStatus = 'ROBUST' | 'COVERED' | 'SINGLE-POINT' | 'GAP';
 
+export type PartnerCoverageViewMode = 'BY_RECOMMENDATION' | 'BY_PARTNER';
 
 export interface StudioUserSession {
   email: string;

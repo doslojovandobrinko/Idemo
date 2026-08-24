@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { getOptimizedImageUrl } from '../utils/assetHelper';
+import { getOptimizedImageUrl, resolveMediaDisplayUrl } from '../utils/assetHelper';
 
 interface LazyImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   src: string;
@@ -26,7 +26,7 @@ export const LazyImage: React.FC<LazyImageProps> = ({
   // Safe helper to strip dev prefixes and ensure relative path for published and AppMyWeb builds
   const cleanPath = (p: string): string => {
     if (!p) return '';
-    if (p.startsWith('http://') || p.startsWith('https://')) {
+    if (p.startsWith('http://') || p.startsWith('https://') || p.startsWith('blob:') || p.startsWith('data:')) {
       return p;
     }
     let cp = p;
@@ -42,7 +42,7 @@ export const LazyImage: React.FC<LazyImageProps> = ({
 
   const getResolvedFallback = () => {
     if (!fallbackSrc) return '';
-    if (fallbackSrc.startsWith('http://') || fallbackSrc.startsWith('https://')) {
+    if (fallbackSrc.startsWith('http://') || fallbackSrc.startsWith('https://') || fallbackSrc.startsWith('blob:')) {
       return fallbackSrc;
     }
     let fb = fallbackSrc;
@@ -60,7 +60,8 @@ export const LazyImage: React.FC<LazyImageProps> = ({
   };
 
   const resolvedFallback = getResolvedFallback();
-  const initialSrc = getOptimizedImageUrl(cleanPath(src));
+  const isGovernedMedia = Boolean(src && (src.startsWith('recommendation-media/') || src.startsWith('/recommendation-media/')));
+  const initialSrc = isGovernedMedia ? '' : getOptimizedImageUrl(cleanPath(src));
   const [imgSrc, setImgSrc] = useState<string>(initialSrc || resolvedFallback);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -68,11 +69,33 @@ export const LazyImage: React.FC<LazyImageProps> = ({
 
   // Sync state when src changes (Critical for switching views and candidates)
   React.useEffect(() => {
-    const nextSrc = getOptimizedImageUrl(cleanPath(src));
-    setImgSrc(nextSrc || resolvedFallback);
+    let active = true;
     setIsLoaded(false);
     setHasError(false);
-  }, [src, fallbackSrc]);
+
+    if (isGovernedMedia) {
+      resolveMediaDisplayUrl(src)
+        .then((resolvedUrl) => {
+          if (active) {
+            setImgSrc(resolvedUrl || resolvedFallback);
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setHasError(true);
+            setImgSrc(resolvedFallback);
+          }
+        });
+    } else {
+      const nextSrc = getOptimizedImageUrl(cleanPath(src));
+      setImgSrc(nextSrc || resolvedFallback);
+    }
+
+    return () => {
+      active = false;
+    };
+  }, [src, fallbackSrc, isGovernedMedia]);
+
 
   // Handle cached images that are already loaded when ref is bound
   React.useEffect(() => {
@@ -117,7 +140,7 @@ export const LazyImage: React.FC<LazyImageProps> = ({
       )}
       <img
         ref={imgRef}
-        src={imgSrc}
+        src={imgSrc || undefined}
         alt={alt}
         loading="lazy"
         onLoad={handleLoad}

@@ -44,6 +44,10 @@ export interface MoodOrbitProps {
    * Fired when the Today's Concierge card is clicked to delegate modal showing.
    */
   onSelectConcierge?: () => void;
+  /**
+   * Optional callback to open exact fine-tuning sliders section.
+   */
+  onOpenFineTuning?: () => void;
 }
 
 // Fixed Travel Duration Snaps (Magnetic Detents)
@@ -82,7 +86,8 @@ export default function MoodOrbit({
   onHaptic,
   language = 'en',
   conciergeStyleName,
-  onSelectConcierge
+  onSelectConcierge,
+  onOpenFineTuning
 }: MoodOrbitProps) {
   // Local state representing coordinates, budget and time
   const [localX, setLocalX] = useState(propX);
@@ -673,12 +678,13 @@ export default function MoodOrbit({
 
         let currentDistance = Math.hypot(e.clientX - orbCenterX, e.clientY - orbCenterY);
         
-        const minDragDistance = 50; // pixels from center
-        const maxDragDistance = 150; // pixels from center
+        const minDragDistance = 25; // pixels from center
+        const maxDragDistance = 140; // pixels from center
         const fraction = (currentDistance - minDragDistance) / (maxDragDistance - minDragDistance);
         const clampedFraction = Math.max(0, Math.min(1, fraction));
-        // Map to [100, 500] in steps of 100:
-        let targetBudget = 100 + Math.round(clampedFraction * 4) * 100;
+        // Map across €50 to €500 in fine-tuned €25 steps for precision
+        let targetBudget = Math.round((50 + clampedFraction * 450) / 25) * 25;
+        targetBudget = Math.max(50, Math.min(500, targetBudget));
 
         if (targetBudget !== localBudget) {
           setLocalBudget(targetBudget);
@@ -1531,21 +1537,21 @@ export default function MoodOrbit({
               <circle r="4" fill="#FFFFFF" className="opacity-30" cx="-1.5" cy="-1.5" />
             </g>
 
-            {/* Invisible Outer Dial Track Ring to Adjust Budget limit */}
+            {/* Outer Dial Track Ring to Adjust Time limit (Rotatable Bezel Track) */}
             <circle 
               r="92" 
               fill="none" 
               stroke="transparent" 
-              strokeWidth="16" 
+              strokeWidth="20" 
               className="cursor-pointer pointer-events-auto"
               onPointerDown={(e) => {
-                if (!selectedMode) {
-                  handleBudgetStart(e);
+                if (!selectedMode || selectedMode === 'time') {
+                  handleTimeStart(e);
                 }
               }}
             />
 
-            {/* Invisible Inner Body Zone to scale Time limit */}
+            {/* Inner Body Zone to scale Budget limit (Radial Dial Area) */}
             <circle 
               r="55" 
               fill="none" 
@@ -1553,8 +1559,8 @@ export default function MoodOrbit({
               strokeWidth="50" 
               className="cursor-pointer pointer-events-auto"
               onPointerDown={(e) => {
-                if (!selectedMode) {
-                  handleTimeStart(e);
+                if (!selectedMode || selectedMode === 'budget') {
+                  handleBudgetStart(e);
                 }
               }}
             />
@@ -1748,6 +1754,29 @@ export default function MoodOrbit({
           <span className="text-[7px] font-bold text-[#8C8A7D] leading-tight scale-90">{t.tipTime}</span>
         </button>
       </div>
+
+      {/* Direct Fine-Tuning Discoverability Bridge */}
+      {onOpenFineTuning && (
+        <button
+          type="button"
+          onClick={() => {
+            onOpenFineTuning();
+            triggerHapticProxy(10);
+          }}
+          className="w-full py-2 px-3 rounded-xl bg-[#FAF9F5] border border-[#D5D3C8] hover:border-accent-teal/40 hover:bg-[#F5F3EB] text-brand-charcoal transition-all flex items-center justify-between text-xs font-bold cursor-pointer group shadow-xs outline-none select-none z-10"
+        >
+          <div className="flex items-center gap-2">
+            <Sliders size={13} className="text-accent-teal" />
+            <span className="font-mono text-[9px] uppercase tracking-wider font-extrabold text-[#5C5A4D] group-hover:text-brand-charcoal">
+              {isSr ? 'Precizno podešavanje (Klizači)' : isZh ? '精确数值微调 (滑块)' : 'Exact Fine-Tuning (Sliders)'}
+            </span>
+          </div>
+          <span className="text-[9.5px] font-mono text-accent-teal font-extrabold group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
+            <span>{isSr ? 'Otvori' : isZh ? '展开' : 'Open'}</span>
+            <span>&rarr;</span>
+          </span>
+        </button>
+      )}
 
       {/* Dynamic correlation explanatory modal */}
       <AnimatePresence>

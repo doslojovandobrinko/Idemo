@@ -54,7 +54,8 @@ export interface DrillDownItem {
  */
 export function calculateRecommendationCompleteness(
   rec: Partial<Recommendation>,
-  status: string = 'CANDIDATE'
+  status: string = 'CANDIDATE',
+  options?: { isMediaUnresolvable?: boolean }
 ): RecommendationCompletenessResult {
   const items: ScoreItem[] = [
     {
@@ -112,9 +113,19 @@ export function calculateRecommendationCompleteness(
     {
       key: 'image',
       label: 'Hero Experience Image',
-      isComplete: Boolean(rec.image && (rec.image.startsWith('http') || rec.image.startsWith('/assets') || rec.image.startsWith('/src/assets'))),
+      isComplete: Boolean(
+        rec.image && 
+        (rec.image.startsWith('http') || 
+         rec.image.startsWith('/assets') || 
+         rec.image.startsWith('/src/assets') ||
+         rec.image.startsWith('recommendation-media/') ||
+         rec.image.startsWith('/recommendation-media/')) &&
+        !options?.isMediaUnresolvable
+      ),
       weight: 10,
-      missingNote: 'High-resolution image URL required'
+      missingNote: options?.isMediaUnresolvable
+        ? 'Attached media object cannot be resolved from storage (re-upload required)'
+        : 'High-resolution image URL required'
     },
     {
       key: 'category',

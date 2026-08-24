@@ -20,7 +20,7 @@ const AVAILABLE_ROLES: RoleConfig[] = [
   {
     role: 'Super Admin',
     description: 'Full system control, release governance & security configuration',
-    heroImage: '/src/assets/images/uvac_meanders_1778841048759.webp',
+    heroImage: '/src/assets/images/uvac_meanders_1778841048759.png',
     defaultEmail: 'admin@idemo.travel'
   },
   {
@@ -207,7 +207,7 @@ export function StudioAuthShell({ onLoginSuccess, onCancel }: StudioAuthShellPro
                     {/* Panoramic Destination Hero Strip */}
                     <div className="relative w-full aspect-[16/6] overflow-hidden rounded-t-2xl bg-[#23251E]">
                       <img
-                        src={r.heroImage}
+                        src={r.heroImage || undefined}
                         alt=""
                         loading="lazy"
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"

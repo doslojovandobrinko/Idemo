@@ -18,10 +18,25 @@ import {
   Check,
   User,
   Link as LinkIcon,
-  Compass
+  Compass,
+  Lock,
+  Power,
+  Trash2,
+  RefreshCw
 } from 'lucide-react';
 import { Partner } from '../../types';
 import { calculatePartnerReadiness } from './utils/scoring';
+import { 
+  getPartnerLifecycleState, 
+  savePartnerProfile, 
+  verifyPartnerAction, 
+  activatePartnerAction, 
+  enableConciergeRoutingAction, 
+  disableConciergeRoutingAction, 
+  suspendPartnerAction, 
+  retirePartnerAction, 
+  reactivatePartnerAction 
+} from '../../lib/partnerLifecycleService';
 
 export type PartnerLifecycleStage = 'Candidate' | 'Verification' | 'Approved' | 'Active' | 'Suspended' | 'Archived';
 
@@ -112,21 +127,14 @@ export function PartnerEditorModal({
   useEffect(() => {
     if (initialPartner) {
       setForm({ ...initialPartner });
-      
-      // Determine stage from verificationStatus or routing role
-      const vStatus = initialPartner.verificationStatus || '';
-      if (vStatus.includes('Archived')) setLifecycleStage('Archived');
-      else if (vStatus.includes('Suspended')) setLifecycleStage('Suspended');
-      else if (initialPartner.conciergeRoutingEligible === 'Yes') setLifecycleStage('Active');
-      else if (vStatus.includes('verified') || vStatus.includes('Verified')) setLifecycleStage('Approved');
-      else if (vStatus.includes('unverified') || vStatus.includes('Review')) setLifecycleStage('Verification');
-      else setLifecycleStage('Candidate');
-
+      const st = getPartnerLifecycleState(initialPartner);
+      setLifecycleStage(st.stage);
       setExpertiseInput((initialPartner.expertise || []).join('\n'));
       setLinkedRecsInput((initialPartner.linkedRecommendations || []).join('\n'));
     } else {
+      const newId = `P-${Math.floor(100 + Math.random() * 900)}`;
       setForm({
-        id: `P-${Math.floor(100 + Math.random() * 900)}`,
+        id: newId,
         nameEn: '',
         nameSr: '',
         nameZh: '',
@@ -134,11 +142,10 @@ export function PartnerEditorModal({
         partnerType: 'Individual',
         candidateType: 'Individual',
         operationalRole: 'Concierge / Service Partner Candidate',
-        verificationStatus: 'Public contact verified',
-        lastVerified: new Date().toISOString().split('T')[0],
-        verificationDetails: 'Verified in operational registry.',
-        routingRole: 'Eligible for concierge dispatch subject to active status and availability',
-        conciergeRoutingEligible: 'Yes',
+        verificationStatus: 'unverified',
+        stage: 'Candidate',
+        status: 'invited',
+        conciergeRoutingEligible: 'No',
         directContactAvailable: 'Yes',
         phone: '',
         whatsApp: '',
@@ -167,7 +174,8 @@ export function PartnerEditorModal({
     linkedRecommendations: linkedRecsInput.split('\n').filter(l => l.trim().length > 0)
   };
 
-  const readiness = calculatePartnerReadiness(currentPartnerState, lifecycleStage);
+  const lifecycleState = getPartnerLifecycleState(currentPartnerState);
+  const readiness = calculatePartnerReadiness(currentPartnerState, lifecycleState.stage);
   const warnings = readiness.missingItems;
 
   const toggleServiceArea = (area: string) => {
@@ -180,6 +188,79 @@ export function PartnerEditorModal({
     setSelectedLanguages(prev => 
       prev.includes(lang) ? prev.filter(l => l !== lang) : [...prev, lang]
     );
+  };
+
+  const handleVerify = () => {
+    if (!form.id) return;
+    const updated = verifyPartnerAction(form.id, 'Admin');
+    setForm(updated);
+    const st = getPartnerLifecycleState(updated);
+    setLifecycleStage(st.stage);
+    onSave(updated, st.stage);
+  };
+
+  const handleActivate = () => {
+    if (!form.id) return;
+    try {
+      const updated = activatePartnerAction(form.id);
+      setForm(updated);
+      const st = getPartnerLifecycleState(updated);
+      setLifecycleStage(st.stage);
+      onSave(updated, st.stage);
+    } catch (err: any) {
+      alert(err?.message || 'Activation failed');
+    }
+  };
+
+  const handleEnableRouting = () => {
+    if (!form.id) return;
+    try {
+      const updated = enableConciergeRoutingAction(form.id);
+      setForm(updated);
+      const st = getPartnerLifecycleState(updated);
+      setLifecycleStage(st.stage);
+      onSave(updated, st.stage);
+    } catch (err: any) {
+      alert(err?.message || 'Enabling routing failed');
+    }
+  };
+
+  const handleDisableRouting = () => {
+    if (!form.id) return;
+    const updated = disableConciergeRoutingAction(form.id);
+    setForm(updated);
+    const st = getPartnerLifecycleState(updated);
+    setLifecycleStage(st.stage);
+    onSave(updated, st.stage);
+  };
+
+  const handleSuspend = () => {
+    if (!form.id) return;
+    const updated = suspendPartnerAction(form.id, 'Suspended via Partner Studio');
+    setForm(updated);
+    const st = getPartnerLifecycleState(updated);
+    setLifecycleStage(st.stage);
+    onSave(updated, st.stage);
+  };
+
+  const handleRetire = () => {
+    if (!form.id) return;
+    if (window.confirm('Retire this partner profile? It will be archived and excluded from active routing while preserving all historical records.')) {
+      const updated = retirePartnerAction(form.id, 'Retired via Partner Studio');
+      setForm(updated);
+      const st = getPartnerLifecycleState(updated);
+      setLifecycleStage(st.stage);
+      onSave(updated, st.stage);
+    }
+  };
+
+  const handleReactivate = () => {
+    if (!form.id) return;
+    const updated = reactivatePartnerAction(form.id);
+    setForm(updated);
+    const st = getPartnerLifecycleState(updated);
+    setLifecycleStage(st.stage);
+    onSave(updated, st.stage);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -200,13 +281,14 @@ export function PartnerEditorModal({
       category: form.category || 'Tourist Guide',
       partnerType: form.partnerType || 'Individual',
       pinHash: form.pinHash || '0000000000000000000000000000000000000000000000000000000000000000',
-      verificationStatus: lifecycleStage === 'Active' ? 'Public contact verified' : `${lifecycleStage} Stage`,
-      conciergeRoutingEligible: lifecycleStage === 'Active' ? 'Yes' : 'Pending qualification',
       expertise: updatedExpertise,
       linkedRecommendations: updatedLinkedRecs
     } as Partner;
 
-    onSave(updatedPartner, lifecycleStage);
+    // Preserves existing lifecycle state without automatic escalation
+    const saved = savePartnerProfile(updatedPartner);
+    const st = getPartnerLifecycleState(saved);
+    onSave(saved, st.stage);
     onClose();
   };
 
@@ -656,28 +738,116 @@ export function PartnerEditorModal({
               </span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 font-mono text-[10.5px]">
-              {(['Candidate', 'Verification', 'Approved', 'Active', 'Suspended', 'Archived'] as const).map((st) => {
-                const isSelected = lifecycleStage === st;
-                return (
-                  <button
-                    key={st}
-                    type="button"
-                    onClick={() => setLifecycleStage(st)}
-                    className={`py-2 px-2 rounded-xl font-bold uppercase transition-all cursor-pointer text-center truncate ${
-                      isSelected
-                        ? st === 'Active'
-                          ? 'bg-[#2E7D32] text-white shadow-xs'
-                          : st === 'Suspended' || st === 'Archived'
-                          ? 'bg-[#8A1F1F] text-white'
-                          : 'bg-[#23251E] text-white'
-                        : 'bg-[#FAF9F5] text-[#8C8A7D] hover:text-[#1E2E20] border border-[#E5E3DB]'
-                    }`}
-                  >
-                    {st}
-                  </button>
-                );
-              })}
+            {/* GOVERNED LIFECYCLE ACTIONS PANEL */}
+            <div className="space-y-3 p-4 bg-[#FAF9F5] border border-[#E5E3DB] rounded-xl font-mono text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E5E3DB] pb-3">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-[#8C8A7D] block">Current Governed State</span>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold uppercase border ${
+                      lifecycleState.stage === 'Active' ? 'bg-[#E8F5E9] text-[#2E7D32] border-[#C8E6C9]' :
+                      lifecycleState.stage === 'Suspended' || lifecycleState.stage === 'Archived' ? 'bg-[#FFEBEE] text-[#C62828] border-[#FFCDD2]' :
+                      lifecycleState.stage === 'Approved' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                      'bg-[#FFF8E1] text-[#F57F17] border-[#FFE082]'
+                    }`}>
+                      Stage: {lifecycleState.stage}
+                    </span>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold uppercase border ${
+                      lifecycleState.isVerified ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-gray-100 text-gray-600 border-gray-200'
+                    }`}>
+                      {lifecycleState.isVerified ? 'VERIFIED' : 'UNVERIFIED'}
+                    </span>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold uppercase border ${
+                      lifecycleState.isRoutable ? 'bg-[#E8F5E9] text-[#2E7D32] border-[#C8E6C9]' : 'bg-gray-100 text-gray-600 border-gray-200'
+                    }`}>
+                      ROUTING: {lifecycleState.isRoutable ? 'YES' : 'NO'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Explicit Governed Action Buttons */}
+              <div className="pt-2 space-y-2">
+                <span className="text-[10px] uppercase font-bold text-[#8C8A7D] block">Explicit Admin Governance Actions</span>
+                <div className="flex flex-wrap gap-2">
+                  {lifecycleState.mayVerify && (
+                    <button
+                      type="button"
+                      onClick={handleVerify}
+                      className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] uppercase flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <ShieldCheck size={13} />
+                      Verify Profile
+                    </button>
+                  )}
+
+                  {lifecycleState.mayActivate && (
+                    <button
+                      type="button"
+                      onClick={handleActivate}
+                      className="px-3 py-1.5 rounded-lg bg-[#2E7D32] hover:bg-[#1B5E20] text-white font-bold text-[11px] uppercase flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Power size={13} />
+                      Activate Partner
+                    </button>
+                  )}
+
+                  {lifecycleState.mayEnableRouting && (
+                    <button
+                      type="button"
+                      onClick={handleEnableRouting}
+                      className="px-3 py-1.5 rounded-lg bg-[#1565C0] hover:bg-[#0D47A1] text-white font-bold text-[11px] uppercase flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Compass size={13} />
+                      Enable Concierge Routing
+                    </button>
+                  )}
+
+                  {lifecycleState.mayDisableRouting && (
+                    <button
+                      type="button"
+                      onClick={handleDisableRouting}
+                      className="px-3 py-1.5 rounded-lg bg-gray-600 hover:bg-gray-700 text-white font-bold text-[11px] uppercase flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Lock size={13} />
+                      Disable Routing
+                    </button>
+                  )}
+
+                  {lifecycleState.maySuspend && (
+                    <button
+                      type="button"
+                      onClick={handleSuspend}
+                      className="px-3 py-1.5 rounded-lg bg-[#C62828] hover:bg-[#B71C1C] text-white font-bold text-[11px] uppercase flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Lock size={13} />
+                      Suspend Partner
+                    </button>
+                  )}
+
+                  {lifecycleState.mayRetire && (
+                    <button
+                      type="button"
+                      onClick={handleRetire}
+                      className="px-3 py-1.5 rounded-lg bg-[#37474F] hover:bg-[#263238] text-white font-bold text-[11px] uppercase flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <Trash2 size={13} />
+                      Retire / Archive
+                    </button>
+                  )}
+
+                  {lifecycleState.mayReactivate && (
+                    <button
+                      type="button"
+                      onClick={handleReactivate}
+                      className="px-3 py-1.5 rounded-lg bg-[#2E7D32] hover:bg-[#1B5E20] text-white font-bold text-[11px] uppercase flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      <RefreshCw size={13} />
+                      Reactivate Partner
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Partner Readiness Score Box */}

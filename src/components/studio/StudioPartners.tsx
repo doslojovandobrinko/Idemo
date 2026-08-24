@@ -18,20 +18,27 @@ import {
   Award,
   Compass,
   Link as LinkIcon,
-  Check
+  Check,
+  FileCheck
 } from 'lucide-react';
 import { Partner } from '../../types';
 import { PARTNERS as INITIAL_PARTNERS } from '../../data/partners';
 import { PartnerEditorModal, PartnerLifecycleStage } from './PartnerEditorModal';
 import { calculatePartnerReadiness } from './utils/scoring';
+import { getAllPartners, getPartnerLifecycleState } from '../../lib/partnerLifecycleService';
+import { StudioUserSession } from './types';
+import { StudioPassportReviewView } from './StudioPassportReviewView';
 
 interface StudioPartnersProps {
   targetPartnerId?: string;
+  session?: StudioUserSession;
+  initialSubTab?: 'directory' | 'passport-review';
 }
 
-export function StudioPartners({ targetPartnerId }: StudioPartnersProps) {
-  const [partnerList, setPartnerList] = useState<Partner[]>(INITIAL_PARTNERS);
+export function StudioPartners({ targetPartnerId, session, initialSubTab = 'directory' }: StudioPartnersProps) {
+  const [partnerList, setPartnerList] = useState<Partner[]>(() => getAllPartners());
   const [selectedPartnerId, setSelectedPartnerId] = useState<string>('P-001');
+  const [activeSubTab, setActiveSubTab] = useState<'directory' | 'passport-review'>(initialSubTab);
 
   useEffect(() => {
     if (targetPartnerId) {
@@ -59,15 +66,16 @@ export function StudioPartners({ targetPartnerId }: StudioPartnersProps) {
 
       if (!matchesSearch) return false;
 
-      if (selectedStageFilter === 'ALL') return true;
+      const st = getPartnerLifecycleState(p);
+      if (selectedStageFilter === 'ACTIVE') return st.isActive;
+      if (selectedStageFilter === 'CANDIDATE') return st.isCandidate;
+      if (selectedStageFilter === 'VERIFICATION') return st.stage === 'Verification';
+      if (selectedStageFilter === 'APPROVED') return st.isVerified && !st.isActive;
+      if (selectedStageFilter === 'SUSPENDED') return st.isSuspended;
+      if (selectedStageFilter === 'ARCHIVED') return st.isRetired;
 
-      const vStatus = (p.verificationStatus || '').toLowerCase();
-      if (selectedStageFilter === 'ACTIVE') return p.conciergeRoutingEligible === 'Yes' && !vStatus.includes('suspended') && !vStatus.includes('archived');
-      if (selectedStageFilter === 'CANDIDATE') return vStatus.includes('candidate') || p.conciergeRoutingEligible === 'Pending qualification';
-      if (selectedStageFilter === 'VERIFICATION') return vStatus.includes('unverified') || vStatus.includes('review');
-      if (selectedStageFilter === 'APPROVED') return vStatus.includes('verified') && p.conciergeRoutingEligible !== 'Yes';
-      if (selectedStageFilter === 'SUSPENDED') return vStatus.includes('suspended');
-      if (selectedStageFilter === 'ARCHIVED') return vStatus.includes('archived');
+      // 'ALL' filter shows all non-retired partners (or retired if searchQuery explicitly matches)
+      if (selectedStageFilter === 'ALL') return searchQuery ? true : !st.isRetired;
 
       return true;
     });
@@ -90,25 +98,17 @@ export function StudioPartners({ targetPartnerId }: StudioPartnersProps) {
   };
 
   const handleSavePartner = (savedPartner: Partner, stage: PartnerLifecycleStage) => {
-    setPartnerList(prev => {
-      const idx = prev.findIndex(p => p.id === savedPartner.id);
-      if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = savedPartner;
-        return copy;
-      }
-      return [savedPartner, ...prev];
-    });
+    setPartnerList(getAllPartners());
     setSelectedPartnerId(savedPartner.id);
   };
 
   const getPartnerStageLabel = (p: Partner): { label: string; color: string } => {
-    const vStatus = (p.verificationStatus || '').toLowerCase();
-    if (vStatus.includes('archived')) return { label: 'Archived', color: 'bg-gray-100 text-gray-600 border-gray-200' };
-    if (vStatus.includes('suspended')) return { label: 'Suspended', color: 'bg-red-100 text-red-700 border-red-200' };
-    if (p.conciergeRoutingEligible === 'Yes') return { label: 'Active Partner', color: 'bg-[#E8F5E9] text-[#2E7D32] border-[#C8E6C9]' };
-    if (vStatus.includes('verified')) return { label: 'Approved', color: 'bg-blue-50 text-blue-700 border-blue-200' };
-    if (vStatus.includes('unverified') || vStatus.includes('review')) return { label: 'Verification', color: 'bg-[#FFF8E1] text-[#F57F17] border-[#FFE082]' };
+    const st = getPartnerLifecycleState(p);
+    if (st.isRetired) return { label: 'Archived', color: 'bg-gray-100 text-gray-600 border-gray-200' };
+    if (st.isSuspended) return { label: 'Suspended', color: 'bg-red-100 text-red-700 border-red-200' };
+    if (st.isActive) return { label: 'Active Partner', color: 'bg-[#E8F5E9] text-[#2E7D32] border-[#C8E6C9]' };
+    if (st.isVerified) return { label: 'Approved', color: 'bg-blue-50 text-blue-700 border-blue-200' };
+    if (st.stage === 'Verification') return { label: 'Verification', color: 'bg-[#FFF8E1] text-[#F57F17] border-[#FFE082]' };
     return { label: 'Candidate', color: 'bg-purple-50 text-purple-700 border-purple-200' };
   };
 
@@ -140,7 +140,38 @@ export function StudioPartners({ targetPartnerId }: StudioPartnersProps) {
         </div>
       </div>
 
-      {/* Filter Bar */}
+      {/* Sub-Tab Navigation Bar */}
+      <div className="flex items-center gap-2 border-b border-[#E5E3DB] pb-3">
+        <button
+          onClick={() => setActiveSubTab('directory')}
+          className={`px-4 py-2 rounded-xl font-mono text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+            activeSubTab === 'directory'
+              ? 'bg-[#23251E] text-white shadow-xs'
+              : 'bg-white text-[#8C8A7D] hover:text-[#1E2E20] border border-[#E5E3DB]'
+          }`}
+        >
+          <Users size={14} />
+          <span>Partner Directory</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('passport-review')}
+          className={`px-4 py-2 rounded-xl font-mono text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+            activeSubTab === 'passport-review'
+              ? 'bg-[#23251E] text-white shadow-xs'
+              : 'bg-white text-[#8C8A7D] hover:text-[#1E2E20] border border-[#E5E3DB]'
+          }`}
+        >
+          <FileCheck size={14} className={activeSubTab === 'passport-review' ? 'text-[#C5A059]' : ''} />
+          <span>Passport Review</span>
+        </button>
+      </div>
+
+      {activeSubTab === 'passport-review' ? (
+        <StudioPassportReviewView session={session} />
+      ) : (
+        <>
+          {/* Filter Bar */}
       <div className="bg-white border border-[#E5E3DB] rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
         {/* Search */}
         <div className="relative w-full sm:w-80">
@@ -427,6 +458,8 @@ export function StudioPartners({ targetPartnerId }: StudioPartnersProps) {
           </div>
         )}
       </div>
+      </>
+      )}
 
       {/* Modal */}
       <PartnerEditorModal
