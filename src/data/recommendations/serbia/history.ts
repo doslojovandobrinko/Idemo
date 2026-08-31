@@ -19,7 +19,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "1.5 - 2 hours",
     "travelTimeMinutes": 100,
     "location": "Despotovac",
-    "estimatedCost": "€10 - €20",
+    "estimatedCost":"€20 - €30",
     "preferredTransport": "Car",
     "coordinates": {
       "lat": 44.1017,
@@ -91,7 +91,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "15 - 20 minutes",
     "travelTimeMinutes": 20,
     "location": "Belgrade, Vračar",
-    "estimatedCost": "€8",
+    "estimatedCost":"€10",
     "preferredTransport": "Taxi / Tram",
     "website": "https://nikolateslamuseum.org",
     "phone": "+381 11 243 3886",
@@ -133,7 +133,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "3.5 hours",
     "travelTimeMinutes": 210,
     "location": "Gamzigrad, Zaječar",
-    "estimatedCost": "€5 - €10",
+    "estimatedCost":"€10 - €20",
     "preferredTransport": "Car",
     "website": "https://www.felixromuliana.rs",
     "conciergePhone": "+381 63 987 6543",
@@ -175,7 +175,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "1.5 hours",
     "travelTimeMinutes": 90,
     "location": "Kostolac, Požarevac",
-    "estimatedCost": "€8 - €12",
+    "estimatedCost":"€10 - €20",
     "preferredTransport": "Car",
     "website": "https://viminacium.org.rs",
     "coordinates": {
@@ -216,7 +216,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "2 hours 15 mins",
     "travelTimeMinutes": 135,
     "location": "Golubac",
-    "estimatedCost": "€5 - €250",
+    "estimatedCost":"€10 - €300",
     "preferredTransport": "Car / River Cruise",
     "website": "https://tvrdjavagolubackigrad.rs",
     "coordinates": {
@@ -257,7 +257,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "3 hours",
     "travelTimeMinutes": 180,
     "location": "Near Donji Milanovac",
-    "estimatedCost": "€5 - €180",
+    "estimatedCost":"€10 - €220",
     "preferredTransport": "Car / Guided Tour",
     "website": "http://www.lepenski-vir.rs",
     "coordinates": {
@@ -298,7 +298,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "1.5 hours",
     "travelTimeMinutes": 90,
     "location": "South Banat Region",
-    "estimatedCost": "€50 - €5000+",
+    "estimatedCost":"€60 - €6000+",
     "preferredTransport": "Car",
     "website": "http://www.naivnaumetnost.com",
     "coordinates": {
@@ -339,7 +339,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "2.5 hours",
     "travelTimeMinutes": 150,
     "location": "Near Čačak",
-    "estimatedCost": "€40 - €180",
+    "estimatedCost":"€50 - €220",
     "preferredTransport": "Car",
     "website": "https://turizamcacak.org.rs",
     "coordinates": {
@@ -380,7 +380,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "3.5 - 4 hours",
     "travelTimeMinutes": 220,
     "location": "Zlatibor Region",
-    "estimatedCost": "€5 - €250",
+    "estimatedCost":"€10 - €300",
     "preferredTransport": "Car",
     "website": "https://sirogojno.rs",
     "coordinates": {
@@ -421,7 +421,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "2.5 - 3 hours",
     "travelTimeMinutes": 160,
     "location": "Niš, Southern Serbia",
-    "estimatedCost": "€40 - €180",
+    "estimatedCost":"€50 - €220",
     "preferredTransport": "Car / Train / Flight",
     "website": "https://visitnis.com",
     "coordinates": {
@@ -462,7 +462,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "3 hours",
     "travelTimeMinutes": 180,
     "location": "Niš Outskirts",
-    "estimatedCost": "€3 - €8",
+    "estimatedCost":"€5 - €10",
     "preferredTransport": "Car / Taxi from Niš",
     "website": "http://www.narodnimuzejnis.rs",
     "coordinates": {
@@ -503,7 +503,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 10,
     "location": "Vračar, Belgrade",
-    "estimatedCost": "Free / Donation",
+    "estimatedCost":"Free / Donation",
     "preferredTransport": "On Foot / Taxi",
     "website": "https://hramsavetv.com",
     "coordinates": {
@@ -544,7 +544,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "1.5 hours",
     "travelTimeMinutes": 90,
     "location": "Topola, Central Serbia",
-    "estimatedCost": "€5 - €15",
+    "estimatedCost":"€10 - €20",
     "preferredTransport": "Car / Private Tour",
     "website": "https://oplenac.rs",
     "coordinates": {
@@ -585,7 +585,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "3.5 hours",
     "travelTimeMinutes": 210,
     "location": "Pirot, SE Serbia",
-    "estimatedCost": "€150 - €2000+",
+    "estimatedCost":"€180 - €2400+",
     "preferredTransport": "Car",
     "website": "https://pirotskicilim.rs",
     "coordinates": {
@@ -629,7 +629,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "1 hour",
     "travelTimeMinutes": 60,
     "location": "Kovačica & Padina, Banat",
-    "estimatedCost": "€50–€100",
+    "estimatedCost":"€60 - €120",
     "preferredTransport": "Car",
     "coordinates": {
       "lat": 45.1118,
@@ -673,7 +673,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "15 - 20 minutes",
     "travelTimeMinutes": 20,
     "location": "Ušće Park, Belgrade",
-    "estimatedCost": "€5 - €10",
+    "estimatedCost":"€10 - €20",
     "preferredTransport": "Walk / Bus / Taxi",
     "coordinates": {
       "lat": 44.8194,
@@ -748,7 +748,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "Urban walk",
     "travelTimeMinutes": 10,
     "location": "Kosančićev Venac, Belgrade",
-    "estimatedCost": "€3 - €6",
+    "estimatedCost":"€5 - €10",
     "preferredTransport": "On Foot",
     "coordinates": {
       "lat": 44.8173,
@@ -823,7 +823,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "Urban walk",
     "travelTimeMinutes": 15,
     "location": "Lower Town, Belgrade Fortress",
-    "estimatedCost": "€3 - €5",
+    "estimatedCost":"€5 - €10",
     "preferredTransport": "On Foot",
     "coordinates": {
       "lat": 44.8267,
@@ -898,7 +898,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "1 hour (from Belgrade)",
     "travelTimeMinutes": 60,
     "location": "Trg Galerija, Novi Sad",
-    "estimatedCost": "€3 - €6",
+    "estimatedCost":"€5 - €10",
     "preferredTransport": "Soko Train / Car",
     "coordinates": {
       "lat": 45.2533,
@@ -973,7 +973,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "Urban walk",
     "travelTimeMinutes": 10,
     "location": "Dorćol, Belgrade",
-    "estimatedCost": "Free / Donation",
+    "estimatedCost":"Free / Donation",
     "preferredTransport": "On Foot",
     "coordinates": {
       "lat": 44.8219,
@@ -1048,7 +1048,7 @@ export const historyRecommendations: Recommendation[] = [
     "travelTime": "2.5 hours (from Belgrade)",
     "travelTimeMinutes": 150,
     "location": "Central Niš",
-    "estimatedCost": "€2 - €4",
+    "estimatedCost":"€5 - €10",
     "preferredTransport": "Car / Bus / Train",
     "coordinates": {
       "lat": 43.3211,

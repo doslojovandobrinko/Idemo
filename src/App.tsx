@@ -81,6 +81,7 @@ import MiniMoodGrid from './components/MiniMoodGrid';
 import PrivacyPolicyContent from './components/PrivacyPolicyContent';
 import ProfileScreen, { ARCHETYPES } from './components/ProfileScreen';
 import PartnersScreen from './components/PartnersScreen';
+import OnboardingOverlay from './components/OnboardingOverlay';
 
 const CATEGORY_COORDS: Record<string, { x: number; y: number }> = {
   [Category.HISTORY]: { x: 0.55, y: 0.25 }, // Urban-leaning, slightly explorer
@@ -123,6 +124,9 @@ const AdminAccessDialog = (typeof import.meta !== 'undefined' && import.meta?.en
 const IdemoStudio = React.lazy(() => import('./components/IdemoStudio').then(m => ({ default: m.IdemoStudio })));
 import { draftExpansionPool } from './data/recommendations/serbia/draft_expansion';
 import IdemoLogo from './components/IdemoLogo';
+// Feature Flag: Set to false to instantly revert to canonical SVG plaque
+const USE_CUSTOM_HERO_IMAGE = true;
+
 import { safeStorage } from './lib/safeStorage';
 import { 
   getAllInquiriesV2, 
@@ -133,6 +137,7 @@ import {
   checkHasUnreadProposals 
 } from './lib/inquiryStorage';
 import { fetchActiveProposal } from './lib/inquiryService';
+import { executeCoordinatedVisitorRequest } from './lib/visitorRateCoordinator';
 
 // Available travel durations steps
 export const ALLOWED_TIMES = [4, 8, 12, 24, 28, 48];
@@ -1371,6 +1376,8 @@ export default function App() {
     };
   }, [isAdmin]);
 
+  const refreshActiveInquiryProposalsRef = React.useRef<() => Promise<void>>(() => Promise.resolve());
+
   React.useEffect(() => {
     // Synchronize proposal unread state with local event bus
     const handleProposalStateChange = () => {
@@ -1378,6 +1385,8 @@ export default function App() {
     };
 
     window.addEventListener('idemo_proposal_state_change', handleProposalStateChange);
+
+    let pollTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
     // Background proposal status refresh for active inquiries (runs outside PlanCard)
     const refreshActiveInquiryProposals = async () => {
@@ -1394,25 +1403,37 @@ export default function App() {
             continue;
           }
 
+          const isPendingActive = (inq.status === 'submitted' || inq.status === 'submitting') && !inq.cached_proposal && !inq.confirmed_arrangement;
+
           try {
-            const proposalRes = await fetchActiveProposal(serverId);
-            if (proposalRes.success && proposalRes.proposal_found && proposalRes.match_id && proposalRes.response_id) {
-              updateInquiryCachedProposalV2(serverId, {
-                schema_version: 1,
-                match_id: proposalRes.match_id,
-                response_id: proposalRes.response_id,
-                response_type: proposalRes.response_type || 'accept_as_requested',
-                message: proposalRes.message || '',
-                proposed_start_at: proposalRes.proposed_start_at || null,
-                proposed_end_at: proposalRes.proposed_end_at || null,
-                cached_at: Date.now(),
-              });
-              updateInquiryServerStatusV2(serverId, 'Waiting for confirmation');
-              stateChanged = true;
-            } else if (proposalRes.success && !proposalRes.proposal_found) {
-              if (inq.cached_proposal) {
-                clearCachedProposalV2(serverId);
+            const result = await executeCoordinatedVisitorRequest(
+              serverId,
+              'background',
+              'PROPOSAL',
+              () => fetchActiveProposal(serverId),
+              isPendingActive
+            );
+
+            if (result.executed && result.success && result.data) {
+              const proposalRes = result.data;
+              if (proposalRes.success && proposalRes.proposal_found && proposalRes.match_id && proposalRes.response_id) {
+                updateInquiryCachedProposalV2(serverId, {
+                  schema_version: 1,
+                  match_id: proposalRes.match_id,
+                  response_id: proposalRes.response_id,
+                  response_type: proposalRes.response_type || 'accept_as_requested',
+                  message: proposalRes.message || '',
+                  proposed_start_at: proposalRes.proposed_start_at || null,
+                  proposed_end_at: proposalRes.proposed_end_at || null,
+                  cached_at: Date.now(),
+                });
+                updateInquiryServerStatusV2(serverId, 'Waiting for confirmation');
                 stateChanged = true;
+              } else if (proposalRes.success && !proposalRes.proposal_found) {
+                if (inq.cached_proposal) {
+                  clearCachedProposalV2(serverId);
+                  stateChanged = true;
+                }
               }
             }
           } catch (e) {
@@ -1429,12 +1450,31 @@ export default function App() {
       }
     };
 
-    refreshActiveInquiryProposals();
-    const intervalId = setInterval(refreshActiveInquiryProposals, 45000);
+    refreshActiveInquiryProposalsRef.current = refreshActiveInquiryProposals;
+
+    const scheduleNextPoll = () => {
+      if (pollTimeoutId) clearTimeout(pollTimeoutId);
+      const allInquiries = getAllInquiriesV2();
+      const hasActivePending = allInquiries.some(
+        (inq) => (inq.status === 'submitted' || inq.status === 'submitting') && !inq.cached_proposal && !inq.confirmed_arrangement
+      );
+      // Adaptive interval: 15s if actively waiting for partner response, 45s otherwise
+      const nextDelay = hasActivePending ? 15000 : 45000;
+      pollTimeoutId = setTimeout(async () => {
+        await refreshActiveInquiryProposals();
+        scheduleNextPoll();
+      }, nextDelay);
+    };
+
+    refreshActiveInquiryProposals().then(() => {
+      scheduleNextPoll();
+    });
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        refreshActiveInquiryProposals();
+        refreshActiveInquiryProposals().then(() => {
+          scheduleNextPoll();
+        });
         setHasUnreadPartnerProposal(checkHasUnreadProposals());
       }
     };
@@ -1443,9 +1483,16 @@ export default function App() {
     return () => {
       window.removeEventListener('idemo_proposal_state_change', handleProposalStateChange);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      clearInterval(intervalId);
+      if (pollTimeoutId) clearTimeout(pollTimeoutId);
     };
   }, []);
+
+  // Immediate refresh whenever visitor opens My Planner screen
+  React.useEffect(() => {
+    if (currentScreen === 'plan') {
+      refreshActiveInquiryProposalsRef.current?.();
+    }
+  }, [currentScreen]);
 
   const [lowSignalMode, setLowSignalMode] = useState<boolean>(() => {
     try {
@@ -1669,6 +1716,21 @@ export default function App() {
       const saved = safeStorage.getItem('idemo_custom_orbit_v1');
       if (saved) {
         const parsed = JSON.parse(saved);
+        if (typeof parsed.isCustom === 'boolean') {
+          if (parsed.isCustom && typeof parsed.orbitX === 'number' && typeof parsed.orbitY === 'number') {
+            return { orbitX: parsed.orbitX, orbitY: parsed.orbitY };
+          }
+          return null;
+        }
+        // Legacy record compatibility (missing isCustom field):
+        const isUntouchedDefault =
+          parsed.orbitX === 0.5 &&
+          parsed.orbitY === 0.5 &&
+          (parsed.budget === undefined || parsed.budget === 100) &&
+          (parsed.time === undefined || parsed.time === 24);
+        if (isUntouchedDefault) {
+          return null;
+        }
         if (typeof parsed.orbitX === 'number' && typeof parsed.orbitY === 'number') {
           return { orbitX: parsed.orbitX, orbitY: parsed.orbitY };
         }
@@ -1988,16 +2050,25 @@ export default function App() {
   // Synchronize canonical orbit coordinates and budget/time preferences to safeStorage
   useEffect(() => {
     try {
-      safeStorage.setItem('idemo_custom_orbit_v1', JSON.stringify({
-        orbitX: customOrbit?.orbitX ?? orbitX,
-        orbitY: customOrbit?.orbitY ?? orbitY,
-        budget,
-        time
-      }));
+      if (customOrbit !== null) {
+        safeStorage.setItem('idemo_custom_orbit_v1', JSON.stringify({
+          isCustom: true,
+          orbitX: customOrbit.orbitX,
+          orbitY: customOrbit.orbitY,
+          budget,
+          time
+        }));
+      } else {
+        safeStorage.setItem('idemo_custom_orbit_v1', JSON.stringify({
+          isCustom: false,
+          budget,
+          time
+        }));
+      }
     } catch (e) {
       console.warn('Failed to persist custom orbit and budget/time preferences:', e);
     }
-  }, [customOrbit, orbitX, orbitY, budget, time]);
+  }, [customOrbit, budget, time]);
 
   const prefs: UserPreferences = {
     budget,
@@ -2448,7 +2519,7 @@ export default function App() {
             onSelectRec={handleSelectRec}
             onUpdateDate={updateScheduledDate}
             onRemove={removeScheduledItem}
-            onExplore={() => navigateToScreen('explore')}
+            onExplore={() => { triggerHaptic(8); navigateToScreen('home'); }}
             onAddBundle={addBundleToPlan}
             lowSignalMode={lowSignalMode}
             allRecommendations={userFacingRecommendations}
@@ -2558,6 +2629,7 @@ export default function App() {
 
               try {
                 safeStorage.setItem('idemo_custom_orbit_v1', JSON.stringify({
+                  isCustom: true,
                   orbitX: x,
                   orbitY: y,
                   budget: b ?? budget,
@@ -3596,63 +3668,89 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      className="flex-1 flex flex-col justify-center items-center py-4 px-5 relative h-full overflow-y-auto overflow-x-hidden no-scrollbar premium-paper select-none gap-y-4"
+      className="flex-1 flex flex-col justify-between items-center py-2 xs:py-2.5 px-3.5 relative h-full max-h-full overflow-hidden premium-paper select-none gap-y-1.5"
     >
-      {/* Group top section (Promotional Statement) with confident, elegant rhythm */}
-      <div className="flex-shrink-0 flex flex-col justify-center items-center max-w-[340px] mx-auto w-full pt-1">
-        {/* Main 2-line promotional statement */}
-        <div className="text-center w-full flex flex-col justify-center items-center gap-y-1">
-          <p className="font-sans text-[15px] xs:text-[16.5px] sm:text-[18px] text-[#800020] font-bold uppercase tracking-[0.06em] xs:tracking-[0.08em] sm:tracking-[0.1em] text-center leading-[1.3] whitespace-nowrap">
+      {/* 1. Top Section (Promotional Statement - Oxblood #800020, Scaled -20% for 1-Screen Precision & Extra BOLD) */}
+      <div className="flex-shrink-0 flex flex-col justify-center items-center max-w-[360px] mx-auto w-full pt-0.5">
+        <div className="text-center w-full flex flex-col justify-center items-center gap-y-0.5">
+          <p className="font-sans text-[18px] xs:text-[21px] sm:text-[24px] text-[#800020] font-black uppercase tracking-[0.04em] xs:tracking-[0.05em] text-center leading-[1.15] whitespace-nowrap">
             {t.serbia_subheadline_line1_l1}
           </p>
-          <p className="font-sans text-[15px] xs:text-[16.5px] sm:text-[18px] text-[#800020] font-bold uppercase tracking-[0.06em] xs:tracking-[0.08em] sm:tracking-[0.1em] text-center leading-[1.3] whitespace-nowrap">
+          <p className="font-sans text-[18px] xs:text-[21px] sm:text-[24px] text-[#800020] font-black uppercase tracking-[0.04em] xs:tracking-[0.05em] text-center leading-[1.15] whitespace-nowrap">
             {t.serbia_subheadline_line1_l2}
           </p>
         </div>
       </div>
 
-      {/* Group middle section (Tactile IDEMO Logo & Compact Language Selector) - Perfect spacing, zero empty bloat */}
-      <div className="flex-shrink-0 flex flex-col justify-center items-center gap-y-3.5 my-1 w-full">
-        {/* 5. IDEMO Logo - Precision Physical Plaque Button */}
-        <div className="relative flex justify-center items-center w-[210px] h-[52px]" style={{ perspective: "1000px" }}>
-          {/* 3D solid thickness plate base */}
-          <div className="absolute inset-0 bg-[#C4C2B8] rounded-[14px] translate-y-[5px] border border-brand-charcoal/[0.04] shadow-[0_4px_8px_rgba(35,37,30,0.12),0_1px_2px_rgba(35,37,30,0.08)] pointer-events-none" />
+      {/* 2. Middle Section (Tactile IDEMO Button + Language Selector - Seamless Background Blend) */}
+      <div className="flex-1 flex flex-col justify-center items-center gap-y-1.5 xs:gap-y-2 my-auto w-full min-h-0">
+        {/* IDEMO Hero Emblem (Prime Ultra-Resolution +50% Footprint, Seamless Blend, Locked 1122:1402) */}
+        <div 
+          className={`relative flex justify-center items-center ${
+            USE_CUSTOM_HERO_IMAGE 
+              ? "w-[360px] xs:w-[420px] sm:w-[480px] md:w-[520px] aspect-[1122/1402] max-h-[58vh] xs:max-h-[62vh] max-w-[calc(100vw-24px)]" 
+              : "w-[210px] h-[52px]"
+          }`} 
+          style={{ perspective: "1000px" }}
+        >
+          {/* 3D solid thickness plate base (Only shown when not using custom hero image) */}
+          {!USE_CUSTOM_HERO_IMAGE && (
+            <div 
+              className="absolute inset-0 bg-[#C4C2B8] translate-y-[3.5px] xs:translate-y-[4px] border border-brand-charcoal/[0.04] pointer-events-none rounded-[14px] shadow-[0_4px_8px_rgba(35,37,30,0.12),0_1px_2px_rgba(35,37,30,0.08)]"
+            />
+          )}
           
           <motion.div 
             onClick={handleStart}
-            className="relative w-full h-full cursor-pointer select-none bg-[#FAF9F5] rounded-[14px] flex items-center justify-center border border-brand-charcoal/[0.12] overflow-hidden px-4"
+            className={`relative w-full h-full cursor-pointer select-none flex items-center justify-center overflow-hidden ${
+              USE_CUSTOM_HERO_IMAGE 
+                ? "bg-transparent border-none shadow-none p-0" 
+                : "bg-[#FAF9F5] rounded-[14px] px-4 border border-brand-charcoal/[0.12]"
+            }`}
             initial={{ 
+              scale: 1,
               y: 0,
-              boxShadow: "0 1px 2px rgba(35,37,30,0.02), inset 0px 1.5px 1px rgba(255,255,255,0.95)"
             }}
             whileHover={{ 
-              y: 1.5,
-              boxShadow: "0 0.5px 1px rgba(35,37,30,0.01), inset 0px 1.5px 1px rgba(255,255,255,0.95)"
+              scale: 1.025,
+              y: -1,
             }}
             whileTap={{ 
-              y: 5,
-              boxShadow: "inset 0px 2px 4px rgba(35,37,30,0.12)"
+              scale: 0.97,
+              y: 2,
             }}
             transition={{ type: "spring", stiffness: 450, damping: 25 }}
             onMouseDown={() => triggerHaptic(8)}
             onTouchStart={() => triggerHaptic(8)}
             id="tactile-hero-logo"
           >
-            {/* Premium Glass reflection glaze */}
-            <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/20 pointer-events-none rounded-[14px]" />
+            {/* Premium Glass reflection glaze (Only for plaque mode) */}
+            {!USE_CUSTOM_HERO_IMAGE && (
+              <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-white/20 pointer-events-none z-10 rounded-[14px]" />
+            )}
             
-            <IdemoLogo 
-              width="100%" 
-              height="100%" 
-              showBg={false}
-              className="text-brand-charcoal select-none pointer-events-none" 
-            />
+            {USE_CUSTOM_HERO_IMAGE ? (
+              <img 
+                src="/idemo_hero_custom.png" 
+                alt="IDEMO" 
+                className="w-full h-full object-contain select-none pointer-events-none drop-shadow-[0_8px_24px_rgba(35,37,30,0.06)]"
+                style={{ imageRendering: "-webkit-optimize-contrast" }}
+                draggable={false}
+              />
+            ) : (
+              <IdemoLogo 
+                width="100%" 
+                height="100%" 
+                showBg={false}
+                className="text-brand-charcoal select-none pointer-events-none" 
+              />
+            )}
           </motion.div>
         </div>
 
-        {/* 6. Precision Machined Language Selector (Gently recessed control directly below IDEMO Logo) */}
-        <div className="w-full max-w-[280px] px-2 z-50">
-          <div className="flex justify-between p-[4px] bg-[#FAF9F5]/40 rounded-full border border-brand-charcoal/[0.08] shadow-[0_1px_2px_rgba(255,255,255,0.9)]">
+        {/* Language Selector (Recessed control directly below IDEMO Button) */}
+        <div className="w-full max-w-[260px] px-1.5 z-50">
+          <div className="flex justify-between p-[2.5px] bg-[#FAF9F5]/40 rounded-full border border-brand-charcoal/[0.08] shadow-[0_1px_2px_rgba(255,255,255,0.9)]">
             {LANGUAGES.map((lang) => {
               const isSelected = language === lang.code;
               return (
@@ -3663,7 +3761,7 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
                     setLanguage(lang.code);
                   }}
                   whileTap={{ scale: 0.95 }}
-                  className={`flex-1 py-2 rounded-full text-[10.5px] xs:text-[11.5px] font-bold uppercase tracking-widest transition-all duration-200 select-none cursor-pointer text-center relative ${
+                  className={`flex-1 py-1 rounded-full text-[9.5px] xs:text-[10.5px] font-bold uppercase tracking-wider transition-all duration-200 select-none cursor-pointer text-center relative ${
                     isSelected
                       ? 'bg-[#EAE8E0]/50 text-brand-charcoal shadow-[inset_0_1.5px_3.5px_rgba(35,37,30,0.13)] border border-brand-charcoal/[0.02] font-black'
                       : 'text-brand-charcoal/45 hover:text-brand-charcoal/75 bg-transparent border border-transparent'
@@ -3672,7 +3770,7 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
                   id={`premium-lang-${lang.code}`}
                 >
                   {/* Invisible padding expansion for touch target */}
-                  <span className="absolute -inset-1.5 rounded-full bg-transparent" />
+                  <span className="absolute -inset-1 rounded-full bg-transparent" />
                   <span className="relative z-10">{lang.code}</span>
                 </motion.button>
               );
@@ -3681,24 +3779,23 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
         </div>
       </div>
 
-      {/* Group bottom section (Disclaimer Card) */}
-      <div className="flex-shrink-0 w-full max-w-[340px] mx-auto pt-0 mb-2">
-        {/* 7. Disclaimer Card */}
-        <div className="text-center space-y-1 bg-white/30 border border-border-main/8 rounded-[12px] py-2.5 px-4 shadow-[0_1.5px_8px_rgba(35,37,30,0.01)] backdrop-blur-xs flex flex-col items-center justify-center" id="refined-disclaimer-card">
-          <p className="text-[10.5px] xs:text-[11.5px] font-bold uppercase tracking-[0.14em] text-brand-charcoal/50 leading-normal">
+      {/* 3. Bottom Section (Disclaimer Card - Compact Precision) */}
+      <div className="flex-shrink-0 w-full max-w-[325px] mx-auto pt-0 pb-0.5">
+        <div className="text-center space-y-0.5 bg-white/30 border border-border-main/8 rounded-[11px] py-1.5 px-3 shadow-[0_1.5px_8px_rgba(35,37,30,0.01)] backdrop-blur-xs flex flex-col items-center justify-center" id="refined-disclaimer-card">
+          <p className="text-[9.5px] xs:text-[10px] font-bold uppercase tracking-[0.11em] text-brand-charcoal/50 leading-tight">
             {t.disclaimer_1}
           </p>
-          <div className="h-[1px] bg-border-main/10 my-1 w-1/5 mx-auto" />
-          <p className="text-[10px] xs:text-[11px] uppercase tracking-[0.11em] text-brand-charcoal/50 leading-relaxed font-semibold">
+          <div className="h-[1px] bg-border-main/10 my-0.5 w-1/5 mx-auto" />
+          <p className="text-[9px] xs:text-[9.5px] uppercase tracking-[0.09em] text-brand-charcoal/50 leading-tight font-semibold">
             {t.disclaimer_2}
           </p>
-          <div className="h-[1px] bg-border-main/10 my-1 w-1/5 mx-auto" />
+          <div className="h-[1px] bg-border-main/10 my-0.5 w-1/5 mx-auto" />
           <button
             onClick={() => {
               triggerHaptic(10);
               setShowPrivacy(true);
             }}
-            className="text-[10px] xs:text-[11px] uppercase tracking-[0.12em] text-accent-teal hover:text-accent-teal/85 transition-colors font-bold cursor-pointer underline decoration-dotted underline-offset-2"
+            className="text-[9px] xs:text-[9.5px] uppercase tracking-[0.1em] text-accent-teal hover:text-accent-teal/85 transition-colors font-bold cursor-pointer underline decoration-dotted underline-offset-2"
           >
             {language === 'sr' ? 'Politika Privatnosti' : language === 'es' ? 'Política de Privacidad' : language === 'de' ? 'Datenschutzerklärung' : language === 'ru' ? 'Политика конфиденциальности' : language === 'zh' ? '隐私政策' : 'Privacy Policy'}
           </button>
@@ -6855,198 +6952,6 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
   const [copiedToast, setCopiedToast] = React.useState(false);
   const [calendarToast, setCalendarToast] = React.useState<{ type: 'success' | 'error' | 'warning', message: string } | null>(null);
 
-  const renderJourneyBundles = () => {
-    const JOURNEY_BUNDLES = [
-      {
-        id: 'old_belgrade',
-        title: { en: '3 Hours in Old Belgrade', sr: '3 sata u starom Beogradu', zh: '老贝尔格莱德3小时游' },
-        tag: '2 Hours / 3 Hours',
-        duration: '3h',
-        vibe: 'Classic Heritage & Coffee',
-        itemIds: ['29', '7', '10'], // Kalemegdanska Terasa, Nikola Tesla Museum, Rakia Bar Belgrade
-        description: {
-          en: 'A concise historical circuit through old fortress steps, Nikola Tesla’s archive, and Belgrade’s oldest social spirits.',
-          sr: 'Kompaktna istorijska šetnja kroz kule Kalemegdana, arhiv Nikole Tesle i najstarije beogradske kafane.',
-          zh: '一段穿越古老城堡、特斯拉科学陈列馆与最古老酒馆的紧凑历史人文漫游。'
-        }
-      },
-      {
-        id: 'belgrade_architects',
-        title: { en: 'Belgrade for Architects', sr: 'Beograd za arhitekte', zh: '建筑师的贝尔格莱德' },
-        tag: 'Half-Day',
-        duration: 'Half-Day',
-        vibe: 'Brutalist Masterpieces & Confluence',
-        itemIds: ['23', '29'], // Silosi Belgrade, Kalemegdanska Terasa (with high fortress geography)
-        description: {
-          en: 'An editorial route exploring post-war industrial concrete structures, defensive military battlements, and Sava riverfront urban planning.',
-          sr: 'Pregled monumentalnih silosa, odbrambenih vizantijskih i austrijskih zidina i rečne urbane arhitekture.',
-          zh: '品读战后粗野主义工业粮仓、历代军事保卫要塞与萨瓦河岸新规划区，体验建筑的力量。'
-        }
-      },
-      {
-        id: 'quiet_serbia',
-        title: { en: 'Quiet Serbia', sr: 'Mirna Srbija', zh: '宁谧塞尔维亚' },
-        tag: 'Full-Day',
-        duration: 'Full-Day',
-        vibe: 'Wilderness & Organic Distilleries',
-        itemIds: ['1', '11'], // Uvac Meanders, Distillery Zarić
-        description: {
-          en: 'Unpowered nature escape featuring Europe’s most majestic meanders, organic premium fruit distilleries, and quiet valley air.',
-          sr: 'Premium izolacija u netaknutoj prirodi: veličanstveni meandri Uvca i organic destilerija premium rakije.',
-          zh: '远离尘嚣，行舟于雄阔的曲流大峡谷，探访手工高级果实蒸馏工坊与静谧的山林。'
-        }
-      },
-      {
-        id: 'concrete_coffee',
-        title: { en: 'Concrete & Coffee', sr: 'Beton i kafa', zh: '混凝土与咖啡' },
-        tag: '2 Hours',
-        duration: '2h',
-        vibe: 'Brutalist Acoustics & Coffee Cult',
-        itemIds: ['23', '10'], // Silosi Belgrade, Rakia Bar / craft coffee area
-        description: {
-          en: 'A lightweight exploration of Belgrade’s industrial concrete acoustic cavities paired with premium, slow-brewed local coffee.',
-          sr: 'Kratka šetnja kroz brutalističke akustične silose uz vrhunsku, lagano kuvanu domaću kafu.',
-          zh: '轻松探索贝尔格莱德粗野建筑巨构的混能共鸣腔，品鉴慢速手冲咖啡与微醺果味。'
-        }
-      },
-      {
-        id: 'rakija_river',
-        title: { en: 'Rakija & River Evenings', sr: 'Rakija i rečne večeri', zh: '拉基亚与河畔之夜' },
-        tag: 'Weekend',
-        duration: 'Weekend',
-        vibe: 'Traditional Gastronomy & Confluence Melodies',
-        itemIds: ['10', '58', '3'], // Rakia Bar, Kafanas of Old Zemun, Riverside splavovi Confluence
-        description: {
-          en: 'A weekend immersion into traditional plum distillates, riverside fish stews, and floating acoustic melodies on the Danube.',
-          sr: 'Vikend uranjanje u tradicionalnu šljivu, autentičnu čorbu u Zemunu i akustičnu tamburicu na rekama.',
-          zh: '周末沉浸式体验：传统双蒸橡木桶李子烧酒搭配多瑙河畔鲜美鱼汤，以及浮动船坞里的现场弦乐。'
-        }
-      }
-    ];
-
-    const handleDownloadBundleICS = (b: any) => {
-      let icsContent = [
-        'BEGIN:VCALENDAR',
-        'VERSION:2.0',
-        'PRODID:-//IDEMO//EN',
-        'CALSCALE:GREGORIAN',
-        'METHOD:PUBLISH'
-      ];
-      
-      const today = new Date();
-      b.itemIds.forEach((id: string, index: number) => {
-        const item = allRecommendations.find((r: any) => r.id === id);
-        if (!item) return;
-
-        const eventDate = new Date(today);
-        eventDate.setDate(today.getDate() + index);
-
-        const year = eventDate.getFullYear();
-        const month = String(eventDate.getMonth() + 1).padStart(2, '0');
-        const day = String(eventDate.getDate()).padStart(2, '0');
-        const dateStr = `${year}${month}${day}`;
-
-        icsContent.push('BEGIN:VEVENT');
-        icsContent.push(`UID:bundle-${b.id}-${item.id}-${Date.now()}@idemo.com`);
-        icsContent.push(`DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z`);
-        icsContent.push(`DTSTART;VALUE=DATE:${dateStr}`);
-        icsContent.push(`DTEND;VALUE=DATE:${dateStr}`);
-        icsContent.push(`SUMMARY:${getLocalizedValue(item, 'title', language)}`);
-        icsContent.push(`DESCRIPTION:Curated Itinerary Step for ${b.title[language] || b.title['en']}. Vibe: ${b.vibe}. Cost: ${item.estimatedCost || 'N/A'}`);
-        icsContent.push(`LOCATION:${getLocalizedValue(item, 'location', language)}`);
-        icsContent.push('END:VEVENT');
-      });
-
-      icsContent.push('END:VCALENDAR');
-
-      const blob = new Blob([icsContent.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${b.id}_trip_plan.ics`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    };
-
-    return (
-      <div className="space-y-4 pt-10 border-t border-border-main/50 mt-10">
-        <div className="space-y-1">
-          <div className="flex items-center gap-1.5 text-accent-teal">
-            <Compass size={11} className="text-accent-teal" />
-            <span className="text-[8.5px] uppercase font-black tracking-widest">
-              {language === 'sr' ? 'Kustoske rute' : language === 'zh' ? '精品路线' : 'Curated Journeys'}
-            </span>
-          </div>
-          <h3 className="text-xl font-serif text-brand-charcoal tracking-tight">
-            {language === 'sr' ? 'Predefinisane rute (Offline)' : language === 'zh' ? '离线品质行程包' : 'Offline Journey Bundles'}
-          </h3>
-          <p className="text-[11px] text-[#5C5E54] leading-normal font-sans">
-            {language === 'sr' 
-              ? 'Učitajte stručno odabrane itinerere u svoj planer jednim klikom. Potpuno offline operativno.' 
-              : language === 'zh' 
-              ? '一键载入本地学者雕琢的主题路线。断网离线也能正常导航和查阅。' 
-              : 'Direct drop-in itineraries configured by local curatorial scholars. Pre-cached and 100% functional offline.'}
-          </p>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          {JOURNEY_BUNDLES.map((b) => {
-            const isAdded = b.itemIds.every(id => scheduledItems.some((s: any) => s.id === id));
-            return (
-              <div 
-                key={b.id} 
-                className="bg-white border border-border-main p-5 rounded-[28px] shadow-tactile hover:shadow-md transition-all flex flex-col justify-between text-left"
-              >
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[8px] font-black uppercase tracking-wider text-accent-red bg-accent-red/5 border border-accent-red/10 px-2 py-0.5 rounded-full">
-                      {b.tag}
-                    </span>
-                    <span className="text-[8.5px] font-mono text-[#8C8A7D]">
-                      ⏱ {b.duration}
-                    </span>
-                  </div>
-                  <h4 className="text-[14px] font-serif font-bold text-brand-charcoal leading-tight">
-                    {b.title[language] || b.title['en']}
-                  </h4>
-                  <p className="text-[10.5px] text-[#5C5E54]/80 leading-relaxed font-sans mt-1">
-                    {b.description[language] || b.description['en']}
-                  </p>
-                </div>
-
-                <div className="mt-5 pt-3 border-t border-[#EAE8DF] flex justify-between items-center">
-                  <span className="text-[8px] font-mono text-[#8C8A7D] uppercase">
-                    Vibe: {b.vibe}
-                  </span>
-                  
-                  <div className="flex items-center gap-2">
-                    {isAdded ? (
-                      <span className="text-[8.5px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1">
-                        ✓ Active
-                      </span>
-                    ) : (
-                      <button 
-                        onClick={() => {
-                          triggerHaptic(12);
-                          onAddBundle(b.itemIds);
-                        }}
-                        className="px-3.5 py-1.5 bg-accent-red hover:bg-accent-red/90 text-white uppercase text-[8px] tracking-widest font-black rounded-full shadow-sm active:scale-95 transition-all outline-none cursor-pointer"
-                      >
-                        {language === 'sr' ? 'Sačuvaj u planer događaja' : language === 'zh' ? '保存到我的活动计划器' : 'Save to My Event Planner'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
   const shareBtnLabels: Record<string, string> = {
     en: 'SHARE EVENT PLANNER AS PDF',
     sr: 'PODELI PLANER DOGAĐAJA KAO PDF',
@@ -8894,22 +8799,63 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
       </header>
 
       {scheduledItems.length === 0 ? (
-        <div>
-          <div className="py-14 text-center space-y-4 px-10">
-             <div className="w-16 h-16 bg-brand-pearl rounded-full flex items-center justify-center mx-auto mb-2 border border-border-main/60 opacity-60">
-                <CalendarIcon size={24} className="text-brand-charcoal" />
-             </div>
-             <p className="text-sm font-serif italic text-brand-charcoal leading-relaxed px-2 text-center opacity-60">
-               "{t.empty_plan}"
-             </p>
-             <button 
-               onClick={onExplore}
-               className="text-[9px] uppercase tracking-widest font-black text-accent-red border border-accent-red/25 px-5 py-2.5 rounded-full active:scale-95 transition-all cursor-pointer inline-block mt-1"
-             >
-               {t.start_exploring}
-             </button>
+        <div className="py-2">
+          <div className="relative overflow-hidden rounded-2xl border border-border-main/20 bg-transparent p-6 sm:p-8 text-center my-2">
+            {/* Minimalist Serbia Journey Route Motif (Faint decorative route line) */}
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-15 select-none overflow-hidden">
+              <svg width="340" height="180" viewBox="0 0 340 180" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full max-w-md">
+                {/* Smooth route path */}
+                <path 
+                  d="M 30 140 C 90 140, 100 40, 170 80 C 240 120, 260 30, 310 50" 
+                  stroke="#800020" 
+                  strokeWidth="1.5" 
+                  strokeDasharray="4 4" 
+                  strokeLinecap="round" 
+                  fill="none" 
+                  className="opacity-50"
+                />
+                {/* Waypoint 1 */}
+                <circle cx="30" cy="140" r="4" fill="#1E2E20" className="opacity-70" />
+                <circle cx="30" cy="140" r="8" stroke="#1E2E20" strokeWidth="1" fill="none" className="opacity-40" />
+                {/* Waypoint 2 */}
+                <circle cx="120" cy="60" r="3.5" fill="#800020" className="opacity-80" />
+                {/* Waypoint 3 */}
+                <circle cx="210" cy="100" r="3.5" fill="#1E2E20" className="opacity-70" />
+                {/* Waypoint 4 */}
+                <circle cx="310" cy="50" r="4" fill="#800020" className="opacity-90" />
+                <circle cx="310" cy="50" r="8" stroke="#800020" strokeWidth="1" fill="none" className="opacity-50" />
+              </svg>
+            </div>
+
+            <div className="relative z-10 space-y-4 max-w-md mx-auto">
+              <div className="w-11 h-11 rounded-full bg-brand-sand/40 border border-border-main/30 flex items-center justify-center mx-auto text-accent-red shadow-2xs mb-1">
+                <Compass size={20} className="text-accent-red" />
+              </div>
+
+              <h3 className="text-sm sm:text-base font-serif font-black text-brand-charcoal tracking-tight uppercase px-2">
+                {t.empty_plan_headline || 'YOUR SERBIA JOURNEY STARTS HERE'}
+              </h3>
+
+              <p className="text-[13.5px] sm:text-[14.5px] text-brand-charcoal/85 leading-relaxed max-w-sm sm:max-w-md mx-auto font-normal">
+                {t.empty_plan_sub || 'Save what inspires you and build your journey. Tell us what you need, IDEMO finds the best-matched partner, and you connect directly.'}
+              </p>
+
+              <div className="pt-1 pb-1">
+                <span className="inline-block text-[9px] font-black uppercase tracking-[0.2em] text-accent-teal bg-accent-teal/8 px-4 py-1.5 rounded-full border border-accent-teal/20">
+                  {t.journey_cues || '2–3 HOURS · HALF DAY · FULL DAY'}
+                </span>
+              </div>
+
+              <div className="pt-1">
+                <button 
+                  onClick={onExplore}
+                  className="text-[9.5px] uppercase tracking-[0.22em] font-black text-white bg-accent-red hover:bg-accent-red/90 px-7 py-3 rounded-full active:scale-95 transition-all cursor-pointer shadow-xs border border-accent-red/20 inline-flex items-center gap-2"
+                >
+                  <span>{t.start_exploring}</span>
+                </button>
+              </div>
+            </div>
           </div>
-          {renderJourneyBundles()}
         </div>
       ) : (
         <div className="space-y-5">
@@ -8930,8 +8876,6 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
                </div>
              ))}
            </AnimatePresence>
-
-           {renderJourneyBundles()}
 
             {/* HIGH-FIDELITY LIVE DOCUMENT PREVIEW MODAL OVERLAY */}
             <AnimatePresence>
@@ -10415,1526 +10359,3 @@ function ExploreScreen({
   </div>
 );
 };
-
-const ONBOARDING_TRANSLATIONS: Record<string, any> = {
-  en: {
-    cards: [
-      {
-        eyebrow: "YOUR MOOD · YOUR TIME · YOUR PRIORITIES",
-        title: "SET WHAT FITS YOU.",
-        description: "Set your mood, budget and available time. IDEMO prioritises what fits you now.",
-        actions: [
-          { num: "1", verb: "MOVE", label: "Mood", icon: "Move" },
-          { num: "2", verb: "RESIZE", label: "Budget", icon: "Maximize2" },
-          { num: "3", verb: "ROTATE", label: "Time", icon: "RotateCw" }
-        ],
-        guidance: [
-          { 
-            num: "①", 
-            heading: "MOVE · MOOD", 
-            primary: "Move the Orb toward what feels right today.", 
-            supporting: "Balance Urban, Nature, Hedonist and Adventurer to express your mood." 
-          },
-          { 
-            num: "②", 
-            heading: "RESIZE · BUDGET", 
-            primary: "Resize the Orb to set your preferred budget.", 
-            supporting: "Expand for a higher budget or contract it for a lower one." 
-          },
-          { 
-            num: "③", 
-            heading: "ROTATE · TIME", 
-            primary: "Rotate the ring to show how much time you have available.", 
-            supporting: "More available time allows IDEMO to consider longer experiences." 
-          }
-        ],
-        axis_urban: "URBAN",
-        axis_nature: "NATURE",
-        axis_hedonist: "HEDONIST",
-        axis_adventurer: "ADVENTURER"
-      },
-      {
-        eyebrow: "CURATED DISCOVERY",
-        title: "FROM IDEA TO EXPERIENCE.",
-        description: "Save what interests you, choose when, and ask for local help when you need it.",
-        dest_badge: "CURATED EXPERIENCE",
-        dest_title: "UVAC MEANDERS",
-        dest_subtitle: "Nature • Western Serbia",
-        actions: [
-          { num: "1", verb: "SAVE", label: "Keep the experience", icon: "Bookmark" },
-          { num: "2", verb: "PLAN", label: "Choose when", icon: "Calendar" },
-          { num: "3", verb: "ASK", label: "Request local help", icon: "Send" }
-        ],
-        guidance: [
-          { 
-            num: "①", 
-            heading: "SAVE · KEEP IT", 
-            primary: "Found something you like? Save it.", 
-            supporting: "It stays available while you continue exploring." 
-          },
-          { 
-            num: "②", 
-            heading: "PLAN · CHOOSE WHEN", 
-            primary: "Add the experience to your Travel Plan.", 
-            supporting: "Choose the date that works for your visit." 
-          },
-          { 
-            num: "③", 
-            heading: "ASK · LOCAL HELP", 
-            primary: "Need help arranging it? Send a request.", 
-            supporting: "Add your date, party details and what assistance you need." 
-          }
-        ],
-        req_title: "YOUR REQUEST (EXAMPLE)",
-        req_date_label: "DATE",
-        req_date: "18 MAY",
-        req_party_label: "PARTY",
-        req_party: "2 PEOPLE",
-        req_note_label: "NOTE",
-        req_note: "PRIVATE GUIDE",
-        matching_text: "MATCHING WITH A VERIFIED LOCAL PARTNER..."
-      },
-      {
-        eyebrow: "YOU DECIDE WHAT HAPPENS NEXT.",
-        title: "YOU DECIDE WHAT HAPPENS NEXT.",
-        description: "Review what is proposed, choose what works, then connect directly with the verified partner.",
-        partner_badge: "VERIFIED LOCAL PARTNER",
-        available_badge: "AVAILABLE",
-        partner_title: "Uvac Meanders",
-        partner_sub: "Private guided experience",
-        partner_schedule: "18 MAY • 09:00",
-        partner_meta: "Private guide + local transport",
-        partner_price: "€ 220",
-        partner_price_sub: "for 2 people",
-        partner_quote: "“Happy to arrange this for you.”",
-        partner_btn: "VIEW RESPONSE >",
-        actions: [
-          { num: "1", verb: "REQUEST", label: "Send details", icon: "Send" },
-          { num: "2", verb: "REVIEW", label: "Your proposal", icon: "FileText" },
-          { num: "3", verb: "CONNECT", label: "You decide", icon: "User" }
-        ],
-        guidance: [
-          { 
-            num: "①", 
-            heading: "REQUEST · SEND DETAILS", 
-            primary: "Tell us when you're going and what help you need.", 
-            supporting: "Your request is matched with an appropriate verified local partner." 
-          },
-          { 
-            num: "②", 
-            heading: "REVIEW · YOUR PROPOSAL", 
-            primary: "Review the partner's availability and proposed arrangement.", 
-            supporting: "Check the details, price and personal message before deciding." 
-          },
-          { 
-            num: "③", 
-            heading: "CONNECT · YOU DECIDE", 
-            primary: "Choose what works and continue directly with the partner.", 
-            supporting: "Confirm, request an alternative, or decide not to proceed." 
-          }
-        ],
-        commercial_boundary: {
-          title: "IDEMO INTRODUCES. YOU ARRANGE DIRECTLY.",
-          subtitle: "You arrange directly with the partner.",
-          text: "Booking, payment and commercial terms are between you and the partner."
-        }
-      }
-    ],
-    start: "START EXPLORING >",
-    next: "CONTINUE >",
-    back: "Back",
-    skip: "Skip",
-    trust_line: "No registration required. Preferences stay private on your device.",
-    trust_ribbon: "PRIVATE BY DESIGN • CURATED EXPERIENCES • TRUSTED LOCAL EXPERTS",
-    step_label: "STEP"
-  },
-  sr: {
-    cards: [
-      {
-        eyebrow: "VAŠE RASPOLOŽENJE · VAŠE VREME · VAŠI PRIORITETI",
-        title: "PODEŠAVANJE PO VAŠOJ MERI.",
-        description: "Podesite raspoloženje, budžet i vreme. IDEMO prioritizuje ono što vam najviše odgovara.",
-        actions: [
-          { num: "1", verb: "POMERITE", label: "Raspoloženje", icon: "Move" },
-          { num: "2", verb: "PRILAGODITE", label: "Budžet", icon: "Maximize2" },
-          { num: "3", verb: "OKRENITE", label: "Vreme", icon: "RotateCw" }
-        ],
-        guidance: [
-          { 
-            num: "①", 
-            heading: "POMERITE · RASPOLOŽENJE", 
-            primary: "Pomerite orbitu ka onome što vam danas prija.", 
-            supporting: "Uskladite Grad, Prirodu, Hedonizam i Avanturu da izrazite raspoloženje." 
-          },
-          { 
-            num: "②", 
-            heading: "PRILAGODITE · BUDŽET", 
-            primary: "Prilagodite orbitu da postavite željeni budžet.", 
-            supporting: "Povećajte prečnik za veći budžet ili ga smanjite za manji." 
-          },
-          { 
-            num: "③", 
-            heading: "OKRENITE · VREME", 
-            primary: "Okrenite prsten da naznačite raspoloživo vreme.", 
-            supporting: "Više raspoloživog vremena omogućava predloge dužih iskustava." 
-          }
-        ],
-        axis_urban: "GRAD",
-        axis_nature: "PRIRODA",
-        axis_hedonist: "HEDONIZAM",
-        axis_adventurer: "AVANTURA"
-      },
-      {
-        eyebrow: "ODABRANO ISTRAŽIVANJE",
-        title: "OD IDEJE DO ISKUSTVA.",
-        description: "Sačuvajte ono što vas zanima, izaberite kada, i zatražite lokalnu pomoć kada vam zatreba.",
-        dest_badge: "ODABRANO ISKUSTVO",
-        dest_title: "MEANDRI UVCA",
-        dest_subtitle: "Priroda • Zapadna Srbija",
-        actions: [
-          { num: "1", verb: "SAČUVAJ", label: "Zadržite iskustvo", icon: "Bookmark" },
-          { num: "2", verb: "PLANIRAJ", label: "Izaberite kada", icon: "Calendar" },
-          { num: "3", verb: "ZATRAŽI", label: "Lokalna pomoć", icon: "Send" }
-        ],
-        guidance: [
-          { 
-            num: "①", 
-            heading: "SAČUVAJ · ZADRŽITE", 
-            primary: "Pronašli ste nešto što vam se dopada? Sačuvajte to.", 
-            supporting: "Ostaje vam pri ruci dok nastavljate sa istraživanjem." 
-          },
-          { 
-            num: "②", 
-            heading: "PLANIRAJ · IZABERITE KADA", 
-            primary: "Dodajte iskustvo u svoj Plan Puta.", 
-            supporting: "Izaberite datum koji vam najviše odgovara za posetu." 
-          },
-          { 
-            num: "③", 
-            heading: "ZATRAŽI · LOKALNA POMOĆ", 
-            primary: "Potrebna vam je pomoć oko organizacije? Pošaljite upit.", 
-            supporting: "Dodajte datum, broj osoba i pomoć koja vam je potrebna." 
-          }
-        ],
-        req_title: "VAŠ UPIT (PRIMER)",
-        req_date_label: "DATUM",
-        req_date: "18. MAJ",
-        req_party_label: "BROJ",
-        req_party: "2 OSOBE",
-        req_note_label: "NAPOMENA",
-        req_note: "PRIVATNI VODIČ",
-        matching_text: "POVEZIVANJE SA PROVERENIM LOKALNIM PARTNEROM..."
-      },
-      {
-        eyebrow: "VI ODLUČUJETE ŠTA SLEDI.",
-        title: "VI ODLUČUJETE ŠTA SLEDI.",
-        description: "Pregledajte šta je predloženo, izaberite šta vam odgovara i povežite se direktno sa partnerom.",
-        partner_badge: "PROVERENI LOKALNI PARTNER",
-        available_badge: "DOSTUPNO",
-        partner_title: "Meandri Uvca",
-        partner_sub: "Privatno vođeno iskustvo",
-        partner_schedule: "18. MAJ • 09:00",
-        partner_meta: "Privatni vodič + lokalni prevoz",
-        partner_price: "€ 220",
-        partner_price_sub: "za 2 osobe",
-        partner_quote: "“Rado ću ovo organizovati za vas.”",
-        partner_btn: "PREGLED ODGOVORA >",
-        actions: [
-          { num: "1", verb: "ZATRAŽI", label: "Pošaljite detalje", icon: "Send" },
-          { num: "2", verb: "PREGLED", label: "Vaš predlog", icon: "FileText" },
-          { num: "3", verb: "KONTAKT", label: "Vi odlučujete", icon: "User" }
-        ],
-        guidance: [
-          { 
-            num: "①", 
-            heading: "ZATRAŽI · POŠALJITE DETALJE", 
-            primary: "Navedite kada putujete i kakva pomoć vam je potrebna.", 
-            supporting: "Vaš upit se spaja sa odgovarajućim proverenim partnerom." 
-          },
-          { 
-            num: "②", 
-            heading: "PREGLED · VAŠ PREDLOG", 
-            primary: "Pregledajte dostupnost partnera i predloženi aranžman.", 
-            supporting: "Proverite detalje, cenu i ličnu poruku pre donošenja odluke." 
-          },
-          { 
-            num: "③", 
-            heading: "KONTAKT · VI ODLUČUJETE", 
-            primary: "Izaberite šta vam odgovara i nastavite direktno sa partnerom.", 
-            supporting: "Potvrdite, zatražite izmenu ili odlučite da ne nastavite." 
-          }
-        ],
-        commercial_boundary: {
-          title: "IDEMO INTRODUCES. YOU ARRANGE DIRECTLY.",
-          subtitle: "Vi direktno dogovarate sa partnerom.",
-          text: "Rezervacija, plaćanje i uslovi važe isključivo između vas i partnera."
-        }
-      }
-    ],
-    start: "ZAPOČNI ISTRAŽIVANJE >",
-    next: "NASTAVI >",
-    back: "Nazad",
-    skip: "Preskoči",
-    trust_line: "Bez registracije. Podešavanja ostaju privatna na vašem uređaju.",
-    trust_ribbon: "PRIVATNOST PO DIZAJNU • ODABRANA ISKUSTVA • PROVERENI LOKALNI STRUČNJACI",
-    step_label: "KORAK"
-  },
-  zh: {
-    cards: [
-      {
-        eyebrow: "您的心境 · 您的时间 · 您的偏好",
-        title: "随心调校。",
-        description: "设置您的心境、预算与可用时间。IDEMO 将优先呈现最契合您当下的体验。",
-        actions: [
-          { num: "1", verb: "移动", label: "心境", icon: "Move" },
-          { num: "2", verb: "缩放", label: "预算", icon: "Maximize2" },
-          { num: "3", verb: "旋转", label: "时间", icon: "RotateCw" }
-        ],
-        guidance: [
-          { 
-            num: "①", 
-            heading: "移动 · 心境", 
-            primary: "将灵感轨道移动至契合当下心境的位置。", 
-            supporting: "在都市、自然、享乐与探险之间取得平衡以表达您的偏好。" 
-          },
-          { 
-            num: "②", 
-            heading: "缩放 · 预算", 
-            primary: "缩放灵感轨道以设定您的预期预算。", 
-            supporting: "放大以提高预算上限，缩小以设置精简预算。" 
-          },
-          { 
-            num: "③", 
-            heading: "旋转 · 时间", 
-            primary: "旋转外圈以设定您当前可用的探索时间。", 
-            supporting: "充裕的时间将帮助 IDEMO 为您匹配深度与远距离体验。" 
-          }
-        ],
-        axis_urban: "都市",
-        axis_nature: "自然",
-        axis_hedonist: "享乐",
-        axis_adventurer: "探险"
-      },
-      {
-        eyebrow: "深度甄选探索",
-        title: "从灵感到真实体验。",
-        description: "收藏心仪体验，选择出行时间，在需要时向 IDEMO 寻求本地专属协助。",
-        dest_badge: "深度甄选体验",
-        dest_title: "乌瓦茨峡谷曲流",
-        dest_subtitle: "自然风光 • 塞尔维亚西部",
-        actions: [
-          { num: "1", verb: "收藏", label: "保留心仪体验", icon: "Bookmark" },
-          { num: "2", verb: "规划", label: "选择出行时间", icon: "Calendar" },
-          { num: "3", verb: "咨询", label: "获取本地支持", icon: "Send" }
-        ],
-        guidance: [
-          { 
-            num: "①", 
-            heading: "收藏 · 随心保留", 
-            primary: "发现心仪之选？即刻一键收藏。", 
-            supporting: "在您继续探索其它体验时，已收藏项目将始终妥善保留。" 
-          },
-          { 
-            num: "②", 
-            heading: "规划 · 选定日期", 
-            primary: "将该体验添加入您的专属旅行计划中。", 
-            supporting: "选择最契合您出行节奏的专属日期。" 
-          },
-          { 
-            num: "③", 
-            heading: "咨询 · 本地支持", 
-            primary: "需要行程协调？一键发送专属需求。", 
-            supporting: "填写出行时间、同行人数及所需协助（自主可选）。" 
-          }
-        ],
-        req_title: "您的专属需求（示例）",
-        req_date_label: "日期",
-        req_date: "5月18日",
-        req_party_label: "人数",
-        req_party: "2 位同行",
-        req_note_label: "备注",
-        req_note: "私人向导",
-        matching_text: "正在为您匹配认证本土合作伙伴..."
-      },
-      {
-        eyebrow: "行程节奏由您决定。",
-        title: "行程节奏由您决定。",
-        description: "审阅方案细节，选择心仪安排，随后与认证伙伴直接对接确认。",
-        partner_badge: "认证本土合作伙伴",
-        available_badge: "已确认空档",
-        partner_title: "乌瓦茨峡谷曲流",
-        partner_sub: "私人定制向导体验",
-        partner_schedule: "5月18日 • 09:00",
-        partner_meta: "专属私人向导 + 本地专属接送",
-        partner_price: "€ 220",
-        partner_price_sub: "2人合计",
-        partner_quote: "“很高兴为您定制并安排这段行程。”",
-        partner_btn: "查看方案详情 >",
-        actions: [
-          { num: "1", verb: "咨询", label: "发送细节", icon: "Send" },
-          { num: "2", verb: "审阅", label: "定制方案", icon: "FileText" },
-          { num: "3", verb: "直连", label: "由您定夺", icon: "User" }
-        ],
-        guidance: [
-          { 
-            num: "①", 
-            heading: "咨询 · 发送细节", 
-            primary: "告知您的出行时间与所需的本地协助。", 
-            supporting: "您的需求将为您精准匹配经过官方认证的本土合作伙伴。" 
-          },
-          { 
-            num: "②", 
-            heading: "审阅 · 定制方案", 
-            primary: "查看伙伴提供的空档排期与定制方案建议。", 
-            supporting: "在做决定前，清晰审阅所有细节安排、透明报价与留言。" 
-          },
-          { 
-            num: "③", 
-            heading: "直连 · 由您定夺", 
-            primary: "挑选心仪安排，随后直接与本土伙伴对接沟通。", 
-            supporting: "确认安排、请求调整备选，或选择暂不推进。" 
-          }
-        ],
-        commercial_boundary: {
-          title: "IDEMO INTRODUCES. YOU ARRANGE DIRECTLY.",
-          subtitle: "您与伙伴直接对接安排。",
-          text: "所有预订、支付及服务条款均直接在您与合作伙伴之间达成。"
-        }
-      }
-    ],
-    start: "开始探索之旅 >",
-    next: "继续 >",
-    back: "返回",
-    skip: "跳过",
-    trust_line: "无需注册。偏好设置私密保留在您的个人设备中。",
-    trust_ribbon: "原生隐私保护 • 深度甄选体验 • 值得信赖的本地专家",
-    step_label: "步骤"
-  }
-};
-
-const CARD1_ARCHETYPES: Record<string, {
-  balanced: string;
-  cultural: string;
-  wild: string;
-  wellness: string;
-  metropolis: string;
-  label: string;
-}> = {
-  en: {
-    balanced: "BALANCED VOYAGER",
-    cultural: "CULTURAL STRATEGIST",
-    wild: "WILD HORIZON EXPLORER",
-    wellness: "WELLNESS SANCTUARY",
-    metropolis: "METROPOLIS HEDONIST",
-    label: "TYPE"
-  },
-  sr: {
-    balanced: "BALANSIRANI NOMAD",
-    cultural: "KULTURNI ISTRAŽIVAČ",
-    wild: "AVANTURISTA NA TERENU",
-    wellness: "OAZA SPOKOJA",
-    metropolis: "GRADSKI HEDONISTA",
-    label: "PROFIL"
-  },
-  zh: {
-    balanced: "全能探索官",
-    cultural: "文化探索官",
-    wild: "荒野拓荒先锋",
-    wellness: "林野康养行",
-    metropolis: "都市臻奢派",
-    label: "画像类型"
-  }
-};
-
-function OnboardingOverlay({
-  language,
-  recommendations,
-  onClose,
-  onRegisterBackHandler
-}: {
-  language: string;
-  recommendations?: Recommendation[];
-  onClose: () => void;
-  onRegisterBackHandler?: (handler: (() => boolean) | null) => void;
-}) {
-  const [cardIndex, setCardIndex] = useState(0);
-  const [direction, setDirection] = useState(1);
-  const [activeStepAnim, setActiveStepAnim] = useState<number>(1);
-  const [card1BudgetText, setCard1BudgetText] = useState<string>('€250');
-  const [card1TimeText, setCard1TimeText] = useState<string>('24 h');
-  const [card1QuadrantKey, setCard1QuadrantKey] = useState<'balanced' | 'cultural' | 'wild' | 'wellness' | 'metropolis'>('balanced');
-  const [card1BudgetIsMax, setCard1BudgetIsMax] = useState<boolean>(false);
-  const [pauseAutoCycle, setPauseAutoCycle] = useState<boolean>(false);
-  const shouldReduceMotion = useReducedMotion();
-
-  const t = ONBOARDING_TRANSLATIONS[language] || ONBOARDING_TRANSLATIONS['en'];
-  const archData = CARD1_ARCHETYPES[language] || CARD1_ARCHETYPES['en'];
-  const current = t.cards[cardIndex];
-  const recList = recommendations && recommendations.length > 0 ? recommendations : INITIAL_RECOMMENDATIONS;
-  const uvacRec = recList.find(r => r.id === '1');
-  const uvacImage = getApprovedPrimaryMedia('1', uvacRec?.image);
-
-  // Handle manual step selection with temporary pause before resuming cycle
-  const handleStepClick = useCallback((stepNum: number) => {
-    triggerHaptic(5);
-    setActiveStepAnim(stepNum);
-    setPauseAutoCycle(true);
-  }, []);
-
-  const handleNext = () => {
-    triggerHaptic(5);
-    if (cardIndex < 2) {
-      setDirection(1);
-      setCardIndex(cardIndex + 1);
-    } else {
-      onClose();
-    }
-  };
-
-  const handleBack = useCallback(() => {
-    triggerHaptic(5);
-    if (cardIndex > 0) {
-      setDirection(-1);
-      setCardIndex(prev => prev - 1);
-      return true;
-    }
-    return false;
-  }, [cardIndex]);
-
-  useEffect(() => {
-    if (onRegisterBackHandler) {
-      if (cardIndex > 0) {
-        onRegisterBackHandler(() => {
-          return handleBack();
-        });
-      } else {
-        onRegisterBackHandler(null);
-      }
-    }
-    return () => {
-      if (onRegisterBackHandler) {
-        onRegisterBackHandler(null);
-      }
-    };
-  }, [cardIndex, handleBack, onRegisterBackHandler]);
-
-  // Continuous 1 -> 2 -> 3 loop engine across all onboarding cards
-  useEffect(() => {
-    if (shouldReduceMotion) {
-      return;
-    }
-
-    if (pauseAutoCycle) {
-      const pauseTimer = setTimeout(() => {
-        setPauseAutoCycle(false);
-        setActiveStepAnim(prev => (prev >= 3 ? 1 : prev + 1));
-      }, 4000);
-      return () => clearTimeout(pauseTimer);
-    }
-
-    // Step duration: Card 1 retains calibrated timing (Step 1 = 6200ms, Step 2 = 4500ms, Step 3 = 4500ms).
-    // Cards 2 and 3 dwell time reduced by ~50% (2200ms per step) for a noticeably faster, crisp progression.
-    const stepDuration = cardIndex === 0 
-      ? (activeStepAnim === 1 ? 6200 : activeStepAnim === 2 ? 4500 : 4500)
-      : 2200;
-
-    const nextStepTimer = setTimeout(() => {
-      setActiveStepAnim(prev => (prev >= 3 ? 1 : prev + 1));
-    }, stepDuration);
-
-    return () => clearTimeout(nextStepTimer);
-  }, [cardIndex, activeStepAnim, pauseAutoCycle, shouldReduceMotion]);
-
-  // Card 1 sub-step calibration updates for Quadrant Archetype, Budget (€100 -> €500 -> €250) and Time (2h -> 8h -> 24h -> 48h -> 24h)
-  useEffect(() => {
-    if (cardIndex !== 0 || shouldReduceMotion) {
-      setCard1BudgetText('€250');
-      setCard1TimeText('24 h');
-      setCard1QuadrantKey('balanced');
-      setCard1BudgetIsMax(false);
-      return;
-    }
-
-    const subTimers: ReturnType<typeof setTimeout>[] = [];
-
-    if (activeStepAnim === 1) {
-      setCard1BudgetText('€250');
-      setCard1TimeText('24 h');
-      setCard1QuadrantKey('balanced');
-      setCard1BudgetIsMax(false);
-      subTimers.push(setTimeout(() => setCard1QuadrantKey('cultural'), 850));
-      subTimers.push(setTimeout(() => setCard1QuadrantKey('wild'), 2050));
-      subTimers.push(setTimeout(() => setCard1QuadrantKey('wellness'), 3250));
-      subTimers.push(setTimeout(() => setCard1QuadrantKey('metropolis'), 4450));
-      subTimers.push(setTimeout(() => setCard1QuadrantKey('balanced'), 5650));
-    } else if (activeStepAnim === 2) {
-      setCard1QuadrantKey('balanced');
-      // Step 2: Start neutral €250 -> shrink to €100 -> expand to maximum €500 and STAY at maximum
-      setCard1BudgetText('€250');
-      setCard1BudgetIsMax(false);
-      subTimers.push(setTimeout(() => {
-        setCard1BudgetText('€100');
-        setCard1BudgetIsMax(false);
-      }, 700));
-      subTimers.push(setTimeout(() => {
-        setCard1BudgetText('€500');
-        setCard1BudgetIsMax(true); // Black pulsating digits at max scale, remains at maximum
-      }, 2000));
-    } else if (activeStepAnim === 3) {
-      setCard1QuadrantKey('balanced');
-      // Step 3: Continues at maximum scale while rotating through time horizons
-      setCard1BudgetText('€500');
-      setCard1BudgetIsMax(false);
-      setCard1TimeText('2 h');
-      subTimers.push(setTimeout(() => setCard1TimeText('8 h'), 900));
-      subTimers.push(setTimeout(() => setCard1TimeText('24 h'), 1900));
-      subTimers.push(setTimeout(() => setCard1TimeText('48 h'), 2900));
-      subTimers.push(setTimeout(() => setCard1TimeText('24 h'), 3900));
-    }
-
-    return () => {
-      subTimers.forEach(clearTimeout);
-    };
-  }, [cardIndex, activeStepAnim, shouldReduceMotion]);
-
-  // Reset active step and pause on card navigation
-  useEffect(() => {
-    setActiveStepAnim(1);
-    setPauseAutoCycle(false);
-  }, [cardIndex]);
-
-  const renderActionIcon = (iconName: string, className = "text-brand-charcoal stroke-[1.8]") => {
-    switch (iconName) {
-      case 'Move': return <Move size={26} className={className} />;
-      case 'Maximize2': return <Maximize2 size={26} className={className} />;
-      case 'RotateCw': return <RotateCw size={26} className={className} />;
-      case 'Bookmark': return <Bookmark size={26} className={className} />;
-      case 'Calendar': return <CalendarIcon size={26} className={className} />;
-      case 'Send': return <Send size={26} className={className} />;
-      case 'FileText': return <FileText size={26} className={className} />;
-      case 'CheckCircle': return <CheckCircle size={26} className={className} />;
-      case 'User': return <User size={26} className={className} />;
-      default: return <Sparkles size={26} className={className} />;
-    }
-  };
-
-  const handleGoTo = (idx: number) => {
-    if (idx === cardIndex) return;
-    triggerHaptic(5);
-    setDirection(idx > cardIndex ? 1 : -1);
-    setCardIndex(idx);
-  };
-
-  const handleDismiss = () => {
-    triggerHaptic(5);
-    onClose();
-  };
-
-  const cardVariants = {
-    enter: (dir: number) => ({
-      x: dir > 0 ? 32 : -32,
-      opacity: 0,
-    }),
-    center: {
-      x: 0,
-      opacity: 1,
-      transition: {
-        x: { type: "spring", stiffness: 320, damping: 32 },
-        opacity: { duration: 0.22, ease: "easeOut" }
-      }
-    },
-    exit: (dir: number) => ({
-      x: dir > 0 ? -32 : 32,
-      opacity: 0,
-      transition: {
-        x: { type: "spring", stiffness: 320, damping: 32 },
-        opacity: { duration: 0.18, ease: "easeIn" }
-      }
-    })
-  };
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-[#FAF9F5] z-[110] flex flex-col justify-between p-3.5 sm:p-5 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] select-none overflow-hidden h-[100dvh] w-full"
-    >
-      {/* TOP: Segmented Progress Bar & Step Tracker + Back / Skip */}
-      <div className="flex-shrink-0 w-full space-y-2 pt-0.5 max-w-md mx-auto">
-        {/* 3-Segment Solid Progress Bar with Tappable Step Selection */}
-        <div className="flex gap-2 w-full">
-          {[0, 1, 2].map(idx => (
-            <button 
-              key={idx}
-              onClick={() => handleGoTo(idx)}
-              aria-label={`Go to card ${idx + 1}`}
-              className={`h-[4px] rounded-full flex-1 transition-all duration-300 cursor-pointer ${
-                cardIndex === idx ? 'bg-[#23251E]' : 'bg-[#23251E]/15 hover:bg-[#23251E]/30'
-              }`}
-            />
-          ))}
-        </div>
-
-        <div className="flex justify-between items-center text-[10px] font-mono font-bold uppercase tracking-[0.14em] text-brand-charcoal/60">
-          <div className="flex items-center gap-2">
-            {cardIndex > 0 ? (
-              <button
-                onClick={handleBack}
-                className="hover:text-brand-charcoal transition-colors cursor-pointer py-1 px-1.5 -ml-1 flex items-center gap-1 normal-case font-sans text-[11.5px] font-medium text-brand-charcoal/70 min-h-[44px]"
-              >
-                <ArrowLeft size={13} className="stroke-[2.2]" />
-                <span>{t.back || "Back"}</span>
-              </button>
-            ) : (
-              <span className="w-1" />
-            )}
-            <span>{t.step_label || "STEP"} {cardIndex + 1} / 3</span>
-          </div>
-
-          <button 
-            onClick={handleDismiss}
-            className="hover:text-brand-charcoal transition-colors cursor-pointer py-1 px-2.5 -mr-2 normal-case font-sans text-[11.5px] font-normal text-brand-charcoal/60 min-h-[44px] flex items-center"
-          >
-            {t.skip}
-          </button>
-        </div>
-      </div>
-
-      {/* Animated Container for the 3 Greeting Cards */}
-      <div className="flex-1 flex flex-col justify-between overflow-hidden min-h-0 my-1 max-w-md mx-auto w-full">
-        <AnimatePresence mode="wait" custom={direction}>
-          <motion.div
-            key={cardIndex}
-            custom={direction}
-            variants={cardVariants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            className="flex-1 flex flex-col justify-between space-y-2 min-h-0"
-          >
-              {/* ========================================================================= */}
-              {/* 1. HERO VISUAL (~40-45% of Card Height)                                   */}
-              {/* ========================================================================= */}
-
-              {/* CARD 1 HERO VISUAL: Canonical Mood Orbit with Animated Calibration Sequence (MOVE -> RESIZE -> ROTATE) */}
-              {cardIndex === 0 && (
-                <div className="flex-shrink-0 w-full flex flex-col items-center space-y-1">
-                  {/* TOP: Dynamic Live Quadrant Archetype Indicator (Placed outside on top of 2D field, horizontally centered, borderless, doubled font size) */}
-                  <div className="w-full flex items-center justify-center min-h-[28px] xs:min-h-[32px] pointer-events-none select-none">
-                    <AnimatePresence mode="wait">
-                      <motion.div
-                        key={card1QuadrantKey}
-                        initial={{ opacity: 0, y: -4, scale: 0.96 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 4, scale: 0.96 }}
-                        transition={{ duration: 0.25, ease: "easeOut" }}
-                        className="flex items-center justify-center gap-2 text-center"
-                      >
-                        <span className="w-2 h-2 rounded-full bg-[#8A1F1F] animate-pulse shrink-0" />
-                        <span className="text-[20px] xs:text-[22px] sm:text-[24px] font-mono font-black uppercase tracking-[0.06em] text-brand-charcoal leading-none">
-                          {archData[card1QuadrantKey]}
-                        </span>
-                      </motion.div>
-                    </AnimatePresence>
-                  </div>
-
-                  <div className="w-full h-[200px] xs:h-[225px] sm:h-[250px] max-h-[34vh] rounded-[22px] bg-[#FAF9F5] border border-[#E2DFC2]/80 relative overflow-hidden flex items-center justify-center select-none shadow-xs">
-                    {/* Subtle background radial dots */}
-                    <div className="absolute inset-0 bg-[radial-gradient(#23251E_1px,transparent_1px)] [background-size:14px_14px] opacity-[0.03] pointer-events-none" />
-
-                    {/* Canonical Dashed 4-Way Crosshair Axes with arrows */}
-                    <div className="absolute w-[84%] h-[1px] border-t border-dashed border-brand-charcoal/25 pointer-events-none" />
-                    <div className="absolute h-[84%] w-[1px] border-l border-dashed border-brand-charcoal/25 pointer-events-none" />
-
-                  {/* TOP AXIS: URBAN (Building Icon + Label) - Highly Visible Prominent Pill */}
-                  <motion.div 
-                    initial={{ opacity: 0.9, y: 0 }}
-                    animate={{ opacity: [0.9, 1, 0.9], scale: [1, 1.03, 1] }}
-                    transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
-                    className="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-white border-2 border-[#D5D3C8] shadow-sm pointer-events-none z-20"
-                  >
-                    <Building2 size={18} className="text-[#8A1F1F] stroke-[2.4]" />
-                    <span className="text-[13px] sm:text-[14px] font-mono font-black uppercase tracking-[0.2em] text-brand-charcoal leading-none">
-                      {current.axis_urban}
-                    </span>
-                  </motion.div>
-
-                  {/* BOTTOM AXIS: NATURE (Pine Tree Icon + Label) - Highly Visible Prominent Pill */}
-                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-white border-2 border-[#D5D3C8] shadow-sm pointer-events-none z-20">
-                    <TreePine size={18} className="text-[#8A1F1F] stroke-[2.4]" />
-                    <span className="text-[13px] sm:text-[14px] font-mono font-black uppercase tracking-[0.2em] text-brand-charcoal leading-none">
-                      {current.axis_nature}
-                    </span>
-                  </div>
-
-                  {/* LEFT AXIS: HEDONIST (Cocktail Glass Icon + Label) */}
-                  <div className="absolute left-2.5 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 pointer-events-none z-20">
-                    <div className="p-2 rounded-xl bg-white border-2 border-[#D5D3C8] shadow-xs flex items-center justify-center">
-                      <Wine size={18} className="text-brand-charcoal stroke-[2.2]" />
-                    </div>
-                    <span className="text-[12.5px] sm:text-[13.5px] font-mono font-black uppercase tracking-[0.18em] text-brand-charcoal leading-none">
-                      {current.axis_hedonist}
-                    </span>
-                  </div>
-
-                  {/* RIGHT AXIS: ADVENTURER (Mountain Peaks Icon + Label) */}
-                  <motion.div 
-                    initial={{ opacity: 0.9 }}
-                    animate={{ opacity: [0.9, 1, 0.9], scale: [1, 1.04, 1] }}
-                    transition={{ duration: 3.5, delay: 0.5, repeat: Infinity, ease: "easeInOut" }}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 pointer-events-none z-20"
-                  >
-                    <div className="p-2 rounded-xl bg-white border-2 border-[#D5D3C8] shadow-xs flex items-center justify-center">
-                      <Mountain size={18} className="text-brand-charcoal stroke-[2.2]" />
-                    </div>
-                    <span className="text-[12.5px] sm:text-[13.5px] font-mono font-black uppercase tracking-[0.18em] text-brand-charcoal leading-none">
-                      {current.axis_adventurer}
-                    </span>
-                  </motion.div>
-
-                  {/* Animated Centerpiece Mood Orbit: Synchronized with continuous activeStepAnim */}
-                  <motion.div 
-                    className="relative z-10 flex items-center justify-center"
-                    initial={{ x: 0, y: 0, scale: 1, rotate: 0 }}
-                    animate={
-                      shouldReduceMotion 
-                        ? { x: 0, y: 0, scale: 1, rotate: 0 } 
-                        : activeStepAnim === 1
-                          ? { 
-                              x: [0, 42, 40, -42, -40, 0], 
-                              y: [0, -30, 30, 28, -30, 0], 
-                              scale: [1, 1.06, 1.04, 1.06, 1.04, 1], 
-                              rotate: [0, 8, -6, 8, -6, 0] 
-                            }
-                          : activeStepAnim === 2
-                            ? { 
-                                x: 0, 
-                                y: 0, 
-                                // Step 2: shrink to 0.58, expand to 2.84, and stay at max 2.84
-                                scale: [1, 0.58, 0.58, 2.84, 2.84], 
-                                rotate: 0 
-                              }
-                            : { 
-                                x: 0, 
-                                y: 0, 
-                                // Step 3: Maintains max scale 2.84 while rotating smoothly through time horizons
-                                scale: 2.84, 
-                                rotate: [0, 60, 140, 240, 360] 
-                              }
-                    }
-                    transition={{
-                      duration: activeStepAnim === 1 ? 6.0 : activeStepAnim === 2 ? 4.5 : 4.5,
-                      ease: "easeInOut",
-                      times: activeStepAnim === 2 ? [0, 0.22, 0.44, 0.75, 1.0] : undefined
-                    }}
-                  >
-                    {/* Subtle Warm Halo on Mood Orbit */}
-                    <div className="absolute w-11 h-11 rounded-full bg-amber-400/[0.08] blur-sm pointer-events-none" />
-
-                    {/* Exact MoodOrbit Orb Scaled Vector Replica (~38px diameter) */}
-                    <div className="w-[38px] h-[38px] sm:w-[42px] sm:h-[42px] rounded-full relative shadow-[0_2px_8px_rgba(0,0,0,0.2),0_0_6px_rgba(251,191,36,0.2)] border border-[#D5D3C8] overflow-hidden flex items-center justify-center">
-                      <svg 
-                        viewBox="-100 -100 200 200" 
-                        className="w-full h-full rounded-full select-none overflow-hidden"
-                      >
-                        <defs>
-                          {/* Bezel Metallic Titanium Ring Brushed Stop Gradients */}
-                          <linearGradient id="onbSilverBezel" x1="0" y1="0" x2="1" y2="1">
-                            <stop offset="0%" stopColor="#FFFFFF" />
-                            <stop offset="20%" stopColor="#F4F4F5" />
-                            <stop offset="40%" stopColor="#D4D4D8" />
-                            <stop offset="50%" stopColor="#A1A1AA" />
-                            <stop offset="60%" stopColor="#E4E4E7" />
-                            <stop offset="80%" stopColor="#71717A" />
-                            <stop offset="90%" stopColor="#3F3F46" />
-                            <stop offset="100%" stopColor="#18181B" />
-                          </linearGradient>
-
-                          {/* Lower Segment Space Dark Slate Gradient */}
-                          <linearGradient id="onbTimeGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#1E293B" />
-                            <stop offset="100%" stopColor="#0F172A" />
-                          </linearGradient>
-
-                          {/* Upper Segment Premium Rose Gold Gradient */}
-                          <linearGradient id="onbBudgetGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#FB7185" />
-                            <stop offset="100%" stopColor="#E11D48" />
-                          </linearGradient>
-
-                          {/* Crown Mechanical Ridged Texture Gradient */}
-                          <linearGradient id="onbCrownGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#FFFFFF" />
-                            <stop offset="25%" stopColor="#D4D4D8" />
-                            <stop offset="50%" stopColor="#71717A" />
-                            <stop offset="75%" stopColor="#D4D4D8" />
-                            <stop offset="100%" stopColor="#18181B" />
-                          </linearGradient>
-
-                          {/* Glass Convex Reflection Layer Highlight */}
-                          <radialGradient id="onbGlassReflection" cx="30%" cy="30%" r="70%">
-                            <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.45" />
-                            <stop offset="50%" stopColor="#FFFFFF" stopOpacity="0.08" />
-                            <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
-                          </radialGradient>
-
-                          {/* Sapphire Glass Anti-Reflective (AR) Coating Sheen */}
-                          <linearGradient id="onbSapphireAR" x1="0" y1="0" x2="1" y2="1">
-                            <stop offset="0%" stopColor="#38BDF8" stopOpacity="0.12" />
-                            <stop offset="30%" stopColor="#818CF8" stopOpacity="0.04" />
-                            <stop offset="70%" stopColor="#C084FC" stopOpacity="0" />
-                            <stop offset="100%" stopColor="#38BDF8" stopOpacity="0.06" />
-                          </linearGradient>
-
-                          {/* Chromalight Glow Filter for Luxury Watch Luminescence */}
-                          <filter id="onbChromalightGlow" x="-50%" y="-50%" width="200%" height="200%">
-                            <feGaussianBlur in="SourceGraphic" stdDeviation="1.2" result="blur1" />
-                            <feGaussianBlur in="SourceGraphic" stdDeviation="3.0" result="blur2" />
-                            <feMerge>
-                              <feMergeNode in="blur2" />
-                              <feMergeNode in="blur1" />
-                              <feMergeNode in="SourceGraphic" />
-                            </feMerge>
-                          </filter>
-
-                          {/* Luminous paint gradient mimicking Rolex Chromalight */}
-                          <linearGradient id="onbLumeFill" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#E0F2FE" />
-                            <stop offset="60%" stopColor="#00F0FF" />
-                            <stop offset="100%" stopColor="#0284C7" />
-                          </linearGradient>
-                        </defs>
-
-                        {/* 1. Time Segment base layer (Dark Slate) */}
-                        <circle r="98" fill="url(#onbTimeGrad)" stroke="#334155" strokeWidth="1" />
-
-                        {/* 2. Upper Budget segment overlaid with wavy divider */}
-                        <path 
-                          d="M -90,0 C -45,15 45,-15 90,0 A 90,90 0 0,0 -90,0 Z" 
-                          fill="url(#onbBudgetGrad)" 
-                          transform="rotate(-25)"
-                        />
-
-                        {/* 3. Polished Metallic Beveled Divider on Dial Seam */}
-                        <path 
-                          d="M -90,0 C -45,15 45,-15 90,0" 
-                          fill="none" 
-                          stroke="#0F172A" 
-                          strokeWidth="2" 
-                          className="opacity-45"
-                          transform="rotate(-25)"
-                        />
-                        <path 
-                          d="M -90,0 C -45,15 45,-15 90,0" 
-                          fill="none" 
-                          stroke="#E2E8F0" 
-                          strokeWidth="0.75" 
-                          className="opacity-90"
-                          transform="rotate(-25)"
-                        />
-
-                        {/* 4. Fine 60-Minute Dial Track */}
-                        {Array.from({ length: 60 }).map((_, i) => {
-                          const angle = i * 6;
-                          const isHourMarker = i % 5 === 0;
-                          if (isHourMarker) {
-                            const hour = i / 5;
-                            if (hour === 0 || hour === 3 || hour === 6 || hour === 9) {
-                              return null;
-                            }
-                          }
-                          const r1 = isHourMarker ? 80 : 83;
-                          const r2 = 85;
-                          const rad = (angle * Math.PI) / 180;
-                          const x1 = r1 * Math.cos(rad);
-                          const y1 = r1 * Math.sin(rad);
-                          const x2 = r2 * Math.cos(rad);
-                          const y2 = r2 * Math.sin(rad);
-                          return (
-                            <line 
-                              key={i} 
-                              x1={x1} 
-                              y1={y1} 
-                              x2={x2} 
-                              y2={y2} 
-                              stroke="#FFFFFF" 
-                              className={isHourMarker ? 'opacity-40' : 'opacity-15'}
-                              strokeWidth={isHourMarker ? 0.75 : 0.4} 
-                            />
-                          );
-                        })}
-
-                        {/* 5. 12 O'Clock Inverted Triangle (Chromalight) */}
-                        <polygon 
-                          points="-5.5,-83 5.5,-83 0,-71" 
-                          fill="url(#onbLumeFill)" 
-                          stroke="#E4E4E7" 
-                          strokeWidth="0.5" 
-                          filter="url(#onbChromalightGlow)" 
-                        />
-
-                        {/* 6. High-Contrast 3, 6, 9 Numerals (Chromalight) */}
-                        <text
-                          x="73"
-                          y="0"
-                          textAnchor="middle"
-                          dominantBaseline="central"
-                          fill="url(#onbLumeFill)"
-                          stroke="#E4E4E7"
-                          strokeWidth="0.5"
-                          filter="url(#onbChromalightGlow)"
-                          className="font-sans font-black select-none pointer-events-none"
-                          style={{ fontSize: '11px', letterSpacing: '-0.05em' }}
-                        >
-                          3
-                        </text>
-                        <text
-                          x="0"
-                          y="73"
-                          textAnchor="middle"
-                          dominantBaseline="central"
-                          fill="url(#onbLumeFill)"
-                          stroke="#E4E4E7"
-                          strokeWidth="0.5"
-                          filter="url(#onbChromalightGlow)"
-                          className="font-sans font-black select-none pointer-events-none"
-                          style={{ fontSize: '11px', letterSpacing: '-0.05em' }}
-                        >
-                          6
-                        </text>
-                        <text
-                          x="-73"
-                          y="0"
-                          textAnchor="middle"
-                          dominantBaseline="central"
-                          fill="url(#onbLumeFill)"
-                          stroke="#E4E4E7"
-                          strokeWidth="0.5"
-                          filter="url(#onbChromalightGlow)"
-                          className="font-sans font-black select-none pointer-events-none"
-                          style={{ fontSize: '11px', letterSpacing: '-0.05em' }}
-                        >
-                          9
-                        </text>
-
-                        {/* 7. Baton Hour Indices */}
-                        {[1, 2, 4, 5, 7, 8, 10, 11].map(h => {
-                          const angle = h * 30;
-                          return (
-                            <g key={h} transform={`rotate(${angle})`}>
-                              <rect 
-                                x="-1.8" 
-                                y="-83" 
-                                width="3.6" 
-                                height="9" 
-                                rx="0.5"
-                                fill="url(#onbLumeFill)" 
-                                stroke="#E4E4E7" 
-                                strokeWidth="0.5" 
-                                filter="url(#onbChromalightGlow)" 
-                              />
-                            </g>
-                          );
-                        })}
-
-                        {/* 8. Outer Titanium Bezel Ring */}
-                        <circle r="93.5" fill="none" stroke="url(#onbSilverBezel)" strokeWidth="9" className="opacity-85 pointer-events-none" />
-                        
-                        {/* 9. Sapphire Glass & Anti-Reflective Coating */}
-                        <circle r="96" fill="url(#onbGlassReflection)" className="pointer-events-none mix-blend-overlay" />
-                        <circle r="96" fill="url(#onbSapphireAR)" className="pointer-events-none mix-blend-screen" />
-                        <circle r="97.5" fill="none" stroke="#FFFFFF" strokeWidth="0.75" className="opacity-60 pointer-events-none" />
-                        <circle r="89" fill="none" stroke="#090d16" strokeWidth="1.25" className="opacity-35 pointer-events-none" />
-
-                        {/* 10. Mechanical Crown Indicator at Perimeter */}
-                        <g transform="rotate(-25) translate(92, 0)">
-                          <rect x="-6.5" y="-13" width="13" height="26" rx="2" fill="#000" className="opacity-15" transform="translate(1, 1)" />
-                          <rect x="-6.5" y="-13" width="13" height="26" rx="2.5" fill="url(#onbSilverBezel)" stroke="#1F2937" strokeWidth="0.75" />
-                          <circle r="2.5" fill="#14B8A6" stroke="#0D9488" strokeWidth="0.5" cx="0" cy="0" />
-                          <line x1="-4.5" y1="-9" x2="4.5" y2="-9" stroke="#374151" strokeWidth="0.75" />
-                          <line x1="-4.5" y1="-6" x2="4.5" y2="-6" stroke="#374151" strokeWidth="0.75" />
-                          <line x1="-4.5" y1="-3" x2="4.5" y2="-3" stroke="#374151" strokeWidth="0.75" />
-                          <line x1="-4.5" y1="3" x2="4.5" y2="3" stroke="#374151" strokeWidth="0.75" />
-                          <line x1="-4.5" y1="6" x2="4.5" y2="6" stroke="#374151" strokeWidth="0.75" />
-                          <line x1="-4.5" y1="9" x2="4.5" y2="9" stroke="#374151" strokeWidth="0.75" />
-                        </g>
-
-                        {/* 11. Budget Text Display: Turns orange and pulsates at maximum scale */}
-                        <g transform="translate(0, -42)">
-                          <text 
-                            textAnchor="middle" 
-                            dominantBaseline="middle" 
-                            className="fill-black/30 font-sans font-black tracking-tight"
-                            style={{ fontSize: '18.5px', userSelect: 'none', transform: 'translateY(1.5px)' }}
-                          >
-                            {card1BudgetText}
-                          </text>
-                          <text 
-                            textAnchor="middle" 
-                            dominantBaseline="middle" 
-                            className={`font-sans font-black tracking-tight transition-colors duration-300 ${
-                              card1BudgetIsMax ? 'fill-[#F97316] drop-shadow-[0_0_8px_rgba(249,115,22,0.9)] animate-pulse' : 'fill-white'
-                            }`}
-                            style={{ fontSize: '18px', userSelect: 'none' }}
-                          >
-                            {card1BudgetText}
-                          </text>
-                          <text 
-                            textAnchor="middle" 
-                            dominantBaseline="middle" 
-                            className={`font-sans font-extrabold tracking-widest transition-colors duration-300 ${
-                              card1BudgetIsMax ? 'fill-[#FB923C]' : 'fill-white/75'
-                            }`}
-                            style={{ fontSize: '7.5px', transform: 'translateY(13.5px)', userSelect: 'none' }}
-                          >
-                            BUDGET
-                          </text>
-                        </g>
-
-                        {/* 12. Time Text Display */}
-                        <g transform="translate(0, 42)">
-                          <text 
-                            textAnchor="middle" 
-                            dominantBaseline="middle" 
-                            className="fill-black/35 font-sans font-black tracking-tight"
-                            style={{ fontSize: activeStepAnim === 3 ? '42px' : '18.5px', userSelect: 'none', transform: 'translateY(1.5px)' }}
-                          >
-                            {card1TimeText}
-                          </text>
-                          <text 
-                            textAnchor="middle" 
-                            dominantBaseline="middle" 
-                            className={`font-mono font-black tracking-tight transition-all duration-300 ${
-                              activeStepAnim === 3 ? 'fill-[#12130F] drop-shadow-[0_0_12px_rgba(255,255,255,0.95)]' : 'fill-white'
-                            }`}
-                            style={{ fontSize: activeStepAnim === 3 ? '40px' : '18px', userSelect: 'none' }}
-                          >
-                            {card1TimeText}
-                          </text>
-                          <text 
-                            textAnchor="middle" 
-                            dominantBaseline="middle" 
-                            className={`font-sans font-extrabold tracking-widest transition-all duration-300 ${
-                              activeStepAnim === 3 ? 'fill-[#12130F]/90 font-black' : 'fill-white/75'
-                            }`}
-                            style={{ fontSize: activeStepAnim === 3 ? '12px' : '7.5px', transform: activeStepAnim === 3 ? 'translateY(22px)' : 'translateY(13.5px)', userSelect: 'none' }}
-                          >
-                            TIME
-                          </text>
-                        </g>
-
-                        {/* 13. Mercedes Hour Hand */}
-                        <g transform="rotate(-60)">
-                          <path 
-                            d="M 0,0 L -1.5,-6 L -1.5,-23 A 4.5,4.5 0 0,1 -4,-26.5 A 4.5,4.5 0 0,1 -1.5,-30.5 L -1.5,-38 L 0,-41 L 1.5,-38 L 1.5,-30.5 A 4.5,4.5 0 0,1 4,-26.5 A 4.5,4.5 0 0,1 1.5,-23 L 1.5,-6 Z" 
-                            fill="#3F3F46" 
-                            className="opacity-40" 
-                            transform="translate(0, 0.5)"
-                          />
-                          <path 
-                            d="M 0,0 L -1.2,-6 L -1.2,-23 A 4.2,4.2 0 0,1 -3.5,-26.5 A 4.2,4.2 0 0,1 -1.2,-30 L -1.2,-37 L 0,-40 L 1.2,-37 L 1.2,-30 A 4.2,4.2 0 0,1 3.5,-26.5 A 4.2,4.2 0 0,1 1.2,-23 L 1.2,-6 Z" 
-                            fill="url(#onbLumeFill)" 
-                            stroke="#E4E4E7" 
-                            strokeWidth="0.75" 
-                            filter="url(#onbChromalightGlow)" 
-                          />
-                          <circle cx="0" cy="-26.5" r="3.2" fill="none" stroke="#52525B" strokeWidth="0.5" />
-                          <line x1="0" y1="-26.5" x2="0" y2="-29.7" stroke="#52525B" strokeWidth="0.55" />
-                          <line x1="0" y1="-26.5" x2="-2.77" y2="-24.9" stroke="#52525B" strokeWidth="0.55" />
-                          <line x1="0" y1="-26.5" x2="2.77" y2="-24.9" stroke="#52525B" strokeWidth="0.55" />
-                        </g>
-
-                        {/* 14. Tapered Minute Hand */}
-                        <g transform="rotate(130)">
-                          <path 
-                            d="M 0,0 L -1.5,-8 L -1.5,-55 L 0,-59 L 1.5,-55 L 1.5,-8 Z" 
-                            fill="#3F3F46" 
-                            className="opacity-40" 
-                            transform="translate(0, 0.5)"
-                          />
-                          <path 
-                            d="M 0,0 L -1.1,-8 L -1.1,-54 L 0,-58 L 1.1,-54 L 1.1,-8 Z" 
-                            fill="url(#onbLumeFill)" 
-                            stroke="#E4E4E7" 
-                            strokeWidth="0.75" 
-                            filter="url(#onbChromalightGlow)" 
-                          />
-                          <line x1="0" y1="-8" x2="0" y2="-53" stroke="#52525B" strokeWidth="0.5" className="opacity-40" />
-                        </g>
-
-                        {/* 15. Lollipop Second Hand with continuous animation */}
-                        <g className="origin-center animate-[spin_60s_linear_infinite]">
-                          <line x1="0" y1="15" x2="0" y2="-66" stroke="#E2E8F0" strokeWidth="0.5" />
-                          <circle cx="0" cy="-48" r="3.2" fill="url(#onbLumeFill)" stroke="#E4E4E7" strokeWidth="0.5" filter="url(#onbChromalightGlow)" />
-                          <circle cx="0" cy="12" r="1.5" fill="#E2E8F0" />
-                        </g>
-
-                        {/* 16. Center Precision Machined Crown Pivot Button */}
-                        <g>
-                          <circle r="16.5" fill="#000" className="opacity-15" transform="translate(0, 1.5)" />
-                          <circle r="15" fill="url(#onbSilverBezel)" stroke="#4B5563" strokeWidth="0.5" />
-                          {Array.from({ length: 12 }).map((_, i) => {
-                            const angle = i * 30;
-                            const rad = (angle * Math.PI) / 180;
-                            const x1 = 12 * Math.cos(rad);
-                            const y1 = 12 * Math.sin(rad);
-                            const x2 = 14.5 * Math.cos(rad);
-                            const y2 = 14.5 * Math.sin(rad);
-                            return (
-                              <line 
-                                key={i} 
-                                x1={x1} 
-                                y1={y1} 
-                                x2={x2} 
-                                y2={y2} 
-                                stroke="#374151" 
-                                strokeWidth="0.75" 
-                                className="opacity-70" 
-                              />
-                            );
-                          })}
-                          <circle r="11" fill="#111827" stroke="#9CA3AF" strokeWidth="0.5" className="opacity-90" />
-                          <circle r="8.5" fill="url(#onbCrownGrad)" stroke="#111827" strokeWidth="0.5" />
-                          <circle r="5" fill="none" stroke="#374151" strokeWidth="0.5" className="opacity-40" />
-                        </g>
-                      </svg>
-                    </div>
-                  </motion.div>
-                </div>
-                </div>
-              )}
-
-              {/* CARD 2 HERO VISUAL: Clean Landscape Image with Bookmark Micro-Interaction */}
-              {cardIndex === 1 && (
-                <div className="flex-shrink-0 w-full h-[210px] xs:h-[235px] sm:h-[260px] max-h-[35vh] rounded-[22px] bg-[#FAF9F5] border border-[#E2DFC2]/80 relative overflow-hidden flex flex-col justify-between select-none shadow-xs group">
-                  {/* High-Resolution Full Landscape Image with subtle slow zoom */}
-                  <motion.div 
-                    initial={{ scale: 1 }}
-                    animate={{ scale: 1.05 }}
-                    transition={{ duration: 6, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}
-                    className="absolute inset-0 w-full h-full"
-                  >
-                    <LazyImage 
-                      src={uvacImage} 
-                      alt="Uvac Meanders" 
-                      containerClassName="w-full h-full"
-                      className="w-full h-full object-cover object-center"
-                    />
-                  </motion.div>
-
-                  {/* Gradient Overlay for high text legibility */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/40 pointer-events-none" />
-
-                  {/* Top Bar: Floating Badges + Animated Bookmark Icon */}
-                  <div className="relative z-10 p-3 flex items-center justify-between w-full">
-                    <span className="px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-md text-[10px] sm:text-[11px] font-mono uppercase tracking-[0.16em] text-white font-bold border border-white/25 shadow-sm">
-                      {current.dest_badge || "CURATED EXPERIENCE"}
-                    </span>
-                    
-                    <div className="flex items-center gap-2">
-                      <span className="px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-md text-[10px] sm:text-[11px] font-mono uppercase tracking-[0.16em] text-white font-bold border border-white/25 shadow-sm flex items-center gap-1.5">
-                        <MapPin size={13} className="text-[#E2DFC2] fill-[#E2DFC2]/40" />
-                        {current.dest_title || "UVAC MEANDERS"}
-                      </span>
-                      
-                      {/* Floating Save Bookmark indicator with subtle active pulse */}
-                      <motion.div 
-                        animate={{ 
-                          scale: activeStepAnim === 1 ? [1, 1.25, 1.1] : 1,
-                          backgroundColor: activeStepAnim === 1 ? "rgba(138, 31, 31, 0.9)" : "rgba(0, 0, 0, 0.7)"
-                        }}
-                        transition={{ duration: 0.5 }}
-                        className="w-8 h-8 rounded-full border border-white/30 flex items-center justify-center text-amber-300 shadow-md backdrop-blur-md"
-                      >
-                        <Bookmark size={15} className="fill-amber-300" />
-                      </motion.div>
-                    </div>
-                  </div>
-
-                  {/* Bottom Bar: Interactive Trip Plan Status Ribbon */}
-                  <div className="relative z-10 p-3 flex items-center justify-between w-full">
-                    <motion.div 
-                      animate={{ 
-                        opacity: activeStepAnim >= 2 ? 1 : 0.8,
-                        scale: activeStepAnim === 2 ? 1.05 : 1
-                      }}
-                      className="px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white/90 text-[10px] font-mono flex items-center gap-1.5"
-                    >
-                      <CalendarIcon size={12} className="text-amber-300" />
-                      <span>{activeStepAnim === 3 ? "Ask verified local partner" : "Trip plan active"}</span>
-                    </motion.div>
-                  </div>
-                </div>
-              )}
-
-              {/* CARD 3 HERO VISUAL: Verified Local Partner Response & Proposal Mockup Card with Entrance Animation */}
-              {cardIndex === 2 && (
-                <div className="flex-shrink-0 w-full h-[210px] xs:h-[235px] sm:h-[260px] max-h-[35vh] rounded-[20px] bg-[#F7F6F0] border border-[#E2DFC2]/60 p-3 relative overflow-hidden flex items-center justify-center select-none shadow-xs">
-                  {/* Subtle background radial dots */}
-                  <div className="absolute inset-0 bg-[radial-gradient(#23251E_1px,transparent_1px)] [background-size:14px_14px] opacity-[0.03] pointer-events-none" />
-
-                  {/* Floating Verified Proposal Card with subtle floating physics */}
-                  <motion.div 
-                    initial={{ y: 8, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ type: "spring", stiffness: 280, damping: 26 }}
-                    className="relative z-10 w-full max-w-[350px] bg-white border border-[#E2DFC2] rounded-[18px] p-3 shadow-md space-y-2 text-left"
-                  >
-                    {/* Header Badges: Verified Partner + Available */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-emerald-800 bg-emerald-50 border border-emerald-300/80 px-2 py-0.5 rounded-full">
-                        <ShieldCheck size={13} className="stroke-[2.4] text-emerald-700" />
-                        <span className="text-[9px] font-mono font-bold uppercase tracking-wider">
-                          {current.partner_badge || "VERIFIED LOCAL PARTNER"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-emerald-800 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                        <div className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
-                        <span className="text-[9px] font-mono font-bold uppercase tracking-wider">
-                          {current.available_badge || "AVAILABLE"}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Proposal Thumbnail & Details Row */}
-                    <div className="flex items-start gap-3 pt-0.5">
-                      <LazyImage 
-                        src={uvacImage} 
-                        alt="Uvac Thumbnail" 
-                        containerClassName="w-14 h-14 rounded-[12px] shrink-0 border border-border-main/40 overflow-hidden shadow-xs"
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="min-w-0 flex-1 space-y-0.5">
-                        <h5 className="font-serif text-[15px] font-bold text-brand-charcoal tracking-tight leading-tight truncate">
-                          {current.partner_title || "Uvac Meanders"}
-                        </h5>
-                        <p className="text-[10px] font-mono text-brand-charcoal/70 truncate">
-                          {current.partner_sub || "Private guided experience"}
-                        </p>
-                        <p className="text-[9.5px] font-mono text-brand-charcoal/60 truncate flex items-center gap-1.5">
-                          <CalendarIcon size={11} className="shrink-0 text-brand-charcoal/50" />
-                          <span>{current.partner_schedule}</span>
-                        </p>
-                        <p className="text-[9px] font-mono text-brand-charcoal/50 truncate">
-                          {current.partner_meta}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Price, Note & Response Button Strip */}
-                    <div className="flex items-center justify-between pt-1.5 border-t border-[#E2DFC2]/50">
-                      <div>
-                        <div className="flex items-baseline gap-1.5">
-                          <span className="font-bold text-brand-charcoal text-[14px] font-mono">
-                            {current.partner_price || "€ 220"}
-                          </span>
-                          <span className="text-[9px] font-mono text-brand-charcoal/50">
-                            {current.partner_price_sub || "for 2 people"}
-                          </span>
-                        </div>
-                        <p className="text-[9.5px] text-brand-charcoal/75 italic font-serif truncate max-w-[160px]">
-                          {current.partner_quote || "“Happy to arrange this for you.”"}
-                        </p>
-                      </div>
-
-                      <motion.div 
-                        animate={{ 
-                          scale: activeStepAnim === 3 ? [1, 1.06, 1] : 1,
-                          backgroundColor: activeStepAnim === 3 ? "#8A1F1F" : "#23251E"
-                        }}
-                        transition={{ duration: 0.6 }}
-                        className="text-white px-2.5 py-1 rounded-[8px] text-[8.5px] font-mono font-bold uppercase tracking-wider cursor-default shadow-xs shrink-0"
-                      >
-                        {current.partner_btn || "VIEW RESPONSE >"}
-                      </motion.div>
-                    </div>
-                  </motion.div>
-                </div>
-              )}
-
-              {/* ========================================================================= */}
-              {/* 2. PROMINENT ACTIVE GUIDANCE PANEL (Primary Teaching Device)               */}
-              {/* ========================================================================= */}
-              <div className="flex-shrink-0 w-full bg-white border border-[#E2DFC2] rounded-[16px] p-2.5 xs:p-3 sm:p-3.5 shadow-xs flex flex-col justify-center text-left relative overflow-hidden transition-all duration-300">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={`${cardIndex}-${activeStepAnim}`}
-                    initial={{ opacity: 0.7, scale: 0.985, y: 3 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0.6, scale: 0.985, y: -3 }}
-                    transition={{ duration: 0.2, ease: "easeOut" }}
-                    className="space-y-1"
-                  >
-                    {/* Top Row: Large Active Number + Action & Purpose Heading */}
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center justify-center w-5.5 h-5.5 rounded-full bg-[#8A1F1F] text-white font-mono text-[11px] font-bold shadow-2xs shrink-0">
-                        {current.guidance?.[activeStepAnim - 1]?.num || `0${activeStepAnim}`}
-                      </span>
-                      <span className="text-[11px] xs:text-[12px] font-mono font-black uppercase tracking-[0.14em] text-[#8A1F1F] truncate">
-                        {current.guidance?.[activeStepAnim - 1]?.heading || current.actions[activeStepAnim - 1]?.verb}
-                      </span>
-                    </div>
-
-                    {/* Primary Guidance Sentence (Bold, highly readable, clear teaching device) */}
-                    <p className="text-[11.5px] xs:text-[12.5px] sm:text-[13px] font-sans font-bold text-brand-charcoal leading-snug">
-                      {current.guidance?.[activeStepAnim - 1]?.primary || current.description}
-                    </p>
-
-                    {/* Supporting Guidance Sentence */}
-                    {current.guidance?.[activeStepAnim - 1]?.supporting && (
-                      <p className="text-[10px] xs:text-[10.5px] font-sans text-brand-charcoal/70 leading-tight">
-                        {current.guidance[activeStepAnim - 1].supporting}
-                      </p>
-                    )}
-                  </motion.div>
-                </AnimatePresence>
-              </div>
-
-              {/* ========================================================================= */}
-              {/* 3. THREE NUMBERED ACTION STEPS (MOVE/RESIZE/ROTATE or SAVE/PLAN/ASK etc.) */}
-              {/* ========================================================================= */}
-
-              {/* CARD 1 ACTION CARD: Single White Box with 3 Columns & Tappable Steps */}
-              {cardIndex === 0 && (
-                <div className="flex-shrink-0 w-full bg-white border border-[#E2DFC2]/70 rounded-[14px] p-2 sm:p-2.5 shadow-xs">
-                  <div className="grid grid-cols-3 divide-x divide-[#E2DFC2]/50 text-center">
-                    {current.actions.map((act: { num: string; verb: string; label: string; icon: string }, idx: number) => {
-                      const isActive = activeStepAnim === (idx + 1);
-                      return (
-                        <button 
-                          key={idx} 
-                          onClick={() => handleStepClick(idx + 1)}
-                          className="flex flex-col items-center justify-center px-1 py-1 space-y-0.5 transition-all duration-300 cursor-pointer hover:bg-black/[0.02] rounded-lg min-h-[44px]"
-                        >
-                          <span className={`inline-flex items-center justify-center w-5.5 h-5.5 rounded-full border font-mono text-[11px] font-bold transition-all duration-300 ${
-                            isActive 
-                              ? 'border-[#8A1F1F] bg-[#8A1F1F] text-white scale-110 shadow-xs' 
-                              : 'border-[#8A1F1F] text-[#8A1F1F] bg-transparent'
-                          }`}>
-                            {act.num}
-                          </span>
-                          <div className={`py-0.5 transition-transform duration-300 ${isActive ? 'scale-110' : 'scale-100'}`}>
-                            {renderActionIcon(act.icon, isActive ? "text-[#8A1F1F] stroke-[2.2]" : "text-brand-charcoal stroke-[1.8]")}
-                          </div>
-                          <span className={`text-[10px] font-mono font-bold uppercase tracking-wider transition-colors duration-300 ${
-                            isActive ? 'text-[#8A1F1F]' : 'text-brand-charcoal'
-                          }`}>
-                            {act.verb}
-                          </span>
-                          <span className="text-[8.5px] font-sans text-brand-charcoal/65">
-                            {act.label}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* CARDS 2 & 3 ACTION ROW: 3 Columns with arrows & tappable active steps */}
-              {cardIndex > 0 && (
-                <div className="flex-shrink-0 w-full px-1">
-                  <div className="flex items-center justify-between w-full">
-                    {current.actions.map((act: { num: string; verb: string; label: string; icon: string }, idx: number) => {
-                      const isActive = activeStepAnim === (idx + 1);
-                      return (
-                        <React.Fragment key={idx}>
-                          <button 
-                            onClick={() => handleStepClick(idx + 1)}
-                            className="flex-1 flex flex-col items-center text-center px-0.5 py-1 transition-all duration-300 cursor-pointer hover:bg-black/[0.02] rounded-lg min-h-[44px] justify-center"
-                          >
-                            <span className={`inline-flex items-center justify-center w-5.5 h-5.5 rounded-full border font-mono text-[11px] font-bold mb-0.5 transition-all duration-300 ${
-                              isActive 
-                                ? 'border-[#8A1F1F] bg-[#8A1F1F] text-white scale-110 shadow-xs' 
-                                : 'border-[#8A1F1F] text-[#8A1F1F] bg-transparent'
-                            }`}>
-                              {act.num}
-                            </span>
-                            <div className={`my-0.5 transition-transform duration-300 ${isActive ? 'scale-110' : 'scale-100'}`}>
-                              {renderActionIcon(act.icon, isActive ? "text-[#8A1F1F] stroke-[2.2]" : "text-brand-charcoal stroke-[1.8]")}
-                            </div>
-                            <span className={`text-[10px] font-mono font-bold uppercase tracking-wider transition-colors duration-300 ${
-                              isActive ? 'text-[#8A1F1F]' : 'text-brand-charcoal'
-                            }`}>
-                              {act.verb}
-                            </span>
-                            <span className="text-[8.5px] font-sans text-brand-charcoal/65 leading-tight mt-0.5 max-w-[80px]">
-                              {act.label}
-                            </span>
-                          </button>
-                          {idx < 2 && (
-                            <span className={`text-[15px] font-mono select-none px-0.5 transition-colors duration-300 ${
-                              activeStepAnim > (idx + 1) ? 'text-[#8A1F1F]' : 'text-brand-charcoal/30'
-                            }`}>
-                              →
-                            </span>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* ========================================================================= */}
-              {/* 4. EDITORIAL HEADLINE & SINGLE EXPLANATORY SENTENCE                       */}
-              {/* ========================================================================= */}
-              <div className="flex-shrink-0 space-y-0.5 text-left">
-                {current.eyebrow && (
-                  <p className="font-mono text-[8.5px] xs:text-[9px] uppercase tracking-[0.2em] text-[#8A1F1F] font-bold">
-                    {current.eyebrow}
-                  </p>
-                )}
-                <h3 className="text-[18px] xs:text-[20px] sm:text-[22px] font-serif font-bold text-brand-charcoal leading-tight uppercase tracking-tight">
-                  {current.title}
-                </h3>
-                <p className="text-[11px] xs:text-[12px] text-brand-charcoal/75 leading-tight font-sans">
-                  {current.description}
-                </p>
-
-                {/* CARD 3 COMMERCIAL BOUNDARY: Compact Handshake Trust Callout */}
-                {current.commercial_boundary && (
-                  <div className="mt-1 rounded-[10px] bg-[#F7F5EE] border border-[#E2DFC2]/80 p-2 flex items-center gap-2 text-left">
-                    <div className="w-6 h-6 rounded-full bg-[#EAE6D8] border border-[#D8D4C2] flex items-center justify-center shrink-0 text-brand-charcoal">
-                      <Handshake size={13} className="stroke-[1.75]" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[8px] font-mono uppercase tracking-[0.12em] font-bold text-brand-charcoal">
-                        {current.commercial_boundary.title}
-                      </p>
-                      <p className="text-[9px] text-brand-charcoal/70 leading-tight font-sans">
-                        {current.commercial_boundary.text}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </AnimatePresence>
-        </div>
-
-        {/* ========================================================================= */}
-        {/* 4. PRIMARY CTA & FOOTER METADATA RIBBON                                   */}
-        {/* ========================================================================= */}
-        <div className="flex-shrink-0 w-full space-y-1.5 pt-1">
-          <button
-            onClick={handleNext}
-            className="w-full h-11 sm:h-12 rounded-[16px] bg-[#23251E] hover:bg-[#32352B] text-white flex items-center justify-center gap-2 font-mono font-bold uppercase tracking-[0.18em] text-[11px] shadow-sm group active:scale-[0.98] transition-all cursor-pointer min-h-[44px]"
-          >
-            <span>{cardIndex === 2 ? t.start : t.next}</span>
-          </button>
-
-          {/* Footer Metadata Ribbon */}
-          <div className="pt-0.5 w-full text-center">
-            <p className="text-[8px] xs:text-[8.5px] font-mono tracking-wider text-brand-charcoal/45 uppercase font-medium select-none">
-              {t.trust_ribbon}
-            </p>
-          </div>
-        </div>
-    </motion.div>
-  );
-}
-
-
-

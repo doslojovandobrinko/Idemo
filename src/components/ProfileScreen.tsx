@@ -29,7 +29,6 @@ import { VibeSettings, DEFAULT_VIBE_SETTINGS, calculateVibeMatch } from './VibeC
 import MoodOrbit from './MoodOrbit';
 import PrivacyPolicyContent from './PrivacyPolicyContent';
 import { ConciergeSOSHub } from './ConciergeSOSHub';
-import { PartnerCard } from './PartnerCard';
 
 // Direct trigger of haptic patterns
 const triggerHaptic = (pattern: number | number[]) => {
@@ -462,11 +461,6 @@ export default function ProfileScreen({
   const [linkCopied, setLinkCopied] = useState(false);
   const [showCorrelationModal, setShowCorrelationModal] = useState(false);
 
-  // Staged Mood Orbit local state before explicit commit
-  const [stagedX, setStagedX] = useState<number | null>(null);
-  const [stagedY, setStagedY] = useState<number | null>(null);
-  const [stagedBudget, setStagedBudget] = useState<number | null>(null);
-  const [stagedTime, setStagedTime] = useState<number | null>(null);
   const [appliedToast, setAppliedToast] = useState(false);
 
   // Accordion states under "Trust & Privacy"
@@ -1050,24 +1044,6 @@ export default function ProfileScreen({
     setPersonalizedRecs(finalTop3.slice(0, 3));
   }, [currentArchetype, recommendations, ratings, language, budget, time, selectedCats, t]);
 
-  // Journey Contextual Editorial Observations
-  const accuracyCandidates = [
-    {
-      id: '29',
-      title: isSr ? 'Kalemegdanska tvrđava' : isZh ? '卡莱梅格丹城堡' : 'Kalemegdan Fortress',
-      location: isSr ? 'Kalemegdan, Beograd' : isZh ? '贝城卡莱梅格丹' : 'Kalemegdan, Belgrade',
-      visited: isSr ? 'Posećeno juče' : isZh ? '昨日已游览' : 'Visited yesterday',
-    },
-    {
-      id: '33',
-      title: isSr ? 'Skadarlija' : isZh ? '斯卡达里亚' : 'Skadarlija',
-      location: isSr ? 'Skadarlija, Beograd' : isZh ? '贝城斯卡达里亚' : 'Skadarlija, Belgrade',
-      visited: isSr ? 'Posećeno pre 2 dana' : isZh ? '两日前已游览' : 'Visited 2 days ago',
-    }
-  ];
-
-  const pendingCandidates = accuracyCandidates.filter(exp => !confirmedAccuracyRecs[exp.id]);
-
   return (
     <div className="flex-1 flex flex-col min-h-0 relative overflow-hidden" id="profile-screen-wrapper">
       <motion.div 
@@ -1116,15 +1092,16 @@ export default function ProfileScreen({
         <div className="rounded-2xl overflow-hidden bg-white/40 p-2 border border-[#2D3025]/5 shadow-inner">
           <MoodOrbit 
             language={language}
-            x={stagedX ?? orbitX}
-            y={stagedY ?? orbitY}
-            budget={stagedBudget ?? budget}
-            time={stagedTime ?? time}
+            x={orbitX}
+            y={orbitY}
+            budget={budget}
+            time={time}
             onChange={(newX: number, newY: number, newBudget: number, newTime: number) => {
-              setStagedX(newX);
-              setStagedY(newY);
-              setStagedBudget(newBudget);
-              setStagedTime(newTime);
+              setBudget(newBudget);
+              setTime(newTime);
+              if (onOrbitChange) {
+                onOrbitChange(newX, newY, newBudget, newTime);
+              }
             }}
             onSelectConcierge={() => {
               setShowCorrelationModal(true);
@@ -1144,16 +1121,8 @@ export default function ProfileScreen({
           <button
             id="apply-mood-orbit-btn"
             onClick={() => {
-              const finalX = stagedX ?? orbitX;
-              const finalY = stagedY ?? orbitY;
-              const finalB = stagedBudget ?? budget;
-              const finalT = stagedTime ?? time;
-
-              setBudget(finalB);
-              setTime(finalT);
-
               if (onOrbitChange) {
-                onOrbitChange(finalX, finalY, finalB, finalT);
+                onOrbitChange(orbitX, orbitY, budget, time);
               }
 
               setAppliedToast(true);
@@ -1411,7 +1380,7 @@ export default function ProfileScreen({
                         {isSr ? 'BUDŽET ZA DANAS' : isZh ? '日均预算上限' : 'DAILY BUDGET CAP'}
                       </span>
                       <span className="text-xs font-mono font-black text-brand-charcoal">
-                        €{stagedBudget ?? budget}{(stagedBudget ?? budget) >= 500 ? '+' : ''}
+                        €{budget}{budget >= 500 ? '+' : ''}
                       </span>
                     </div>
                     <input 
@@ -1419,11 +1388,13 @@ export default function ProfileScreen({
                       min="50" 
                       max="500" 
                       step="25"
-                      value={stagedBudget ?? budget}
+                      value={budget}
                       onChange={(e) => {
                         const val = parseInt(e.target.value);
                         setBudget(val);
-                        setStagedBudget(val);
+                        if (onOrbitChange) {
+                          onOrbitChange(orbitX, orbitY, val, time);
+                        }
                         if (val % 100 === 0) playHaptic(3);
                       }}
                       className="w-full h-1 bg-[#2D3025]/10 rounded-lg appearance-none cursor-pointer accent-[#2D3025]"
@@ -1442,7 +1413,7 @@ export default function ProfileScreen({
                         {isSr ? 'RASPOLOŽIVO VREME' : isZh ? '单日可用时长' : 'SINGLE-DAY TIME BUDGET'}
                       </span>
                       <span className="text-xs font-mono font-black text-brand-charcoal">
-                        {getTimeTag(language, stagedTime ?? time)}
+                        {getTimeTag(language, time)}
                       </span>
                     </div>
                     <input 
@@ -1450,11 +1421,13 @@ export default function ProfileScreen({
                       min="2" 
                       max="48" 
                       step="2"
-                      value={stagedTime ?? time}
+                      value={time}
                       onChange={(e) => {
                         const val = parseInt(e.target.value);
                         setTime(val);
-                        setStagedTime(val);
+                        if (onOrbitChange) {
+                          onOrbitChange(orbitX, orbitY, budget, val);
+                        }
                         if (val % 12 === 0) playHaptic(3);
                       }}
                       className="w-full h-1 bg-[#2D3025]/10 rounded-lg appearance-none cursor-pointer accent-[#2D3025]"
@@ -1609,105 +1582,6 @@ export default function ProfileScreen({
             </span>
           </div>
         </div>
-
-        {/* Dynamic Contextual Assistance: Place Accuracy Feedback from Recent Visits (Appears only when there are pending Candidates) */}
-        <AnimatePresence>
-          {pendingCandidates.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.3 }}
-              className="bg-[#2D3025] text-brand-pearl rounded-2xl p-4 space-y-3 shadow-md"
-              id="contextual-editorial-observation"
-            >
-              <div className="flex items-center gap-2 border-b border-brand-pearl/10 pb-2">
-                <MapPin className="text-accent-teal w-4 h-4 flex-shrink-0" />
-                <span className="text-[10px] uppercase tracking-widest font-black leading-none text-brand-pearl/80">
-                  {isSr 
-                    ? 'PROVERA TAČNOSTI PODATAKA' 
-                    : isZh 
-                    ? '地点信息客观校验' 
-                    : isEs 
-                    ? 'VERIFICACIÓN DE DATOS' 
-                    : isDe 
-                    ? 'DATENGENAUIGKEIT PRÜFEN' 
-                    : isRu 
-                    ? 'ПРОВЕРКА ТОЧНОСТИ ДАННЫХ' 
-                    : 'VERIFY PLACE DETAILS'}
-                </span>
-              </div>
-              <p className="text-[11px] leading-relaxed text-brand-pearl/70 font-medium">
-                {isSr 
-                  ? 'Bili ste nedavno u blizini ovih mesta? Pomozite kustosima i putnicima brzom potvrdom da li su podaci o lokaciji, radnom vremenu i cenama i dalje tačni.' 
-                  : isZh 
-                  ? '您近期曾前往以下贝尔格莱德地点？请协助编辑团队与其他旅行者，快速确认营业时间、价格及地点信息是否依然准确。' 
-                  : isEs 
-                  ? '¿Ha visitado estos lugares recientemente? Ayude a los editores y viajeros confirmando si los horarios, precios y ubicación siguen siendo precisos.' 
-                  : isDe 
-                  ? 'Waren Sie kürzlich in der Nähe dieser Orte? Helfen Sie Kuratoren und Reisenden, indem Sie bestätigen, ob Öffnungszeiten, Preise und Standort noch aktuell sind.' 
-                  : isRu 
-                  ? 'Недавно были рядом с этими местами? Помогите кураторам и путешественникам, подтвердив актуальность часов работы, цен и адреса.' 
-                  : 'Visited near these locations recently? Help curators and fellow travelers by confirming whether hours, prices, and place details are still accurate.'}
-              </p>
-              
-              <div className="space-y-2 pt-1">
-                {pendingCandidates.map((exp) => (
-                  <div key={exp.id} className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-center justify-between gap-2">
-                    <div className="space-y-0.5">
-                      <span className="text-xs font-bold block text-brand-pearl leading-snug">
-                        {exp.title}
-                      </span>
-                      <div className="flex items-center gap-1.5 text-[10px] text-brand-pearl/50 font-medium leading-none">
-                        <MapPin size={10} />
-                        <span>{exp.location}</span>
-                        <span className="mx-0.5">•</span>
-                        <span>{exp.visited}</span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        onConfirmAccuracy(exp);
-                        playHaptic([20, 10, 20]);
-                      }}
-                      className="bg-accent-teal text-white text-[10px] font-black uppercase px-3 h-8 rounded-lg hover:bg-accent-teal/90 transition-all cursor-pointer active:scale-95 whitespace-nowrap shrink-0"
-                    >
-                      {isSr 
-                        ? 'POTVRDI TAČNOST' 
-                        : isZh 
-                        ? '校验信息' 
-                        : isEs 
-                        ? 'VERIFICAR' 
-                        : isDe 
-                        ? 'ÜBERPRÜFEN' 
-                        : isRu 
-                        ? 'ПРОВЕРИТЬ' 
-                        : 'VERIFY DETAILS'}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </section>
-
-      {/* EXCLUSIVE VENUE PARTNER SYSTEM (v2.0.0) */}
-      <section className="bg-brand-pearl rounded-3xl border border-[#2D3025]/10 p-5 space-y-4 shadow-[0_2px_8px_rgba(35,37,30,0.02)]">
-        <div className="flex items-center gap-2">
-          <Sparkles className="text-amber-500 w-4 h-4" />
-          <h2 className="text-xs uppercase tracking-[0.25em] font-black text-brand-charcoal">
-            {isSr ? 'EKSKLUZIVNI PARTNERI' : isZh ? '合作伙伴计划' : 'BESPOKE PARTNER PRIVILEGES'}
-          </h2>
-        </div>
-        <p className="text-[11px] leading-relaxed text-[#2D3025]/60 font-medium">
-          {isSr 
-            ? 'Otključajte ekskluzivne lokalne pogodnosti, poklone i VIP usluge kod 30 kustoski selektovanih beogradskih partnera unosom unikatnog verifikacionog koda.' 
-            : isZh 
-            ? '输入特约商户验证码，即可在 30 家经过严格挑选的贝尔格莱德顶级场所解锁专属迎宾特权、贵宾礼遇与尊享服务。' 
-            : 'Unlock premier local privileges, curated welcome gifts, and VIP services at 30 handpicked Belgrade partner venues using their bespoke access codes.'}
-        </p>
-        <PartnerCard language={language} />
       </section>
 
       {/* QUESTION 4: Why can I trust IDEMO? -> Trust & Privacy Expandable Card */}

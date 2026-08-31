@@ -182,3 +182,12 @@ Before applying any change, verify the following:
 
 All IDEMO AI implementation agents must comply with the Quota Safety Gate defined in GEMINI.md before beginning substantial repository-wide, agentic, grounded, batch, or high-context work.
 
+
+---
+
+## 9. Protected Welcome Screen Standard (Frozen Hero Specification)
+* **Hero Image Baseline:** The IDEMO Welcome Screen custom hero emblem (`/public/idemo_hero_custom.png`, native 1122:1402 aspect ratio) is validated and frozen.
+* **Aspect Ratio & Containment:** Must always use `object-contain` locked to `aspect-[1122/1402]`. Never use `object-cover` or introduce fixed-width constraints that clip top/bottom pixels.
+* **Seamless Background:** Hero button container must seamlessly blend into the card background (`bg-transparent`, no borders or solid base plates when `USE_CUSTOM_HERO_IMAGE` is true).
+* **Typography:** Promotional headline ("BECAUSE THE BEST OF SERBIA SHOULD BE EASY TO FIND") must remain in oxblood (`#800020`), `font-black` (900 weight), uppercase, scaled to 18px-24px for single-screen zero-scroll mobile guarantee.
+* **Zero Visual Regression:** No future update may alter these dimensions, crop the emblem, or introduce scrolling on the initial welcome screen without explicit Creator approval.

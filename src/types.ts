@@ -201,6 +201,7 @@ export interface ConfirmedArrangementRecord {
   match_id: string;
   partner_name: string;
   partner_code: string;
+  photo_url?: string | null;
   contact_phone: string | null;
   contact_email: string | null;
   introduction: string | null;
@@ -256,6 +257,8 @@ export interface VisitorProposalResult {
   message?: string;
   proposed_start_at?: string;
   proposed_end_at?: string;
+  created_at?: string;
+  has_countered?: boolean;
   error?: string;
 }
 

@@ -19,7 +19,7 @@ export const wellbeingRecommendations: Recommendation[] = [
     "travelTime": "2.5 - 3 hours",
     "travelTimeMinutes": 160,
     "location": "Central Serbia",
-    "estimatedCost": "€15 - €800+",
+    "estimatedCost":"€20 - €960+",
     "preferredTransport": "Car / Train",
     "coordinates": {
       "lat": 43.6214,
@@ -67,7 +67,7 @@ export const wellbeingRecommendations: Recommendation[] = [
     "travelTime": "3 hours",
     "travelTimeMinutes": 180,
     "location": "Eastern Serbia",
-    "estimatedCost": "€20 - €200",
+    "estimatedCost":"€30 - €240",
     "preferredTransport": "Car",
     "website": "https://tosokobanja.rs",
     "coordinates": {
@@ -108,7 +108,7 @@ export const wellbeingRecommendations: Recommendation[] = [
     "travelTime": "3 hours",
     "travelTimeMinutes": 180,
     "location": "Vrnjačka Banja",
-    "estimatedCost": "€150 - €600+",
+    "estimatedCost":"€180 - €720+",
     "preferredTransport": "Car / Private Transfer",
     "website": "https://hotelzeptervrnjackabanja.rs",
     "coordinates": {
@@ -149,7 +149,7 @@ export const wellbeingRecommendations: Recommendation[] = [
     "travelTime": "4 hours",
     "travelTimeMinutes": 240,
     "location": "Southern Serbia",
-    "estimatedCost": "€60 - €220 per night",
+    "estimatedCost":"€80 - €270 per night",
     "preferredTransport": "Car / Private Transfer",
     "website": "https://prolombanja.com",
     "coordinates": {
@@ -190,7 +190,7 @@ export const wellbeingRecommendations: Recommendation[] = [
     "travelTime": "1.5 hours",
     "travelTimeMinutes": 90,
     "location": "Fruška Gora Monasteries",
-    "estimatedCost": "€10 - €50",
+    "estimatedCost":"€20 - €60",
     "preferredTransport": "Car",
     "coordinates": {
       "lat": 45.1192,

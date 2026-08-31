@@ -8,6 +8,15 @@ import { saveInquiryRecordV2, saveVisitorCredential, getVisitorCredential, remov
 import { bootstrapTaxonomy, getTaxonomyCache } from './taxonomyStore';
 import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 
+const metaEnv = (import.meta as unknown as { env?: Record<string, string> }).env || {};
+const getEnvVar = (key: string): string => {
+  if (metaEnv[key]) return metaEnv[key];
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return process.env[key] as string;
+  }
+  return '';
+};
+
 export interface SubmitInquiryParams {
   recommendation: Recommendation;
   visitorName: string;
@@ -292,6 +301,8 @@ export async function fetchActiveProposal(inquiryId: string): Promise<VisitorPro
       message: resData.message,
       proposed_start_at: resData.proposed_start_at,
       proposed_end_at: resData.proposed_end_at,
+      created_at: resData.created_at,
+      has_countered: resData.has_countered,
     };
   } catch (err: any) {
     return { success: false, error: 'Unable to check active proposal. Please try again.' };
@@ -365,11 +376,11 @@ export async function declineProposal(inquiryId: string, matchId: string, reason
 
     const resData = await response.json();
     if (!response.ok || !resData.success) {
-      return { success: false, error: resData.error || 'Failed to decline proposal.' };
+      return { success: false, error: resData.error || 'Failed to decline partner proposal.' };
     }
 
-    // Status becomes canceled (terminal) -> purge credential
-    removeVisitorCredential(inquiryId);
+    // Candidate rejected: inquiry returns to matching to find next eligible partner.
+    // Visitor credential remains valid.
 
     return {
       success: true,
@@ -378,7 +389,98 @@ export async function declineProposal(inquiryId: string, matchId: string, reason
       status: resData.status,
     };
   } catch (err: any) {
-    return { success: false, error: 'Unable to decline proposal. Please try again.' };
+    return { success: false, error: 'Unable to decline partner proposal. Please try again.' };
+  }
+}
+
+export async function cancelInquiry(inquiryId: string, reason?: string): Promise<VisitorActionResult> {
+  const token = getVisitorCredential(inquiryId);
+  if (!token) {
+    return { success: false, error: 'NO_CREDENTIAL: Recovery token not found on this device.' };
+  }
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/visitor_resolution/cancel`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${anonKey}`,
+        apikey: anonKey,
+        'x-visitor-token': token,
+      },
+      body: JSON.stringify({
+        inquiry_id: inquiryId,
+        reason: reason || '',
+      }),
+    });
+
+    const resData = await response.json();
+    if (!response.ok || !resData.success) {
+      return { success: false, error: resData.error || 'Failed to cancel inquiry.' };
+    }
+
+    // Explicit cancellation: purge credential
+    removeVisitorCredential(inquiryId);
+
+    return {
+      success: true,
+      inquiry_id: resData.inquiry_id,
+      status: 'canceled',
+    };
+  } catch (err: any) {
+    return { success: false, error: 'Unable to cancel inquiry. Please try again.' };
+  }
+}
+
+export async function counterProposal(
+  inquiryId: string,
+  matchId: string,
+  proposedStart: string,
+  proposedEnd: string,
+  notes?: string
+): Promise<VisitorActionResult> {
+  const token = getVisitorCredential(inquiryId);
+  if (!token) {
+    return { success: false, error: 'NO_CREDENTIAL: Recovery token not found on this device.' };
+  }
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/visitor_resolution/counter`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${anonKey}`,
+        apikey: anonKey,
+        'x-visitor-token': token,
+      },
+      body: JSON.stringify({
+        inquiry_id: inquiryId,
+        match_id: matchId,
+        proposed_start_at: proposedStart,
+        proposed_end_at: proposedEnd,
+        notes: notes || '',
+      }),
+    });
+
+    const resData = await response.json();
+    if (!response.ok || !resData.success) {
+      return { success: false, error: resData.error || 'Failed to submit counter date proposal.' };
+    }
+
+    return {
+      success: true,
+      inquiry_id: resData.inquiry_id,
+      match_id: resData.match_id,
+      status: resData.status,
+    };
+  } catch (err: any) {
+    return { success: false, error: 'Unable to submit counter date proposal. Please try again.' };
   }
 }
 
@@ -444,8 +546,8 @@ export async function fetchPartnerIntroduction(inquiryId: string): Promise<Partn
     return { success: false, introduction_available: false, error: 'NO_CREDENTIAL: Visitor recovery token missing.' };
   }
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
+  const anonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
 
   if (!supabaseUrl) {
     return {

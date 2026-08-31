@@ -114,12 +114,12 @@ const getEnvVar = (key: string): string => {
 };
 
 function getFunctionUrl(endpoint: string): string {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
   return `${supabaseUrl.replace(/\/+$/, '')}/functions/v1/partner_resolution/${endpoint.replace(/^\/+/, '')}`;
 }
 
 function getAnonKey(): string {
-  return import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+  return getEnvVar('VITE_SUPABASE_ANON_KEY');
 }
 
 const sha256 = async (text: string): Promise<string> => {
@@ -133,11 +133,11 @@ export async function loginPartner(publicCode: string, pin: string): Promise<Par
   const codeClean = publicCode.trim();
   const pinClean = pin.trim();
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
   if (!supabaseUrl) {
     return {
       success: false,
-      error: 'Database connection URL missing. Cannot perform server-side authentication.'
+      error: 'CONFIG_ERROR: Database connection URL missing. Cannot perform server-side authentication.'
     };
   }
 
@@ -526,6 +526,129 @@ export async function proposePartnerAlternative(
       success: !!data.success,
       match_id: matchId,
       response_id: data.response_id,
+      status: data.status,
+      error: data.message,
+    };
+  } catch (err: any) {
+    return { success: false, error: `NETWORK_FAILURE: ${err?.message || String(err)}` };
+  }
+}
+
+export async function acceptPartnerCounterOffer(matchId: string, message?: string): Promise<PartnerActionResult> {
+  const session = partnerSessionStorage.getPartnerSession();
+  if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
+    return {
+      success: true,
+      match_id: matchId,
+      status: 'accepted'
+    };
+  }
+
+  const url = getFunctionUrl('opportunities/accept-counter');
+  const anonKey = getAnonKey();
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': anonKey,
+        'Authorization': `Bearer ${anonKey}`,
+        'x-partner-session': session.sessionToken,
+      },
+      body: JSON.stringify({ match_id: matchId, message }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    return {
+      success: !!data.success,
+      match_id: matchId,
+      status: data.status,
+      error: data.message,
+    };
+  } catch (err: any) {
+    return { success: false, error: `NETWORK_FAILURE: ${err?.message || String(err)}` };
+  }
+}
+
+export async function declinePartnerCounterOffer(matchId: string, message?: string): Promise<PartnerActionResult> {
+  const session = partnerSessionStorage.getPartnerSession();
+  if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
+    return {
+      success: true,
+      match_id: matchId,
+      status: 'declined'
+    };
+  }
+
+  const url = getFunctionUrl('opportunities/decline-counter');
+  const anonKey = getAnonKey();
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': anonKey,
+        'Authorization': `Bearer ${anonKey}`,
+        'x-partner-session': session.sessionToken,
+      },
+      body: JSON.stringify({ match_id: matchId, message }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    return {
+      success: !!data.success,
+      match_id: matchId,
+      status: data.status,
+      error: data.message,
+    };
+  } catch (err: any) {
+    return { success: false, error: `NETWORK_FAILURE: ${err?.message || String(err)}` };
+  }
+}
+
+export const acceptCounterOpportunity = acceptPartnerCounterOffer;
+export const declineCounterOpportunity = declinePartnerCounterOffer;
+
+export async function withdrawPartnerOpportunity(matchId: string, message?: string): Promise<PartnerActionResult> {
+  const session = partnerSessionStorage.getPartnerSession();
+  if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
+    return {
+      success: true,
+      match_id: matchId,
+      status: 'withdrawn'
+    };
+  }
+
+  const url = getFunctionUrl('opportunities/withdraw');
+  const anonKey = getAnonKey();
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': anonKey,
+        'Authorization': `Bearer ${anonKey}`,
+        'x-partner-session': session.sessionToken,
+      },
+      body: JSON.stringify({ match_id: matchId, message }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    return {
+      success: !!data.success,
+      match_id: matchId,
       status: data.status,
       error: data.message,
     };

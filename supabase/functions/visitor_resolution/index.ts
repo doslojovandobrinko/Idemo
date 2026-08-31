@@ -163,6 +163,9 @@ serve(async (req) => {
     const rawToken = req.headers.get("x-visitor-token") ?? "";
     let matchId = "";
     let reason = "";
+    let proposedStartAt = "";
+    let proposedEndAt = "";
+    let notes = "";
 
     if (req.method === "GET") {
       inquiryId = url.searchParams.get("inquiry_id") ?? "";
@@ -171,6 +174,9 @@ serve(async (req) => {
       inquiryId = body.inquiry_id ?? "";
       matchId = body.match_id ?? "";
       reason = body.reason ?? "";
+      proposedStartAt = body.proposed_start_at ?? body.proposed_start ?? "";
+      proposedEndAt = body.proposed_end_at ?? body.proposed_end ?? "";
+      notes = body.notes ?? body.message ?? "";
     } else {
       return errorResponse(405, "Method not allowed.");
     }
@@ -237,6 +243,19 @@ serve(async (req) => {
       rpcName = "decline_proposal";
       rpcParams.p_match_id = matchId;
       rpcParams.p_reason = reason;
+    } else if (path.endsWith("/cancel")) {
+      rpcName = "cancel_inquiry_by_visitor";
+      rpcParams.p_reason = reason;
+    } else if (path.endsWith("/counter")) {
+      if (!matchId) return errorResponse(400, "Access denied", "Missing match_id for counter proposal.");
+      if (!proposedStartAt || !proposedEndAt) {
+        return errorResponse(400, "Missing required proposed_start_at or proposed_end_at dates.", "Missing start or end date.");
+      }
+      rpcName = "counter_proposal_by_visitor";
+      rpcParams.p_match_id = matchId;
+      rpcParams.p_proposed_start = proposedStartAt;
+      rpcParams.p_proposed_end = proposedEndAt;
+      rpcParams.p_notes = notes;
     } else if (path.endsWith("/request-alternative")) {
       if (!matchId) return errorResponse(400, "Access denied", "Missing match_id for alternative request.");
       rpcName = "request_alternative_option";

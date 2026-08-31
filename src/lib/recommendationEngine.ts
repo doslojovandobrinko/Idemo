@@ -338,11 +338,11 @@ export function getRankedRecommendations(recs: Recommendation[], prefs: UserPref
   const isDefault = hasNoRatings && hasNoImplicitTastes && isDefaultBudgetAndTime && hasNoSelectedCategories && isDefaultOrbit;
 
   if (isDefault) {
-    const targetIds = ['1', '9', '19'];
+    const targetIds = ['1', '81', '9'];
     const targetRecs: Recommendation[] = [];
     const otherRecs: Recommendation[] = [];
     
-    // Maintain the specific default order: Uvac, Sands, Golubac
+    // Maintain the specific default order: Uvac Meanders ('1'), Kablar Ferrata ('81'), Wines of the Sands ('9')
     for (const id of targetIds) {
       const found = recs.find(r => r.id === id);
       if (found) {

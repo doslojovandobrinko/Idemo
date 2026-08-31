@@ -19,7 +19,7 @@ export const natureRecommendations: Recommendation[] = [
     "travelTime": "3.5 - 4 hours",
     "travelTimeMinutes": 220,
     "location": "Sjenica",
-    "estimatedCost": "€30 - €50",
+    "estimatedCost":"€40 - €60",
     "preferredTransport": "Car + Boat",
     "coordinates": {
       "lat": 43.3524,
@@ -73,7 +73,7 @@ export const natureRecommendations: Recommendation[] = [
     "travelTime": "1.5 hours",
     "travelTimeMinutes": 90,
     "location": "Near Sremska Mitrovica",
-    "estimatedCost": "€10 - €60",
+    "estimatedCost":"€20 - €80",
     "preferredTransport": "Car",
     "coordinates": {
       "lat": 44.9592,
@@ -113,7 +113,7 @@ export const natureRecommendations: Recommendation[] = [
     "travelTime": "4 hours",
     "travelTimeMinutes": 240,
     "location": "Tara National Park",
-    "estimatedCost": "€5 - €10 (Park Fee)",
+    "estimatedCost":"€10 - €20 (Park Fee)",
     "preferredTransport": "Car + Hike",
     "coordinates": {
       "lat": 43.9514,
@@ -153,7 +153,7 @@ export const natureRecommendations: Recommendation[] = [
     "travelTime": "4.5 hours",
     "travelTimeMinutes": 270,
     "location": "Kuršumlija",
-    "estimatedCost": "€10 - €15",
+    "estimatedCost":"€10 - €20",
     "preferredTransport": "Car",
     "coordinates": {
       "lat": 42.9861,
@@ -193,7 +193,7 @@ export const natureRecommendations: Recommendation[] = [
     "travelTime": "2.5 - 4 hours",
     "travelTimeMinutes": 180,
     "location": "Golubac–Donji Milanovac",
-    "estimatedCost": "€90 - €500",
+    "estimatedCost":"€110 - €600",
     "preferredTransport": "Car / Private Tour",
     "website": "https://npdjerdap.rs",
     "coordinates": {
@@ -234,7 +234,7 @@ export const natureRecommendations: Recommendation[] = [
     "travelTime": "4 hours",
     "travelTimeMinutes": 240,
     "location": "Southeastern Serbia",
-    "estimatedCost": "€40 - €180 per day",
+    "estimatedCost":"€50 - €220 per day",
     "preferredTransport": "Car",
     "website": "http://www.jpstaraplanina.rs",
     "coordinates": {
@@ -275,7 +275,7 @@ export const natureRecommendations: Recommendation[] = [
     "travelTime": "3.5 - 4 hours",
     "travelTimeMinutes": 220,
     "location": "Western Serbia",
-    "estimatedCost": "€60 - €250",
+    "estimatedCost":"€80 - €300",
     "preferredTransport": "Car",
     "website": "https://nptara.rs",
     "coordinates": {
@@ -316,7 +316,7 @@ export const natureRecommendations: Recommendation[] = [
     "travelTime": "2 hours",
     "travelTimeMinutes": 120,
     "location": "Central-Eastern Serbia",
-    "estimatedCost": "€5 - €10",
+    "estimatedCost":"€10 - €20",
     "preferredTransport": "Car",
     "website": "https://resavskapecina.rs",
     "coordinates": {
@@ -357,7 +357,7 @@ export const natureRecommendations: Recommendation[] = [
     "travelTime": "3.5 hours",
     "travelTimeMinutes": 210,
     "location": "Near Bor",
-    "estimatedCost": "€30 - €150",
+    "estimatedCost":"€40 - €180",
     "preferredTransport": "Car",
     "coordinates": {
       "lat": 44.0333,
@@ -397,7 +397,7 @@ export const natureRecommendations: Recommendation[] = [
     "travelTime": "1.5 hours",
     "travelTimeMinutes": 90,
     "location": "Near Zrenjanin",
-    "estimatedCost": "€10 - €40",
+    "estimatedCost":"€20 - €50",
     "preferredTransport": "Car",
     "website": "https://visitzrenjanin.com",
     "coordinates": {
@@ -438,7 +438,7 @@ export const natureRecommendations: Recommendation[] = [
     "travelTime": "4 hours",
     "travelTimeMinutes": 240,
     "location": "Tara National Park",
-    "estimatedCost": "€80 - €300 per night",
+    "estimatedCost":"€100 - €360 per night",
     "preferredTransport": "Car / Private Transfer",
     "website": "https://nptara.rs",
     "coordinates": {
@@ -479,7 +479,7 @@ export const natureRecommendations: Recommendation[] = [
     "travelTime": "3.5 - 4 hours",
     "travelTimeMinutes": 220,
     "location": "Western Serbia / Drina",
-    "estimatedCost": "€80 - €250",
+    "estimatedCost":"€100 - €300",
     "preferredTransport": "Car / Private Transfer",
     "coordinates": {
       "lat": 43.9667,
@@ -519,7 +519,7 @@ export const natureRecommendations: Recommendation[] = [
     "travelTime": "6 - 7 hours",
     "travelTimeMinutes": 390,
     "location": "Northern Montenegro",
-    "estimatedCost": "€120 - €450 per night",
+    "estimatedCost":"€150 - €540 per night",
     "preferredTransport": "Car / Private Transfer",
     "website": "https://npdurmitor.me",
     "coordinates": {
@@ -560,7 +560,7 @@ export const natureRecommendations: Recommendation[] = [
     "travelTime": "1 - 1.5 hours",
     "travelTimeMinutes": 75,
     "location": "Fruška Gora Region",
-    "estimatedCost": "€60 - €220 per day",
+    "estimatedCost":"€80 - €270 per day",
     "preferredTransport": "Car + E-bike rental",
     "coordinates": {
       "lat": 45.15,
@@ -600,7 +600,7 @@ export const natureRecommendations: Recommendation[] = [
     "travelTime": "4 hours",
     "travelTimeMinutes": 240,
     "location": "Bajina Bašta / Drina",
-    "estimatedCost": "€120 - €450",
+    "estimatedCost":"€150 - €540",
     "preferredTransport": "Car / Private Transfer",
     "coordinates": {
       "lat": 43.9667,
@@ -640,7 +640,7 @@ export const natureRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 15,
     "location": "Belgrade",
-    "estimatedCost": "€10 - €80",
+    "estimatedCost":"€20 - €100",
     "preferredTransport": "Taxi / Bike",
     "website": "https://adaciganlija.rs",
     "coordinates": {
@@ -681,7 +681,7 @@ export const natureRecommendations: Recommendation[] = [
     "travelTime": "2.5 hours",
     "travelTimeMinutes": 150,
     "location": "Ovčar-Kablar Gorge",
-    "estimatedCost": "€50 - €180",
+    "estimatedCost":"€60 - €220",
     "preferredTransport": "Car / Private Transfer",
     "coordinates": {
       "lat": 43.9,
@@ -721,7 +721,7 @@ export const natureRecommendations: Recommendation[] = [
     "travelTime": "3.5 hours",
     "travelTimeMinutes": 210,
     "location": "Zlatibor Region",
-    "estimatedCost": "€50 - €250",
+    "estimatedCost":"€60 - €300",
     "preferredTransport": "Car / Private Transfer",
     "coordinates": {
       "lat": 43.7167,
@@ -761,7 +761,7 @@ export const natureRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 10,
     "location": "Confluence, Belgrade",
-    "estimatedCost": "€40 - €150",
+    "estimatedCost":"€50 - €180",
     "preferredTransport": "On Foot / Taxi",
     "coordinates": {
       "lat": 44.825,
@@ -801,7 +801,7 @@ export const natureRecommendations: Recommendation[] = [
     "travelTime": "5 - 7 hours",
     "travelTimeMinutes": 360,
     "location": "Tara Canyon Region",
-    "estimatedCost": "€150 - €500+",
+    "estimatedCost":"€180 - €600+",
     "preferredTransport": "Car / Private Transfer",
     "coordinates": {
       "lat": 43.35,

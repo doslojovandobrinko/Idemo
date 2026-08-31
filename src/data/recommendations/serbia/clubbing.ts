@@ -19,7 +19,7 @@ export const clubbingRecommendations: Recommendation[] = [
     "travelTime": "15 - 30 minutes",
     "travelTimeMinutes": 20,
     "location": "Belgrade",
-    "estimatedCost": "€20 - €100+",
+    "estimatedCost":"€30 - €120+",
     "preferredTransport": "Taxi / Foot",
     "coordinates": {
       "lat": 44.8142,
@@ -73,7 +73,7 @@ export const clubbingRecommendations: Recommendation[] = [
     "travelTime": "15 - 25 minutes",
     "travelTimeMinutes": 20,
     "location": "Dorćol, Belgrade",
-    "estimatedCost": "€40 - €150",
+    "estimatedCost":"€50 - €180",
     "preferredTransport": "Taxi / Rideshare",
     "website": "https://www.facebook.com/silosibeograd/",
     "coordinates": {
@@ -114,7 +114,7 @@ export const clubbingRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 25,
     "location": "Palilula, Belgrade",
-    "estimatedCost": "€30 - €120",
+    "estimatedCost":"€40 - €150",
     "preferredTransport": "Taxi / Rideshare",
     "website": "https://drugstorebeograd.com",
     "coordinates": {
@@ -155,7 +155,7 @@ export const clubbingRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 20,
     "location": "Sava Riverfront, Belgrade",
-    "estimatedCost": "€50 - €300+",
+    "estimatedCost":"€60 - €360+",
     "preferredTransport": "Taxi / Rideshare",
     "coordinates": {
       "lat": 44.8152,
@@ -195,7 +195,7 @@ export const clubbingRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 15,
     "location": "Senjak / Vračar, Belgrade",
-    "estimatedCost": "€40 - €250",
+    "estimatedCost":"€50 - €300",
     "preferredTransport": "Taxi",
     "coordinates": {
       "lat": 44.7952,
@@ -235,7 +235,7 @@ export const clubbingRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 15,
     "location": "Dorćol / Cetinjska, Belgrade",
-    "estimatedCost": "€20 - €100+",
+    "estimatedCost":"€30 - €120+",
     "preferredTransport": "On Foot / Taxi",
     "coordinates": {
       "lat": 44.8252,
@@ -275,7 +275,7 @@ export const clubbingRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 10,
     "location": "Sava Riverfront, Belgrade",
-    "estimatedCost": "€40 - €250+",
+    "estimatedCost":"€50 - €300+",
     "preferredTransport": "On Foot / Taxi",
     "website": "https://belgradewaterfront.com",
     "coordinates": {
@@ -316,7 +316,7 @@ export const clubbingRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 10,
     "location": "City Center, Belgrade",
-    "estimatedCost": "€15 - €50",
+    "estimatedCost":"€20 - €60",
     "preferredTransport": "On Foot / Taxi",
     "website": "https://bjf.rs",
     "coordinates": {
@@ -357,7 +357,7 @@ export const clubbingRecommendations: Recommendation[] = [
     "travelTime": "1.5 hours",
     "travelTimeMinutes": 90,
     "location": "Kragujevac, Central Serbia",
-    "estimatedCost": "€30 - €80",
+    "estimatedCost":"€40 - €100",
     "preferredTransport": "Car / Private Driver",
     "coordinates": {
       "lat": 44.0128,
@@ -411,7 +411,7 @@ export const clubbingRecommendations: Recommendation[] = [
     "travelTime": "1 hour",
     "travelTimeMinutes": 60,
     "location": "Novi Sad / Petrovaradin",
-    "estimatedCost": "€50 - €250",
+    "estimatedCost":"€60 - €300",
     "preferredTransport": "Intercity Fast Train (Soko)",
     "coordinates": {
       "lat": 45.2531,
@@ -465,7 +465,7 @@ export const clubbingRecommendations: Recommendation[] = [
     "travelTime": "3 hours",
     "travelTimeMinutes": 180,
     "location": "Vrnjačka Banja",
-    "estimatedCost": "€40 - €150",
+    "estimatedCost":"€50 - €180",
     "preferredTransport": "Car / Private Transfer",
     "coordinates": {
       "lat": 43.6214,
@@ -519,7 +519,7 @@ export const clubbingRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 10,
     "location": "Ušće Confluence, Belgrade",
-    "estimatedCost": "Free - €40",
+    "estimatedCost":"Free - €50",
     "preferredTransport": "Taxi / Walking",
     "coordinates": {
       "lat": 44.8231,

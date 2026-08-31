@@ -19,7 +19,7 @@ export const medicalRecommendations: Recommendation[] = [
     "travelTime": "15 - 20 minutes",
     "travelTimeMinutes": 20,
     "location": "Belgrade, Vračar",
-    "estimatedCost": "€100 - €500+",
+    "estimatedCost":"€120 - €600+",
     "preferredTransport": "Taxi",
     "website": "https://www.drkozarev.com",
     "phone": "+381 11 244 7630",
@@ -61,7 +61,7 @@ export const medicalRecommendations: Recommendation[] = [
     "travelTime": "15 - 20 minutes",
     "travelTimeMinutes": 20,
     "location": "Belgrade, Vračar",
-    "estimatedCost": "€200 - €2000+",
+    "estimatedCost":"€240 - €2400+",
     "preferredTransport": "Taxi",
     "website": "https://www.drpopovic.com",
     "phone": "+381 11 244 0404",
@@ -103,7 +103,7 @@ export const medicalRecommendations: Recommendation[] = [
     "travelTime": "3.5 hours",
     "travelTimeMinutes": 210,
     "location": "Zlatibor Mountain",
-    "estimatedCost": "€300 - €2000+",
+    "estimatedCost":"€360 - €2400+",
     "preferredTransport": "Car / Bus",
     "website": "https://www.cigota.rs",
     "coordinates": {
@@ -144,7 +144,7 @@ export const medicalRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 20,
     "location": "Central Belgrade",
-    "estimatedCost": "€40 - €2000+",
+    "estimatedCost":"€50 - €2400+",
     "preferredTransport": "Taxi / Private Transfer",
     "coordinates": {
       "lat": 44.8052,
@@ -184,7 +184,7 @@ export const medicalRecommendations: Recommendation[] = [
     "travelTime": "Varies by location",
     "travelTimeMinutes": 180,
     "location": "Multiple Spa Towns",
-    "estimatedCost": "€500 - €5000+",
+    "estimatedCost":"€600 - €6000+",
     "preferredTransport": "Car / Private Transfer",
     "coordinates": {
       "lat": 43.6114,
@@ -224,7 +224,7 @@ export const medicalRecommendations: Recommendation[] = [
     "travelTime": "Varies",
     "travelTimeMinutes": 120,
     "location": "Multiple Rural Regions",
-    "estimatedCost": "€20 - €150",
+    "estimatedCost":"€30 - €180",
     "preferredTransport": "Car",
     "coordinates": {
       "lat": 45.15,
@@ -264,7 +264,7 @@ export const medicalRecommendations: Recommendation[] = [
     "travelTime": "3 hours",
     "travelTimeMinutes": 180,
     "location": "Central Serbia",
-    "estimatedCost": "€60 - €250 per night",
+    "estimatedCost":"€80 - €300 per night",
     "preferredTransport": "Car / Private Transfer",
     "website": "https://vrnjackabanja.co.rs",
     "coordinates": {
@@ -305,7 +305,7 @@ export const medicalRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 20,
     "location": "Belgrade & Danube Riverside",
-    "estimatedCost": "€500 - €5000+ (Procedure dependent)",
+    "estimatedCost":"€600 - €6000+ (Procedure dependent)",
     "preferredTransport": "Urban access / River shuttle",
     "coordinates": {
       "lat": 44.8176,
@@ -345,7 +345,7 @@ export const medicalRecommendations: Recommendation[] = [
     "travelTime": "3.5 hours",
     "travelTimeMinutes": 210,
     "location": "Zlatibor Mountains",
-    "estimatedCost": "€80 - €220 per night",
+    "estimatedCost":"€100 - €270 per night",
     "preferredTransport": "Car / Private Transfer",
     "website": "https://cigota.rs",
     "coordinates": {
@@ -386,7 +386,7 @@ export const medicalRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 10,
     "location": "Belgrade Center",
-    "estimatedCost": "€60 - €200",
+    "estimatedCost":"€80 - €240",
     "preferredTransport": "On Foot / Taxi",
     "coordinates": {
       "lat": 44.82,
@@ -426,7 +426,7 @@ export const medicalRecommendations: Recommendation[] = [
     "travelTime": "3 hours",
     "travelTimeMinutes": 180,
     "location": "Eastern Serbia",
-    "estimatedCost": "€50 - €180 per night",
+    "estimatedCost":"€60 - €220 per night",
     "preferredTransport": "Car / Private Transfer",
     "website": "https://sokobanja.rs",
     "coordinates": {
@@ -467,7 +467,7 @@ export const medicalRecommendations: Recommendation[] = [
     "travelTime": "4 hours (to Tara)",
     "travelTimeMinutes": 240,
     "location": "Belgrade & Tara National Park",
-    "estimatedCost": "€1500 - €8000+ (Procedure dependent)",
+    "estimatedCost":"€1800 - €9600+ (Procedure dependent)",
     "preferredTransport": "Private Transfer",
     "coordinates": {
       "lat": 43.9167,
@@ -507,7 +507,7 @@ export const medicalRecommendations: Recommendation[] = [
     "travelTime": "4 hours",
     "travelTimeMinutes": 240,
     "location": "Southern Serbia",
-    "estimatedCost": "€60 - €220 per night",
+    "estimatedCost":"€80 - €270 per night",
     "preferredTransport": "Car / Private Transfer",
     "website": "https://prolombanja.com",
     "coordinates": {
@@ -548,7 +548,7 @@ export const medicalRecommendations: Recommendation[] = [
     "travelTime": "1 - 2 hours",
     "travelTimeMinutes": 90,
     "location": "Šumadija / Fruška Gora Regions",
-    "estimatedCost": "€30 - €150",
+    "estimatedCost":"€40 - €180",
     "preferredTransport": "Car",
     "coordinates": {
       "lat": 44.25,
@@ -588,7 +588,7 @@ export const medicalRecommendations: Recommendation[] = [
     "travelTime": "Varies",
     "travelTimeMinutes": 180,
     "location": "Multi-region Serbia",
-    "estimatedCost": "€800 - €3000",
+    "estimatedCost":"€960 - €3600",
     "preferredTransport": "Private Driver / Car",
     "coordinates": {
       "lat": 43.6231,
@@ -628,7 +628,7 @@ export const medicalRecommendations: Recommendation[] = [
     "travelTime": "1.5 hours",
     "travelTimeMinutes": 90,
     "location": "Fruška Gora",
-    "estimatedCost": "€180 - €500 per night",
+    "estimatedCost":"€220 - €600 per night",
     "preferredTransport": "Car / Private Transfer",
     "coordinates": {
       "lat": 45.15,

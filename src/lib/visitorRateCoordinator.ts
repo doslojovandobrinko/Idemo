@@ -141,7 +141,8 @@ function setLastRoleTimestamp(inquiryId: string, role: VisitorRequestRole, times
 export function canExecuteVisitorRequest(
   inquiryId: string,
   role: VisitorRequestRole,
-  kind: VisitorRequestKind
+  kind: VisitorRequestKind,
+  isPendingActive?: boolean
 ): { allowed: boolean; reason?: string; inFlightPromise?: Promise<any>; inFlightKind?: VisitorRequestKind } {
   if (!inquiryId) {
     return { allowed: false, reason: 'Missing inquiry ID' };
@@ -180,29 +181,33 @@ export function canExecuteVisitorRequest(
 
     if (role === 'background') {
       const lastRoleTime = getLastRoleTimestamp(inquiryId, 'background');
-      if (now - lastRoleTime < MIN_INTERVAL_STATUS_BACKGROUND_MS) {
+      if (!isPendingActive && now - lastRoleTime < MIN_INTERVAL_STATUS_BACKGROUND_MS) {
         return { allowed: false, reason: 'Background status sync cooldown active (8m)' };
       }
-      // If status was already retrieved in last 5m by any status call, skip background check
-      if (ledger.lastStatusAt && (now - ledger.lastStatusAt < 5 * 60 * 1000)) {
+      // If status was already retrieved in last 5m by any status call, skip background check unless active pending
+      if (!isPendingActive && ledger.lastStatusAt && (now - ledger.lastStatusAt < 5 * 60 * 1000)) {
         return { allowed: false, reason: 'Status already fresh' };
       }
     }
   } else if (kind === 'PROPOSAL') {
-    // PROPOSAL request: A recent STATUS check must NOT block a PROPOSAL fetch.
-    // Check if PROPOSAL was already fetched recently.
+    // PROPOSAL request: Check if PROPOSAL was already fetched recently (15s minimum spacing)
     if (ledger.lastProposalAt && (now - ledger.lastProposalAt < MIN_SAME_KIND_INTERVAL_MS)) {
       return { allowed: false, reason: 'Proposal fetched very recently' };
     }
 
     if (role === 'plan_auto') {
       const lastRoleTime = getLastRoleTimestamp(inquiryId, 'plan_auto');
-      if (now - lastRoleTime < MIN_INTERVAL_PROPOSAL_AUTO_MS) {
+      if (!isPendingActive && now - lastRoleTime < MIN_INTERVAL_PROPOSAL_AUTO_MS) {
         return { allowed: false, reason: 'PlanCard auto-sync cooldown active (3m)' };
       }
-      // If proposal was already fetched in last 2m, auto-sync is redundant
-      if (ledger.lastProposalAt && (now - ledger.lastProposalAt < 2 * 60 * 1000)) {
+      // If proposal was already fetched in last 2m, auto-sync is redundant unless active pending
+      if (!isPendingActive && ledger.lastProposalAt && (now - ledger.lastProposalAt < 2 * 60 * 1000)) {
         return { allowed: false, reason: 'Proposal already fresh' };
+      }
+    } else if (role === 'background') {
+      const lastRoleTime = getLastRoleTimestamp(inquiryId, 'background');
+      if (!isPendingActive && now - lastRoleTime < MIN_INTERVAL_PROPOSAL_AUTO_MS) {
+        return { allowed: false, reason: 'Background proposal sync cooldown active' };
       }
     } else if (role === 'plan_manual') {
       const lastRoleTime = getLastRoleTimestamp(inquiryId, 'plan_manual');
@@ -222,9 +227,10 @@ export async function executeCoordinatedVisitorRequest<T>(
   inquiryId: string,
   role: VisitorRequestRole,
   kind: VisitorRequestKind,
-  requestFn: () => Promise<T>
+  requestFn: () => Promise<T>,
+  isPendingActive?: boolean
 ): Promise<CoordinatedRequestResult<T>> {
-  let check = canExecuteVisitorRequest(inquiryId, role, kind);
+  let check = canExecuteVisitorRequest(inquiryId, role, kind, isPendingActive);
 
   // If another request for this inquiry is currently in flight:
   if (!check.allowed && check.inFlightPromise) {
@@ -258,7 +264,7 @@ export async function executeCoordinatedVisitorRequest<T>(
       }
 
       // 2. Re-evaluate eligibility for the requested kind under updated budget and freshness.
-      check = canExecuteVisitorRequest(inquiryId, role, kind);
+      check = canExecuteVisitorRequest(inquiryId, role, kind, isPendingActive);
       if (!check.allowed) {
         return {
           success: false,

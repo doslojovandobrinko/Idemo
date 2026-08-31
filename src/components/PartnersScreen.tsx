@@ -23,6 +23,10 @@ import {
   acceptPartnerOpportunity, 
   declinePartnerOpportunity, 
   proposePartnerAlternative,
+  viewPartnerOpportunity,
+  acceptPartnerCounterOffer,
+  declinePartnerCounterOffer,
+  withdrawPartnerOpportunity,
   changePartnerPin,
   OpportunityItem,
   getPartnerProfileContent,
@@ -79,15 +83,27 @@ interface PortalPartner {
 
 interface Inquiry {
   id: string;
+  matchId?: string;
+  inquiryId?: string;
   recId: string;
   recTitle: string;
   partnerId?: string;
   partnerName?: string;
-  status: 'Unmatched' | 'Dispatched Stage 1' | 'Dispatched Stage 2' | 'Locked / Accepted' | 'Alternative Proposed' | 'Answered / Completed' | 'Released' | 'Closed';
+  status: string;
+  matchStatus?: string;
+  inquiryStatus?: string;
+  rawMatchStatus?: string;
   visitorName: string;
   query: string;
   replies: string[];
   createdAt: string;
+  requestedStartAt?: string;
+  requestedEndAt?: string;
+  counterProposal?: {
+    proposedStartAt?: string;
+    proposedEndAt?: string;
+    notes?: string;
+  };
   geography?: string;
   language?: string;
   budget?: string;
@@ -830,37 +846,70 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
   const [authenticatedPartnerProfile, setAuthenticatedPartnerProfile] = useState<AuthenticatedPartnerProfile | null>(null);
 
+  const mapOpportunityToInquiry = (opp: OpportunityItem, partnerId: string, partnerName: string): Inquiry => {
+    const matchId = opp.match_id;
+    const matchStatus = opp.match_status || 'Dispatched Stage 1';
+    return {
+      id: matchId || opp.inquiry_id,
+      matchId,
+      inquiryId: opp.inquiry_id,
+      recId: opp.recommendation_id,
+      recTitle: opp.recommendation_title,
+      partnerId,
+      partnerName,
+      status: matchStatus,
+      matchStatus,
+      inquiryStatus: opp.inquiry_status,
+      rawMatchStatus: opp.match_status,
+      visitorName: opp.visitor_contact?.visitor_name || 'Verified Traveler',
+      query: opp.visitor_notes || 'Traveler requested direct partner assistance via IDEMO dispatch.',
+      replies: [],
+      createdAt: opp.created_at || new Date().toISOString(),
+      requestedStartAt: opp.requested_start_at,
+      requestedEndAt: opp.requested_end_at,
+      counterProposal: (opp as any).counter_proposal || (opp.match_status === 'counter_by_visitor' ? {
+        proposedStartAt: opp.requested_start_at,
+        notes: opp.visitor_notes
+      } : undefined),
+      geography: 'Belgrade & Serbia',
+      language: 'English',
+      subjectExpertise: opp.recommendation_title,
+      category: 'Tourist Guide',
+      dispatchStage: 1,
+    };
+  };
+
   const performSessionValidation = (session: any) => {
     setRestorationState('checking');
     Promise.all([
       fetchAuthenticatedPartnerProfile(),
       fetchPartnerOpportunities('new'),
-    ]).then(([profileRes, oppsRes]) => {
-      if (profileRes.success && profileRes.profile && oppsRes.success) {
+      fetchPartnerOpportunities('active'),
+    ]).then(([profileRes, newOppsRes, activeOppsRes]) => {
+      if (profileRes.success && profileRes.profile) {
         setAuthenticatedPartnerProfile(profileRes.profile);
         setActivePartnerId(profileRes.profile.id);
         setNetworkUnlocked(true);
 
-        // Map backend opportunities to inquiries for authenticated workspace
-        if (oppsRes.opportunities && oppsRes.opportunities.length > 0) {
-          const fetchedInquiries: Inquiry[] = oppsRes.opportunities.map(opp => ({
-            id: opp.match_id || opp.inquiry_id,
-            recId: opp.recommendation_id,
-            recTitle: opp.recommendation_title,
-            partnerId: profileRes.profile!.id,
-            partnerName: profileRes.profile!.name,
-            status: (opp.match_status as any) || 'Dispatched Stage 1',
-            visitorName: opp.visitor_contact?.visitor_name || 'Verified Traveler',
-            query: opp.visitor_notes || 'Traveler requested direct partner assistance via IDEMO dispatch.',
-            replies: [],
-            createdAt: opp.created_at || new Date().toISOString(),
-            geography: 'Belgrade & Serbia',
-            language: 'English',
-            subjectExpertise: opp.recommendation_title,
-            category: 'Tourist Guide',
-            dispatchStage: 1,
-          }));
+        const combined: OpportunityItem[] = [];
+        const seen = new Set<string>();
+        if (newOppsRes.success && newOppsRes.opportunities) {
+          for (const o of newOppsRes.opportunities) {
+            const k = o.match_id || o.inquiry_id;
+            if (!seen.has(k)) { seen.add(k); combined.push(o); }
+          }
+        }
+        if (activeOppsRes.success && activeOppsRes.opportunities) {
+          for (const o of activeOppsRes.opportunities) {
+            const k = o.match_id || o.inquiry_id;
+            if (!seen.has(k)) { seen.add(k); combined.push(o); }
+          }
+        }
+
+        if (combined.length > 0) {
+          const fetchedInquiries = combined.map(opp => mapOpportunityToInquiry(opp, profileRes.profile!.id, profileRes.profile!.name));
           setInquiries(fetchedInquiries);
+          window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
         }
 
         if (profileRes.profile.must_change_pin || session.mustChangePin) {
@@ -877,7 +926,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
         setAuthenticatedPartnerProfile(null);
         setPortalRole('guest');
         setRestorationState('guest');
-        if (oppsRes.error && oppsRes.error.includes('NETWORK_FAILURE')) {
+        if ((newOppsRes.error && newOppsRes.error.includes('NETWORK_FAILURE')) || (activeOppsRes.error && activeOppsRes.error.includes('NETWORK_FAILURE'))) {
           setPinError(isSr ? 'Mreža privremeno nedostupna.' : 'Backend temporarily unavailable.');
         } else {
           setPinError(profileRes.error || (isSr ? 'Sesija je nevažeća ili je istekla.' : 'Partner session invalid or expired.'));
@@ -950,6 +999,86 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   const [profContactEmail, setProfContactEmail] = useState<string>('');
   const [profContactSaving, setProfContactSaving] = useState<boolean>(false);
   const [profContactMsg, setProfContactMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+  const [withdrawConfirmId, setWithdrawConfirmId] = useState<string | null>(null);
+
+  const refreshOpportunities = async () => {
+    const session = partnerSessionStorage.getPartnerSession();
+    if (!session) return;
+    const [newOppsRes, activeOppsRes] = await Promise.all([
+      fetchPartnerOpportunities('new'),
+      fetchPartnerOpportunities('active'),
+    ]);
+    const combined: OpportunityItem[] = [];
+    const seen = new Set<string>();
+    if (newOppsRes.success && newOppsRes.opportunities) {
+      for (const o of newOppsRes.opportunities) {
+        const k = o.match_id || o.inquiry_id;
+        if (!seen.has(k)) { seen.add(k); combined.push(o); }
+      }
+    }
+    if (activeOppsRes.success && activeOppsRes.opportunities) {
+      for (const o of activeOppsRes.opportunities) {
+        const k = o.match_id || o.inquiry_id;
+        if (!seen.has(k)) { seen.add(k); combined.push(o); }
+      }
+    }
+    if (authenticatedPartnerProfile && combined.length > 0) {
+      const fetched = combined.map(opp => mapOpportunityToInquiry(opp, authenticatedPartnerProfile.id, authenticatedPartnerProfile.name));
+      setInquiries(fetched);
+      window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+    }
+  };
+
+  const handleViewOpportunity = async (matchId: string) => {
+    if (!matchId) return;
+    const res = await viewPartnerOpportunity(matchId);
+    if (res.success) {
+      setInquiries(prev => prev.map(inq => (inq.matchId === matchId || inq.id === matchId) ? { ...inq, matchStatus: 'viewed', rawMatchStatus: 'viewed' } : inq));
+      window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+    }
+  };
+
+  const handleAcceptCounter = async (matchId: string) => {
+    setActionLoading(prev => ({ ...prev, [matchId]: true }));
+    const res = await acceptPartnerCounterOffer(matchId);
+    setActionLoading(prev => ({ ...prev, [matchId]: false }));
+    if (res.success) {
+      triggerHaptic(12);
+      setInquiries(prev => prev.map(inq => (inq.matchId === matchId || inq.id === matchId) ? { ...inq, status: 'Locked / Accepted', matchStatus: 'responded' } : inq));
+      refreshOpportunities();
+    } else {
+      alert(res.error || 'Failed to accept counter proposal.');
+    }
+  };
+
+  const handleDeclineCounter = async (matchId: string) => {
+    setActionLoading(prev => ({ ...prev, [matchId]: true }));
+    const res = await declinePartnerCounterOffer(matchId);
+    setActionLoading(prev => ({ ...prev, [matchId]: false }));
+    if (res.success) {
+      triggerHaptic(8);
+      setInquiries(prev => prev.map(inq => (inq.matchId === matchId || inq.id === matchId) ? { ...inq, status: 'Released', matchStatus: 'declined' } : inq));
+      refreshOpportunities();
+    } else {
+      alert(res.error || 'Failed to decline counter proposal.');
+    }
+  };
+
+  const handleExecuteWithdraw = async (matchId: string) => {
+    setActionLoading(prev => ({ ...prev, [matchId]: true }));
+    const res = await withdrawPartnerOpportunity(matchId, 'Partner withdrawn proposal');
+    setActionLoading(prev => ({ ...prev, [matchId]: false }));
+    setWithdrawConfirmId(null);
+    if (res.success) {
+      triggerHaptic(10);
+      setInquiries(prev => prev.map(inq => (inq.matchId === matchId || inq.id === matchId) ? { ...inq, status: 'Released', matchStatus: 'withdrawn' } : inq));
+      refreshOpportunities();
+    } else {
+      alert(res.error || 'Failed to withdraw proposal.');
+    }
+  };
 
   const prevPartnerIdRef = useRef<string | null>(null);
 
@@ -1382,8 +1511,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
         }
       } else {
         triggerHaptic([60, 40]);
-        if (res.error && res.error.includes('NETWORK_FAILURE')) {
-          setPinError(isSr ? 'Mreža privremeno nedostupna.' : 'Backend temporarily unavailable.');
+        if (res.error && (res.error.includes('NETWORK_FAILURE') || res.error.includes('CONFIG_ERROR') || res.error.includes('Database connection URL missing'))) {
+          setPinError(isSr ? 'Mreža ili konfiguracija baze nije dostupna.' : 'Backend or database configuration unavailable.');
         } else {
           setPinError(isSr ? 'Kod partnera ili PIN nije ispravan.' : isZh ? '合作伙伴代码或 PIN 不正确。' : 'Partner code or PIN is incorrect.');
         }
@@ -1606,10 +1735,13 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   };
 
   // Modern Automated Dispatch Handlers
-  const handlePartnerAcceptInquiry = async (inqId: string, partnerId: string) => {
+  const handlePartnerAcceptInquiry = async (inqId: string, partnerId: string, customMessage?: string) => {
     triggerHaptic(20);
+    const typedText = (customMessage !== undefined ? customMessage : activeAnswerText[inqId])?.trim();
+    const messageToPersist = typedText || 'Accepted via Partner Portal';
+
     if (partnerSessionStorage.hasActiveSession()) {
-      const res = await acceptPartnerOpportunity(inqId, 'Accepted via Partner Portal');
+      const res = await acceptPartnerOpportunity(inqId, messageToPersist);
       if (!res.success) {
         alert(res.error || 'Failed to accept opportunity on server.');
         return;
@@ -1619,16 +1751,20 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     const partnerName = partner?.name || currentSimulatedPartner?.name || authenticatedPartnerProfile?.name || 'Partner';
     const updated = inquiries.map(inq => {
       if (inq.id === inqId) {
+        const existingReplies = inq.replies || [];
+        const hasMsg = existingReplies.includes(messageToPersist);
         return {
           ...inq,
           status: 'Locked / Accepted' as const,
           partnerId: partnerId,
-          partnerName: partnerName
+          partnerName: partnerName,
+          replies: hasMsg ? existingReplies : [...existingReplies, messageToPersist],
         };
       }
       return inq;
     });
     syncPortalState(partnersList, updated);
+    setActiveAnswerText(prev => ({ ...prev, [inqId]: '' }));
   };
 
   const handlePartnerPassInquiry = async (inqId: string, partnerId: string) => {
@@ -1669,14 +1805,31 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     setShowReleaseModalId(null);
   };
 
-  const handlePartnerSubmitAnswer = (inqId: string, partnerId: string, answerText: string) => {
-    if (!answerText.trim()) return;
+  const handlePartnerSubmitAnswer = async (inqId: string, partnerId: string, answerText: string) => {
+    const trimmed = answerText.trim();
+    if (!trimmed) return;
     triggerHaptic(25);
+
+    const targetInquiry = inquiries.find(inq => inq.id === inqId);
+    const isAlreadyAcceptedOnServer = targetInquiry && (
+      targetInquiry.status === 'Locked / Accepted' ||
+      targetInquiry.status === 'Answered / Completed' ||
+      targetInquiry.status === 'Alternative Proposed'
+    );
+
+    if (partnerSessionStorage.hasActiveSession() && !isAlreadyAcceptedOnServer) {
+      const res = await acceptPartnerOpportunity(inqId, trimmed);
+      if (!res.success) {
+        alert(res.error || 'Failed to accept opportunity on server.');
+        return;
+      }
+    }
+
     const updatedInquiries = inquiries.map(inq => {
       if (inq.id === inqId) {
         return {
           ...inq,
-          replies: [...inq.replies, answerText],
+          replies: [...(inq.replies || []), trimmed],
           status: 'Answered / Completed' as const
         };
       }
@@ -1689,6 +1842,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       return p;
     });
     syncPortalState(updatedPartners, updatedInquiries);
+    setActiveAnswerText(prev => ({ ...prev, [inqId]: '' }));
   };
 
   const handlePartnerProposeAlternative = async (inqId: string, partnerId: string, date: string, time: string, note: string) => {
@@ -3427,12 +3581,35 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                         const isAltFormOpen = altFormOpenId === inq.id;
 
                         return (
-                          <div key={inq.id} className="border border-[#2D3025]/10 rounded-2xl p-4 bg-[#FAF9F5]/60 space-y-3 shadow-xs">
+                          <div 
+                            key={inq.id} 
+                            onClick={() => {
+                              if (inq.matchStatus === 'offered' || inq.rawMatchStatus === 'offered') {
+                                handleViewOpportunity(inq.matchId || inq.id);
+                              }
+                            }}
+                            className="border border-[#2D3025]/10 rounded-2xl p-4 bg-[#FAF9F5]/60 space-y-3 shadow-xs"
+                          >
                             {/* Card Header */}
                             <div className="flex justify-between items-start gap-2">
-                              <div className="text-left">
-                                <h4 className="text-xs font-serif font-black text-brand-charcoal">{inq.visitorName}</h4>
-                                <p className="text-[9px] font-mono text-brand-charcoal/60 font-bold uppercase">{inq.recTitle}</p>
+                              <div className="text-left flex items-start gap-2">
+                                {(inq.matchStatus === 'offered' || inq.rawMatchStatus === 'offered') && (
+                                  <span 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleViewOpportunity(inq.matchId || inq.id);
+                                    }}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-mono font-bold bg-red-500/10 text-red-700 border border-red-500/20 cursor-pointer hover:bg-red-100 shrink-0 mt-0.5"
+                                    title="Unread opportunity"
+                                  >
+                                    <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
+                                    <span>NEW</span>
+                                  </span>
+                                )}
+                                <div>
+                                  <h4 className="text-xs font-serif font-black text-brand-charcoal">{inq.visitorName}</h4>
+                                  <p className="text-[9px] font-mono text-brand-charcoal/60 font-bold uppercase">{inq.recTitle}</p>
+                                </div>
                               </div>
                               <span className={`text-[8.5px] font-mono font-bold uppercase px-2.5 py-1 rounded-md border ${
                                 isPendingAction
@@ -3461,6 +3638,53 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             <div className="bg-white border border-[#2D3025]/10 rounded-xl p-3 text-[11.5px] text-brand-charcoal/90 leading-relaxed italic text-left shadow-2xs">
                               "{inq.query}"
                             </div>
+
+                            {/* Visitor Counter Proposal Section if present */}
+                            {(inq.matchStatus === 'counter_by_visitor' || inq.rawMatchStatus === 'counter_by_visitor' || (inq.counterProposal && (inq.counterProposal.proposedStartAt || inq.counterProposal.notes))) && (
+                              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2 text-left">
+                                <div className="flex items-center gap-1.5 text-amber-950 font-mono text-[9px] font-bold uppercase">
+                                  <Calendar size={13} className="text-amber-800 shrink-0" />
+                                  <span>{isSr ? 'Posetilac je predložio novi termin / uslove:' : 'Visitor Counter-Proposal:'}</span>
+                                </div>
+                                <div className="bg-white/90 p-2.5 rounded-lg text-xs font-sans text-brand-charcoal space-y-1 border border-amber-500/15">
+                                  {(inq.counterProposal?.proposedStartAt || inq.requestedStartAt) && (
+                                    <p className="font-mono text-[10.5px] font-black text-amber-950">
+                                      <strong>{isSr ? 'Predloženi termin:' : 'Proposed Date/Time:'}</strong>{' '}
+                                      {inq.counterProposal?.proposedStartAt || inq.requestedStartAt}
+                                    </p>
+                                  )}
+                                  {(inq.counterProposal?.notes || inq.query) && (
+                                    <p className="text-[11px] italic text-brand-charcoal/80">
+                                      "{inq.counterProposal?.notes || inq.query}"
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAcceptCounter(inq.matchId || inq.id);
+                                    }}
+                                    disabled={actionLoading[inq.id] || actionLoading[inq.matchId || '']}
+                                    className="flex-1 py-2 px-3 bg-emerald-700 hover:bg-emerald-800 text-white text-[9.5px] font-black uppercase tracking-wider rounded-xl cursor-pointer flex items-center justify-center gap-1.5 shadow-xs transition-colors disabled:opacity-50"
+                                  >
+                                    <CheckCircle2 size={13} />
+                                    <span>{isSr ? 'Prihvati kontra-predlog' : 'Accept Counter-Proposal'}</span>
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeclineCounter(inq.matchId || inq.id);
+                                    }}
+                                    disabled={actionLoading[inq.id] || actionLoading[inq.matchId || '']}
+                                    className="flex-1 py-2 px-3 bg-white border border-red-500/30 hover:bg-red-50 text-red-700 text-[9.5px] font-black uppercase tracking-wider rounded-xl cursor-pointer flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                                  >
+                                    <XCircle size={13} />
+                                    <span>{isSr ? 'Odbij kontra-predlog' : 'Decline Counter-Proposal'}</span>
+                                  </button>
+                                </div>
+                              </div>
+                            )}
 
                             {/* Metadata Grid */}
                             <div className="grid grid-cols-2 gap-2 text-[9px] font-mono text-brand-charcoal/70 bg-white/60 p-2.5 rounded-xl border border-[#2D3025]/5 text-left">
@@ -3498,6 +3722,20 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             {/* ACTION BUTTONS FOR PENDING OPPORTUNITY */}
                             {isPendingAction && (
                               <div className="pt-2 border-t border-[#2D3025]/10 space-y-2 text-left">
+                                <div className="space-y-1">
+                                  <label className="text-[8px] font-mono uppercase font-bold text-brand-charcoal/50 block">
+                                    {isSr ? 'Poruka / Uslovi posetiocu (opciono):' : 'Message / Offer to Visitor (Optional):'}
+                                  </label>
+                                  <textarea
+                                    rows={2}
+                                    placeholder={isSr ? 'Npr. "Čekam Vas kod Hrama St. Save u 10:00h"...' : 'e.g. "I will meet you at St Sava at 10:00"...'}
+                                    value={activeAnswerText[inq.id] || ''}
+                                    onChange={e => {
+                                      setActiveAnswerText(prev => ({ ...prev, [inq.id]: e.target.value }));
+                                    }}
+                                    className="w-full p-2.5 bg-white border border-[#2D3025]/15 rounded-xl text-xs font-sans text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F]/20 focus:outline-none"
+                                  />
+                                </div>
                                 <span className="text-[8px] font-mono uppercase font-bold text-brand-charcoal/50 block">
                                   {isSr ? 'Izaberite akciju za ovaj upit:' : 'Select Action for Opportunity:'}
                                 </span>
@@ -3640,6 +3878,55 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                     {isSr ? 'Pošalji ponudu' : 'Transmit Proposal'}
                                   </button>
                                 </div>
+                              </div>
+                            )}
+
+                            {/* WITHDRAW PROPOSAL ACTION FOR ACTIVE / PROPOSED OPPORTUNITIES */}
+                            {(isAlternative || inq.matchStatus === 'responded' || inq.matchStatus === 'proposed' || inq.matchStatus === 'counter_by_visitor') && inq.status !== 'Released' && (
+                              <div className="pt-2 border-t border-[#2D3025]/10 text-left">
+                                {withdrawConfirmId === (inq.matchId || inq.id) ? (
+                                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl space-y-2 text-left animate-fade-in">
+                                    <p className="text-[10px] font-medium text-red-950 leading-snug">
+                                      {isSr 
+                                        ? 'Povuci ponudu? Posetilac može biti povezan sa drugim odgovarajućim partnerom.' 
+                                        : 'Withdraw this proposal? The visitor may be connected with another suitable partner.'}
+                                    </p>
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleExecuteWithdraw(inq.matchId || inq.id);
+                                        }}
+                                        disabled={actionLoading[inq.id] || actionLoading[inq.matchId || '']}
+                                        className="px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white text-[9px] font-black uppercase tracking-wider rounded-lg cursor-pointer transition-colors disabled:opacity-50"
+                                      >
+                                        {isSr ? 'DA, POVUCI PONUDU' : 'YES, WITHDRAW'}
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setWithdrawConfirmId(null);
+                                        }}
+                                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-brand-charcoal text-[9px] font-bold uppercase rounded-lg cursor-pointer"
+                                      >
+                                        {isSr ? 'ODUSTANI' : 'CANCEL'}
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex justify-end">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setWithdrawConfirmId(inq.matchId || inq.id);
+                                      }}
+                                      className="text-[9px] font-mono font-bold uppercase text-red-700/70 hover:text-red-700 hover:underline cursor-pointer flex items-center gap-1"
+                                    >
+                                      <span>✕</span>
+                                      <span>{isSr ? 'POVUCI PONUDU' : 'WITHDRAW PROPOSAL'}</span>
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>

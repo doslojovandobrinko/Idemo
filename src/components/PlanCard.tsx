@@ -13,7 +13,7 @@ import { triggerHaptic, CONCIERGE_T } from '../App';
 import { LazyImage } from './LazyImage';
 import { safeStorage } from '../lib/safeStorage';
 import { getInquiryByRecommendationId, getVisitorCredential, removeVisitorCredential, removeInquiryRecordV2, removeInquiryByRecommendation, markProposalAsSeen, removeSeenProposal, isProposalSeen, updateInquiryServerStatusV2, getCachedProposalByServerId, updateInquiryCachedProposalV2, clearCachedProposalV2, getConfirmedArrangementByServerId, saveConfirmedArrangementV2, clearConfirmedArrangementV2 } from '../lib/inquiryStorage';
-import { submitInquiry, fetchActiveProposal, confirmProposal, declineProposal, requestAlternativeProposal, fetchPartnerIntroduction, PartnerIntroductionResult } from '../lib/inquiryService';
+import { submitInquiry, fetchActiveProposal, confirmProposal, declineProposal, cancelInquiry, counterProposal, requestAlternativeProposal, fetchPartnerIntroduction, PartnerIntroductionResult } from '../lib/inquiryService';
 import { executeCoordinatedVisitorRequest } from '../lib/visitorRateCoordinator';
 
 function getPartnerMonogram(name?: string): string {
@@ -167,6 +167,8 @@ const ARRANGE_TR: Record<string, any> = {
     inquiry_reference: "Inquiry Reference",
     regarding: "Regarding",
     time_placeholder: "e.g., 14:00, Morning, Evening...",
+    exhausted_partners: "All suitable partners are currently engaged. Please try again later.",
+    try_again: "TRY AGAIN",
   },
   sr: {
     arrange_this: "ARRANGE",
@@ -180,6 +182,8 @@ const ARRANGE_TR: Record<string, any> = {
     inquiry_reference: "Referenca upita",
     regarding: "Povodom",
     time_placeholder: "npr. 14:00, prepodne, veče...",
+    exhausted_partners: "Svi odgovarajući partneri su trenutno zauzeti. Molimo pokušajte ponovo kasnije.",
+    try_again: "POKUŠAJ PONOVO",
   },
   es: {
     arrange_this: "ARRANGE",
@@ -193,6 +197,8 @@ const ARRANGE_TR: Record<string, any> = {
     inquiry_reference: "Referencia de la solicitud",
     regarding: "Respecto a",
     time_placeholder: "Ej. 14:00, mañana, tarde...",
+    exhausted_partners: "Todos los socios adecuados están ocupados actualmente. Por favor, inténtelo de nuevo más tarde.",
+    try_again: "INTENTAR DE NUEVO",
   },
   de: {
     arrange_this: "ARRANGE",
@@ -206,6 +212,8 @@ const ARRANGE_TR: Record<string, any> = {
     inquiry_reference: "Anfrage-Referenz",
     regarding: "Betrifft",
     time_placeholder: "z.B. 14:00 Uhr, Vormittag, Abend...",
+    exhausted_partners: "Alle passenden Partner sind derzeit ausgebucht. Bitte versuchen Sie es später erneut.",
+    try_again: "ERNEUT VERSUCHEN",
   },
   ru: {
     arrange_this: "ARRANGE",
@@ -219,6 +227,8 @@ const ARRANGE_TR: Record<string, any> = {
     inquiry_reference: "Номер запроса",
     regarding: "По поводу",
     time_placeholder: "например, 14:00, утро, вечер...",
+    exhausted_partners: "Все подходящие партнеры в настоящее время заняты. Пожалуйста, попробуйте позже.",
+    try_again: "ПОПРОБОВАТЬ СНОВА",
   },
   zh: {
     arrange_this: "ARRANGE",
@@ -232,6 +242,8 @@ const ARRANGE_TR: Record<string, any> = {
     inquiry_reference: "查询参考号",
     regarding: "关于项目",
     time_placeholder: "例如：14:00、上午、晚上...",
+    exhausted_partners: "所有合适的合作伙伴目前均已忙碌。请稍后再试。",
+    try_again: "重试",
   }
 };
 
@@ -252,6 +264,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
 
   const [isExpanded, setIsExpanded] = React.useState(false);
   const [preferredTime, setPreferredTime] = React.useState('');
+  const [counterDateInput, setCounterDateInput] = React.useState('');
   const [notes, setNotes] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
   const [progress, setProgress] = React.useState(0);
@@ -306,14 +319,42 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
   const [introLoading, setIntroLoading] = React.useState(false);
   const [introData, setIntroData] = React.useState<PartnerIntroductionResult | null>(null);
 
+  const loadIntroduction = React.useCallback(async (serverId: string) => {
+    if (!serverId) return;
+    try {
+      setIntroLoading(true);
+      const res = await fetchPartnerIntroduction(serverId);
+      if (res) {
+        setIntroData(res);
+        if (res.success && res.introduction_available) {
+          setPassportPhotoError(false);
+        }
+      } else {
+        setIntroData({
+          success: false,
+          introduction_available: false,
+          error: 'Host profile unavailable.',
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to load partner introduction:', e);
+      setIntroData({
+        success: false,
+        introduction_available: false,
+        error: 'Failed to load partner introduction.',
+      });
+    } finally {
+      setIntroLoading(false);
+    }
+  }, []);
+
+  const lastIntroAttemptKeyRef = React.useRef<string>('');
+
   const handleToggleIntro = async () => {
     if (!introOpen) {
       setIntroOpen(true);
-      if (!introData && inquiry?.serverInquiryId) {
-        setIntroLoading(true);
-        const res = await fetchPartnerIntroduction(inquiry.serverInquiryId);
-        setIntroData(res);
-        setIntroLoading(false);
+      if ((!introData || !introData.introduction_available) && inquiry?.serverInquiryId && !introLoading) {
+        await loadIntroduction(inquiry.serverInquiryId);
       }
     } else {
       setIntroOpen(false);
@@ -391,7 +432,8 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
     }
 
     try {
-      const result = await executeCoordinatedVisitorRequest(serverId, role, 'PROPOSAL', () => fetchActiveProposal(serverId));
+      const isPendingActive = !isManual && !inquiry?.cachedProposal && !inquiry?.confirmedArrangement;
+      const result = await executeCoordinatedVisitorRequest(serverId, role, 'PROPOSAL', () => fetchActiveProposal(serverId), isPendingActive);
 
       if (result.executed) {
         if (result.success && result.data) {
@@ -443,7 +485,37 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
         }
       } else {
         // Request was skipped by coordinator due to in-flight lock, rate budget, or cooldown
-        if (isManual) {
+        const existing = getInquiryByRecommendationId(item.id, item.dbId);
+        if (existing?.server_inquiry_id) {
+          const cached = getCachedProposalByServerId(existing.server_inquiry_id);
+          if (cached) {
+            setActiveProposal({
+              success: true,
+              proposal_found: true,
+              match_id: cached.match_id,
+              response_id: cached.response_id,
+              response_type: cached.response_type,
+              message: cached.message,
+              proposed_start_at: cached.proposed_start_at,
+              proposed_end_at: cached.proposed_end_at,
+            });
+            const awaitingLabel = (existing as any).visitor_status_label || (language === 'sr' ? 'Čeka se vaša potvrda' : 'Waiting for confirmation');
+            setInquiry((prev: any) => prev ? {
+              ...prev,
+              visitorStatusLabel: awaitingLabel,
+              isAuthoritative: true,
+            } : prev);
+            if (isManual) {
+              setStatusFeedback(language === 'sr' ? 'Pristigla je ponuda partnera.' : 'A proposal from the partner is available.');
+            }
+          } else if (isManual) {
+            if (result.rateLimited) {
+              setStatusFeedback(language === 'sr' ? 'Status je proveren nedavno. Pokušajte ponovo za nekoliko minuta.' : 'Status was checked recently. Please try again in a few minutes.');
+            } else {
+              setStatusFeedback(language === 'sr' ? 'Status je osvežen nedavno.' : 'Status was updated recently.');
+            }
+          }
+        } else if (isManual) {
           if (result.rateLimited) {
             setStatusFeedback(language === 'sr' ? 'Status je proveren nedavno. Pokušajte ponovo za nekoliko minuta.' : 'Status was checked recently. Please try again in a few minutes.');
           } else {
@@ -476,6 +548,49 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
     };
   }, [inquiry?.serverInquiryId, syncServerStatusAndProposal]);
 
+  // Listen for background proposal state changes (e.g. dispatched by App.tsx background sync)
+  React.useEffect(() => {
+    const handleProposalStateChange = (event: Event) => {
+      try {
+        const detail = (event as CustomEvent)?.detail;
+        const targetServerId = detail?.inquiryId;
+        const currentServerId = inquiry?.serverInquiryId;
+
+        if (!targetServerId || (currentServerId && targetServerId === currentServerId)) {
+          const existing = getInquiryByRecommendationId(item.id, item.dbId);
+          if (existing?.server_inquiry_id) {
+            const cached = getCachedProposalByServerId(existing.server_inquiry_id);
+            if (cached) {
+              setActiveProposal({
+                success: true,
+                proposal_found: true,
+                match_id: cached.match_id,
+                response_id: cached.response_id,
+                response_type: cached.response_type,
+                message: cached.message,
+                proposed_start_at: cached.proposed_start_at,
+                proposed_end_at: cached.proposed_end_at,
+              });
+              const awaitingLabel = (existing as any).visitor_status_label || (language === 'sr' ? 'Čeka se vaša potvrda' : 'Waiting for confirmation');
+              setInquiry((prev: any) => prev ? {
+                ...prev,
+                visitorStatusLabel: awaitingLabel,
+                isAuthoritative: true,
+              } : prev);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to handle proposal state change:', e);
+      }
+    };
+
+    window.addEventListener('idemo_proposal_state_change', handleProposalStateChange);
+    return () => {
+      window.removeEventListener('idemo_proposal_state_change', handleProposalStateChange);
+    };
+  }, [inquiry?.serverInquiryId, item.id, item.dbId, language]);
+
   // Render-gated proposal seen effect:
   // Runs only when activeProposal is populated, confirmed found, visitor credential exists, and serverInquiryId is available
   React.useEffect(() => {
@@ -493,6 +608,20 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
       }
     }
   }, [activeProposal, inquiry?.serverInquiryId]);
+
+  // Auto-fetch partner passport & introduction when proposal is active or arrangement is confirmed
+  React.useEffect(() => {
+    const serverId = inquiry?.serverInquiryId;
+    if (!serverId) return;
+
+    const attemptKey = `${serverId}_${activeProposal?.match_id || 'confirmed'}`;
+    const needsFetch = (!introData || !introData.introduction_available) && lastIntroAttemptKeyRef.current !== attemptKey;
+
+    if ((activeProposal?.proposal_found || confirmedArrangement) && needsFetch && !introLoading) {
+      lastIntroAttemptKeyRef.current = attemptKey;
+      loadIntroduction(serverId);
+    }
+  }, [inquiry?.serverInquiryId, activeProposal?.proposal_found, activeProposal?.match_id, !!confirmedArrangement, introData, introLoading, loadIntroduction]);
 
   const handleCheckStatus = async () => {
     const serverId = inquiry?.serverInquiryId;
@@ -538,6 +667,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
         match_id: activeProposal.match_id,
         partner_name: resolvedIntro?.partner_name || 'Verified Partner',
         partner_code: resolvedIntro?.partner_code || 'IDM-PTR',
+        photo_url: resolvedIntro?.photo_url || null,
         contact_phone: resolvedIntro?.contact_phone || null,
         contact_email: resolvedIntro?.contact_email || null,
         introduction: resolvedIntro?.introduction || null,
@@ -570,6 +700,35 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
     setActionInProgress(false);
 
     if (res.success) {
+      // Rejection of current candidate routes to next eligible candidate
+      const label = language === 'sr' ? 'Tražimo sledećeg dostupnog partnera' : 'Finding suitable local assistance';
+      setInquiry((prev: any) => prev ? {
+        ...prev,
+        status: 'matching',
+        visitorStatusLabel: label,
+      } : prev);
+      updateInquiryServerStatusV2(serverId, label);
+      setActiveProposal(null);
+      clearCachedProposalV2(serverId);
+      removeSeenProposal(serverId);
+      window.dispatchEvent(new Event('idemo_proposal_state_change'));
+      setProposalReason('');
+      setStatusFeedback(language === 'sr' ? 'Partner ponuda odbijena. Tražimo sledećeg dostupnog partnera...' : 'Partner proposal declined. Finding next available local partner...');
+    } else {
+      setStatusFeedback(res.error || 'Failed to decline partner proposal.');
+    }
+  };
+
+  const handleCancelInquiry = async () => {
+    const serverId = inquiry?.serverInquiryId;
+    if (!serverId) return;
+    triggerHaptic(10);
+    setActionInProgress(true);
+
+    const res = await cancelInquiry(serverId, proposalReason);
+    setActionInProgress(false);
+
+    if (res.success) {
       removeInquiryRecordV2(serverId);
       removeSeenProposal(serverId);
       window.dispatchEvent(new Event('idemo_proposal_state_change'));
@@ -578,7 +737,84 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
       setProposalReason('');
       setStatusFeedback(language === 'sr' ? 'Zahtev je otkazan.' : 'Inquiry request canceled.');
     } else {
-      setStatusFeedback(res.error || 'Failed to decline proposal.');
+      setStatusFeedback(res.error || 'Failed to cancel inquiry.');
+    }
+  };
+
+  const handleCounterProposal = async () => {
+    const serverId = inquiry?.serverInquiryId;
+    if (!serverId || !activeProposal?.match_id) return;
+
+    if (activeProposal.response_type !== 'propose_alternative') {
+      setStatusFeedback(language === 'sr' ? 'Kontra-predlog je moguć samo kada partner predloži zamenski termin.' : 'Counter proposal is only permitted when the partner proposes an alternative date.');
+      return;
+    }
+
+    if (activeProposal.has_countered) {
+      setStatusFeedback(language === 'sr' ? 'Dozvoljen je maksimalno jedan kontra-predlog po ponudi.' : 'Maximum of one counter proposal permitted per partner offer.');
+      return;
+    }
+
+    if (!counterDateInput) {
+      setStatusFeedback(language === 'sr' ? 'Molimo izaberite novi datum za kontra-predlog.' : 'Please select a date for your counter proposal.');
+      return;
+    }
+
+    const selectedDate = counterDateInput;
+
+    triggerHaptic(10);
+    setActionInProgress(true);
+
+    const startIso = new Date(`${selectedDate}T${preferredTime || '12:00'}:00Z`).toISOString();
+    const endIso = new Date(new Date(startIso).getTime() + 2 * 3600 * 1000).toISOString();
+
+    const res = await counterProposal(serverId, activeProposal.match_id, startIso, endIso, proposalReason);
+    setActionInProgress(false);
+
+    if (res.success) {
+      setActiveProposal((prev: any) => prev ? { ...prev, has_countered: true } : prev);
+      setProposalReason('');
+      setStatusFeedback(language === 'sr' ? 'Kontra-predlog datuma uspešno poslat partneru na razmatranje.' : 'Counter date proposal sent to partner for review.');
+    } else {
+      setStatusFeedback(res.error || 'Failed to submit counter proposal.');
+    }
+  };
+
+  const handleTryAgain = async () => {
+    triggerHaptic(15);
+    setActionInProgress(true);
+    setStatusFeedback(language === 'sr' ? 'Kreiramo novi upit za traženje partnera...' : 'Creating new inquiry to search for available partners...');
+
+    const isEmail = contactInfoInput.includes('@');
+    const res = await submitInquiry({
+      recommendation: item,
+      visitorName: visitorNameInput.trim() || 'Visitor',
+      email: isEmail ? contactInfoInput.trim() : undefined,
+      phoneNumber: !isEmail && contactInfoInput.trim().length > 0 ? contactInfoInput.trim() : '+381621873260',
+      visitorNotes: notes.trim() || 'Arrangement retry',
+      preferredDate: counterDateInput || (item.scheduledDate ? item.scheduledDate.split('T')[0] : new Date().toISOString().split('T')[0]),
+      preferredTime: preferredTime.trim() || 'Anytime',
+    });
+
+    setActionInProgress(false);
+
+    if (res.success && res.referenceCode && res.inquiryId) {
+      setInquiry({
+        itemId: item.id,
+        serverInquiryId: res.inquiryId,
+        status: "Assistance Requested",
+        visitorStatusLabel: language === 'sr' ? 'Tražimo dostupnog lokalnog partnera' : 'Finding suitable local assistance',
+        referenceCode: res.referenceCode,
+        preferredTime: preferredTime,
+        notes: notes,
+        timestamp: new Date().toISOString(),
+        isAuthoritative: true,
+      });
+      setActiveProposal(null);
+      clearCachedProposalV2(res.inquiryId);
+      setStatusFeedback(language === 'sr' ? 'Novi upit je uspešno kreiran.' : 'New inquiry created successfully.');
+    } else {
+      setStatusFeedback(res.error || (language === 'sr' ? 'Greška pri kreiranju novog upita.' : 'Failed to create new inquiry.'));
     }
   };
 
@@ -611,14 +847,6 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
   };
 
   const handleRemoveFromDevice = () => {
-    const confirmMsg = language === 'sr'
-      ? 'Ova radnja uklanja lokalni zapis i pristupni ključ sa ovog uređaja. Sam upit na serveru NEĆE biti otkazan. Da li ste sigurni?'
-      : 'This removes the local record and access credential from this device. The inquiry on the server will NOT be canceled. Are you sure?';
-
-    if (!window.confirm(confirmMsg)) {
-      return;
-    }
-
     triggerHaptic(10);
     const serverId = inquiry?.serverInquiryId;
     const refCode = inquiry?.referenceCode;
@@ -637,6 +865,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
     setConfirmedArrangement(null);
     setStatusFeedback(null);
     setIsExpanded(false);
+    onRemove?.(item.id);
   };
 
   
@@ -1225,6 +1454,23 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                 </p>
               )}
 
+              {(inquiry.status === 'needs_assistance' || inquiry.visitorStatusLabel === 'needs_assistance' || statusFeedback?.includes('engaged') || statusFeedback?.includes('zauzeti')) && (
+                <div className="space-y-2">
+                  <p className="text-[9px] font-medium text-amber-950 text-center bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20 leading-relaxed font-sans">
+                    {ARRANGE_TR[language]?.exhausted_partners || ARRANGE_TR['en'].exhausted_partners}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleTryAgain}
+                    disabled={actionInProgress}
+                    className="w-full h-9 bg-[#C5A059] hover:bg-[#C5A059]/90 text-white text-[9px] uppercase tracking-wider font-black rounded-xl shadow-sm flex items-center justify-center gap-1.5 cursor-pointer transition-all disabled:opacity-50"
+                  >
+                    <span>🔄</span>
+                    <span>{ARRANGE_TR[language]?.try_again || ARRANGE_TR['en'].try_again}</span>
+                  </button>
+                </div>
+              )}
+
               {/* Active Proposal Card if available */}
               {activeProposal && activeProposal.proposal_found && !confirmedArrangement && (
                 <div className="p-3 bg-white rounded-xl border-2 border-[#3E5037]/30 space-y-2.5 shadow-sm">
@@ -1252,40 +1498,156 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                     </div>
                   )}
 
-                  {/* Reason input for decline / alternative */}
-                  <input
-                    type="text"
-                    placeholder={language === 'sr' ? 'Napomena (opciono)...' : 'Reason / Note (optional)...'}
-                    value={proposalReason}
-                    onChange={(e) => setProposalReason(e.target.value)}
-                    className="w-full text-[9px] px-2.5 py-1.5 rounded-lg border border-brand-charcoal/15 bg-brand-cream/30 focus:outline-none focus:border-[#3E5037]"
-                  />
+                  {/* Progressive Disclosure: Meet your host / Dozvolite da se predstavim (Positioned before decision actions) */}
+                  <div className="pt-1 border-t border-brand-charcoal/10">
+                    <button
+                      type="button"
+                      onClick={handleToggleIntro}
+                      className="w-full py-2 px-3 bg-[#FAF9F5] hover:bg-[#F3EFE6] text-[#3E5037] text-[10px] font-serif font-bold italic rounded-xl border border-[#C5A059]/40 flex items-center justify-between cursor-pointer transition-all shadow-2xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 rounded-full overflow-hidden border border-[#C5A059] bg-[#3E5037]/10 flex items-center justify-center text-[8px] font-bold">
+                          {introData?.photo_url && !passportPhotoError ? (
+                            <img
+                              src={introData.photo_url}
+                              alt="Host"
+                              referrerPolicy="no-referrer"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span>{introData?.partner_name ? getPartnerMonogram(introData.partner_name) : '👤'}</span>
+                          )}
+                        </div>
+                        <span>
+                          {language === 'sr' ? 'Upoznajte vašeg domaćina (Dozvolite da se predstavim)' : 'Meet your host (Allow me to introduce myself)'}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono font-normal text-[#C5A059]">{introOpen ? '▲' : '▼'}</span>
+                    </button>
+
+                    {introOpen && (
+                      <div className="mt-2 p-3 bg-white rounded-xl border border-[#C5A059]/40 space-y-2.5 text-left shadow-xs">
+                        {introLoading ? (
+                          <p className="text-[9px] font-mono text-[#8C8A7D] animate-pulse">
+                            {language === 'sr' ? 'Učitavanje profila domaćina...' : 'Loading host profile...'}
+                          </p>
+                        ) : introData && introData.introduction_available ? (
+                          <div className="space-y-2.5">
+                            <div className="flex items-center justify-between border-b border-[#3E5037]/10 pb-1.5">
+                              <span className="text-[10.5px] font-bold font-serif text-[#1E2E20]">
+                                {introData.partner_name}
+                              </span>
+                              {introData.partner_code && (
+                                <span className="text-[8px] font-mono font-bold text-[#C5A059] bg-[#FAF9F5] px-1.5 py-0.5 rounded border border-[#C5A059]/30">
+                                  {introData.partner_code}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-start gap-3">
+                              <div className="w-14 h-14 rounded-full overflow-hidden flex-shrink-0 border-2 border-[#C5A059] bg-[#3E5037]/10 flex items-center justify-center shadow-sm">
+                                {introData.photo_url && !passportPhotoError ? (
+                                  <img
+                                    src={introData.photo_url || undefined}
+                                    alt={introData.partner_name || 'Partner Profile'}
+                                    referrerPolicy="no-referrer"
+                                    onError={() => setPassportPhotoError(true)}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <span className="text-xs font-serif font-black text-[#3E5037] tracking-wider">
+                                    {getPartnerMonogram(introData.partner_name)}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[9.5px] text-[#1E2E20] leading-relaxed font-sans italic bg-[#FAF9F5] p-2.5 rounded-lg border border-[#E5E3DB]">
+                                  "{introData.introduction}"
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Pre-confirmation privacy safeguard note */}
+                            <div className="p-2 bg-[#FAF9F5] rounded-lg border border-[#E5E3DB] flex items-start gap-1.5 text-[8px] text-[#555348] font-sans">
+                              <span className="text-xs">🔒</span>
+                              <span>
+                                {language === 'sr'
+                                  ? 'Direktni kontakt podaci (WhatsApp, telefon, email) biće vam otključani odmah nakon što potvrdite ponudu.'
+                                  : 'Direct contact channels (WhatsApp, phone, email) will unlock immediately once you confirm the proposal.'}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-[9px] font-sans text-[#8C8A7D] italic">
+                            {language === 'sr' ? 'Profil domaćina je trenutno nedostupan.' : 'Host profile is temporarily unavailable.'}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Counter date & note inputs ONLY when partner proposed alternative date */}
+                  {activeProposal.response_type === 'propose_alternative' && (
+                    <>
+                      <div className="space-y-1 bg-brand-cream/40 p-2 rounded-lg border border-brand-charcoal/10">
+                        <label className="block text-[8px] font-bold text-brand-charcoal/70 uppercase">
+                          {language === 'sr' ? 'Datum za kontra-predlog (obavezno za kontra-termin):' : 'Counter Proposal Date (required for counter offer):'}
+                        </label>
+                        <input
+                          type="date"
+                          value={counterDateInput}
+                          onChange={(e) => setCounterDateInput(e.target.value)}
+                          className="w-full text-[9px] px-2.5 py-1.5 rounded-lg border border-brand-charcoal/20 bg-white focus:outline-none focus:border-[#3E5037]"
+                        />
+                      </div>
+
+                      <input
+                        type="text"
+                        placeholder={language === 'sr' ? 'Napomena za partnera (opciono)...' : 'Note for partner (optional)...'}
+                        value={proposalReason}
+                        onChange={(e) => setProposalReason(e.target.value)}
+                        className="w-full text-[9px] px-2.5 py-1.5 rounded-lg border border-brand-charcoal/15 bg-brand-cream/30 focus:outline-none focus:border-[#3E5037]"
+                      />
+                    </>
+                  )}
 
                   {/* Proposal Action Buttons */}
-                  <div className="grid grid-cols-3 gap-1.5 pt-1">
+                  <div className="grid grid-cols-2 gap-1.5 pt-1">
                     <button
                       type="button"
                       onClick={handleConfirmProposal}
                       disabled={actionInProgress}
                       className="h-8 bg-[#3E5037] hover:bg-[#3E5037]/90 text-white text-[8px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer disabled:opacity-50"
                     >
-                      {language === 'sr' ? 'POTVRDI' : 'CONFIRM'}
+                      {language === 'sr' ? 'POTVRDI PONUDU' : 'CONFIRM PROPOSAL'}
                     </button>
-                    <button
-                      type="button"
-                      onClick={handleRequestAlternative}
-                      disabled={actionInProgress}
-                      className="h-8 bg-brand-charcoal/10 hover:bg-brand-charcoal/20 text-brand-charcoal text-[8px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      {language === 'sr' ? 'IZMENA' : 'ALTERNATIVE'}
-                    </button>
+                    {activeProposal.response_type === 'propose_alternative' && (
+                      <button
+                        type="button"
+                        onClick={handleCounterProposal}
+                        disabled={actionInProgress || !!activeProposal.has_countered}
+                        className="h-8 bg-[#C5A059]/20 hover:bg-[#C5A059]/30 text-[#6B5120] border border-[#C5A059]/40 text-[8px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {activeProposal.has_countered
+                          ? (language === 'sr' ? 'KONTRA-TERMIN POSLAT' : 'COUNTER SENT')
+                          : (language === 'sr' ? 'KONTRA-TERMIN' : 'COUNTER DATE')}
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={handleDeclineProposal}
                       disabled={actionInProgress}
+                      className="h-8 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[8px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {language === 'sr' ? 'ODBIJ PARTNERA (TRAŽI SL.)' : 'REJECT PARTNER (NEXT)'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelInquiry}
+                      disabled={actionInProgress}
                       className="h-8 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[8px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer disabled:opacity-50"
                     >
-                      {language === 'sr' ? 'ODBIJ' : 'DECLINE'}
+                      {language === 'sr' ? 'OTKAŽI MOG ZAHTEV' : 'CANCEL INQUIRY'}
                     </button>
                   </div>
                 </div>
@@ -1309,10 +1671,11 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                   {/* Partner Identity Passport */}
                   <div className="flex items-center gap-3 bg-[#FAF9F5] p-2.5 rounded-xl border border-[#E5E3DB]">
                     <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 border-2 border-[#C5A059] bg-[#3E5037]/10 flex items-center justify-center shadow-sm">
-                      {introData?.photo_url && !passportPhotoError ? (
+                      {(introData?.photo_url || confirmedArrangement.photo_url) && !passportPhotoError ? (
                         <img
-                          src={introData.photo_url || undefined}
+                          src={introData?.photo_url || confirmedArrangement.photo_url || undefined}
                           alt={confirmedArrangement.partner_name}
+                          referrerPolicy="no-referrer"
                           onError={() => setPassportPhotoError(true)}
                           className="w-full h-full object-cover"
                         />
@@ -1331,9 +1694,9 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                           {confirmedArrangement.partner_code}
                         </span>
                       </div>
-                      {confirmedArrangement.introduction && (
+                      {(confirmedArrangement.introduction || introData?.introduction) && (
                         <p className="text-[9px] text-[#555348] line-clamp-2 italic mt-0.5 font-sans">
-                          "{confirmedArrangement.introduction}"
+                          "{confirmedArrangement.introduction || introData?.introduction}"
                         </p>
                       )}
                     </div>
@@ -1416,79 +1779,6 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                       </div>
                     )}
                   </div>
-                </div>
-              )}
-
-              {/* Progressive Disclosure: Let me introduce myself / Dozvolite da se predstavim */}
-              {!confirmedArrangement && (
-                <div className="pt-1">
-                  <button
-                    type="button"
-                    onClick={handleToggleIntro}
-                    className="w-full py-1.5 px-3 bg-white/60 hover:bg-white text-[#3E5037] text-[9.5px] font-serif font-bold italic rounded-lg border border-[#3E5037]/20 flex items-center justify-between cursor-pointer transition-all"
-                  >
-                    <span>{language === 'sr' ? 'Dozvolite da se predstavim' : 'Let me introduce myself'}</span>
-                    <span className="text-[10px] font-mono font-normal">{introOpen ? '▲' : '▼'}</span>
-                  </button>
-
-                  {introOpen && (
-                    <div className="mt-2 p-3 bg-white rounded-xl border border-[#3E5037]/20 space-y-2.5 text-left">
-                      {introLoading ? (
-                        <p className="text-[9px] font-mono text-[#8C8A7D] animate-pulse">
-                          {language === 'sr' ? 'Učitavanje predstavljanja...' : 'Loading introduction...'}
-                        </p>
-                      ) : introData && introData.introduction_available ? (
-                        <div className="space-y-2.5">
-                          <div className="flex items-center justify-between border-b border-[#3E5037]/10 pb-1.5">
-                            <span className="text-[9.5px] font-bold font-serif text-[#1E2E20]">
-                              {introData.partner_name}
-                            </span>
-                            {introData.partner_code && (
-                              <span className="text-[8px] font-mono text-[#8C8A7D]">
-                                {introData.partner_code}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 border-2 border-[#C5A059] bg-[#3E5037]/10 flex items-center justify-center shadow-sm">
-                              {introData.photo_url && !passportPhotoError ? (
-                                <img
-                                  src={introData.photo_url || undefined}
-                                  alt={introData.partner_name || 'Partner Profile'}
-                                  onError={() => setPassportPhotoError(true)}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <span className="text-xs font-serif font-black text-[#3E5037] tracking-wider">
-                                  {getPartnerMonogram(introData.partner_name)}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[9.5px] text-[#1E2E20] leading-relaxed font-sans italic bg-[#FAF9F5] p-2 rounded-lg border border-[#E5E3DB]">
-                                "{introData.introduction}"
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Pre-confirmation security notice */}
-                          <div className="p-2 bg-[#FAF9F5] rounded-lg border border-[#E5E3DB] flex items-start gap-1.5 text-[8px] text-[#555348] font-sans">
-                            <span className="text-xs">🔒</span>
-                            <span>
-                              {language === 'sr'
-                                ? 'Kontakt podaci partnera (telefon, WhatsApp, email) biće otključani automatski nakon što potvrdite ponudu.'
-                                : 'Partner contact details (phone, WhatsApp, email) will be unlocked automatically once you confirm the proposal.'}
-                            </span>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-[9px] font-sans text-[#8C8A7D] italic">
-                          {language === 'sr' ? 'Predstavljanje trenutno nije dostupno.' : 'Introduction not available.'}
-                        </p>
-                      )}
-                    </div>
-                  )}
                 </div>
               )}
             </div>

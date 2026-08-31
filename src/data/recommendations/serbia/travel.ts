@@ -19,7 +19,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "1 hour",
     "travelTimeMinutes": 60,
     "location": "Near Novi Sad",
-    "estimatedCost": "â‚¬10 - â‚¬80",
+    "estimatedCost":"€20 - €100",
     "preferredTransport": "Car / Train",
     "website": "https://www.karlovci.org.rs",
     "coordinates": {
@@ -60,7 +60,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "3 hours",
     "travelTimeMinutes": 180,
     "location": "Zlakusa, UĹľice",
-    "estimatedCost": "â‚¬10 - â‚¬30",
+    "estimatedCost":"€20 - €40",
     "preferredTransport": "Car",
     "coordinates": {
       "lat": 43.8118,
@@ -100,7 +100,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "1 - 1.5 hours",
     "travelTimeMinutes": 75,
     "location": "FruĹˇka Gora National Park",
-    "estimatedCost": "â‚¬15 - â‚¬250",
+    "estimatedCost":"€20 - €300",
     "preferredTransport": "Car",
     "website": "https://npfruskagora.rs",
     "coordinates": {
@@ -141,7 +141,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "3.5 - 4 hours",
     "travelTimeMinutes": 220,
     "location": "Zlatibor District",
-    "estimatedCost": "â‚¬10 - â‚¬300",
+    "estimatedCost":"€20 - €360",
     "preferredTransport": "Car / Heritage Train",
     "website": "https://www.parkprirodemokragora.org.rs",
     "coordinates": {
@@ -182,7 +182,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "4 hours",
     "travelTimeMinutes": 240,
     "location": "Mokra Gora",
-    "estimatedCost": "â‚¬5 - â‚¬250",
+    "estimatedCost":"€10 - €300",
     "preferredTransport": "Car",
     "website": "https://mecavnik.info",
     "coordinates": {
@@ -223,7 +223,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "2.5 - 3 hours",
     "travelTimeMinutes": 160,
     "location": "Northern Vojvodina",
-    "estimatedCost": "â‚¬70 - â‚¬220",
+    "estimatedCost":"€90 - €270",
     "preferredTransport": "Car / Train",
     "website": "https://www.visitsubotica.rs",
     "coordinates": {
@@ -264,7 +264,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "2 hours",
     "travelTimeMinutes": 120,
     "location": "Western Serbia",
-    "estimatedCost": "â‚¬50 - â‚¬180",
+    "estimatedCost":"€60 - €220",
     "preferredTransport": "Car",
     "website": "https://skiresortdivcibare.rs",
     "coordinates": {
@@ -305,7 +305,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "1 - 2 hours",
     "travelTimeMinutes": 90,
     "location": "Central Serbia",
-    "estimatedCost": "â‚¬80 - â‚¬300",
+    "estimatedCost":"€100 - €360",
     "preferredTransport": "Private Driver / Car",
     "website": "https://uzs.rs",
     "coordinates": {
@@ -346,7 +346,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "4 hours",
     "travelTimeMinutes": 240,
     "location": "Southern Serbia",
-    "estimatedCost": "â‚¬80 - â‚¬500+ per night",
+    "estimatedCost":"€100 - €600+ per night",
     "preferredTransport": "Car / Private Transfer",
     "website": "https://infokop.net",
     "coordinates": {
@@ -387,7 +387,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "4 hours",
     "travelTimeMinutes": 240,
     "location": "Stara Planina Region",
-    "estimatedCost": "â‚¬20 - â‚¬120",
+    "estimatedCost":"€30 - €150",
     "preferredTransport": "Car",
     "website": "https://visittaraplanina.com",
     "coordinates": {
@@ -428,7 +428,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "45 minutes",
     "travelTimeMinutes": 45,
     "location": "Avala, Belgrade Outskirts",
-    "estimatedCost": "â‚¬3 - â‚¬8",
+    "estimatedCost":"€5 - €10",
     "preferredTransport": "Taxi / Car",
     "website": "https://avalskitoranj.rs",
     "coordinates": {
@@ -469,7 +469,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "30-45 minutes",
     "travelTimeMinutes": 45,
     "location": "SurÄŤin, Belgrade",
-    "estimatedCost": "Ticket dependent",
+    "estimatedCost":"Ticket dependent",
     "preferredTransport": "EXPO Shuttle / Taxi",
     "website": "https://expo2027belgrade.rs",
     "coordinates": {
@@ -510,7 +510,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "Varies (Belgrade shops or Zlatibor)",
     "travelTimeMinutes": 20,
     "location": "Multiple / Sirogojno",
-    "estimatedCost": "â‚¬80 - â‚¬350",
+    "estimatedCost":"€100 - €420",
     "preferredTransport": "On Foot / Car",
     "website": "https://sirogojno-style.com",
     "coordinates": {
@@ -551,7 +551,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 10,
     "location": "DorÄ‡ol, Belgrade",
-    "estimatedCost": "â‚¬10 - â‚¬40",
+    "estimatedCost":"€20 - €50",
     "preferredTransport": "On Foot / Taxi",
     "website": "https://festival.bitef.rs",
     "coordinates": {
@@ -592,7 +592,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "1 hour (Fast train)",
     "travelTimeMinutes": 60,
     "location": "Novi Sad Square",
-    "estimatedCost": "â‚¬10 - â‚¬35",
+    "estimatedCost":"€20 - €50",
     "preferredTransport": "Train (Soko)",
     "website": "https://www.snp.org.rs",
     "coordinates": {
@@ -633,7 +633,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "30 minutes",
     "travelTimeMinutes": 30,
     "location": "PanÄŤevo",
-    "estimatedCost": "â‚¬30 - â‚¬200",
+    "estimatedCost":"€40 - €240",
     "preferredTransport": "Bus / Taxi",
     "coordinates": {
       "lat": 44.8739,
@@ -673,7 +673,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "3 hours",
     "travelTimeMinutes": 180,
     "location": "Danube Corridor / Eastern Serbia",
-    "estimatedCost": "â‚¬80 - â‚¬280 per day",
+    "estimatedCost":"€100 - €340 per day",
     "preferredTransport": "Car + Cycling segments",
     "website": "https://eurovelo.com",
     "coordinates": {
@@ -714,7 +714,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 15,
     "location": "Belgrade",
-    "estimatedCost": "â‚¬20 - â‚¬100",
+    "estimatedCost":"€30 - €120",
     "preferredTransport": "Taxi / Walking",
     "coordinates": {
       "lat": 44.8184,
@@ -768,7 +768,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 15,
     "location": "Silosi Belgrade",
-    "estimatedCost": "Free - â‚¬20",
+    "estimatedCost":"Free - €30",
     "preferredTransport": "Taxi / CarGo",
     "coordinates": {
       "lat": 44.8236,
@@ -822,7 +822,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "3.5 - 4 hours",
     "travelTimeMinutes": 220,
     "location": "Pirot & Stara Planina",
-    "estimatedCost": "Moderate",
+    "estimatedCost":"Moderate",
     "preferredTransport": "Car",
     "coordinates": {
       "lat": 43.1531,
@@ -874,7 +874,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "3 hours",
     "travelTimeMinutes": 180,
     "location": "ZajeÄŤar & Negotin Valley",
-    "estimatedCost": "Moderate",
+    "estimatedCost":"Moderate",
     "preferredTransport": "Car",
     "coordinates": {
       "lat": 43.8992,
@@ -926,7 +926,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "3.5 hours",
     "travelTimeMinutes": 210,
     "location": "Tara National Park & Bajina BaĹˇta",
-    "estimatedCost": "Moderate",
+    "estimatedCost":"Moderate",
     "preferredTransport": "Car",
     "coordinates": {
       "lat": 43.9111,
@@ -979,7 +979,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "2.5 hours",
     "travelTimeMinutes": 150,
     "location": "NiĹˇ & Mediana",
-    "estimatedCost": "Moderate",
+    "estimatedCost":"Moderate",
     "preferredTransport": "Car",
     "coordinates": {
       "lat": 43.3209,
@@ -1032,7 +1032,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "3.5 hours",
     "travelTimeMinutes": 210,
     "location": "KurĹˇumlija & Radan Mountain",
-    "estimatedCost": "Moderate",
+    "estimatedCost":"Moderate",
     "preferredTransport": "Car",
     "coordinates": {
       "lat": 42.9933,
@@ -1085,7 +1085,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "1.5 hours",
     "travelTimeMinutes": 90,
     "location": "Despotovac & Beljanica",
-    "estimatedCost": "Moderate",
+    "estimatedCost":"Moderate",
     "preferredTransport": "Car",
     "coordinates": {
       "lat": 44.0933,
@@ -1138,7 +1138,7 @@ export const travelRecommendations: Recommendation[] = [
     "travelTime": "2.5 hours",
     "travelTimeMinutes": 150,
     "location": "VrnjaÄŤka Banja & GoÄŤ",
-    "estimatedCost": "Moderate",
+    "estimatedCost":"Moderate",
     "preferredTransport": "Car",
     "coordinates": {
       "lat": 43.6261,

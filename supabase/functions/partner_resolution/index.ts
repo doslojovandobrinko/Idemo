@@ -708,6 +708,53 @@ serve(async (req: Request) => {
       });
     }
 
+    // ENDPOINT: /opportunities/accept-counter (POST)
+    if (pathname.endsWith("/opportunities/accept-counter") && req.method === "POST") {
+      const body = await req.json().catch(() => ({}));
+      const { match_id } = body;
+
+      if (!match_id) {
+        return jsonResponse({ success: false, error: "MISSING_MATCH_ID", message: "match_id is required." }, 400);
+      }
+
+      return invokeRpc(supabase, "accept_partner_counter_offer_secure", {
+        p_partner_id: partnerId,
+        p_match_id: match_id,
+      });
+    }
+
+    // ENDPOINT: /opportunities/decline-counter (POST)
+    if (pathname.endsWith("/opportunities/decline-counter") && req.method === "POST") {
+      const body = await req.json().catch(() => ({}));
+      const { match_id, reason } = body;
+
+      if (!match_id) {
+        return jsonResponse({ success: false, error: "MISSING_MATCH_ID", message: "match_id is required." }, 400);
+      }
+
+      return invokeRpc(supabase, "decline_partner_counter_offer_secure", {
+        p_partner_id: partnerId,
+        p_match_id: match_id,
+        p_reason: reason || null,
+      });
+    }
+
+    // ENDPOINT: /opportunities/withdraw (POST)
+    if (pathname.endsWith("/opportunities/withdraw") && req.method === "POST") {
+      const body = await req.json().catch(() => ({}));
+      const { match_id, reason } = body;
+
+      if (!match_id) {
+        return jsonResponse({ success: false, error: "MISSING_MATCH_ID", message: "match_id is required." }, 400);
+      }
+
+      return invokeRpc(supabase, "withdraw_partner_opportunity_secure", {
+        p_partner_id: partnerId,
+        p_match_id: match_id,
+        p_reason: reason || null,
+      });
+    }
+
     return jsonResponse({ success: false, error: "NOT_FOUND", message: `Endpoint '${pathname}' not found.` }, 404);
   } catch (err: any) {
     return jsonResponse({ success: false, error: "SERVER_ERROR", message: err.message || "Internal server error." }, 500);

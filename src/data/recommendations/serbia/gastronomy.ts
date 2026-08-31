@@ -20,7 +20,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "2 hours",
     "travelTimeMinutes": 120,
     "location": "Subotica / Palić",
-    "estimatedCost": "€20 - €50",
+    "estimatedCost":"€30 - €60",
     "preferredTransport": "Car / Bus",
     "website": "https://www.visitsubotica.rs",
     "coordinates": {
@@ -75,7 +75,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "10 - 15 minutes",
     "travelTimeMinutes": 15,
     "location": "Belgrade City Center",
-    "estimatedCost": "€15 - €40",
+    "estimatedCost":"€20 - €50",
     "preferredTransport": "Foot / Taxi",
     "website": "https://www.rakiabar.com",
     "coordinates": {
@@ -116,7 +116,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "2.5 hours",
     "travelTimeMinutes": 150,
     "location": "Kosjerić",
-    "estimatedCost": "€20 - €60",
+    "estimatedCost":"€30 - €80",
     "preferredTransport": "Car",
     "website": "https://www.destilerijazaric.com",
     "coordinates": {
@@ -157,7 +157,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "3.5 - 4 hours",
     "travelTimeMinutes": 220,
     "location": "Near Negotin",
-    "estimatedCost": "€10 - €150",
+    "estimatedCost":"€20 - €180",
     "preferredTransport": "Car",
     "website": "https://tonegotin.rs",
     "coordinates": {
@@ -198,7 +198,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 20,
     "location": "Dorćol, Belgrade",
-    "estimatedCost": "€60 - €140 per person",
+    "estimatedCost":"€80 - €170 per person",
     "preferredTransport": "Taxi / On Foot",
     "website": "https://homa.rs",
     "phone": "+381 11 328 8656",
@@ -240,7 +240,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 15,
     "location": "Kalemegdan, Belgrade",
-    "estimatedCost": "€20 - €120",
+    "estimatedCost":"€30 - €150",
     "preferredTransport": "On Foot / Taxi",
     "website": "https://kalemegdanskaterasa.com",
     "coordinates": {
@@ -281,7 +281,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 15,
     "location": "Skadarlija, Belgrade",
-    "estimatedCost": "€30 - €90",
+    "estimatedCost":"€40 - €110",
     "preferredTransport": "On Foot / Taxi",
     "website": "https://trisesira.rs",
     "phone": "+381 11 324 7501",
@@ -323,7 +323,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 15,
     "location": "Beton Hala, Belgrade",
-    "estimatedCost": "€35 - €100",
+    "estimatedCost":"€50 - €120",
     "preferredTransport": "Taxi / On Foot",
     "website": "https://ambarrestaurant.com",
     "phone": "+381 11 328 6637",
@@ -365,7 +365,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 10,
     "location": "Savamala, Belgrade",
-    "estimatedCost": "€80 - €200 per person",
+    "estimatedCost":"€100 - €240 per person",
     "preferredTransport": "Taxi / On Foot",
     "website": "https://salon1905.rs",
     "phone": "+381 11 411 7777",
@@ -408,7 +408,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 15,
     "location": "Beton Hala, Belgrade",
-    "estimatedCost": "€30 - €120",
+    "estimatedCost":"€40 - €150",
     "preferredTransport": "Taxi / On Foot",
     "website": "https://comunale.rs",
     "coordinates": {
@@ -449,7 +449,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "3.5 hours",
     "travelTimeMinutes": 210,
     "location": "Southeastern Serbia",
-    "estimatedCost": "€40 - €160",
+    "estimatedCost":"€50 - €200",
     "preferredTransport": "Car / Train",
     "website": "https://topirot.com",
     "coordinates": {
@@ -490,7 +490,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "Urban access",
     "travelTimeMinutes": 20,
     "location": "Zemun, Belgrade",
-    "estimatedCost": "€25 - €120",
+    "estimatedCost":"€30 - €150",
     "preferredTransport": "Taxi / On Foot",
     "coordinates": {
       "lat": 44.8436,
@@ -530,7 +530,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "Varies",
     "travelTimeMinutes": 120,
     "location": "Multiple Regions",
-    "estimatedCost": "€15 - €100+",
+    "estimatedCost":"€20 - €120+",
     "preferredTransport": "Private Driver / Car",
     "coordinates": {
       "lat": 44.2511,
@@ -570,7 +570,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "2.5 - 3 hours",
     "travelTimeMinutes": 160,
     "location": "Guča, SW Serbia",
-    "estimatedCost": "Free - €100+",
+    "estimatedCost":"Free - €120+",
     "preferredTransport": "Car",
     "website": "https://guca.rs",
     "coordinates": {
@@ -611,7 +611,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "1 - 2 hours",
     "travelTimeMinutes": 90,
     "location": "Various / Near Novi Sad",
-    "estimatedCost": "€25 - €60 per person",
+    "estimatedCost":"€30 - €80 per person",
     "preferredTransport": "Car",
     "website": "https://salas137.rs",
     "coordinates": {
@@ -652,7 +652,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "2.5 hours",
     "travelTimeMinutes": 150,
     "location": "Niš Fortress",
-    "estimatedCost": "€30 - €120",
+    "estimatedCost":"€40 - €150",
     "preferredTransport": "Car / Highway Express Bus",
     "coordinates": {
       "lat": 43.3249,
@@ -709,7 +709,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "2 hours (from Belgrade) / 10 mins (from Subotica)",
     "travelTimeMinutes": 120,
     "location": "Palić / Subotica",
-    "estimatedCost": "€20 - €40",
+    "estimatedCost":"€30 - €50",
     "preferredTransport": "Car / Bus",
     "coordinates": {
       "lat": 46.0682,
@@ -765,7 +765,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "1 hour (from Belgrade) / 30 mins (from Novi Sad)",
     "travelTimeMinutes": 60,
     "location": "Neradin, Fruška Gora",
-    "estimatedCost": "€20 - €35",
+    "estimatedCost":"€30 - €50",
     "preferredTransport": "Car / Minibus",
     "coordinates": {
       "lat": 45.1189,
@@ -821,7 +821,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "2 hours (from Belgrade)",
     "travelTimeMinutes": 120,
     "location": "Banja Koviljača / Drina River",
-    "estimatedCost": "€25 - €45",
+    "estimatedCost":"€30 - €60",
     "preferredTransport": "Car / Tour Bus",
     "coordinates": {
       "lat": 44.5298,
@@ -877,7 +877,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "1 hour (from Belgrade)",
     "travelTimeMinutes": 60,
     "location": "Velika Plana",
-    "estimatedCost": "€20 - €40",
+    "estimatedCost":"€30 - €50",
     "preferredTransport": "Car / Highway",
     "coordinates": {
       "lat": 44.3312,
@@ -933,7 +933,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "1.5 hours (from Belgrade) / 45 mins (from Novi Sad)",
     "travelTimeMinutes": 90,
     "location": "Mali Iđoš",
-    "estimatedCost": "€20 - €35",
+    "estimatedCost":"€30 - €50",
     "preferredTransport": "Car / Highway",
     "coordinates": {
       "lat": 45.7061,
@@ -989,7 +989,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "3.5 hours (from Belgrade) / 1.5 hours (from Niš)",
     "travelTimeMinutes": 210,
     "location": "Inovo, Knjaževac / Stara Planina",
-    "estimatedCost": "€20 - €40",
+    "estimatedCost":"€30 - €50",
     "preferredTransport": "Car",
     "coordinates": {
       "lat": 43.4617,
@@ -1045,7 +1045,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "1 hour (from Belgrade)",
     "travelTimeMinutes": 60,
     "location": "Trbušnica, Lazarevac",
-    "estimatedCost": "€20 - €40",
+    "estimatedCost":"€30 - €50",
     "preferredTransport": "Car",
     "coordinates": {
       "lat": 44.3389,
@@ -1101,7 +1101,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "1 hour (from Belgrade) / 25 mins (from Novi Sad)",
     "travelTimeMinutes": 60,
     "location": "Vrdnik, Fruška Gora",
-    "estimatedCost": "€25 - €50",
+    "estimatedCost":"€30 - €60",
     "preferredTransport": "Car",
     "coordinates": {
       "lat": 45.1322,
@@ -1157,7 +1157,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "40 mins (from Belgrade)",
     "travelTimeMinutes": 40,
     "location": "Baćevac, Barajevo",
-    "estimatedCost": "€20 - €45",
+    "estimatedCost":"€30 - €60",
     "preferredTransport": "Car / Taxi",
     "coordinates": {
       "lat": 44.5781,
@@ -1213,7 +1213,7 @@ export const gastronomyRecommendations: Recommendation[] = [
     "travelTime": "2 hours (from Belgrade)",
     "travelTimeMinutes": 120,
     "location": "Mionica / Kosjerić, Maljen",
-    "estimatedCost": "€20 - €35",
+    "estimatedCost":"€30 - €50",
     "preferredTransport": "Car",
     "coordinates": {
       "lat": 44.0219,
