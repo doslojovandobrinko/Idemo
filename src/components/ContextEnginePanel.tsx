@@ -7,42 +7,62 @@ import {
 import { Recommendation } from '../types';
 
 interface ContextEnginePanelProps {
-  language: string;
-  currentWeather: 'Sunny' | 'Rainy' | 'Snowy' | 'Cloudy';
-  setCurrentWeather: (weather: 'Sunny' | 'Rainy' | 'Snowy' | 'Cloudy') => void;
-  currentDayOfWeek: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
-  setCurrentDayOfWeek: (day: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday') => void;
-  currentTimeMinutes: number;
-  setCurrentTimeMinutes: (minutes: number) => void;
-  proximityReference: 'expo' | 'hotel' | 'zemun' | 'none';
-  setProximityReference: (ref: 'expo' | 'hotel' | 'zemun' | 'none') => void;
-  maxWalkingDistanceKm: number;
-  setMaxWalkingDistanceKm: (dist: number) => void;
-  showEverything: boolean;
-  setShowEverything: (show: boolean) => void;
-  totalRecommendationsCount: number;
-  filteredCount: number;
-  triggerHaptic: (intensity: number) => void;
+  language?: string;
+  currentWeather?: 'Sunny' | 'Rainy' | 'Snowy' | 'Cloudy';
+  setCurrentWeather?: (weather: 'Sunny' | 'Rainy' | 'Snowy' | 'Cloudy') => void;
+  currentDayOfWeek?: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
+  setCurrentDayOfWeek?: (day: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday') => void;
+  currentTimeMinutes?: number;
+  setCurrentTimeMinutes?: (minutes: number) => void;
+  proximityReference?: 'expo' | 'hotel' | 'zemun' | 'none';
+  setProximityReference?: (ref: 'expo' | 'hotel' | 'zemun' | 'none') => void;
+  maxWalkingDistanceKm?: number;
+  setMaxWalkingDistanceKm?: (dist: number) => void;
+  showEverything?: boolean;
+  setShowEverything?: (show: boolean) => void;
+  totalRecommendationsCount?: number;
+  filteredCount?: number;
+  triggerHaptic?: (intensity: number) => void;
 }
 
 export function ContextEnginePanel({
-  language,
-  currentWeather,
-  setCurrentWeather,
-  currentDayOfWeek,
-  setCurrentDayOfWeek,
-  currentTimeMinutes,
-  setCurrentTimeMinutes,
-  proximityReference,
-  setProximityReference,
-  maxWalkingDistanceKm,
-  setMaxWalkingDistanceKm,
-  showEverything,
-  setShowEverything,
-  totalRecommendationsCount,
-  filteredCount,
-  triggerHaptic
+  language = 'en',
+  currentWeather: propWeather,
+  setCurrentWeather: propSetWeather,
+  currentDayOfWeek: propDay,
+  setCurrentDayOfWeek: propSetDay,
+  currentTimeMinutes: propTime,
+  setCurrentTimeMinutes: propSetTime,
+  proximityReference: propProx,
+  setProximityReference: propSetProx,
+  maxWalkingDistanceKm: propDist,
+  setMaxWalkingDistanceKm: propSetDist,
+  showEverything: propShowAll,
+  setShowEverything: propSetShowAll,
+  totalRecommendationsCount = 192,
+  filteredCount = 192,
+  triggerHaptic: propHaptic
 }: ContextEnginePanelProps) {
+  const [localWeather, setLocalWeather] = useState<'Sunny' | 'Rainy' | 'Snowy' | 'Cloudy'>('Sunny');
+  const [localDay, setLocalDay] = useState<'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday'>('Wednesday');
+  const [localTime, setLocalTime] = useState<number>(720);
+  const [localProx, setLocalProx] = useState<'expo' | 'hotel' | 'zemun' | 'none'>('expo');
+  const [localDist, setLocalDist] = useState<number>(2);
+  const [localShowAll, setLocalShowAll] = useState<boolean>(false);
+
+  const currentWeather = propWeather ?? localWeather;
+  const setCurrentWeather = propSetWeather ?? setLocalWeather;
+  const currentDayOfWeek = propDay ?? localDay;
+  const setCurrentDayOfWeek = propSetDay ?? setLocalDay;
+  const currentTimeMinutes = propTime ?? localTime;
+  const setCurrentTimeMinutes = propSetTime ?? setLocalTime;
+  const proximityReference = propProx ?? localProx;
+  const setProximityReference = propSetProx ?? setLocalProx;
+  const maxWalkingDistanceKm = propDist ?? localDist;
+  const setMaxWalkingDistanceKm = propSetDist ?? setLocalDist;
+  const showEverything = propShowAll ?? localShowAll;
+  const setShowEverything = propSetShowAll ?? setLocalShowAll;
+  const triggerHaptic = propHaptic ?? (() => {});
   const [isExpanded, setIsExpanded] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
   const [showTechnicalDetails, setShowTechnicalDetails] = useState(false);

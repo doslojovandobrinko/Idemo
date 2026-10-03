@@ -294,10 +294,21 @@ serve(async (req) => {
       const match = matches[0];
       const partnerId = match.partner_id;
 
-      // 3. Fetch partner info and published profile content
-      const [{ data: partnerRow }, { data: profileRow }] = await Promise.all([
+      // 3. Fetch partner info, published profile content, and portfolio relations
+      const [
+        { data: partnerRow },
+        { data: profileRow },
+        { data: langRows },
+        { data: areaRows },
+        { data: capRows },
+        { data: snapshotRow },
+      ] = await Promise.all([
         supabase.from("partners").select("id, name, public_code").eq("id", partnerId).single(),
         supabase.from("partner_profile_content").select("*").eq("partner_id", partnerId).single(),
+        supabase.from("partner_languages").select("languages(name_en)").eq("partner_id", partnerId),
+        supabase.from("partner_service_areas").select("service_areas(name_en)").eq("partner_id", partnerId),
+        supabase.from("partner_capabilities").select("capabilities(name_en)").eq("partner_id", partnerId),
+        supabase.from("partner_portfolio_snapshots").select("portfolio_data").eq("partner_id", partnerId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       ]);
 
       if (!profileRow || profileRow.review_status !== "approved" || !profileRow.intro_published) {
@@ -315,18 +326,38 @@ serve(async (req) => {
         );
       }
 
-      // 4. Generate signed photo URL if published_photo_path exists and consent is active
+      // 4. Extract portfolio metadata
+      const languages = (langRows || []).map((r: any) => r.languages?.name_en).filter(Boolean);
+      const serviceAreas = (areaRows || []).map((r: any) => r.service_areas?.name_en).filter(Boolean);
+      const capabilities = (capRows || []).map((r: any) => r.capabilities?.name_en).filter(Boolean);
+      const portfolioItems = snapshotRow?.portfolio_data?.portfolio_items || [];
+
+      // 5. Generate signed photo URL if published_photo_path exists and consent is active
       let signedPhotoUrl: string | null = null;
 
       if (profileRow.published_photo_path && profileRow.photo_consent_given !== false) {
-        const { data: signedData } = await supabase.storage
-          .from("partner-passports")
-          .createSignedUrl(profileRow.published_photo_path, 300); // 5 minutes signed expiration
-        signedPhotoUrl = signedData?.signedUrl || null;
+        const rawPath = String(profileRow.published_photo_path).trim();
+        if (
+          rawPath.startsWith("/") ||
+          rawPath.startsWith("http://") ||
+          rawPath.startsWith("https://") ||
+          rawPath.startsWith("data:")
+        ) {
+          signedPhotoUrl = rawPath;
+        } else {
+          try {
+            const { data: signedData } = await supabase.storage
+              .from("partner-passports")
+              .createSignedUrl(rawPath, 300); // 5 minutes signed expiration
+            signedPhotoUrl = signedData?.signedUrl || null;
+          } catch {
+            signedPhotoUrl = null;
+          }
+        }
       }
 
-      // 5. Contact disclosure gate: Only disclosed upon confirmed handoff (match.status === 'selected')
-      const isConfirmedHandoff = match.status === "selected";
+      // 6. Contact disclosure gate: Disclosed once partner responds/accepts (match.status === 'responded' or 'selected')
+      const isConfirmedHandoff = match.status === "selected" || match.status === "responded";
       let contactPhone: string | null = null;
       let contactEmail: string | null = null;
 
@@ -340,8 +371,11 @@ serve(async (req) => {
             .eq("recommendation_id", targetRecId)
             .maybeSingle();
 
-          contactPhone = eligRow?.contact_phone || null;
-          contactEmail = eligRow?.contact_email || null;
+          contactPhone = profileRow.published_contact_phone || eligRow?.contact_phone || profileRow.draft_contact_phone || null;
+          contactEmail = profileRow.published_contact_email || eligRow?.contact_email || profileRow.draft_contact_email || null;
+        } else {
+          contactPhone = profileRow.published_contact_phone || profileRow.draft_contact_phone || null;
+          contactEmail = profileRow.published_contact_email || profileRow.draft_contact_email || null;
         }
       }
 
@@ -351,9 +385,15 @@ serve(async (req) => {
           introduction_available: true,
           partner_name: partnerRow?.name || "Verified Partner",
           partner_code: partnerRow?.public_code || "IDM-PTR",
+          category: "IDEMO Verified Partner",
+          verification_status: "IDEMO Verified Host",
           introduction: profileRow.intro_published,
           photo_available: !!profileRow.published_photo_path,
           photo_url: signedPhotoUrl,
+          languages,
+          service_areas: serviceAreas,
+          capabilities,
+          portfolio_items: portfolioItems,
           contact_phone: contactPhone,
           contact_email: contactEmail,
           content_version: profileRow.content_version,

@@ -148,5 +148,46 @@ export function runPartnerIntroductionDisclosureTests(): TestResult[] {
     });
   }
 
+  // TEST 5: Full Portfolio validation (languages, service areas, capabilities, portfolio items)
+  {
+    const richIntro: PartnerIntroductionResult = {
+      success: true,
+      introduction_available: true,
+      partner_name: 'Belgrade Undercover Walking',
+      partner_code: 'P-TG-01',
+      category: 'Licensed Tourist Guide',
+      verification_status: 'IDEMO Verified Host',
+      introduction: 'Licensed heritage guide specializing in Roman and Kalemegdan subterranean tours.',
+      photo_available: true,
+      photo_url: 'https://example.com/guide.jpg',
+      languages: ['English', 'Serbian', 'German'],
+      service_areas: ['Belgrade', 'Zemun'],
+      capabilities: ['Licensed Tourist Guide', 'Cultural Heritage', 'VIP Guiding'],
+      portfolio_items: [
+        {
+          title: 'Belgrade Undercover Walking Tour',
+          description: 'Subterranean Roman ruins and secret citadel chambers.',
+        },
+      ],
+      contact_phone: null,
+      contact_email: null,
+      content_version: 1,
+    };
+
+    const hasLanguages = Array.isArray(richIntro.languages) && richIntro.languages.length >= 2;
+    const hasServiceAreas = Array.isArray(richIntro.service_areas) && richIntro.service_areas.length >= 1;
+    const hasCapabilities = Array.isArray(richIntro.capabilities) && richIntro.capabilities.length >= 2;
+    const hasPortfolioItems = Array.isArray(richIntro.portfolio_items) && richIntro.portfolio_items.length >= 1;
+    const passed = hasLanguages && hasServiceAreas && hasCapabilities && hasPortfolioItems;
+
+    results.push({
+      testNumber: 5,
+      name: 'Full portfolio data validation: Languages, service areas, capabilities, and portfolio items',
+      expected: 'languages>=2, service_areas>=1, capabilities>=2, portfolio_items>=1',
+      actual: `languages=${richIntro.languages?.length}, service_areas=${richIntro.service_areas?.length}, capabilities=${richIntro.capabilities?.length}, portfolio_items=${richIntro.portfolio_items?.length}`,
+      passed,
+    });
+  }
+
   return results;
 }

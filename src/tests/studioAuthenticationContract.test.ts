@@ -3,7 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { parseAndValidateStudioRole } from '../components/studio/StudioAuthShell';
+import {
+  parseAndValidateStudioRole,
+  AVAILABLE_ROLES,
+  AUTHORIZED_STUDIO_EMAIL,
+  AUTHORIZED_STUDIO_PASSWORD
+} from '../components/studio/StudioAuthShell';
 import { getSupabaseClient, isSupabaseConfigured } from '../lib/supabaseClient';
 import { reserveRecommendationDraft } from '../lib/recommendationMediaService';
 
@@ -263,6 +268,56 @@ export async function runStudioAuthenticationContractTests(): Promise<TestResult
       testId: 'AUTH-11',
       name: 'GOLDEN-R01 manual recommendation path still passes through authenticated Studio',
       expected: 'Enforced',
+      actual: `Error: ${err?.message || String(err)}`,
+      passed: false,
+    });
+  }
+
+  // AUTH-12: permanent master operator credentials invariant for all roles
+  try {
+    const isMasterEmailMatch = AUTHORIZED_STUDIO_EMAIL === 'office@idemo.group';
+    const isMasterPasswordMatch = AUTHORIZED_STUDIO_PASSWORD === '!2006Isabella100!';
+    const allRolesMatch =
+      AVAILABLE_ROLES.length === 6 &&
+      AVAILABLE_ROLES.every(r => r.defaultEmail === 'office@idemo.group');
+
+    const passed = isMasterEmailMatch && isMasterPasswordMatch && allRolesMatch;
+    results.push({
+      testId: 'AUTH-12',
+      name: 'permanent master operator credentials invariant for all roles',
+      expected: 'All 6 roles use office@idemo.group and !2006Isabella100!',
+      actual: passed
+        ? 'Verified: all 6 roles default to office@idemo.group with master password'
+        : `Failed: emailMatch=${isMasterEmailMatch}, passMatch=${isMasterPasswordMatch}, roles=${AVAILABLE_ROLES.map(r => r.defaultEmail).join(',')}`,
+      passed,
+    });
+  } catch (err: any) {
+    results.push({
+      testId: 'AUTH-12',
+      name: 'permanent master operator credentials invariant for all roles',
+      expected: 'All 6 roles configured with master credentials',
+      actual: `Error: ${err?.message || String(err)}`,
+      passed: false,
+    });
+  }
+
+  // AUTH-13: all 6 canonical roles exist and are covered
+  try {
+    const expectedRoles = ['Super Admin', 'Curator', 'Editor', 'Translator', 'Partner Manager', 'Release Manager'];
+    const presentRoles = AVAILABLE_ROLES.map(r => r.role);
+    const hasAllRoles = expectedRoles.every(r => presentRoles.includes(r as any));
+    results.push({
+      testId: 'AUTH-13',
+      name: 'all 6 canonical roles exist and are covered',
+      expected: 'All 6 Studio roles represented in role configuration',
+      actual: hasAllRoles ? 'All 6 roles verified in configuration' : `Missing roles: ${expectedRoles.filter(r => !presentRoles.includes(r as any)).join(', ')}`,
+      passed: hasAllRoles,
+    });
+  } catch (err: any) {
+    results.push({
+      testId: 'AUTH-13',
+      name: 'all 6 canonical roles exist and are covered',
+      expected: 'Role list verified',
       actual: `Error: ${err?.message || String(err)}`,
       passed: false,
     });

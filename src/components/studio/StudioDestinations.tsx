@@ -1,5 +1,10 @@
-import React, { useState } from 'react';
-import { MapPin, Globe, CheckCircle2, PackageCheck, Plus, Sparkles, AlertCircle } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { MapPin, Globe, CheckCircle2, PackageCheck, Plus, Sparkles, AlertCircle, Activity } from 'lucide-react';
+import { scanDestinationHealth, DestinationHealthReport } from '../../lib/idemo007v2/destinationHealthService';
+import { scanLinkIntegrity, LinkIntegrityReport } from '../../lib/idemo007v2/linkIntegrityService';
+import { DestinationHealthQueue } from './DestinationHealthQueue';
+import { LinkIntegrityQueue } from './LinkIntegrityQueue';
+import { INITIAL_RECOMMENDATIONS } from '../../data/recommendations/serbia';
 
 interface DestinationItem {
   id: string;
@@ -70,6 +75,18 @@ export function StudioDestinations() {
   const [selectedDestId, setSelectedDestId] = useState<string>('serbia-canonical');
 
   const activeDest = destinations.find(d => d.id === selectedDestId) || destinations[0];
+
+  const healthReport: DestinationHealthReport = useMemo(() => {
+    return scanDestinationHealth({
+      id: activeDest.id,
+      name: activeDest.name,
+      recommendations: INITIAL_RECOMMENDATIONS,
+    });
+  }, [activeDest]);
+
+  const linkReport: LinkIntegrityReport = useMemo(() => {
+    return scanLinkIntegrity(INITIAL_RECOMMENDATIONS);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -193,6 +210,13 @@ export function StudioDestinations() {
           </div>
         </div>
       </div>
+
+      {/* Dedicated Destination Health Monitor Queue */}
+      <DestinationHealthQueue report={healthReport} />
+
+      {/* Dedicated Link Integrity Monitor Queue */}
+      <LinkIntegrityQueue report={linkReport} />
     </div>
   );
 }
+

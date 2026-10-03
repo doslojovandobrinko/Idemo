@@ -19,6 +19,7 @@ export interface HumanProvidedMedia {
 }
 
 export interface AgentProposalInput {
+  runId?: string;
   nameOrTitle: string;
   descriptionOrNotes?: string;
   destinationOrLocation?: string;
@@ -102,7 +103,9 @@ export async function compileRecommendationProposal(
       : (process.env.TEST_SERVER_URL || 'http://127.0.0.1:3000/api/studio/recommendation-agent/research');
 
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timeoutId = controller ? setTimeout(() => controller.abort(), isBrowser ? AGENT_RESEARCH_TIMEOUT_MS : 1500) : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), AGENT_RESEARCH_TIMEOUT_MS) : null;
+
+    const runId = input.runId || `run_007_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
     let response: Response;
     try {
@@ -114,6 +117,7 @@ export async function compileRecommendationProposal(
         signal: controller?.signal,
         body: JSON.stringify({
           ...input,
+          runId,
           availableServiceAreas: serviceAreas,
         }),
       });

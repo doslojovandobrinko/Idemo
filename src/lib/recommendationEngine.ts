@@ -19,6 +19,10 @@ export interface UserPreferences {
   maxWalkingDistanceKm?: number;
   orbitX?: number;
   orbitY?: number;
+  isCustomOrbit?: boolean;
+
+  // Day-Plan Planning Context Isolation Flag
+  isPlanningContext?: boolean;
 }
 
 // Self-contained Haversine formula for distance calculation in kilometers
@@ -163,7 +167,8 @@ export function scoreRecommendation(rec: Recommendation, prefs: UserPreferences)
     durationInHours = hourMatch ? parseInt(hourMatch[0]) : 4;
   }
 
-  const totalDurationMinutes = (durationInHours * 60) + rec.travelTimeMinutes;
+  const travelMins = typeof rec.travelTimeMinutes === 'number' ? rec.travelTimeMinutes : 15;
+  const totalDurationMinutes = (durationInHours * 60) + travelMins;
   const totalDurationHours = totalDurationMinutes / 60;
 
   // Normalized Time score
@@ -197,7 +202,10 @@ export function scoreRecommendation(rec: Recommendation, prefs: UserPreferences)
   const isOutdoor = isOutdoorRecommendation(rec);
   
   // A. Weather-Driven Suitability
-  const weather = prefs.currentWeather || 'Sunny';
+  let weather: string | undefined = prefs.currentWeather;
+  if (!weather && !prefs.isPlanningContext) {
+    weather = 'Sunny'; // Default fallback ONLY for normal recommendations
+  }
   if (weather === 'Sunny') {
     if (isOutdoor) {
       score += 35; // Sun-drenched open air boost
@@ -225,63 +233,74 @@ export function scoreRecommendation(rec: Recommendation, prefs: UserPreferences)
   }
 
   // B. Day of the Week Context
-  const day = prefs.currentDayOfWeek || 'Tuesday';
-  const isWeekend = ['Friday', 'Saturday', 'Sunday'].includes(day);
-  if (isWeekend) {
-    // Weekend matches high-investment, nightlife, adventure or nature excursions
-    if (recCats.includes(Category.CLUBBING) || recCats.includes(Category.TRAVEL) || recCats.includes(Category.NATURE) || totalDurationHours > 4) {
-      score += 30;
-    }
-  } else {
-    // Weekdays match historic center exploration, culinary evenings, or quick wellbeing rituals
-    if (recCats.includes(Category.HISTORY) || recCats.includes(Category.WELLBEING) || (recCats.includes(Category.GASTRONOMY) && totalDurationHours <= 3)) {
-      score += 25;
+  let day: string | undefined = prefs.currentDayOfWeek;
+  if (!day && !prefs.isPlanningContext) {
+    day = 'Tuesday'; // Default fallback ONLY for normal recommendations
+  }
+  if (day) {
+    const isWeekend = ['Friday', 'Saturday', 'Sunday'].includes(day);
+    if (isWeekend) {
+      // Weekend matches high-investment, nightlife, adventure or nature excursions
+      if (recCats.includes(Category.CLUBBING) || recCats.includes(Category.TRAVEL) || recCats.includes(Category.NATURE) || totalDurationHours > 4) {
+        score += 30;
+      }
+    } else {
+      // Weekdays match historic center exploration, culinary evenings, or quick wellbeing rituals
+      if (recCats.includes(Category.HISTORY) || recCats.includes(Category.WELLBEING) || (recCats.includes(Category.GASTRONOMY) && totalDurationHours <= 3)) {
+        score += 25;
+      }
     }
   }
 
   // C. Current Hour of Day Context
-  // Get active hour from user pref if provided, otherwise fallback to system hours
-  let activeHour = new Date().getHours();
+  let activeHour: number | undefined = undefined;
   if (prefs.currentTimeMinutes !== undefined) {
     activeHour = Math.floor(prefs.currentTimeMinutes / 60);
-  } else if (prefs.timeOfDay === 'Evening') {
-    activeHour = 20;
-  } else if (prefs.timeOfDay === 'Working hours') {
-    activeHour = 14;
-  }
-
-  // Sunrise/Morning Weighting (5:00 - 10:00)
-  if (activeHour >= 5 && activeHour < 11) {
-    if (isOutdoor && (rec.title.toLowerCase().includes('viewpoint') || rec.location.toLowerCase().includes('tara') || rec.title.toLowerCase().includes('fortress'))) {
-      score += 25;
-    }
-    if (recCats.includes(Category.WELLBEING)) {
-      score += 15;
+  } else if (!prefs.isPlanningContext) {
+    // Fallback to system hours or timeOfDay ONLY for normal recommendations
+    if (prefs.timeOfDay === 'Evening') {
+      activeHour = 20;
+    } else if (prefs.timeOfDay === 'Working hours') {
+      activeHour = 14;
+    } else {
+      activeHour = new Date().getHours();
     }
   }
 
-  // Midday Heat Weighting (11:00 - 16:00)
-  if (activeHour >= 11 && activeHour < 16) {
-    if (!isOutdoor && (recCats.includes(Category.HISTORY) || recCats.includes(Category.WELLBEING) || recCats.includes(Category.MEDICAL))) {
-      score += 20;
-    } else if (isOutdoor) {
-      score -= 15;
+  if (activeHour !== undefined) {
+    // Sunrise/Morning Weighting (5:00 - 10:00)
+    if (activeHour >= 5 && activeHour < 11) {
+      if (isOutdoor && (rec.title.toLowerCase().includes('viewpoint') || rec.location.toLowerCase().includes('tara') || rec.title.toLowerCase().includes('fortress'))) {
+        score += 25;
+      }
+      if (recCats.includes(Category.WELLBEING)) {
+        score += 15;
+      }
     }
-  }
 
-  // Sunset/Twilight Weighting (17:00 - 20:30)
-  if (activeHour >= 17 && activeHour <= 20) {
-    if (isOutdoor && (rec.title.toLowerCase().includes('sunset') || rec.title.toLowerCase().includes('kayak') || rec.location.toLowerCase().includes('riverfront') || rec.title.toLowerCase().includes('fortress'))) {
-      score += 35;
+    // Midday Heat Weighting (11:00 - 16:00)
+    if (activeHour >= 11 && activeHour < 16) {
+      if (!isOutdoor && (recCats.includes(Category.HISTORY) || recCats.includes(Category.WELLBEING) || recCats.includes(Category.MEDICAL))) {
+        score += 20;
+      } else if (isOutdoor) {
+        score -= 15;
+      }
     }
-  }
 
-  // Late-Night Priority (21:00 - 4:00)
-  if (activeHour >= 21 || activeHour <= 4) {
-    if (recCats.includes(Category.CLUBBING) || recCats.includes(Category.GASTRONOMY)) {
-      score += 40;
-    } else if (isOutdoor && !recCats.includes(Category.CLUBBING)) {
-      score -= 30; // Day-centric outdoor spots penalized
+    // Sunset/Twilight Weighting (17:00 - 20:30)
+    if (activeHour >= 17 && activeHour <= 20) {
+      if (isOutdoor && (rec.title.toLowerCase().includes('sunset') || rec.title.toLowerCase().includes('kayak') || rec.location.toLowerCase().includes('riverfront') || rec.title.toLowerCase().includes('fortress'))) {
+        score += 35;
+      }
+    }
+
+    // Late-Night Priority (21:00 - 4:00)
+    if (activeHour >= 21 || activeHour <= 4) {
+      if (recCats.includes(Category.CLUBBING) || recCats.includes(Category.GASTRONOMY)) {
+        score += 40;
+      } else if (isOutdoor && !recCats.includes(Category.CLUBBING)) {
+        score -= 30; // Day-centric outdoor spots penalized
+      }
     }
   }
 
@@ -333,16 +352,17 @@ export function getRankedRecommendations(recs: Recommendation[], prefs: UserPref
   const hasNoImplicitTastes = !prefs.implicitTastes || Object.keys(prefs.implicitTastes).length === 0;
   const isDefaultBudgetAndTime = prefs.budget === 100 && prefs.time === 24;
   const hasNoSelectedCategories = !prefs.selectedCategories || prefs.selectedCategories.length === 0;
-  const isDefaultOrbit = (prefs.orbitX === undefined || prefs.orbitX === 0.5) && (prefs.orbitY === undefined || prefs.orbitY === 0.5);
+  const isDefaultOrbit = prefs.isCustomOrbit === false
+    || (prefs.isCustomOrbit !== true && (prefs.orbitX === undefined || Math.abs(prefs.orbitX - 0.5) < 0.2) && (prefs.orbitY === undefined || Math.abs(prefs.orbitY - 0.5) < 0.2));
 
   const isDefault = hasNoRatings && hasNoImplicitTastes && isDefaultBudgetAndTime && hasNoSelectedCategories && isDefaultOrbit;
 
   if (isDefault) {
-    const targetIds = ['1', '81', '9'];
+    const targetIds = ['1', '9', '81'];
     const targetRecs: Recommendation[] = [];
     const otherRecs: Recommendation[] = [];
     
-    // Maintain the specific default order: Uvac Meanders ('1'), Kablar Ferrata ('81'), Wines of the Sands ('9')
+    // Maintain the specific default order: Uvac Meanders ('1'), Wines of the Sands ('9'), Kablar Ferrata ('81')
     for (const id of targetIds) {
       const found = recs.find(r => r.id === id);
       if (found) {

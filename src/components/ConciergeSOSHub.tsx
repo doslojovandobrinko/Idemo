@@ -17,6 +17,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { triggerHaptic } from '../App';
+import { routeOutboundAction } from '../lib/outboundRouter';
 
 interface EmbassyData {
   name: Record<string, string>;
@@ -320,7 +321,13 @@ export function ConciergeSOSHub({ language }: { language: string }) {
     const separator = isIOS ? '&' : '?';
     const smsUrl = `sms:${smsNumber}${separator}body=${encodeURIComponent(bodyText)}`;
 
-    window.location.href = smsUrl;
+    routeOutboundAction({
+      url: smsUrl,
+      type: 'EXTERNAL_INTENT',
+      fallbackData: {
+        copyText: `${smsNumber}: ${bodyText}`
+      }
+    });
   };
 
   const activeEmbassy = EMBASSIES[selectedEmbassy];

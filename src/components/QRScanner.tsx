@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Camera, X, RefreshCw, Zap, AlertCircle } from 'lucide-react';
 import jsQR from 'jsqr';
 

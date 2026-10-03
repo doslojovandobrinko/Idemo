@@ -30,10 +30,15 @@ import { runPendingRecommendationRevisionTests } from './pendingRecommendationRe
 import { runPassportStateIsolationTests } from './passportStateIsolation.test';
 import { runMyPlannerUnreadIndicatorTests } from './myPlannerUnreadIndicator.test';
 import { runHumanMediaAuthorityTests } from './humanMediaAuthority.test';
+import { runIdemo007V2Slice1Tests } from './idemo007V2Slice1.test';
+import { runIdemo007V2Slice2Tests } from './idemo007V2Slice2.test';
+import { runSlice3Tests } from './idemo007V2Slice3.test';
+import { runIdemo007V2Slice4Tests } from './idemo007V2Slice4.test';
+import { runIdemo007V2Slice5Tests } from './idemo007V2Slice5.test';
 
 async function main() {
   console.log('================================================================');
-  console.log('IDEMO ENGINEERING OFFICE — WORK PACKAGE: MEDIA PIPELINE UUID SAFETY');
+  console.log('IDEMO ENGINEERING OFFICE — WORK PACKAGE: 007 V2 SLICE 5 TEST SUITE');
   console.log('PERMANENT NON-REGRESSION TEST SUITE RUNNER');
   console.log('================================================================\n');
 
@@ -65,6 +70,11 @@ async function main() {
     const passportIsolationResults = await runPassportStateIsolationTests();
     const myPlannerUnreadResults = await runMyPlannerUnreadIndicatorTests();
     const humanMediaResults = await runHumanMediaAuthorityTests();
+    const v2Slice1Results = await runIdemo007V2Slice1Tests();
+    const v2Slice2Results = await runIdemo007V2Slice2Tests();
+    const v2Slice3Results = await runSlice3Tests();
+    const v2Slice4Results = await runIdemo007V2Slice4Tests();
+    const v2Slice5Results = await runIdemo007V2Slice5Tests();
 
     const formattedUnified = unifiedResults.map(r => ({ ...r, testId: `U${r.testNumber}` }));
     const results = [
@@ -90,17 +100,24 @@ async function main() {
       ...pendingRevisionResults.map(r => ({ ...r, testId: r.testId })),
       ...passportIsolationResults.map(r => ({ ...r, testId: r.testId })),
       ...myPlannerUnreadResults.map(r => ({ ...r, testId: r.testId })),
-      ...humanMediaResults.logs.map((log, idx) => {
-        const passed = log.startsWith('✅ PASS:');
-        const name = log.replace(/^([✅❌]\s*(PASS|FAIL):\s*)/, '');
-        return {
-          testId: `MEDIA-GOV-${(idx + 1).toString().padStart(2, '0')}`,
-          name,
-          expected: 'Strict Human Media Authority condition satisfied',
-          actual: passed ? 'Condition satisfied' : 'Media authority violation detected',
-          passed,
-        };
-      }),
+      ...v2Slice1Results.map(r => ({ ...r, testId: r.testId })),
+      ...v2Slice2Results.map(r => ({ ...r, testId: r.testId })),
+      ...v2Slice3Results.map((r, idx) => ({ testId: `SLICE3-${idx + 1}`, name: r.name, expected: 'Test condition satisfied', actual: r.message, passed: r.passed })),
+      ...v2Slice4Results.map(r => ({ testId: r.testId, name: r.name, expected: r.expected, actual: r.actual, passed: r.passed })),
+      ...v2Slice5Results.map(r => ({ testId: r.testId, name: r.name, expected: r.expected, actual: r.actual, passed: r.passed })),
+      ...humanMediaResults.logs
+        .filter(log => log.startsWith('✅ PASS:') || log.startsWith('❌ FAIL:'))
+        .map((log, idx) => {
+          const passed = log.startsWith('✅ PASS:');
+          const name = log.replace(/^([✅❌]\s*(PASS|FAIL):\s*)/, '');
+          return {
+            testId: `MEDIA-GOV-${(idx + 1).toString().padStart(2, '0')}`,
+            name,
+            expected: 'Strict Human Media Authority condition satisfied',
+            actual: passed ? 'Condition satisfied' : 'Media authority violation detected',
+            passed,
+          };
+        }),
       ...tab6Results.results.map((res, idx) => {
         const passed = res.startsWith('PASS:');
         const parts = res.replace(/^(PASS|FAIL):\s*/, '').split(' - ');

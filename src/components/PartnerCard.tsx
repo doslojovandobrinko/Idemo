@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   KeyRound, 
   CheckCircle2, 
@@ -24,6 +24,7 @@ import { PARTNERS } from '../data/partners';
 import { Partner } from '../types';
 import { safeStorage } from '../lib/safeStorage';
 import { triggerHaptic } from '../App';
+import { routeOutboundAction } from '../lib/outboundRouter';
 
 const sha256 = async (text: string): Promise<string> => {
   const msgUint8 = new TextEncoder().encode(text);
@@ -395,9 +396,20 @@ export function PartnerCard({ language }: PartnerCardProps) {
                         
                         <div className="flex items-center gap-2">
                           <Phone size={12} className="text-amber-600 flex-shrink-0" />
-                          <a href={`tel:${activePartner.phone}`} className="hover:underline text-brand-charcoal font-semibold">
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              triggerHaptic(8);
+                              routeOutboundAction({
+                                url: `tel:${activePartner.phone}`,
+                                type: 'EXTERNAL_INTENT',
+                                fallbackData: { copyText: activePartner.phone }
+                              });
+                            }}
+                            className="hover:underline text-brand-charcoal font-semibold cursor-pointer bg-transparent border-none p-0 text-left"
+                          >
                             {activePartner.phone}
-                          </a>
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -444,25 +456,35 @@ export function PartnerCard({ language }: PartnerCardProps) {
 
                       {/* Direct External Web Target */}
                       <div className="grid grid-cols-2 gap-2.5 pt-1.5">
-                        <a
-                          href={activePartner.website}
-                          target="_blank"
-                          referrerPolicy="no-referrer"
-                          rel="noopener noreferrer"
-                          onClick={() => triggerHaptic(8)}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            triggerHaptic(8);
+                            routeOutboundAction({
+                              url: activePartner.website,
+                              type: 'WEB'
+                            });
+                          }}
                           className="h-10 bg-white hover:bg-[#FAF9F5] border border-[#2D3025]/10 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 text-brand-charcoal transition-colors cursor-pointer"
                         >
                           <Globe size={12} className="text-amber-600" />
                           <span>{t.websiteLabel}</span>
-                        </a>
-                        <a
-                          href={`tel:${activePartner.phone}`}
-                          onClick={() => triggerHaptic(8)}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            triggerHaptic(8);
+                            routeOutboundAction({
+                              url: `tel:${activePartner.phone}`,
+                              type: 'EXTERNAL_INTENT',
+                              fallbackData: { copyText: activePartner.phone }
+                            });
+                          }}
                           className="h-10 bg-white hover:bg-[#FAF9F5] border border-[#2D3025]/10 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 text-brand-charcoal transition-colors cursor-pointer"
                         >
                           <Phone size={12} className="text-amber-600" />
                           <span>{t.phoneLabel}</span>
-                        </a>
+                        </button>
                       </div>
                     </div>
 

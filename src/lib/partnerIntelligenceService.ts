@@ -227,8 +227,15 @@ export function evaluatePartnerSuitability(
     }
   }
 
-  // Sort descending by suitability score
-  scoredPartners.sort((a, b) => b.suitabilityScore - a.suitabilityScore);
+  // Sort descending by suitability score with deterministic ordinal tie-breaking
+  scoredPartners.sort((a, b) => {
+    if (b.suitabilityScore !== a.suitabilityScore) {
+      return b.suitabilityScore - a.suitabilityScore;
+    }
+    if (a.partnerId < b.partnerId) return -1;
+    if (a.partnerId > b.partnerId) return 1;
+    return 0;
+  });
 
   // Assign tiers: PRIMARY, SECONDARY, TERTIARY (Max 3 matches)
   const matches: PartnerMatchScore[] = [];
@@ -397,6 +404,24 @@ export function evaluatePartnerIntroductionCapability(partner: Partner): {
 }
 
 /**
+ * Adapter: Maps an InquiryRecordV2 into a synthetic Recommendation and evaluates partner suitability.
+ */
+export function evaluateInquiryPartnerSuitability(
+  inquiry: import('../types').InquiryRecordV2,
+  customPartners?: Partner[]
+): PartnerIntelligenceResult {
+  const synthRec: Partial<Recommendation> = {
+    id: inquiry.recommendation_id || inquiry.recommendation_db_id || 'inquiry-target',
+    title: inquiry.recommendation_title || 'Inquiry Service Request',
+    category: (inquiry as any).category || (inquiry as any).recommendation_category || Category.HISTORY,
+    location: 'Belgrade Core',
+    shortDescription: inquiry.visitor_notes || '',
+    longDescription: inquiry.visitor_notes || '',
+  };
+  return evaluatePartnerSuitability(synthRec, customPartners);
+}
+
+/**
  * Transforms a 007 Proposal into a Staged Partner object.
  */
 export function stageFromProposal(
@@ -422,11 +447,24 @@ export function stageFromProposal(
 
 /**
  * Transforms a governed Partner record into a Staged Partner object via manual Admin selection.
+ * Enforces hard lifecycle governance: throws if partner is unverified, inactive, suspended, or retired.
  */
 export function stageFromManualSelection(
   partner: Partner,
   assignedTier: PartnerSuitabilityTier
 ): StagedPartner {
+  const state = getPartnerLifecycleState(partner);
+  if (
+    !state.isVerified ||
+    !state.isActive ||
+    state.isRetired ||
+    state.isSuspended ||
+    !state.isConciergeRoutable ||
+    partner.is_open_for_inquiries === false
+  ) {
+    throw new Error(`INELIGIBLE_PARTNER: Partner ${partner.id} (${partner.nameEn}) fails hard lifecycle governance rules.`);
+  }
+
   return {
     partnerId: partner.id,
     partnerName: partner.nameEn,

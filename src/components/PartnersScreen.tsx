@@ -4,16 +4,18 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   KeyRound, CheckCircle2, Globe, Phone, MapPin, Sparkles, Lock, Unlock, X, 
   AlertCircle, Gift, Map as MapIcon, Search, Filter, CheckCircle, Award,
-  ShieldCheck, Plus, Send, Check, Users, MessageCircle, Eye, ChevronRight, Briefcase, Loader2, Calendar, XCircle
+  ShieldCheck, Plus, Send, Check, Users, MessageCircle, Eye, ChevronRight, Briefcase, Loader2, Calendar, XCircle, Trash2, Camera,
+  FolderArchive, ChevronDown, Zap, UserCheck, MessageSquare
 } from 'lucide-react';
 import { PARTNERS } from '../data/partners';
 import { Partner } from '../types';
 import { safeStorage } from '../lib/safeStorage';
 import IdemoLogo from './IdemoLogo';
+import { routeOutboundAction } from '../lib/outboundRouter';
 import { 
   loginPartner, 
   logoutPartner, 
@@ -39,6 +41,16 @@ import {
 } from '../lib/partnerService';
 import { partnerSessionStorage } from '../lib/partnerSessionStorage';
 import { loadAuthoritativeCommunityEvents } from '../lib/communityFeedService';
+import { 
+  getAllInquiriesV2, 
+  saveInquiryRecordV2, 
+  updateInquiryCachedProposalV2, 
+  updateInquiryServerStatusV2, 
+  removeSeenProposal,
+  getConfirmedArrangementByServerId,
+  saveConfirmedArrangementV2
+} from '../lib/inquiryStorage';
+import { CachedProposalRecord, InquiryRecordV2, ConfirmedArrangementRecord } from '../types';
 
 // Static Lookup for IDEMO Recommendations
 const RECOMMENDATIONS_LOOKUP = [
@@ -79,6 +91,8 @@ interface PortalPartner {
   reliability: number;
   eligibility: boolean;
   isDemo?: boolean;
+  publicCode?: string;
+  introduction?: string;
 }
 
 interface Inquiry {
@@ -117,6 +131,8 @@ interface Inquiry {
     note: string;
   };
   releaseReason?: string;
+  visitorConfirmed?: boolean;
+  visitorConfirmedAt?: number;
 }
 
 // Initial Controlled Ecosystem Partner Structure (10 Guides, 3 Medical, 10 Transport, 7 Open, 2 Demonstration)
@@ -126,6 +142,8 @@ const INITIAL_PORTAL_PARTNERS: PortalPartner[] = [
     id: 'UNO1',
     pin: '3001',
     name: 'UNO1 (60% Portfolio Scope)',
+    publicCode: 'UNO1',
+    introduction: 'I am a licensed local guide with strong knowledge of Belgrade, Serbian history, cultural heritage and traditional gastronomy. I enjoy helping visitors understand the stories behind the places they see and creating memorable experiences tailored to their interests.',
     category: 'Tourist Guide',
     status: 'Trusted',
     capabilities: [
@@ -149,6 +167,8 @@ const INITIAL_PORTAL_PARTNERS: PortalPartner[] = [
     id: 'UNO2',
     pin: '3002',
     name: 'UNO2 (75% Portfolio Scope)',
+    publicCode: 'UNO2',
+    introduction: 'I am a licensed local guide with strong knowledge of Belgrade, Serbian history, cultural heritage and traditional gastronomy. I enjoy helping visitors understand the stories behind the places they see and creating memorable experiences tailored to their interests.',
     category: 'Tourist Guide',
     status: 'Trusted',
     capabilities: [
@@ -207,74 +227,7 @@ const INITIAL_PORTAL_PARTNERS: PortalPartner[] = [
   { id: 'p-os-7', pin: '6007', name: 'Open Slot — Kids & Family Entertainment', category: 'Open Slot', status: 'Validated', capabilities: ['Multi-lingual Nanny Guides'], languages: ['English'], geography: 'TBD', channels: ['WhatsApp'], contactPhone: '', instagram: '', assignedRecs: [], contributions: 0, reliability: 100, eligibility: false }
 ];
 
-const INITIAL_INQUIRIES: Inquiry[] = [
-  {
-    id: 'INQ-2001',
-    recId: '1',
-    recTitle: 'Uvac Meanders',
-    status: 'Dispatched Stage 1',
-    visitorName: 'Sir James Henderson',
-    query: 'Looking to organize a private 2-day photo-safari of the Uvac River Gorge starting from Belgrade next Thursday morning. Needs high-quality telescopes and birdwatching setup.',
-    replies: [],
-    createdAt: new Date().toISOString(),
-    geography: 'Western Serbia (Sjenica)',
-    language: 'English',
-    budget: '€400 - €600',
-    availableTime: 'Thursday & Friday',
-    subjectExpertise: 'Canyon Kayaking & Vulture Spotting',
-    category: 'Tourist Guide'
-  },
-  {
-    id: 'INQ-2002',
-    recId: '4',
-    recTitle: 'Vrnjačka Banja',
-    status: 'Dispatched Stage 2',
-    visitorName: 'Elena Rostova',
-    query: 'Interested in booking dental assessment orientation and aesthetic planning slots for Monday morning. Please coordinate transportation and hotel pickup.',
-    replies: [],
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-    geography: 'Belgrade',
-    language: 'Russian',
-    budget: '€1,000 - €1,500',
-    availableTime: 'Monday morning',
-    subjectExpertise: 'Dental Orientation & Skin Care Liaison',
-    category: 'Medical/Wellbeing'
-  },
-  {
-    id: 'INQ-2003',
-    recId: '3',
-    recTitle: 'Belgrade Splavovi',
-    partnerId: 'p-tr-1',
-    partnerName: 'Tesla Ride Belgrade Premium',
-    status: 'Answered / Completed',
-    visitorName: 'Kenji Takahashi',
-    query: 'Require zero-emission executive sedan transport from Tesla Airport Terminal straight to Sava waterfront on Friday night. Confirm if VIP drivers speak Japanese.',
-    replies: ['Confirmed. Driver speaking English and Japanese is reserved. Plate BG-TESLA. Flight tracked automatically.'],
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    geography: 'Belgrade',
-    language: 'Japanese',
-    budget: '€150 - €250',
-    availableTime: 'Friday Night',
-    subjectExpertise: 'EV Airport Pickups',
-    category: 'Limousine/Transport'
-  },
-  {
-    id: 'INQ-2004',
-    recId: '7',
-    recTitle: 'Nikola Tesla Museum',
-    status: 'Unmatched',
-    visitorName: 'Dr. Sarah Jenkins',
-    query: 'Deep technical tour of Tesla’s induction motor models and high-frequency patents. Need an expert guide with electrical engineering background.',
-    replies: [],
-    createdAt: new Date().toISOString(),
-    geography: 'Belgrade',
-    language: 'English',
-    budget: '€100 - €200',
-    availableTime: 'Any day',
-    subjectExpertise: 'Electrical Engineering & Tesla Legacy',
-    category: 'Tourist Guide'
-  }
-];
+const INITIAL_INQUIRIES: Inquiry[] = [];
 
 const ROTATING_IMAGES = [
   "/src/assets/images/salon_1905_interior_1778845083168.png",
@@ -909,6 +862,11 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
         if (combined.length > 0) {
           const fetchedInquiries = combined.map(opp => mapOpportunityToInquiry(opp, profileRes.profile!.id, profileRes.profile!.name));
           setInquiries(fetchedInquiries);
+          safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(fetchedInquiries));
+          window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+        } else {
+          setInquiries([]);
+          safeStorage.setItem('idemo_portal_inquiries', JSON.stringify([]));
           window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
         }
 
@@ -987,6 +945,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   // Partner Passport Introduction Editor states
   const [passportIntroDraft, setPassportIntroDraft] = useState<string>('');
   const [passportPhotoPath, setPassportPhotoPath] = useState<string | null>(null);
+  const [passportPhotoPreview, setPassportPhotoPreview] = useState<string | null>(null);
+  const [photoLoadError, setPhotoLoadError] = useState<boolean>(false);
   const [passportPhotoMime, setPassportPhotoMime] = useState<string | null>(null);
   const [passportPhotoConsent, setPassportPhotoConsent] = useState<boolean>(false);
   const [passportReviewStatus, setPassportReviewStatus] = useState<string>('draft');
@@ -998,9 +958,10 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   const [profContactPhone, setProfContactPhone] = useState<string>('');
   const [profContactEmail, setProfContactEmail] = useState<string>('');
   const [profContactSaving, setProfContactSaving] = useState<boolean>(false);
-  const [profContactMsg, setProfContactMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [profContactMsg, setProfContactMsg] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
 
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+  const [partnerActionFeedback, setPartnerActionFeedback] = useState<{ type: 'success' | 'info' | 'error'; message: string } | null>(null);
   const [withdrawConfirmId, setWithdrawConfirmId] = useState<string | null>(null);
 
   const refreshOpportunities = async () => {
@@ -1024,10 +985,17 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
         if (!seen.has(k)) { seen.add(k); combined.push(o); }
       }
     }
-    if (authenticatedPartnerProfile && combined.length > 0) {
-      const fetched = combined.map(opp => mapOpportunityToInquiry(opp, authenticatedPartnerProfile.id, authenticatedPartnerProfile.name));
-      setInquiries(fetched);
-      window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+    if (authenticatedPartnerProfile) {
+      if (combined.length > 0) {
+        const fetched = combined.map(opp => mapOpportunityToInquiry(opp, authenticatedPartnerProfile.id, authenticatedPartnerProfile.name));
+        setInquiries(fetched);
+        safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(fetched));
+        window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+      } else {
+        setInquiries([]);
+        safeStorage.setItem('idemo_portal_inquiries', JSON.stringify([]));
+        window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+      }
     }
   };
 
@@ -1040,13 +1008,167 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     }
   };
 
+  const bridgePartnerAcceptanceToVisitor = (
+    inquiry: Partial<Inquiry>,
+    partnerName: string,
+    message: string,
+    alternativeOffer?: { date: string; time: string; note: string }
+  ) => {
+    try {
+      const allVisitorInquiries = getAllInquiriesV2();
+
+      // Find the matching visitor inquiry record
+      let target = allVisitorInquiries?.find(vInq => {
+        if (inquiry.inquiryId && (vInq.server_inquiry_id === inquiry.inquiryId || vInq.local_queue_id === inquiry.inquiryId)) return true;
+        if (inquiry.id && (vInq.server_inquiry_id === inquiry.id || vInq.local_queue_id === inquiry.id)) return true;
+        if (inquiry.recId && (vInq.recommendation_id === inquiry.recId || vInq.recommendation_db_id === inquiry.recId)) return true;
+        if (inquiry.recTitle && vInq.recommendation_title) {
+          const t1 = inquiry.recTitle.toLowerCase().trim();
+          const t2 = vInq.recommendation_title.toLowerCase().trim();
+          if (t1.includes(t2) || t2.includes(t1)) return true;
+        }
+        return false;
+      });
+
+      if (!target) {
+        // Fallback creation if inquiry originated directly in runtime testing
+        const fallbackQueueId = `inq_${Date.now()}`;
+        const fallbackRecId = inquiry.recId || '1';
+        const fallbackRecTitle = inquiry.recTitle || (fallbackRecId === '1' ? 'Uvac Meanders' : 'Recommendation');
+        const fallbackRecord: InquiryRecordV2 = {
+          local_queue_id: fallbackQueueId,
+          recommendation_id: fallbackRecId,
+          recommendation_title: fallbackRecTitle,
+          visitor_name: inquiry.visitorName || 'Verified Traveler',
+          visitor_notes: inquiry.query || 'Arrangement request',
+          requested_start_at: inquiry.requestedStartAt || new Date().toISOString(),
+          requested_end_at: inquiry.requestedEndAt || new Date(Date.now() + 2 * 3600000).toISOString(),
+          preferred_date: new Date().toISOString().split('T')[0],
+          preferred_time: inquiry.availableTime || 'Anytime',
+          status: 'submitted',
+          is_server_authoritative: true,
+          created_at: new Date().toISOString(),
+          client_request_id: `req_${Date.now()}`,
+        };
+        saveInquiryRecordV2(fallbackRecord);
+        target = fallbackRecord;
+      }
+
+      const serverOrLocalId = target.server_inquiry_id || target.local_queue_id;
+      const matchId = inquiry.matchId || `match_${target.recommendation_id || Date.now()}`;
+      const responseId = `resp_${Date.now()}`;
+
+      let proposedStartAt: string | null = null;
+      let proposedEndAt: string | null = null;
+      if (alternativeOffer) {
+        proposedStartAt = `${alternativeOffer.date}T${alternativeOffer.time || '10:00'}:00Z`;
+        proposedEndAt = `${alternativeOffer.date}T${alternativeOffer.time ? String(parseInt(alternativeOffer.time.split(':')[0]) + 2).padStart(2, '0') + ':00' : '12:00'}:00Z`;
+      } else if (inquiry.requestedStartAt) {
+        proposedStartAt = inquiry.requestedStartAt;
+        proposedEndAt = inquiry.requestedEndAt || null;
+      }
+
+      const proposalRecord: CachedProposalRecord = {
+        schema_version: 1,
+        match_id: matchId,
+        response_id: responseId,
+        response_type: alternativeOffer ? 'propose_alternative' : 'accept_as_requested',
+        message: alternativeOffer 
+          ? (alternativeOffer.note ? `${alternativeOffer.note} (${alternativeOffer.date} ${alternativeOffer.time})` : (isSr ? `Predložen zamenski termin: ${alternativeOffer.date} ${alternativeOffer.time}` : `Alternative proposed: ${alternativeOffer.date} ${alternativeOffer.time}`))
+          : message,
+        proposed_start_at: proposedStartAt,
+        proposed_end_at: proposedEndAt,
+        cached_at: Date.now(),
+      };
+
+      // 1. Persist proposal to visitor storage
+      updateInquiryCachedProposalV2(serverOrLocalId, proposalRecord);
+
+      // 1b. Resolve partner contact channels and immediately populate confirmed arrangement
+      const catalogPartner = INITIAL_PORTAL_PARTNERS.find(p =>
+        (authenticatedPartnerProfile && (p.id.toLowerCase() === authenticatedPartnerProfile.public_code?.toLowerCase() || p.id.toLowerCase() === authenticatedPartnerProfile.id?.toLowerCase())) ||
+        (currentSimulatedPartner && p.id.toLowerCase() === currentSimulatedPartner.id.toLowerCase()) ||
+        p.name.toLowerCase() === partnerName.toLowerCase() ||
+        p.id.toLowerCase() === 'uno1'
+      );
+
+      const contactPhone = authenticatedPartnerProfile?.published_contact_phone ||
+        authenticatedPartnerProfile?.draft_contact_phone ||
+        currentSimulatedPartner?.contactPhone ||
+        catalogPartner?.contactPhone ||
+        '+381 62 187 3260';
+
+      const contactEmail = authenticatedPartnerProfile?.published_contact_email ||
+        authenticatedPartnerProfile?.draft_contact_email ||
+        'concierge@idemo.travel';
+
+      const arrangementRecord: ConfirmedArrangementRecord = {
+        match_id: matchId,
+        partner_name: partnerName,
+        partner_code: authenticatedPartnerProfile?.public_code || currentSimulatedPartner?.publicCode || catalogPartner?.publicCode || 'UNO1',
+        category: authenticatedPartnerProfile?.category || currentSimulatedPartner?.category || catalogPartner?.category || 'Tourist Guide',
+        verification_status: 'IDEMO Verified Host',
+        photo_url: authenticatedPartnerProfile?.photo_url || currentSimulatedPartner?.photoUrl || '/assets/images/partners/uno_portrait.svg',
+        contact_phone: contactPhone,
+        contact_email: contactEmail,
+        introduction: authenticatedPartnerProfile?.bio || currentSimulatedPartner?.introduction || catalogPartner?.introduction || null,
+        languages: authenticatedPartnerProfile?.languages || currentSimulatedPartner?.languages || catalogPartner?.languages || ['English', 'Serbian'],
+        service_areas: currentSimulatedPartner?.geography ? [currentSimulatedPartner.geography] : ['Belgrade'],
+        capabilities: currentSimulatedPartner?.capabilities || catalogPartner?.capabilities || ['Licensed Tourist Guide'],
+        portfolio_items: [],
+        confirmed_terms: proposalRecord.message,
+        proposed_start_at: proposedStartAt,
+        proposed_end_at: proposedEndAt,
+        confirmed_at: Date.now(),
+      };
+
+      saveConfirmedArrangementV2(serverOrLocalId, arrangementRecord);
+
+      // 2. Update visitor status label
+      const statusLabel = isSr ? 'Upit prihvaćen — kontakt otključan' : 'Inquiry accepted — contact unlocked';
+      updateInquiryServerStatusV2(serverOrLocalId, statusLabel);
+
+      // 3. Mark proposal as unread so red dot turns ON immediately
+      removeSeenProposal(serverOrLocalId);
+      const sig = `${matchId}_${responseId}`;
+      removeSeenProposal(sig);
+
+      // 4. Dispatch events for instant UI update (<10ms)
+      window.dispatchEvent(new CustomEvent('idemo_arrangement_confirmed', {
+        detail: {
+          inquiryId: serverOrLocalId,
+          arrangement: arrangementRecord
+        }
+      }));
+      window.dispatchEvent(new CustomEvent('idemo_proposal_state_change', {
+        detail: {
+          inquiryId: serverOrLocalId,
+          proposal: proposalRecord
+        }
+      }));
+      window.dispatchEvent(new CustomEvent('idemo_inquiry_updated'));
+    } catch (err) {
+      console.warn('Failed to bridge partner acceptance to visitor:', err);
+    }
+  };
+
   const handleAcceptCounter = async (matchId: string) => {
     setActionLoading(prev => ({ ...prev, [matchId]: true }));
     const res = await acceptPartnerCounterOffer(matchId);
     setActionLoading(prev => ({ ...prev, [matchId]: false }));
     if (res.success) {
       triggerHaptic(12);
+      const targetInq = inquiries.find(inq => inq.matchId === matchId || inq.id === matchId);
+      const partnerName = authenticatedPartnerProfile?.name || currentSimulatedPartner?.name || 'Partner';
+      bridgePartnerAcceptanceToVisitor(targetInq || { matchId }, partnerName, isSr ? 'Prihvaćen predlog putnika' : 'Counter offer accepted');
       setInquiries(prev => prev.map(inq => (inq.matchId === matchId || inq.id === matchId) ? { ...inq, status: 'Locked / Accepted', matchStatus: 'responded' } : inq));
+      setPartnerActionFeedback({
+        type: 'success',
+        message: isSr
+          ? 'Predlog putnika uspešno prihvaćen! Zvanična ponuda je poslata u Planer (Crvena tačka aktivirana).'
+          : 'Counter offer accepted! Proposal sent to traveler (Red dot activated).'
+      });
+      setTimeout(() => setPartnerActionFeedback(null), 7000);
       refreshOpportunities();
     } else {
       alert(res.error || 'Failed to accept counter proposal.');
@@ -1091,6 +1213,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       prevPartnerIdRef.current = currentPartnerId;
       setPassportIntroDraft('');
       setPassportPhotoPath(null);
+      setPassportPhotoPreview(null);
+      setPhotoLoadError(false);
       setPassportPhotoMime(null);
       setPassportPhotoConsent(false);
       setPassportReviewStatus('draft');
@@ -1100,6 +1224,50 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       setProfContactSaving(false);
       setProfContactMsg(null);
     }
+
+    const loadStoredOrCanonical = () => {
+      const currIdLower = currentPartnerId ? currentPartnerId.trim().toLowerCase() : '';
+      const isUno = currIdLower.includes('uno1') || currIdLower.includes('uno2') || currIdLower.startsWith('a0000000-0000-0000-0000-00000000009');
+      
+      const storedRaw = safeStorage.getItem(`idemo_partner_passport_${(currentPartnerId || '').toUpperCase()}`) ||
+                        safeStorage.getItem(`idemo_partner_passport_${(currentPartnerId || '').toLowerCase()}`);
+      if (storedRaw) {
+        try {
+          const parsed = JSON.parse(storedRaw);
+          if (parsed.intro_draft || parsed.intro_published) {
+            setPassportIntroDraft(parsed.intro_draft || parsed.intro_published);
+          }
+          const photo = parsed.photo_url || parsed.published_photo_path || parsed.draft_photo_path || null;
+          if (photo) {
+            setPassportPhotoPath(photo);
+            setPassportPhotoPreview(photo);
+          }
+          if (typeof parsed.photo_consent_given === 'boolean') {
+            setPassportPhotoConsent(parsed.photo_consent_given);
+          }
+          if (parsed.review_status) {
+            setPassportReviewStatus(parsed.review_status);
+          }
+          if (parsed.draft_contact_phone || parsed.published_contact_phone || parsed.contact_phone) {
+            setProfContactPhone(parsed.draft_contact_phone || parsed.published_contact_phone || parsed.contact_phone || '');
+          }
+          if (parsed.draft_contact_email || parsed.published_contact_email || parsed.contact_email) {
+            setProfContactEmail(parsed.draft_contact_email || parsed.published_contact_email || parsed.contact_email || '');
+          }
+          return;
+        } catch (e) {
+          console.warn('Failed parsing stored partner passport:', e);
+        }
+      }
+
+      if (isUno) {
+        setPassportIntroDraft('I am a licensed local guide with strong knowledge of Belgrade, Serbian history, cultural heritage and traditional gastronomy. I enjoy helping visitors understand the stories behind the places they see and creating memorable experiences tailored to their interests.');
+        setPassportPhotoPath('/assets/images/partners/uno_portrait.svg');
+        setPassportPhotoPreview('/assets/images/partners/uno_portrait.svg');
+        setPassportPhotoConsent(true);
+        setPassportReviewStatus('approved');
+      }
+    };
 
     if (authenticatedPartnerProfile && (
       authenticatedPartnerProfile.id === currentPartnerId ||
@@ -1138,7 +1306,12 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           }
 
           setPassportIntroDraft(res.content.intro_draft || res.content.intro_published || '');
-          setPassportPhotoPath(res.content.draft_photo_path || res.content.published_photo_path || null);
+          const resolvedPath = res.content.draft_photo_path || res.content.published_photo_path || null;
+          setPassportPhotoPath(resolvedPath);
+          const resolvedPreview = res.content.draft_photo_signed_url ||
+                                  res.content.published_photo_signed_url ||
+                                  (resolvedPath && (resolvedPath.startsWith('/') || resolvedPath.startsWith('http') || resolvedPath.startsWith('data:')) ? resolvedPath : null);
+          setPassportPhotoPreview(resolvedPreview);
           setPassportPhotoMime(res.content.draft_photo_mime || res.content.published_photo_mime || null);
           setPassportPhotoConsent(res.content.photo_consent_given || false);
           setPassportReviewStatus(res.content.review_status || 'draft');
@@ -1150,7 +1323,11 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           if (res.content.draft_contact_email || res.content.published_contact_email) {
             setProfContactEmail(res.content.draft_contact_email || res.content.published_contact_email || '');
           }
+        } else {
+          loadStoredOrCanonical();
         }
+      }).catch(() => {
+        loadStoredOrCanonical();
       });
     }
 
@@ -1186,6 +1363,12 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   // Alternative date/time submission form states
   const [altOfferForm, setAltOfferForm] = useState<Record<string, { date: string; time: string; note: string }>>({});
   const [altFormOpenId, setAltFormOpenId] = useState<string | null>(null);
+
+  // Folder container state for handled / archived opportunities
+  const [isPastFolderOpen, setIsPastFolderOpen] = useState<boolean>(false);
+
+  // Partner Workspace navigation tab state (Zero-scroll design: defaults to opportunities)
+  const [partnerWorkspaceTab, setPartnerWorkspaceTab] = useState<'opportunities' | 'profile' | 'messages'>('opportunities');
 
   // Answer submission states
   const [activeAnswerText, setActiveAnswerText] = useState<Record<string, string>>({});
@@ -1335,13 +1518,101 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     setPartnersList(loadedPartners);
     safeStorage.setItem('idemo_portal_partners', JSON.stringify(loadedPartners));
 
-    const savedInquiries = safeStorage.getItem('idemo_portal_inquiries');
-    if (savedInquiries) {
-      try { setInquiries(JSON.parse(savedInquiries)); } catch (e) { setInquiries(INITIAL_INQUIRIES); }
+    const hasCleanSlateV4 = safeStorage.getItem('idemo_portal_inquiries_v4_clean_all');
+    if (!hasCleanSlateV4) {
+      // Definitive clean slate: completely erase past test inquiries across all partner cards (UNO1, UNO2, and all partners)
+      safeStorage.setItem('idemo_portal_inquiries', JSON.stringify([]));
+      safeStorage.setItem('idemo_portal_inquiries_v4_clean_all', 'true');
+      setInquiries([]);
     } else {
-      setInquiries(INITIAL_INQUIRIES);
-      safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(INITIAL_INQUIRIES));
+      const savedInquiries = safeStorage.getItem('idemo_portal_inquiries');
+      if (savedInquiries) {
+        try {
+          const parsed = JSON.parse(savedInquiries);
+          const cleaned = Array.isArray(parsed) ? parsed.filter((inq: any) => {
+            const pId = String(inq.partnerId || '').toUpperCase();
+            return !['INQ-2001', 'INQ-2002', 'INQ-2003', 'INQ-2004'].includes(inq.id) &&
+              pId !== 'UNO1' &&
+              pId !== 'UNO2';
+          }) : [];
+          setInquiries(cleaned);
+          safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(cleaned));
+        } catch (e) {
+          setInquiries([]);
+          safeStorage.setItem('idemo_portal_inquiries', JSON.stringify([]));
+        }
+      } else {
+        setInquiries([]);
+        safeStorage.setItem('idemo_portal_inquiries', JSON.stringify([]));
+      }
     }
+
+    // Seamless runtime sync: integrate visitor inquiries from Planner
+    try {
+      const visitorInquiries = getAllInquiriesV2();
+      if (visitorInquiries && visitorInquiries.length > 0) {
+        setInquiries(prev => {
+          const merged = [...prev];
+          visitorInquiries.forEach(vInq => {
+            const vId = vInq.server_inquiry_id || vInq.local_queue_id;
+            const alreadyPresent = merged.find(m => m.id === vId || m.inquiryId === vId || (m.recId === vInq.recommendation_id && m.visitorName === vInq.visitor_name));
+            const isConfirmed = (vInq as any).status === 'Arrangement Confirmed' || !!getConfirmedArrangementByServerId(vId);
+            if (!alreadyPresent) {
+              merged.unshift({
+                id: vId,
+                inquiryId: vInq.server_inquiry_id,
+                recId: vInq.recommendation_id,
+                recTitle: vInq.recommendation_title || (vInq.recommendation_id === '1' ? 'Uvac Meanders' : 'Recommendation'),
+                visitorName: vInq.visitor_name || 'Verified Traveler',
+                query: vInq.visitor_notes || 'Arrangement request for Uvac Meanders',
+                status: isConfirmed ? 'Confirmed by Traveler' : vInq.cached_proposal ? 'Locked / Accepted' : 'Pending',
+                visitorConfirmed: isConfirmed,
+                visitorConfirmedAt: isConfirmed ? Date.now() : undefined,
+                dateSubmitted: vInq.created_at || new Date().toISOString(),
+                availableTime: vInq.preferred_time || 'Anytime',
+                language: 'English',
+                budget: 'Standard',
+                geography: 'Uvac / Zlatar',
+                replies: vInq.cached_proposal?.message ? [vInq.cached_proposal.message] : [],
+                requestedStartAt: vInq.requested_start_at,
+                requestedEndAt: vInq.requested_end_at,
+              });
+            } else if (isConfirmed && !alreadyPresent.visitorConfirmed) {
+              alreadyPresent.visitorConfirmed = true;
+              alreadyPresent.status = 'Confirmed by Traveler';
+              alreadyPresent.visitorConfirmedAt = Date.now();
+            }
+          });
+          return merged;
+        });
+      }
+    } catch (e) {}
+
+    // Live reactive listener for traveler proposal confirmation
+    const handleVisitorConfirmed = (e: any) => {
+      const detail = e.detail;
+      if (detail) {
+        setInquiries(prev => prev.map(inq => {
+          const isMatch = inq.id === detail.inquiryId || inq.inquiryId === detail.inquiryId || inq.matchId === detail.matchId;
+          if (isMatch) {
+            return {
+              ...inq,
+              status: 'Confirmed by Traveler',
+              visitorConfirmed: true,
+              visitorConfirmedAt: detail.confirmedAt || Date.now(),
+            };
+          }
+          return inq;
+        }));
+      }
+    };
+    window.addEventListener('idemo_proposal_confirmed_by_visitor', handleVisitorConfirmed);
+    window.addEventListener('idemo_inquiry_updated', () => {
+      const savedInquiries = safeStorage.getItem('idemo_portal_inquiries');
+      if (savedInquiries) {
+        try { setInquiries(JSON.parse(savedInquiries)); } catch (e) {}
+      }
+    });
 
     const savedInterests = safeStorage.getItem('idemo_portal_interest_requests');
     if (savedInterests) {
@@ -1492,6 +1763,10 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
               dispatchStage: 1,
             }));
             setInquiries(fetchedInquiries);
+            safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(fetchedInquiries));
+          } else {
+            setInquiries([]);
+            safeStorage.setItem('idemo_portal_inquiries', JSON.stringify([]));
           }
 
           if (profileRes.profile.must_change_pin || res.partner.must_change_pin) {
@@ -1737,34 +2012,54 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   // Modern Automated Dispatch Handlers
   const handlePartnerAcceptInquiry = async (inqId: string, partnerId: string, customMessage?: string) => {
     triggerHaptic(20);
-    const typedText = (customMessage !== undefined ? customMessage : activeAnswerText[inqId])?.trim();
-    const messageToPersist = typedText || 'Accepted via Partner Portal';
+    const inqKey = inqId;
+    setActionLoading(prev => ({ ...prev, [inqKey]: true }));
 
-    if (partnerSessionStorage.hasActiveSession()) {
-      const res = await acceptPartnerOpportunity(inqId, messageToPersist);
-      if (!res.success) {
-        alert(res.error || 'Failed to accept opportunity on server.');
-        return;
+    const typedText = (customMessage !== undefined ? customMessage : activeAnswerText[inqId])?.trim();
+    const defaultMsg = isSr ? 'Upit prihvaćen. Radujem se saradnji.' : 'Accepted via Partner Portal';
+    const messageToPersist = typedText || defaultMsg;
+
+    try {
+      if (partnerSessionStorage.hasActiveSession()) {
+        const res = await acceptPartnerOpportunity(inqId, messageToPersist);
+        if (!res.success) {
+          alert(res.error || 'Failed to accept opportunity on server.');
+          return;
+        }
       }
+      const partner = partnersList.find(p => p.id === partnerId);
+      const partnerName = partner?.name || currentSimulatedPartner?.name || authenticatedPartnerProfile?.name || 'Partner';
+      const targetInq = inquiries.find(inq => inq.id === inqId || inq.matchId === inqId);
+
+      const updated = inquiries.map(inq => {
+        if (inq.id === inqId) {
+          const existingReplies = inq.replies || [];
+          const hasMsg = existingReplies.includes(messageToPersist);
+          return {
+            ...inq,
+            status: 'Locked / Accepted' as const,
+            partnerId: partnerId,
+            partnerName: partnerName,
+            replies: hasMsg ? existingReplies : [...existingReplies, messageToPersist],
+          };
+        }
+        return inq;
+      });
+      syncPortalState(partnersList, updated);
+      setActiveAnswerText(prev => ({ ...prev, [inqId]: '' }));
+
+      // Bridge directly to visitor's Planner and trigger instant Red Dot
+      bridgePartnerAcceptanceToVisitor(targetInq || { id: inqId, recId: targetInq?.recId }, partnerName, messageToPersist);
+      setPartnerActionFeedback({
+        type: 'success',
+        message: isSr
+          ? 'Upit uspešno prihvaćen! Zvanična ponuda je odmah poslata posetiocu u Moj Planer (Crvena tačka aktivirana). Status: Čeka se potvrda aranžmana.'
+          : 'Opportunity accepted! Official proposal sent to traveler in My Planner (Red dot activated). Status: Awaiting traveler confirmation.'
+      });
+      setTimeout(() => setPartnerActionFeedback(null), 7000);
+    } finally {
+      setActionLoading(prev => ({ ...prev, [inqKey]: false }));
     }
-    const partner = partnersList.find(p => p.id === partnerId);
-    const partnerName = partner?.name || currentSimulatedPartner?.name || authenticatedPartnerProfile?.name || 'Partner';
-    const updated = inquiries.map(inq => {
-      if (inq.id === inqId) {
-        const existingReplies = inq.replies || [];
-        const hasMsg = existingReplies.includes(messageToPersist);
-        return {
-          ...inq,
-          status: 'Locked / Accepted' as const,
-          partnerId: partnerId,
-          partnerName: partnerName,
-          replies: hasMsg ? existingReplies : [...existingReplies, messageToPersist],
-        };
-      }
-      return inq;
-    });
-    syncPortalState(partnersList, updated);
-    setActiveAnswerText(prev => ({ ...prev, [inqId]: '' }));
   };
 
   const handlePartnerPassInquiry = async (inqId: string, partnerId: string) => {
@@ -1843,6 +2138,17 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     });
     syncPortalState(updatedPartners, updatedInquiries);
     setActiveAnswerText(prev => ({ ...prev, [inqId]: '' }));
+
+    const partner = partnersList.find(p => p.id === partnerId);
+    const partnerName = partner?.name || currentSimulatedPartner?.name || authenticatedPartnerProfile?.name || 'Partner';
+    bridgePartnerAcceptanceToVisitor(targetInquiry || { id: inqId }, partnerName, trimmed);
+    setPartnerActionFeedback({
+      type: 'success',
+      message: isSr
+        ? 'Ponuda uspešno poslata posetiocu! Crvena tačka je aktivirana u Planeru.'
+        : 'Proposal transmitted to traveler! Red dot activated in Planner.'
+    });
+    setTimeout(() => setPartnerActionFeedback(null), 7000);
   };
 
   const handlePartnerProposeAlternative = async (inqId: string, partnerId: string, date: string, time: string, note: string) => {
@@ -1858,6 +2164,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     }
     const partner = partnersList.find(p => p.id === partnerId);
     const partnerName = partner?.name || currentSimulatedPartner?.name || authenticatedPartnerProfile?.name || 'Partner';
+    const targetInq = inquiries.find(inq => inq.id === inqId || inq.matchId === inqId);
     const updated = inquiries.map(inq => {
       if (inq.id === inqId) {
         return {
@@ -1871,6 +2178,133 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       return inq;
     });
     syncPortalState(partnersList, updated);
+
+    bridgePartnerAcceptanceToVisitor(
+      targetInq || { id: inqId },
+      partnerName,
+      note || `Alternative: ${date} ${time}`,
+      { date, time, note }
+    );
+    setPartnerActionFeedback({
+      type: 'success',
+      message: isSr
+        ? 'Alternativni termin poslat posetiocu! Crvena tačka je aktivirana u Planeru.'
+        : 'Alternative proposed to traveler! Red dot activated in Planner.'
+    });
+    setTimeout(() => setPartnerActionFeedback(null), 7000);
+  };
+
+  // Dedicated clean board action for test leads (specifically UNO1 / UNO2 or active partner)
+  const handleClearOpportunitiesForCurrentPartner = () => {
+    if (!currentSimulatedPartner) return;
+    const targetPartnerId = (currentSimulatedPartner.id || '').toLowerCase();
+    const targetCode = (currentSimulatedPartner.publicCode || '').toLowerCase();
+    const targetName = (currentSimulatedPartner.name || '').toLowerCase();
+    
+    // Purge opportunities matching the current partner
+    const updated = inquiries.filter(inq => {
+      const pId = (inq.partnerId || '').toLowerCase();
+      const pName = (inq.partnerName || '').toLowerCase();
+      return pId !== targetPartnerId && pId !== targetCode && pName !== targetName;
+    });
+    setInquiries(updated);
+    safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(updated));
+    syncPortalState(partnersList, updated, interestRequests);
+    window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+
+    setPartnerActionFeedback({
+      type: 'success',
+      message: isSr
+        ? `Sve prilike za ${currentSimulatedPartner.name} su uspešno obrisane. Čista tabla!`
+        : `All opportunities for ${currentSimulatedPartner.name} have been erased. Clean board!`
+    });
+    setTimeout(() => setPartnerActionFeedback(null), 5000);
+  };
+
+  // Clear only handled / archived opportunities, preserving any active pending opportunities
+  const handleClearArchivedOpportunities = () => {
+    if (!currentSimulatedPartner) return;
+    const targetPartnerId = (currentSimulatedPartner.id || '').toLowerCase();
+    const targetCode = (currentSimulatedPartner.publicCode || '').toLowerCase();
+    const targetName = (currentSimulatedPartner.name || '').toLowerCase();
+    
+    const updated = inquiries.filter(inq => {
+      const pId = (inq.partnerId || '').toLowerCase();
+      const pName = (inq.partnerName || '').toLowerCase();
+      const isTargetPartner = pId === targetPartnerId || pId === targetCode || pName === targetName;
+      if (!isTargetPartner) return true;
+      
+      const isConfirmedByVisitor = Boolean(
+        inq.visitorConfirmed === true ||
+        inq.status === 'Confirmed by Traveler' ||
+        inq.status === 'Arrangement Confirmed' ||
+        inq.status === 'selected' ||
+        inq.matchStatus === 'selected' ||
+        inq.rawMatchStatus === 'selected' ||
+        inq.inquiryStatus === 'confirmed'
+      );
+
+      const isAccepted = !isConfirmedByVisitor && Boolean(
+        inq.status === 'Locked / Accepted' ||
+        inq.status === 'accepted' ||
+        inq.status === 'responded' ||
+        inq.matchStatus === 'responded' ||
+        inq.rawMatchStatus === 'responded'
+      );
+
+      const isAlternative = Boolean(
+        inq.status === 'Alternative Proposed' ||
+        inq.status === 'proposed' ||
+        inq.alternativeOffer
+      );
+
+      const isDeclined = Boolean(
+        inq.status === 'Released' ||
+        inq.status === 'declined' ||
+        inq.status === 'expired' ||
+        inq.status === 'not_selected' ||
+        inq.status === 'withdrawn' ||
+        inq.matchStatus === 'declined' ||
+        inq.matchStatus === 'expired' ||
+        inq.matchStatus === 'not_selected' ||
+        inq.matchStatus === 'withdrawn' ||
+        inq.rawMatchStatus === 'declined' ||
+        inq.rawMatchStatus === 'expired'
+      );
+
+      const isCompleted = Boolean(
+        inq.status === 'Answered / Completed' ||
+        inq.status === 'completed' ||
+        inq.status === 'closed' ||
+        inq.status === 'canceled' ||
+        inq.inquiryStatus === 'completed' ||
+        inq.inquiryStatus === 'closed' ||
+        inq.inquiryStatus === 'canceled'
+      );
+
+      const isCounter = Boolean(
+        inq.matchStatus === 'counter_by_visitor' ||
+        inq.rawMatchStatus === 'counter_by_visitor' ||
+        inq.status === 'counter_by_visitor'
+      );
+
+      const isPendingAction = isCounter || (!isConfirmedByVisitor && !isAccepted && !isAlternative && !isDeclined && !isCompleted);
+      
+      return isPendingAction;
+    });
+
+    setInquiries(updated);
+    safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(updated));
+    syncPortalState(partnersList, updated, interestRequests);
+    window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+
+    setPartnerActionFeedback({
+      type: 'success',
+      message: isSr 
+        ? `Arhiva obrađenih upita za ${currentSimulatedPartner.name} je uspešno očišćena.`
+        : `Archived opportunities for ${currentSimulatedPartner.name} have been cleared.`
+    });
+    setTimeout(() => setPartnerActionFeedback(null), 5000);
   };
 
   // Message prefill copy templates
@@ -1925,6 +2359,26 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       null
     );
   }, [authenticatedPartnerProfile, activePartnerId, partnersList]);
+
+  // Governed Passport Photo URL resolution
+  const activePhotoUrl = useMemo(() => {
+    if (passportPhotoPreview) return passportPhotoPreview;
+    if (passportPhotoPath) {
+      if (
+        passportPhotoPath.startsWith('/') ||
+        passportPhotoPath.startsWith('http://') ||
+        passportPhotoPath.startsWith('https://') ||
+        passportPhotoPath.startsWith('data:')
+      ) {
+        return passportPhotoPath;
+      }
+    }
+    const currIdLower = (currentSimulatedPartner?.id || activePartnerId || '')?.trim().toLowerCase();
+    if (currIdLower.includes('uno1') || currIdLower.includes('uno2')) {
+      return '/assets/images/partners/uno_portrait.svg';
+    }
+    return null;
+  }, [passportPhotoPreview, passportPhotoPath, currentSimulatedPartner, activePartnerId]);
 
   // Filtered inquiries for partner active views
   const newInquiries = useMemo(() => {
@@ -2127,6 +2581,18 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                 </button>
                 <button onClick={() => { triggerHaptic(10); setPortalRole('partner'); setActivePartnerId('p-tr-1'); }} className={`px-2.5 py-1 rounded-lg text-[8px] font-mono font-black uppercase ${portalRole === 'partner' && activePartnerId === 'p-tr-1' ? 'bg-amber-600 text-white' : 'bg-white border text-brand-charcoal/60'}`}>
                   [PARTNER: LIM]
+                </button>
+                <button 
+                  onClick={() => { 
+                    triggerHaptic([20, 30, 20]); 
+                    setInquiries([]); 
+                    safeStorage.setItem('idemo_portal_inquiries', JSON.stringify([])); 
+                    safeStorage.setItem('idemo_partner_passed_inquiries_map', JSON.stringify({})); 
+                    window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change')); 
+                  }} 
+                  className="px-2.5 py-1 rounded-lg text-[8px] font-mono font-black uppercase bg-rose-700 text-white border border-rose-800 hover:bg-rose-800 transition-colors"
+                >
+                  [PURGE INQUIRIES (0)]
                 </button>
                 <button onClick={() => { triggerHaptic(10); setPortalRole('guest'); }} className={`px-2.5 py-1 rounded-lg text-[8px] font-mono font-black uppercase ${portalRole === 'guest' ? 'bg-amber-600 text-white' : 'bg-white border text-brand-charcoal/60'}`}>
                   [EXIT]
@@ -2344,9 +2810,16 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                   {/* PANORAMIC EDITORIAL HERO HEADER */}
                   <div className="relative w-full h-48 sm:h-56 overflow-hidden bg-[#23251E] rounded-[32px] shadow-sm">
                     <img 
-                      src="/src/assets/images/uvac_meanders_1778841048759.png" 
-                      alt="Uvac Meanders Serbia Landscape" 
+                      src="/assets/images/ovcar_kablar_gorge_monastery_1778844065335.webp" 
+                      alt="Kablar Viewpoint & Ovčar-Kablar Gorge Serbia Landscape" 
                       loading="lazy"
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        if (!target.dataset.fallbackTried) {
+                          target.dataset.fallbackTried = 'true';
+                          target.src = '/src/assets/images/ovcar_kablar_gorge_monastery_1778844065335.webp';
+                        }
+                      }}
                       className="w-full h-full object-cover object-center"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/20" />
@@ -2926,23 +3399,40 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                         <div className="space-y-2 pt-2 border-t border-[#2D3025]/5">
                           <p className="text-[8.5px] uppercase font-mono font-black text-brand-charcoal/40">Prepare Dispatch & Deep Links:</p>
                           <div className="grid grid-cols-3 gap-1.5 text-[8.5px] font-mono font-black">
-                            <a 
-                              href={`https://wa.me/${matchedPartner.contactPhone.replace(/\D/g, '')}?text=${encodeURIComponent(getOutboundCopyText(inq, matchedPartner))}`} 
-                              target="_blank" 
-                              referrerPolicy="no-referrer"
-                              rel="noreferrer"
-                              onClick={() => { triggerHaptic(8); handleUpdateInquiryStatus(inq.id, 'sent'); }}
-                              className="h-8 bg-emerald-50 text-emerald-800 border border-emerald-500/20 rounded-lg flex items-center justify-center gap-1 uppercase"
+                            <button 
+                              type="button"
+                              onClick={() => { 
+                                triggerHaptic(8); 
+                                handleUpdateInquiryStatus(inq.id, 'sent');
+                                const copyText = getOutboundCopyText(inq, matchedPartner);
+                                const waUrl = `https://wa.me/${matchedPartner.contactPhone.replace(/\D/g, '')}?text=${encodeURIComponent(copyText)}`;
+                                routeOutboundAction({
+                                  url: waUrl,
+                                  type: 'EXTERNAL_INTENT',
+                                  fallbackData: { copyText }
+                                });
+                              }}
+                              className="h-8 bg-emerald-50 text-emerald-800 border border-emerald-500/20 rounded-lg flex items-center justify-center gap-1 uppercase cursor-pointer"
                             >
                               <MessageCircle size={10} /> WhatsApp
-                            </a>
-                            <a 
-                              href={`viber://forward?text=${encodeURIComponent(getOutboundCopyText(inq, matchedPartner))}`} 
-                              onClick={() => { triggerHaptic(8); handleUpdateInquiryStatus(inq.id, 'sent'); }}
-                              className="h-8 bg-indigo-50 text-indigo-800 border border-indigo-500/20 rounded-lg flex items-center justify-center gap-1 uppercase"
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={() => { 
+                                triggerHaptic(8); 
+                                handleUpdateInquiryStatus(inq.id, 'sent');
+                                const copyText = getOutboundCopyText(inq, matchedPartner);
+                                const viberUrl = `viber://forward?text=${encodeURIComponent(copyText)}`;
+                                routeOutboundAction({
+                                  url: viberUrl,
+                                  type: 'EXTERNAL_INTENT',
+                                  fallbackData: { copyText }
+                                });
+                              }}
+                              className="h-8 bg-indigo-50 text-indigo-800 border border-indigo-500/20 rounded-lg flex items-center justify-center gap-1 uppercase cursor-pointer"
                             >
                               <Send size={10} /> Viber
-                            </a>
+                            </button>
                             <button 
                               onClick={() => { 
                                 navigator.clipboard.writeText(getOutboundCopyText(inq, matchedPartner)); 
@@ -3128,7 +3618,75 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
               }
             ];
 
-            const assignedInquiries = inquiries.filter(inq => inq.partnerId === currentSimulatedPartner.id);
+            const partnerIdLower = (currentSimulatedPartner.id || '').toLowerCase();
+            const partnerCodeLower = (currentSimulatedPartner.publicCode || '').toLowerCase();
+            const partnerNameLower = (currentSimulatedPartner.name || '').toLowerCase();
+
+            const assignedInquiries = inquiries.filter(inq => {
+              const pId = (inq.partnerId || '').toLowerCase();
+              const pName = (inq.partnerName || '').toLowerCase();
+              return pId === partnerIdLower || (partnerCodeLower && pId === partnerCodeLower) || pName === partnerNameLower;
+            });
+
+            const activeInquiries = assignedInquiries.filter(inq => {
+              const isCounter = Boolean(
+                inq.matchStatus === 'counter_by_visitor' ||
+                inq.rawMatchStatus === 'counter_by_visitor' ||
+                inq.status === 'counter_by_visitor'
+              );
+
+              const isConfirmedByVisitor = Boolean(
+                inq.visitorConfirmed === true ||
+                inq.status === 'Confirmed by Traveler' ||
+                inq.status === 'Arrangement Confirmed' ||
+                inq.status === 'selected' ||
+                inq.matchStatus === 'selected' ||
+                inq.rawMatchStatus === 'selected' ||
+                inq.inquiryStatus === 'confirmed'
+              );
+
+              const isAccepted = !isConfirmedByVisitor && Boolean(
+                inq.status === 'Locked / Accepted' ||
+                inq.status === 'accepted' ||
+                inq.status === 'responded' ||
+                inq.matchStatus === 'responded' ||
+                inq.rawMatchStatus === 'responded'
+              );
+
+              const isAlternative = Boolean(
+                inq.status === 'Alternative Proposed' ||
+                inq.status === 'proposed' ||
+                inq.alternativeOffer
+              );
+
+              const isDeclined = Boolean(
+                inq.status === 'Released' ||
+                inq.status === 'declined' ||
+                inq.status === 'expired' ||
+                inq.status === 'not_selected' ||
+                inq.status === 'withdrawn' ||
+                inq.matchStatus === 'declined' ||
+                inq.matchStatus === 'expired' ||
+                inq.matchStatus === 'not_selected' ||
+                inq.matchStatus === 'withdrawn' ||
+                inq.rawMatchStatus === 'declined' ||
+                inq.rawMatchStatus === 'expired'
+              );
+
+              const isCompleted = Boolean(
+                inq.status === 'Answered / Completed' ||
+                inq.status === 'completed' ||
+                inq.status === 'closed' ||
+                inq.status === 'canceled' ||
+                inq.inquiryStatus === 'completed' ||
+                inq.inquiryStatus === 'closed' ||
+                inq.inquiryStatus === 'canceled'
+              );
+
+              return isCounter || (!isConfirmedByVisitor && !isAccepted && !isAlternative && !isDeclined && !isCompleted);
+            });
+
+            const pastInquiries = assignedInquiries.filter(inq => !activeInquiries.includes(inq));
             const currentMessages = getMessagesForPartner(currentSimulatedPartner.id);
 
             return (
@@ -3155,7 +3713,80 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                   </button>
                 </div>
 
+                {/* ZERO-SCROLL WORKSPACE SEGMENTED VIEW SWITCHER */}
+                <div className="flex items-center bg-[#2D3025]/5 p-1.5 rounded-2xl gap-1 border border-[#2D3025]/10">
+                  <button
+                    type="button"
+                    id="tab-partner-opportunities"
+                    onClick={() => {
+                      setPartnerWorkspaceTab('opportunities');
+                      triggerHaptic(8);
+                    }}
+                    className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      partnerWorkspaceTab === 'opportunities'
+                        ? 'bg-brand-charcoal text-white shadow-xs'
+                        : 'text-brand-charcoal/70 hover:text-brand-charcoal hover:bg-black/5'
+                    }`}
+                  >
+                    <Zap size={14} className={partnerWorkspaceTab === 'opportunities' ? 'text-amber-400' : 'text-brand-charcoal/50'} />
+                    <span>{isSr ? 'Prilike i upiti' : 'Opportunities'}</span>
+                    {activeInquiries.length > 0 && (
+                      <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold ${
+                        partnerWorkspaceTab === 'opportunities'
+                          ? 'bg-amber-400 text-brand-charcoal'
+                          : 'bg-amber-500/20 text-amber-900 border border-amber-500/30'
+                      }`}>
+                        {activeInquiries.length}
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    id="tab-partner-profile"
+                    onClick={() => {
+                      setPartnerWorkspaceTab('profile');
+                      triggerHaptic(8);
+                    }}
+                    className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      partnerWorkspaceTab === 'profile'
+                        ? 'bg-brand-charcoal text-white shadow-xs'
+                        : 'text-brand-charcoal/70 hover:text-brand-charcoal hover:bg-black/5'
+                    }`}
+                  >
+                    <UserCheck size={14} className={partnerWorkspaceTab === 'profile' ? 'text-amber-400' : 'text-brand-charcoal/50'} />
+                    <span>{isSr ? 'Profil i Pasoš' : 'Profile & Passport'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    id="tab-partner-messages"
+                    onClick={() => {
+                      setPartnerWorkspaceTab('messages');
+                      triggerHaptic(8);
+                    }}
+                    className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      partnerWorkspaceTab === 'messages'
+                        ? 'bg-brand-charcoal text-white shadow-xs'
+                        : 'text-brand-charcoal/70 hover:text-brand-charcoal hover:bg-black/5'
+                    }`}
+                  >
+                    <MessageSquare size={14} className={partnerWorkspaceTab === 'messages' ? 'text-amber-400' : 'text-brand-charcoal/50'} />
+                    <span>{isSr ? 'Poruke' : 'Messages'}</span>
+                    {currentMessages.length > 0 && (
+                      <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold ${
+                        partnerWorkspaceTab === 'messages'
+                          ? 'bg-amber-400 text-brand-charcoal'
+                          : 'bg-brand-charcoal/10 text-brand-charcoal/70'
+                      }`}>
+                        {currentMessages.length}
+                      </span>
+                    )}
+                  </button>
+                </div>
+
                 {/* CARD 1: MY PARTNER PROFILE */}
+                {partnerWorkspaceTab === 'profile' && (
                 <div className="bg-white border border-[#2D3025]/10 rounded-[32px] p-6 shadow-sm text-left space-y-5">
                   <div className="flex items-center gap-2 border-b border-[#2D3025]/5 pb-3">
                     <span className="p-1.5 rounded-lg bg-[#8A1F1F]/5 text-[#8A1F1F]">
@@ -3231,9 +3862,192 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                       />
                     </div>
 
-                    {/* Photo Consent & Selector */}
-                    <div className="space-y-2 pt-1 border-t border-[#2D3025]/5">
-                      <label className="flex items-start gap-2 text-xs text-brand-charcoal/80 cursor-pointer">
+                    {/* Photo Preview, Consent & Selector */}
+                    <div className="p-3 bg-[#FAF8F5] border border-[#2D3025]/10 rounded-xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono uppercase tracking-wider font-bold text-brand-charcoal/70">
+                          {isSr ? 'Fotografija profila (Pasoš partnera)' : 'Professional Portrait (Passport Photo)'}
+                        </span>
+                        {activePhotoUrl ? (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                            <CheckCircle2 size={11} />
+                            {isSr ? 'Fotografija aktivna' : 'Photo Attached & Active'}
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-mono font-bold text-brand-charcoal/50 bg-neutral-100 px-2 py-0.5 rounded-md border border-neutral-200">
+                            {isSr ? 'Nema fotografije' : 'No photo attached'}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Photo Visual Card */}
+                      <div className="flex items-center gap-3.5">
+                        <div className="relative w-16 h-16 rounded-full overflow-hidden border-2 border-[#C5A059] shadow-sm bg-neutral-100 flex items-center justify-center shrink-0">
+                          {activePhotoUrl && !photoLoadError ? (
+                            <img
+                              src={activePhotoUrl}
+                              alt={currentSimulatedPartner?.name || 'Partner portrait'}
+                              referrerPolicy="no-referrer"
+                              onError={() => setPhotoLoadError(true)}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center bg-[#1A2E26]/5 text-brand-charcoal/40">
+                              <Camera size={20} className="text-brand-charcoal/50" />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex-1 space-y-1.5">
+                          <p className="text-[11px] leading-snug text-brand-charcoal/80 font-sans">
+                            {isSr
+                              ? 'Ova fotografija se prikazuje posetiocu u sekciji „Dozvolite da se predstavim“ nakon prihvatanja upita.'
+                              : 'This portrait is displayed to travelers in the “Let me introduce myself” card alongside your intro text once an inquiry is confirmed.'}
+                          </p>
+                          <div className="flex items-center gap-2 pt-0.5">
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              id="passport-photo-input"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                if (file.size > 5 * 1024 * 1024) {
+                                  setPassportMsg({ type: 'error', text: isSr ? 'Fotografija ne sme biti veća od 5 MB.' : 'Photo size must not exceed 5 MB.' });
+                                  return;
+                                }
+
+                                // Instant visual preview
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                  const dataUrl = reader.result as string;
+                                  setPassportPhotoPreview(dataUrl);
+                                  setPhotoLoadError(false);
+                                };
+                                reader.readAsDataURL(file);
+
+                                setPassportPhotoConsent(true);
+                                const targetId = activePartnerId;
+                                setPassportSaving(true);
+                                setPassportMsg(null);
+
+                                // 1. Request upload authorization
+                                const authRes = await authorizePhotoUpload(file.name, file.type, file.size);
+                                if (activePartnerId !== targetId) {
+                                  setPassportSaving(false);
+                                  return;
+                                }
+
+                                if (authRes.success && authRes.upload_url && authRes.path) {
+                                  // 2. Execute binary upload to storage
+                                  const uploadRes = await uploadPhotoToSignedUrl(authRes.upload_url, file);
+                                  if (activePartnerId !== targetId) {
+                                    setPassportSaving(false);
+                                    return;
+                                  }
+
+                                  if (uploadRes.success) {
+                                    setPassportPhotoPath(authRes.path);
+                                    setPassportPhotoMime(authRes.mime_type || file.type);
+                                    setPassportMsg({ type: 'success', text: isSr ? 'Fotografija uspešno otpremljena.' : 'Photo uploaded successfully to partner storage.' });
+                                    // Cache locally as well
+                                    if (targetId) {
+                                      try {
+                                        const key = `idemo_partner_passport_${targetId.toUpperCase()}`;
+                                        const existing = safeStorage.getItem(key);
+                                        const parsed = existing ? JSON.parse(existing) : {};
+                                        safeStorage.setItem(key, JSON.stringify({
+                                          ...parsed,
+                                          photo_url: authRes.path,
+                                          draft_photo_path: authRes.path,
+                                          published_photo_path: authRes.path,
+                                          photo_consent_given: true,
+                                        }));
+                                      } catch (err) {
+                                        console.warn('Storage sync error:', err);
+                                      }
+                                    }
+                                  } else {
+                                    setPassportMsg({ type: 'error', text: uploadRes.error || 'Failed to upload photo to storage.' });
+                                  }
+                                } else {
+                                  // Offline / demo fallback with data URL
+                                  reader.onload = () => {
+                                    const dataUrl = reader.result as string;
+                                    setPassportPhotoPath(dataUrl);
+                                    setPassportPhotoMime(file.type);
+                                    setPassportPhotoPreview(dataUrl);
+                                    setPassportMsg({
+                                      type: 'success',
+                                      text: isSr ? 'Fotografija uspešno ažurirana (lokalni pregled).' : 'Photo updated successfully (local preview).'
+                                    });
+                                    if (targetId) {
+                                      try {
+                                        const key = `idemo_partner_passport_${targetId.toUpperCase()}`;
+                                        const existing = safeStorage.getItem(key);
+                                        const parsed = existing ? JSON.parse(existing) : {};
+                                        safeStorage.setItem(key, JSON.stringify({
+                                          ...parsed,
+                                          photo_url: dataUrl,
+                                          draft_photo_path: dataUrl,
+                                          photo_consent_given: true,
+                                        }));
+                                      } catch (err) {
+                                        console.warn('Storage sync error:', err);
+                                      }
+                                    }
+                                  };
+                                }
+                                setPassportSaving(false);
+                              }}
+                            />
+                            <label
+                              htmlFor="passport-photo-input"
+                              className="px-3 py-1.5 bg-white border border-[#2D3025]/20 rounded-lg text-[10px] font-mono font-bold uppercase text-brand-charcoal hover:bg-neutral-50 cursor-pointer transition-colors shadow-xs"
+                            >
+                              {activePhotoUrl ? (isSr ? 'Promeni fotografiju' : 'Change Photo') : (isSr ? 'Izaberi fotografiju' : 'Select Photo')}
+                            </label>
+
+                            {activePhotoUrl && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  triggerHaptic(10);
+                                  setPassportPhotoPath(null);
+                                  setPassportPhotoPreview(null);
+                                  setPhotoLoadError(false);
+                                  setPassportMsg({
+                                    type: 'info',
+                                    text: isSr ? 'Fotografija uklonjena iz pasoša.' : 'Photo removed from passport.'
+                                  });
+                                  if (activePartnerId) {
+                                    try {
+                                      const key = `idemo_partner_passport_${activePartnerId.toUpperCase()}`;
+                                      const existing = safeStorage.getItem(key);
+                                      if (existing) {
+                                        const parsed = JSON.parse(existing);
+                                        delete parsed.photo_url;
+                                        delete parsed.draft_photo_path;
+                                        delete parsed.published_photo_path;
+                                        safeStorage.setItem(key, JSON.stringify(parsed));
+                                      }
+                                    } catch (err) {
+                                      console.warn('Storage clear error:', err);
+                                    }
+                                  }
+                                }}
+                                className="px-2.5 py-1.5 text-[10px] font-mono font-bold text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                              >
+                                {isSr ? 'Ukloni' : 'Remove'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Consent Checkbox */}
+                      <label className="flex items-start gap-2 text-xs text-brand-charcoal/80 cursor-pointer pt-1 border-t border-[#2D3025]/5">
                         <input
                           type="checkbox"
                           checked={passportPhotoConsent}
@@ -3241,71 +4055,11 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                           className="mt-0.5 rounded border-[#2D3025]/20 text-[#8A1F1F] focus:ring-[#8A1F1F]"
                         />
                         <span className="text-[10px] leading-snug">
-                          I consent to IDEMO processing and displaying my professional profile photo for verified visitor introductions upon inquiry acceptance.
+                          {isSr
+                            ? 'Dajem saglasnost da IDEMO obradi i prikaže moju profesionalnu profilnu fotografiju verifikovanim posetiocima nakon prihvatanja upita.'
+                            : 'I consent to IDEMO processing and displaying my professional profile photo for verified visitor introductions upon inquiry acceptance.'}
                         </span>
                       </label>
-
-                      <div className="flex items-center gap-3 pt-1">
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp"
-                          id="passport-photo-input"
-                          className="hidden"
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            if (file.size > 5 * 1024 * 1024) {
-                              setPassportMsg({ type: 'error', text: 'Photo size must not exceed 5 MB.' });
-                              return;
-                            }
-                            const targetId = activePartnerId;
-                            setPassportSaving(true);
-                            setPassportMsg(null);
-
-                            // 1. Request upload authorization
-                            const authRes = await authorizePhotoUpload(file.name, file.type, file.size);
-                            if (activePartnerId !== targetId) {
-                              setPassportSaving(false);
-                              return;
-                            }
-
-                            if (!authRes.success || !authRes.upload_url || !authRes.path) {
-                              setPassportMsg({ type: 'error', text: authRes.error || 'Failed to authorize photo upload.' });
-                              setPassportSaving(false);
-                              return;
-                            }
-
-                            // 2. Execute binary upload to authorized storage signed URL
-                            const uploadRes = await uploadPhotoToSignedUrl(authRes.upload_url, file);
-                            if (activePartnerId !== targetId) {
-                              setPassportSaving(false);
-                              return;
-                            }
-
-                            if (uploadRes.success) {
-                              // Only populate local path and show attached AFTER upload succeeds
-                              setPassportPhotoPath(authRes.path);
-                              setPassportPhotoMime(authRes.mime_type || file.type);
-                              setPassportMsg({ type: 'success', text: 'Photo uploaded successfully to partner storage.' });
-                            } else {
-                              // UX Invariant: Do NOT mark attached if upload failed
-                              setPassportMsg({ type: 'error', text: uploadRes.error || 'Failed to upload photo to storage.' });
-                            }
-                            setPassportSaving(false);
-                          }}
-                        />
-                        <label
-                          htmlFor="passport-photo-input"
-                          className="px-3 py-1.5 bg-white border border-[#2D3025]/20 rounded-lg text-[10px] font-mono font-bold uppercase text-brand-charcoal hover:bg-neutral-50 cursor-pointer transition-colors"
-                        >
-                          {passportPhotoPath ? 'Change Professional Photo' : 'Select Professional Photo (JPG/PNG)'}
-                        </label>
-                        {passportPhotoPath && (
-                          <span className="text-[10px] font-mono text-emerald-700 font-bold">
-                            ✓ Photo Attached
-                          </span>
-                        )}
-                      </div>
                     </div>
 
                     {passportMsg && (
@@ -3372,8 +4126,36 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                               setProfContactSaving(false);
                               return;
                             }
+                            // Always synchronize to SafeStorage first for offline-first data protection
+                            if (targetId) {
+                              try {
+                                const key = `idemo_partner_passport_${targetId.toUpperCase()}`;
+                                const existing = safeStorage.getItem(key);
+                                const parsed = existing ? JSON.parse(existing) : {};
+                                safeStorage.setItem(key, JSON.stringify({
+                                  ...parsed,
+                                  draft_contact_phone: profContactPhone || null,
+                                  draft_contact_email: profContactEmail || null,
+                                  contact_phone: profContactPhone || parsed.contact_phone || null,
+                                  contact_email: profContactEmail || parsed.contact_email || null,
+                                  updated_at: new Date().toISOString(),
+                                }));
+                              } catch (err) {
+                                console.warn('Storage sync error:', err);
+                              }
+                            }
+
                             if (res.success) {
-                              setProfContactMsg({ type: 'success', text: 'Professional contact details updated.' });
+                              setProfContactMsg({ type: 'success', text: res.message || 'Professional contact details updated.' });
+                            } else if (
+                              res.error?.includes('disabled on this database version') ||
+                              res.error?.includes('ENDPOINT_DISABLED') ||
+                              res.message?.includes('disabled on this database version')
+                            ) {
+                              setProfContactMsg({
+                                type: 'warning',
+                                text: 'Saved locally in SafeStorage. Remote Supabase Edge Function deployment pending.',
+                              });
                             } else {
                               setProfContactMsg({ type: 'error', text: res.error || 'Failed to update contact info.' });
                             }
@@ -3385,7 +4167,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                           {profContactSaving ? 'Saving...' : 'Save Professional Contact Info'}
                         </button>
                         {profContactMsg && (
-                          <p className={`text-[10px] font-mono ${profContactMsg.type === 'success' ? 'text-emerald-700' : 'text-red-600'}`}>
+                          <p className={`text-[10px] font-mono ${profContactMsg.type === 'success' ? 'text-emerald-700' : profContactMsg.type === 'warning' ? 'text-amber-700' : 'text-red-600'}`}>
                             {profContactMsg.text}
                           </p>
                         )}
@@ -3413,17 +4195,46 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             setPassportSaving(false);
                             return;
                           }
+
+                          // Resilient local snapshot sync
+                          if (targetId) {
+                            try {
+                              const key = `idemo_partner_passport_${targetId.toUpperCase()}`;
+                              const existing = safeStorage.getItem(key);
+                              const parsed = existing ? JSON.parse(existing) : {};
+                              safeStorage.setItem(key, JSON.stringify({
+                                ...parsed,
+                                intro_draft: passportIntroDraft,
+                                photo_url: activePhotoUrl,
+                                draft_photo_path: passportPhotoPath,
+                                published_photo_path: passportPhotoPath,
+                                photo_consent_given: passportPhotoConsent,
+                                review_status: passportReviewStatus === 'approved' ? 'approved' : 'draft',
+                                draft_contact_phone: profContactPhone || null,
+                                draft_contact_email: profContactEmail || null,
+                                contact_phone: profContactPhone || parsed.contact_phone || null,
+                                contact_email: profContactEmail || parsed.contact_email || null,
+                                updated_at: new Date().toISOString(),
+                              }));
+                            } catch (err) {
+                              console.warn('Storage sync error:', err);
+                            }
+                          }
+
                           setPassportSaving(false);
                           if (res.success) {
                             setPassportReviewStatus('draft');
-                            setPassportMsg({ type: 'success', text: 'Passport draft saved successfully.' });
+                            setPassportMsg({ type: 'success', text: isSr ? 'Nacrt pasoša uspešno sačuvan.' : 'Passport draft saved successfully.' });
+                          } else if (res.error && res.error.includes('BACKEND_UNAVAILABLE')) {
+                            setPassportReviewStatus('draft');
+                            setPassportMsg({ type: 'success', text: isSr ? 'Nacrt pasoša sačuvan lokalno (Demo režim).' : 'Passport draft saved locally (Demo mode).' });
                           } else {
-                            setPassportMsg({ type: 'error', text: res.error || 'Failed to save draft.' });
+                            setPassportMsg({ type: 'error', text: res.error || (isSr ? 'Greška pri čuvanju nacrta.' : 'Failed to save draft.') });
                           }
                         }}
                         className="px-3.5 py-2 bg-white border border-[#2D3025]/20 hover:bg-neutral-50 text-brand-charcoal text-[10px] font-mono font-bold uppercase rounded-xl transition-colors cursor-pointer"
                       >
-                        Save Draft
+                        {isSr ? 'Sačuvaj nacrt' : 'Save Draft'}
                       </button>
 
                       <button
@@ -3452,17 +4263,41 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             setPassportSaving(false);
                             return;
                           }
+
+                          // Resilient local snapshot sync
+                          if (targetId) {
+                            try {
+                              const key = `idemo_partner_passport_${targetId.toUpperCase()}`;
+                              const existing = safeStorage.getItem(key);
+                              const parsed = existing ? JSON.parse(existing) : {};
+                              safeStorage.setItem(key, JSON.stringify({
+                                ...parsed,
+                                intro_draft: passportIntroDraft,
+                                photo_url: activePhotoUrl,
+                                draft_photo_path: passportPhotoPath,
+                                published_photo_path: passportPhotoPath,
+                                photo_consent_given: passportPhotoConsent,
+                                review_status: 'pending_review',
+                              }));
+                            } catch (err) {
+                              console.warn('Storage sync error:', err);
+                            }
+                          }
+
                           setPassportSaving(false);
                           if (subRes.success) {
                             setPassportReviewStatus('pending_review');
-                            setPassportMsg({ type: 'success', text: 'Submitted for IDEMO Editorial Review.' });
+                            setPassportMsg({ type: 'success', text: isSr ? 'Podneto na IDEMO urednički pregled.' : 'Submitted for IDEMO Editorial Review.' });
+                          } else if (subRes.error && subRes.error.includes('BACKEND_UNAVAILABLE')) {
+                            setPassportReviewStatus('pending_review');
+                            setPassportMsg({ type: 'success', text: isSr ? 'Podneto na IDEMO pregled (Demo režim).' : 'Submitted for IDEMO Review (Demo mode).' });
                           } else {
-                            setPassportMsg({ type: 'error', text: subRes.error || 'Failed to submit.' });
+                            setPassportMsg({ type: 'error', text: subRes.error || (isSr ? 'Greška pri podnošenju.' : 'Failed to submit.') });
                           }
                         }}
                         className="px-3.5 py-2 bg-[#8A1F1F] text-white hover:bg-[#8A1F1F]/90 text-[10px] font-mono font-bold uppercase rounded-xl transition-colors cursor-pointer"
                       >
-                        Submit For IDEMO Review
+                        {isSr ? 'Podnesi na IDEMO pregled' : 'Submit For IDEMO Review'}
                       </button>
                     </div>
                   </div>
@@ -3550,393 +4385,626 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                     })}
                   </div>
                 </div>
+                )}
 
                 {/* CARD 2: MY OPPORTUNITIES */}
-                <div className="bg-white border border-[#2D3025]/10 rounded-[32px] p-6 shadow-sm text-left space-y-4">
-                  <div className="flex items-center gap-2 border-b border-[#2D3025]/5 pb-3">
-                    <span className="p-1.5 rounded-lg bg-amber-50 text-amber-700">
-                      <Briefcase size={14} />
-                    </span>
-                    <div className="space-y-0.5">
-                      <span className="text-[8px] uppercase tracking-widest font-mono text-brand-charcoal/40 font-bold block">Assigned Leads</span>
-                      <h3 className="text-xs uppercase tracking-wide font-black text-brand-charcoal">
-                        {isSr ? 'MOJE PRILIKE I UPITI' : 'MY OPPORTUNITIES'}
-                      </h3>
-                    </div>
-                  </div>
+                {partnerWorkspaceTab === 'opportunities' && (() => {
+                  const renderOpportunityCard = (inq: Inquiry, isArchived: boolean = false) => {
+                    const isConfirmedByVisitor = Boolean(
+                      inq.visitorConfirmed === true ||
+                      inq.status === 'Confirmed by Traveler' ||
+                      inq.status === 'Arrangement Confirmed' ||
+                      inq.status === 'selected' ||
+                      inq.matchStatus === 'selected' ||
+                      inq.rawMatchStatus === 'selected' ||
+                      inq.inquiryStatus === 'confirmed'
+                    );
 
-                  {assignedInquiries.length === 0 ? (
-                    <div className="text-center py-8 text-brand-charcoal/40 text-[11px] font-mono">
-                      {isSr ? 'Trenutno nema dodeljenih prilika.' : 'No active opportunities currently assigned.'}
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {assignedInquiries.map(inq => {
-                        const isAccepted = inq.status === 'Locked / Accepted' || inq.status === 'accepted';
-                        const isAlternative = inq.status === 'Alternative Proposed' || inq.status === 'proposed';
-                        const isDeclined = inq.status === 'Released' || inq.status === 'declined';
-                        const isCompleted = inq.status === 'Answered / Completed';
-                        const isPendingAction = !isAccepted && !isAlternative && !isDeclined && !isCompleted;
+                    const isAccepted = !isConfirmedByVisitor && Boolean(
+                      inq.status === 'Locked / Accepted' ||
+                      inq.status === 'accepted' ||
+                      inq.status === 'responded' ||
+                      inq.matchStatus === 'responded' ||
+                      inq.rawMatchStatus === 'responded'
+                    );
 
-                        const isAltFormOpen = altFormOpenId === inq.id;
+                    const isAlternative = Boolean(
+                      inq.status === 'Alternative Proposed' ||
+                      inq.status === 'proposed' ||
+                      inq.alternativeOffer
+                    );
 
-                        return (
-                          <div 
-                            key={inq.id} 
-                            onClick={() => {
-                              if (inq.matchStatus === 'offered' || inq.rawMatchStatus === 'offered') {
-                                handleViewOpportunity(inq.matchId || inq.id);
-                              }
-                            }}
-                            className="border border-[#2D3025]/10 rounded-2xl p-4 bg-[#FAF9F5]/60 space-y-3 shadow-xs"
-                          >
-                            {/* Card Header */}
-                            <div className="flex justify-between items-start gap-2">
-                              <div className="text-left flex items-start gap-2">
-                                {(inq.matchStatus === 'offered' || inq.rawMatchStatus === 'offered') && (
-                                  <span 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleViewOpportunity(inq.matchId || inq.id);
-                                    }}
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-mono font-bold bg-red-500/10 text-red-700 border border-red-500/20 cursor-pointer hover:bg-red-100 shrink-0 mt-0.5"
-                                    title="Unread opportunity"
-                                  >
-                                    <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
-                                    <span>NEW</span>
-                                  </span>
-                                )}
-                                <div>
-                                  <h4 className="text-xs font-serif font-black text-brand-charcoal">{inq.visitorName}</h4>
-                                  <p className="text-[9px] font-mono text-brand-charcoal/60 font-bold uppercase">{inq.recTitle}</p>
-                                </div>
+                    const isDeclined = Boolean(
+                      inq.status === 'Released' ||
+                      inq.status === 'declined' ||
+                      inq.status === 'expired' ||
+                      inq.status === 'not_selected' ||
+                      inq.status === 'withdrawn' ||
+                      inq.matchStatus === 'declined' ||
+                      inq.matchStatus === 'expired' ||
+                      inq.matchStatus === 'not_selected' ||
+                      inq.matchStatus === 'withdrawn' ||
+                      inq.rawMatchStatus === 'declined' ||
+                      inq.rawMatchStatus === 'expired'
+                    );
+
+                    const isCompleted = Boolean(
+                      inq.status === 'Answered / Completed' ||
+                      inq.status === 'completed' ||
+                      inq.status === 'closed' ||
+                      inq.status === 'canceled' ||
+                      inq.inquiryStatus === 'completed' ||
+                      inq.inquiryStatus === 'closed' ||
+                      inq.inquiryStatus === 'canceled'
+                    );
+
+                    const isCounter = Boolean(
+                      inq.matchStatus === 'counter_by_visitor' ||
+                      inq.rawMatchStatus === 'counter_by_visitor' ||
+                      inq.status === 'counter_by_visitor'
+                    );
+
+                    const isPendingAction = isCounter || (!isConfirmedByVisitor && !isAccepted && !isAlternative && !isDeclined && !isCompleted);
+
+                    const isAltFormOpen = altFormOpenId === inq.id;
+
+                    return (
+                      <div 
+                        key={inq.id} 
+                        onClick={() => {
+                          if (inq.matchStatus === 'offered' || inq.rawMatchStatus === 'offered') {
+                            handleViewOpportunity(inq.matchId || inq.id);
+                          }
+                        }}
+                        className={`border rounded-2xl p-4 space-y-3 shadow-xs text-left ${
+                          isArchived 
+                            ? 'border-[#2D3025]/8 bg-[#FAF9F5]/40 opacity-95' 
+                            : 'border-[#2D3025]/10 bg-[#FAF9F5]/60'
+                        }`}
+                      >
+                        {/* Card Header */}
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="text-left flex items-start gap-2">
+                            {(inq.matchStatus === 'offered' || inq.rawMatchStatus === 'offered') && (
+                              <span 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleViewOpportunity(inq.matchId || inq.id);
+                                }}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-mono font-bold bg-red-500/10 text-red-700 border border-red-500/20 cursor-pointer hover:bg-red-100 shrink-0 mt-0.5"
+                                title="Unread opportunity"
+                              >
+                                <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
+                                <span>NEW</span>
+                              </span>
+                            )}
+                            <div>
+                              <h4 className="text-xs font-serif font-black text-brand-charcoal">{inq.visitorName}</h4>
+                              <p className="text-[9px] font-mono text-brand-charcoal/60 font-bold uppercase">{inq.recTitle}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {isArchived && (
+                              <span className="text-[7.5px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-brand-charcoal/5 text-brand-charcoal/50 border border-brand-charcoal/10">
+                                {isSr ? 'ARHIVA' : 'ARCHIVED'}
+                              </span>
+                            )}
+                            <span className={`text-[8.5px] font-mono font-bold uppercase px-2.5 py-1 rounded-md border ${
+                              isConfirmedByVisitor
+                                ? 'bg-emerald-700 text-white border-emerald-700 shadow-2xs'
+                                : isPendingAction
+                                ? 'bg-amber-500/10 text-amber-900 border-amber-500/30 animate-pulse'
+                                : isAccepted
+                                ? 'bg-emerald-800 text-emerald-100 border-emerald-700 shadow-2xs'
+                                : isAlternative
+                                ? 'bg-[#8A1F1F]/10 text-[#8A1F1F] border-[#8A1F1F]/20'
+                                : isDeclined
+                                ? 'bg-gray-200 text-gray-700 border-gray-300'
+                                : 'bg-[#2D3025]/5 text-[#2D3025]/70 border-transparent'
+                            }`}>
+                              {isConfirmedByVisitor
+                                ? (isSr ? 'POTVRĐENO OD STRANE POSETIOCA' : 'PROPOSAL CONFIRMED BY TRAVELER')
+                                : isPendingAction
+                                ? (isSr ? 'Čeka Vaš odgovor' : 'Awaiting Your Response')
+                                : isAccepted
+                                ? (isSr ? 'UPIT PRIHVAĆEN' : 'INQUIRY ACCEPTED')
+                                : isAlternative
+                                ? (isSr ? 'Predložena alternativa' : 'Alternative Offered')
+                                : isDeclined
+                                ? (isSr ? 'Odbijeno' : 'Declined')
+                                : (isSr ? 'Završeno' : 'Completed')}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Inquiry Query / Visitor Notes */}
+                        <div className="bg-white border border-[#2D3025]/10 rounded-xl p-3 text-[11.5px] text-brand-charcoal/90 leading-relaxed italic text-left shadow-2xs">
+                          "{inq.query}"
+                        </div>
+
+                        {/* Visitor Counter Proposal Section if present */}
+                        {(inq.matchStatus === 'counter_by_visitor' || inq.rawMatchStatus === 'counter_by_visitor' || (inq.counterProposal && (inq.counterProposal.proposedStartAt || inq.counterProposal.notes))) && (
+                          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2 text-left">
+                            <div className="flex items-center gap-1.5 text-amber-950 font-mono text-[9px] font-bold uppercase">
+                              <Calendar size={13} className="text-amber-800 shrink-0" />
+                              <span>{isSr ? 'Posetilac je predložio novi termin / uslove:' : 'Visitor Counter-Proposal:'}</span>
+                            </div>
+                            <div className="bg-white/90 p-2.5 rounded-lg text-xs font-sans text-brand-charcoal space-y-1 border border-amber-500/15">
+                              {(inq.counterProposal?.proposedStartAt || inq.requestedStartAt) && (
+                                <p className="font-mono text-[10.5px] font-black text-amber-950">
+                                  <strong>{isSr ? 'Predloženi termin:' : 'Proposed Date/Time:'}</strong>{' '}
+                                  {inq.counterProposal?.proposedStartAt || inq.requestedStartAt}
+                                </p>
+                              )}
+                              {(inq.counterProposal?.notes || inq.query) && (
+                                <p className="text-[11px] italic text-brand-charcoal/80">
+                                  "{inq.counterProposal?.notes || inq.query}"
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAcceptCounter(inq.matchId || inq.id);
+                                }}
+                                disabled={actionLoading[inq.id] || actionLoading[inq.matchId || '']}
+                                className="flex-1 py-2 px-3 bg-emerald-700 hover:bg-emerald-800 text-white text-[9.5px] font-black uppercase tracking-wider rounded-xl cursor-pointer flex items-center justify-center gap-1.5 shadow-xs transition-colors disabled:opacity-50"
+                              >
+                                <CheckCircle2 size={13} />
+                                <span>{isSr ? 'Prihvati kontra-predlog' : 'Accept Counter-Proposal'}</span>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeclineCounter(inq.matchId || inq.id);
+                                }}
+                                disabled={actionLoading[inq.id] || actionLoading[inq.matchId || '']}
+                                className="flex-1 py-2 px-3 bg-white border border-red-500/30 hover:bg-red-50 text-red-700 text-[9.5px] font-black uppercase tracking-wider rounded-xl cursor-pointer flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                              >
+                                <XCircle size={13} />
+                                <span>{isSr ? 'Odbij kontra-predlog' : 'Decline Counter-Proposal'}</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Metadata Grid */}
+                        <div className="grid grid-cols-2 gap-2 text-[9px] font-mono text-brand-charcoal/70 bg-white/60 p-2.5 rounded-xl border border-[#2D3025]/5 text-left">
+                          <div><span className="text-brand-charcoal/40 uppercase font-bold">{isSr ? 'Lokacija:' : 'Geography:'}</span> {inq.geography || 'N/A'}</div>
+                          <div><span className="text-brand-charcoal/40 uppercase font-bold">{isSr ? 'Jezik:' : 'Language:'}</span> {inq.language || 'English'}</div>
+                          <div><span className="text-brand-charcoal/40 uppercase font-bold">{isSr ? 'Budžet:' : 'Budget:'}</span> {inq.budget || 'N/A'}</div>
+                          <div><span className="text-brand-charcoal/40 uppercase font-bold">{isSr ? 'Vreme:' : 'Available Time:'}</span> {inq.availableTime || 'N/A'}</div>
+                        </div>
+
+                        {/* Show Reply Thread / Submitted Responses */}
+                        {inq.replies && inq.replies.length > 0 && (
+                          <div className="space-y-1.5 pt-1.5 border-t border-[#2D3025]/10 text-left">
+                            <span className="text-[8px] font-mono uppercase font-black text-brand-charcoal/50 block">
+                              {isSr ? 'Poslati odgovori:' : 'Submitted Responses:'}
+                            </span>
+                            {inq.replies.map((rep, idx) => (
+                              <div key={idx} className="bg-emerald-500/10 text-emerald-950 border border-emerald-500/20 rounded-xl p-2.5 text-[10.5px] leading-relaxed font-sans">
+                                "{rep}"
                               </div>
-                              <span className={`text-[8.5px] font-mono font-bold uppercase px-2.5 py-1 rounded-md border ${
-                                isPendingAction
-                                  ? 'bg-amber-500/10 text-amber-900 border-amber-500/30 animate-pulse'
-                                  : isAccepted
-                                  ? 'bg-emerald-500/10 text-emerald-900 border-emerald-500/30'
-                                  : isAlternative
-                                  ? 'bg-[#8A1F1F]/10 text-[#8A1F1F] border-[#8A1F1F]/20'
-                                  : isDeclined
-                                  ? 'bg-gray-200 text-gray-700 border-gray-300'
-                                  : 'bg-[#2D3025]/5 text-[#2D3025]/70 border-transparent'
-                              }`}>
-                                {isPendingAction
-                                  ? (isSr ? 'Čeka Vaš odgovor' : 'Awaiting Your Response')
-                                  : isAccepted
-                                  ? (isSr ? 'Prihvaćeno - U pripremi' : 'Accepted - Active Lead')
-                                  : isAlternative
-                                  ? (isSr ? 'Predložena alternativa' : 'Alternative Offered')
-                                  : isDeclined
-                                  ? (isSr ? 'Odbijeno' : 'Declined')
-                                  : (isSr ? 'Završeno' : 'Completed')}
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Show Alternative Offer details if present */}
+                        {inq.alternativeOffer && (
+                          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-[10px] font-mono text-amber-950 space-y-1">
+                            <span className="font-bold uppercase text-[8px] block text-amber-800">
+                              {isSr ? 'Predloženi zamenski termin:' : 'Proposed Alternative Parameters:'}
+                            </span>
+                            <p><strong>{isSr ? 'Datum:' : 'Date:'}</strong> {inq.alternativeOffer.date} {inq.alternativeOffer.time && `• ${inq.alternativeOffer.time}`}</p>
+                            {inq.alternativeOffer.note && <p><strong>{isSr ? 'Napomena:' : 'Note:'}</strong> "{inq.alternativeOffer.note}"</p>}
+                          </div>
+                        )}
+
+                        {/* Confirmed by Visitor Banner */}
+                        {isConfirmedByVisitor && (
+                          <div className="bg-emerald-600/15 border-2 border-emerald-600/30 rounded-xl p-3 text-left space-y-1.5 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 font-mono text-[10.5px] font-black uppercase text-emerald-900">
+                                <CheckCircle2 size={16} className="text-emerald-700 shrink-0" />
+                                <span>{isSr ? 'POTVRĐENO OD STRANE POSETIOCA' : 'PROPOSAL CONFIRMED BY TRAVELER'}</span>
+                              </div>
+                              <span className="text-[8px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-emerald-700 text-white">
+                                {isSr ? 'Aranžman zaključen' : 'Arrangement Locked'}
                               </span>
                             </div>
+                            <p className="text-[10.5px] text-emerald-950 font-sans leading-relaxed">
+                              {isSr 
+                                ? 'Posetilac je prihvatio vaše uslove i zvanično potvrdio aranžman! Možete pristupiti direktnoj realizaciji i kontaktu.' 
+                                : 'The traveler has confirmed your terms and accepted the proposal! You may proceed with direct realization and contact.'}
+                            </p>
+                          </div>
+                        )}
 
-                            {/* Inquiry Query / Visitor Notes */}
-                            <div className="bg-white border border-[#2D3025]/10 rounded-xl p-3 text-[11.5px] text-brand-charcoal/90 leading-relaxed italic text-left shadow-2xs">
-                              "{inq.query}"
-                            </div>
-
-                            {/* Visitor Counter Proposal Section if present */}
-                            {(inq.matchStatus === 'counter_by_visitor' || inq.rawMatchStatus === 'counter_by_visitor' || (inq.counterProposal && (inq.counterProposal.proposedStartAt || inq.counterProposal.notes))) && (
-                              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2 text-left">
-                                <div className="flex items-center gap-1.5 text-amber-950 font-mono text-[9px] font-bold uppercase">
-                                  <Calendar size={13} className="text-amber-800 shrink-0" />
-                                  <span>{isSr ? 'Posetilac je predložio novi termin / uslove:' : 'Visitor Counter-Proposal:'}</span>
-                                </div>
-                                <div className="bg-white/90 p-2.5 rounded-lg text-xs font-sans text-brand-charcoal space-y-1 border border-amber-500/15">
-                                  {(inq.counterProposal?.proposedStartAt || inq.requestedStartAt) && (
-                                    <p className="font-mono text-[10.5px] font-black text-amber-950">
-                                      <strong>{isSr ? 'Predloženi termin:' : 'Proposed Date/Time:'}</strong>{' '}
-                                      {inq.counterProposal?.proposedStartAt || inq.requestedStartAt}
-                                    </p>
-                                  )}
-                                  {(inq.counterProposal?.notes || inq.query) && (
-                                    <p className="text-[11px] italic text-brand-charcoal/80">
-                                      "{inq.counterProposal?.notes || inq.query}"
-                                    </p>
-                                  )}
-                                </div>
-                                <div className="flex flex-wrap gap-2 pt-1">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleAcceptCounter(inq.matchId || inq.id);
-                                    }}
-                                    disabled={actionLoading[inq.id] || actionLoading[inq.matchId || '']}
-                                    className="flex-1 py-2 px-3 bg-emerald-700 hover:bg-emerald-800 text-white text-[9.5px] font-black uppercase tracking-wider rounded-xl cursor-pointer flex items-center justify-center gap-1.5 shadow-xs transition-colors disabled:opacity-50"
-                                  >
-                                    <CheckCircle2 size={13} />
-                                    <span>{isSr ? 'Prihvati kontra-predlog' : 'Accept Counter-Proposal'}</span>
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeclineCounter(inq.matchId || inq.id);
-                                    }}
-                                    disabled={actionLoading[inq.id] || actionLoading[inq.matchId || '']}
-                                    className="flex-1 py-2 px-3 bg-white border border-red-500/30 hover:bg-red-50 text-red-700 text-[9.5px] font-black uppercase tracking-wider rounded-xl cursor-pointer flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
-                                  >
-                                    <XCircle size={13} />
-                                    <span>{isSr ? 'Odbij kontra-predlog' : 'Decline Counter-Proposal'}</span>
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Metadata Grid */}
-                            <div className="grid grid-cols-2 gap-2 text-[9px] font-mono text-brand-charcoal/70 bg-white/60 p-2.5 rounded-xl border border-[#2D3025]/5 text-left">
-                              <div><span className="text-brand-charcoal/40 uppercase font-bold">{isSr ? 'Lokacija:' : 'Geography:'}</span> {inq.geography || 'N/A'}</div>
-                              <div><span className="text-brand-charcoal/40 uppercase font-bold">{isSr ? 'Jezik:' : 'Language:'}</span> {inq.language || 'English'}</div>
-                              <div><span className="text-brand-charcoal/40 uppercase font-bold">{isSr ? 'Budžet:' : 'Budget:'}</span> {inq.budget || 'N/A'}</div>
-                              <div><span className="text-brand-charcoal/40 uppercase font-bold">{isSr ? 'Vreme:' : 'Available Time:'}</span> {inq.availableTime || 'N/A'}</div>
-                            </div>
-
-                            {/* Show Reply Thread / Submitted Responses */}
-                            {inq.replies && inq.replies.length > 0 && (
-                              <div className="space-y-1.5 pt-1.5 border-t border-[#2D3025]/10 text-left">
-                                <span className="text-[8px] font-mono uppercase font-black text-brand-charcoal/50 block">
-                                  {isSr ? 'Poslati odgovori:' : 'Submitted Responses:'}
+                        {/* Confirmed / Accepted Status Display */}
+                        {isAccepted && !isConfirmedByVisitor && (
+                          <div className="pt-2 border-t border-[#2D3025]/10 space-y-2 text-left">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 py-2.5 px-3.5 bg-[#142A1E] text-emerald-100 border border-emerald-700/60 rounded-xl flex items-center justify-center gap-2 shadow-xs cursor-default">
+                                <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
+                                <span className="text-[10px] font-mono font-black uppercase tracking-wider text-emerald-200">
+                                  {isSr ? 'UPIT PRIHVAĆEN (INQUIRY ACCEPTED)' : 'INQUIRY ACCEPTED'}
                                 </span>
-                                {inq.replies.map((rep, idx) => (
-                                  <div key={idx} className="bg-emerald-500/10 text-emerald-950 border border-emerald-500/20 rounded-xl p-2.5 text-[10.5px] leading-relaxed font-sans">
-                                    "{rep}"
+                              </div>
+                            </div>
+                            <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-xl p-3 text-left space-y-1.5 shadow-2xs">
+                              <div className="flex items-center gap-1.5 font-mono text-[10px] font-black uppercase text-emerald-800">
+                                <CheckCircle2 size={14} className="text-emerald-700 shrink-0" />
+                                <span>{isSr ? 'Zvanična ponuda poslata posetiocu' : 'Official Proposal Dispatched'}</span>
+                              </div>
+                              <p className="text-[10.5px] text-emerald-950 font-sans leading-relaxed">
+                                {isSr 
+                                  ? 'Posetilac je odmah obavešten u sekciji Moj Planer (aktivirana je crvena tačka na dugmetu Planera). Čeka se da posetilac potvrdi aranžman ili zakaže termin.' 
+                                  : 'The traveler was instantly notified in My Planner (red dot indicator active on Planner button). Awaiting traveler confirmation.'}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ACTION BUTTONS FOR PENDING OPPORTUNITY */}
+                        {isPendingAction && (
+                          <div className="pt-2 border-t border-[#2D3025]/10 space-y-2 text-left">
+                            <div className="space-y-1">
+                              <label className="text-[8px] font-mono uppercase font-bold text-brand-charcoal/50 block">
+                                {isSr ? 'Poruka / Uslovi posetiocu (opciono):' : 'Message / Offer to Visitor (Optional):'}
+                              </label>
+                              <textarea
+                                rows={2}
+                                placeholder={isSr ? 'Npr. "Čekam Vas kod Hrama St. Save u 10:00h"...' : 'e.g. "I will meet you at St Sava at 10:00"...'}
+                                value={activeAnswerText[inq.id] || ''}
+                                onChange={e => {
+                                  setActiveAnswerText(prev => ({ ...prev, [inq.id]: e.target.value }));
+                                }}
+                                className="w-full p-2.5 bg-white border border-[#2D3025]/15 rounded-xl text-xs font-sans text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F]/20 focus:outline-none"
+                              />
+                            </div>
+                            <span className="text-[8px] font-mono uppercase font-bold text-brand-charcoal/50 block">
+                              {isSr ? 'Izaberite akciju za ovaj upit:' : 'Select Action for Opportunity:'}
+                            </span>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                onClick={() => handlePartnerAcceptInquiry(inq.id, currentSimulatedPartner.id)}
+                                disabled={actionLoading[inq.id]}
+                                className="flex-1 py-2 px-3 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 text-white text-[9.5px] font-black uppercase tracking-wider rounded-xl cursor-pointer flex items-center justify-center gap-1.5 shadow-xs transition-colors"
+                              >
+                                <CheckCircle2 size={13} className={actionLoading[inq.id] ? 'animate-spin' : ''} />
+                                <span>
+                                  {actionLoading[inq.id]
+                                    ? (isSr ? 'Prihvatanje...' : 'Accepting...')
+                                    : (isSr ? 'Prihvati upit' : 'Accept Opportunity')}
+                                </span>
+                              </button>
+
+                              <button
+                                onClick={() => setAltFormOpenId(isAltFormOpen ? null : inq.id)}
+                                disabled={actionLoading[inq.id]}
+                                className="flex-1 py-2 px-3 bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white text-[9.5px] font-black uppercase tracking-wider rounded-xl cursor-pointer flex items-center justify-center gap-1.5 shadow-xs transition-colors"
+                              >
+                                <Calendar size={13} />
+                                <span>{isSr ? 'Predloži drugi termin' : 'Propose Alternative'}</span>
+                              </button>
+
+                              <button
+                                onClick={() => handlePartnerPassInquiry(inq.id, currentSimulatedPartner.id)}
+                                disabled={actionLoading[inq.id]}
+                                className="py-2 px-3 bg-white border border-[#2D3025]/20 hover:bg-red-50 disabled:opacity-60 text-red-700 text-[9.5px] font-black uppercase tracking-wider rounded-xl cursor-pointer flex items-center justify-center gap-1.5 transition-colors"
+                              >
+                                <XCircle size={13} />
+                                <span>{isSr ? 'Odbij' : 'Decline'}</span>
+                              </button>
+                            </div>
+
+                            {/* Form for Proposing Alternative */}
+                            {isAltFormOpen && (
+                              <div className="bg-white border border-amber-500/20 rounded-2xl p-3.5 space-y-2.5 mt-2 animate-fade-in shadow-xs">
+                                <span className="text-[8.5px] font-mono font-bold uppercase text-amber-800 block">
+                                  {isSr ? 'Unesite zamenske parametre ponude:' : 'Enter Alternative Parameters:'}
+                                </span>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="space-y-1">
+                                    <label className="text-[8px] font-mono font-bold uppercase text-brand-charcoal/50 block">
+                                      {isSr ? 'Datum' : 'Date'}
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={altOfferForm[inq.id]?.date || ''}
+                                      onChange={e => setAltOfferForm(prev => ({
+                                        ...prev,
+                                        [inq.id]: { ...(prev[inq.id] || { date: '', time: '', note: '' }), date: e.target.value }
+                                      }))}
+                                      className="w-full p-2 bg-[#FAF9F5] border border-[#2D3025]/15 rounded-lg text-xs font-mono"
+                                    />
                                   </div>
-                                ))}
-                              </div>
-                            )}
-
-                            {/* Show Alternative Offer details if present */}
-                            {inq.alternativeOffer && (
-                              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-[10px] font-mono text-amber-950 space-y-1">
-                                <span className="font-bold uppercase text-[8px] block text-amber-800">
-                                  {isSr ? 'Predloženi zamenski termin:' : 'Proposed Alternative Parameters:'}
-                                </span>
-                                <p><strong>{isSr ? 'Datum:' : 'Date:'}</strong> {inq.alternativeOffer.date} {inq.alternativeOffer.time && `• ${inq.alternativeOffer.time}`}</p>
-                                {inq.alternativeOffer.note && <p><strong>{isSr ? 'Napomena:' : 'Note:'}</strong> "{inq.alternativeOffer.note}"</p>}
-                              </div>
-                            )}
-
-                            {/* ACTION BUTTONS FOR PENDING OPPORTUNITY */}
-                            {isPendingAction && (
-                              <div className="pt-2 border-t border-[#2D3025]/10 space-y-2 text-left">
+                                  <div className="space-y-1">
+                                    <label className="text-[8px] font-mono font-bold uppercase text-brand-charcoal/50 block">
+                                      {isSr ? 'Vreme' : 'Time'}
+                                    </label>
+                                    <input
+                                      type="time"
+                                      value={altOfferForm[inq.id]?.time || ''}
+                                      onChange={e => setAltOfferForm(prev => ({
+                                        ...prev,
+                                        [inq.id]: { ...(prev[inq.id] || { date: '', time: '', note: '' }), time: e.target.value }
+                                      }))}
+                                      className="w-full p-2 bg-[#FAF9F5] border border-[#2D3025]/15 rounded-lg text-xs font-mono"
+                                    />
+                                  </div>
+                                </div>
                                 <div className="space-y-1">
-                                  <label className="text-[8px] font-mono uppercase font-bold text-brand-charcoal/50 block">
-                                    {isSr ? 'Poruka / Uslovi posetiocu (opciono):' : 'Message / Offer to Visitor (Optional):'}
+                                  <label className="text-[8px] font-mono font-bold uppercase text-brand-charcoal/50 block">
+                                    {isSr ? 'Poruka / Uslovi' : 'Note / Parameters'}
                                   </label>
                                   <textarea
                                     rows={2}
-                                    placeholder={isSr ? 'Npr. "Čekam Vas kod Hrama St. Save u 10:00h"...' : 'e.g. "I will meet you at St Sava at 10:00"...'}
-                                    value={activeAnswerText[inq.id] || ''}
-                                    onChange={e => {
-                                      setActiveAnswerText(prev => ({ ...prev, [inq.id]: e.target.value }));
-                                    }}
-                                    className="w-full p-2.5 bg-white border border-[#2D3025]/15 rounded-xl text-xs font-sans text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F]/20 focus:outline-none"
+                                    placeholder={isSr ? 'Napišite razlog ili predlog drugog termina/uslova...' : 'Explain proposed changes or schedule alternative...'}
+                                    value={altOfferForm[inq.id]?.note || ''}
+                                    onChange={e => setAltOfferForm(prev => ({
+                                      ...prev,
+                                      [inq.id]: { ...(prev[inq.id] || { date: '', time: '', note: '' }), note: e.target.value }
+                                    }))}
+                                    className="w-full p-2 bg-[#FAF9F5] border border-[#2D3025]/15 rounded-lg text-xs font-sans"
                                   />
                                 </div>
-                                <span className="text-[8px] font-mono uppercase font-bold text-brand-charcoal/50 block">
-                                  {isSr ? 'Izaberite akciju za ovaj upit:' : 'Select Action for Opportunity:'}
-                                </span>
-                                <div className="flex flex-wrap gap-2">
-                                  <button
-                                    onClick={() => handlePartnerAcceptInquiry(inq.id, currentSimulatedPartner.id)}
-                                    className="flex-1 py-2 px-3 bg-emerald-700 hover:bg-emerald-800 text-white text-[9.5px] font-black uppercase tracking-wider rounded-xl cursor-pointer flex items-center justify-center gap-1.5 shadow-xs transition-colors"
-                                  >
-                                    <CheckCircle2 size={13} />
-                                    <span>{isSr ? 'Prihvati upit' : 'Accept Opportunity'}</span>
-                                  </button>
-
-                                  <button
-                                    onClick={() => setAltFormOpenId(isAltFormOpen ? null : inq.id)}
-                                    className="flex-1 py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white text-[9.5px] font-black uppercase tracking-wider rounded-xl cursor-pointer flex items-center justify-center gap-1.5 shadow-xs transition-colors"
-                                  >
-                                    <Calendar size={13} />
-                                    <span>{isSr ? 'Predloži drugi termin' : 'Propose Alternative'}</span>
-                                  </button>
-
-                                  <button
-                                    onClick={() => handlePartnerPassInquiry(inq.id, currentSimulatedPartner.id)}
-                                    className="py-2 px-3 bg-white border border-[#2D3025]/20 hover:bg-red-50 text-red-700 text-[9.5px] font-black uppercase tracking-wider rounded-xl cursor-pointer flex items-center justify-center gap-1.5 transition-colors"
-                                  >
-                                    <XCircle size={13} />
-                                    <span>{isSr ? 'Odbij' : 'Decline'}</span>
-                                  </button>
-                                </div>
-
-                                {/* Form for Proposing Alternative */}
-                                {isAltFormOpen && (
-                                  <div className="bg-white border border-amber-500/20 rounded-2xl p-3.5 space-y-2.5 mt-2 animate-fade-in shadow-xs">
-                                    <span className="text-[8.5px] font-mono font-bold uppercase text-amber-800 block">
-                                      {isSr ? 'Unesite zamenske parametre ponude:' : 'Enter Alternative Parameters:'}
-                                    </span>
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <div className="space-y-1">
-                                        <label className="text-[8px] font-mono font-bold uppercase text-brand-charcoal/50 block">
-                                          {isSr ? 'Datum' : 'Date'}
-                                        </label>
-                                        <input
-                                          type="date"
-                                          value={altOfferForm[inq.id]?.date || ''}
-                                          onChange={e => setAltOfferForm(prev => ({
-                                            ...prev,
-                                            [inq.id]: { ...(prev[inq.id] || { date: '', time: '', note: '' }), date: e.target.value }
-                                          }))}
-                                          className="w-full p-2 bg-[#FAF9F5] border border-[#2D3025]/15 rounded-lg text-xs font-mono"
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <label className="text-[8px] font-mono font-bold uppercase text-brand-charcoal/50 block">
-                                          {isSr ? 'Vreme' : 'Time'}
-                                        </label>
-                                        <input
-                                          type="time"
-                                          value={altOfferForm[inq.id]?.time || ''}
-                                          onChange={e => setAltOfferForm(prev => ({
-                                            ...prev,
-                                            [inq.id]: { ...(prev[inq.id] || { date: '', time: '', note: '' }), time: e.target.value }
-                                          }))}
-                                          className="w-full p-2 bg-[#FAF9F5] border border-[#2D3025]/15 rounded-lg text-xs font-mono"
-                                        />
-                                      </div>
-                                    </div>
-                                    <div className="space-y-1">
-                                      <label className="text-[8px] font-mono font-bold uppercase text-brand-charcoal/50 block">
-                                        {isSr ? 'Poruka / Uslovi' : 'Note / Parameters'}
-                                      </label>
-                                      <textarea
-                                        rows={2}
-                                        placeholder={isSr ? 'Napišite razlog ili predlog drugog termina/uslova...' : 'Explain proposed changes or schedule alternative...'}
-                                        value={altOfferForm[inq.id]?.note || ''}
-                                        onChange={e => setAltOfferForm(prev => ({
-                                          ...prev,
-                                          [inq.id]: { ...(prev[inq.id] || { date: '', time: '', note: '' }), note: e.target.value }
-                                        }))}
-                                        className="w-full p-2 bg-[#FAF9F5] border border-[#2D3025]/15 rounded-lg text-xs font-sans"
-                                      />
-                                    </div>
-                                    <div className="flex justify-end gap-2">
-                                      <button
-                                        onClick={() => setAltFormOpenId(null)}
-                                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-brand-charcoal text-[9px] font-bold uppercase rounded-lg cursor-pointer"
-                                      >
-                                        {isSr ? 'Odustani' : 'Cancel'}
-                                      </button>
-                                      <button
-                                        onClick={() => {
-                                          const form = altOfferForm[inq.id];
-                                          if (!form?.date) {
-                                            alert(isSr ? 'Unesite predloženi datum.' : 'Please select a proposed date.');
-                                            return;
-                                          }
-                                          handlePartnerProposeAlternative(
-                                            inq.id,
-                                            currentSimulatedPartner.id,
-                                            form.date,
-                                            form.time || '10:00',
-                                            form.note || 'Alternative parameters proposed'
-                                          );
-                                          setAltFormOpenId(null);
-                                        }}
-                                        className="px-4 py-1.5 bg-amber-700 hover:bg-amber-800 text-white text-[9px] font-black uppercase tracking-wider rounded-lg cursor-pointer shadow-xs"
-                                      >
-                                        {isSr ? 'Pošalji predlog' : 'Submit Proposal'}
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Submit Final Response / Offer Form for Accepted or Alternative Leads */}
-                            {(isAccepted || isAlternative) && (
-                              <div className="space-y-2 pt-2 border-t border-[#2D3025]/10 text-left">
-                                <span className="text-[8px] font-mono uppercase font-bold text-brand-charcoal/50 block">
-                                  {isSr ? 'Pošaljite detaljnu ponudu / itinerer' : 'Transmit Professional Offer / Proposal'}
-                                </span>
-                                <textarea 
-                                  placeholder={isSr ? 'Napišite vašu ponudu, cene, detalje ture ili uslove...' : 'Write your detailed offer, pricing, tour itinerary, or conditions...'}
-                                  value={activeAnswerText[inq.id] || ''}
-                                  onChange={e => {
-                                    setActiveAnswerText(prev => ({ ...prev, [inq.id]: e.target.value }));
-                                  }}
-                                  className="w-full p-3 bg-white border border-[#2D3025]/15 rounded-xl text-xs focus:ring-1 focus:ring-[#8A1F1F]/20 focus:outline-none text-brand-charcoal"
-                                  rows={3}
-                                />
                                 <div className="flex justify-end gap-2">
-                                  <button 
-                                    onClick={() => {
-                                      const ans = activeAnswerText[inq.id];
-                                      if (ans && ans.trim()) {
-                                        handlePartnerSubmitAnswer(inq.id, currentSimulatedPartner.id, ans);
-                                        setActiveAnswerText(prev => ({ ...prev, [inq.id]: '' }));
-                                      }
-                                    }}
-                                    className="px-4 py-2 bg-[#8A1F1F] hover:bg-[#8A1F1F]/90 text-white text-[9px] font-black uppercase tracking-wider rounded-xl cursor-pointer shadow-xs transition-colors"
+                                  <button
+                                    onClick={() => setAltFormOpenId(null)}
+                                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-brand-charcoal text-[9px] font-bold uppercase rounded-lg cursor-pointer"
                                   >
-                                    {isSr ? 'Pošalji ponudu' : 'Transmit Proposal'}
+                                    {isSr ? 'Odustani' : 'Cancel'}
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const form = altOfferForm[inq.id];
+                                      if (!form?.date) {
+                                        alert(isSr ? 'Unesite predloženi datum.' : 'Please select a proposed date.');
+                                        return;
+                                      }
+                                      handlePartnerProposeAlternative(
+                                        inq.id,
+                                        currentSimulatedPartner.id,
+                                        form.date,
+                                        form.time || '10:00',
+                                        form.note || 'Alternative parameters proposed'
+                                      );
+                                      setAltFormOpenId(null);
+                                    }}
+                                    className="px-4 py-1.5 bg-amber-700 hover:bg-amber-800 text-white text-[9px] font-black uppercase tracking-wider rounded-lg cursor-pointer shadow-xs"
+                                  >
+                                    {isSr ? 'Pošalji predlog' : 'Submit Proposal'}
                                   </button>
                                 </div>
-                              </div>
-                            )}
-
-                            {/* WITHDRAW PROPOSAL ACTION FOR ACTIVE / PROPOSED OPPORTUNITIES */}
-                            {(isAlternative || inq.matchStatus === 'responded' || inq.matchStatus === 'proposed' || inq.matchStatus === 'counter_by_visitor') && inq.status !== 'Released' && (
-                              <div className="pt-2 border-t border-[#2D3025]/10 text-left">
-                                {withdrawConfirmId === (inq.matchId || inq.id) ? (
-                                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl space-y-2 text-left animate-fade-in">
-                                    <p className="text-[10px] font-medium text-red-950 leading-snug">
-                                      {isSr 
-                                        ? 'Povuci ponudu? Posetilac može biti povezan sa drugim odgovarajućim partnerom.' 
-                                        : 'Withdraw this proposal? The visitor may be connected with another suitable partner.'}
-                                    </p>
-                                    <div className="flex gap-2">
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleExecuteWithdraw(inq.matchId || inq.id);
-                                        }}
-                                        disabled={actionLoading[inq.id] || actionLoading[inq.matchId || '']}
-                                        className="px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white text-[9px] font-black uppercase tracking-wider rounded-lg cursor-pointer transition-colors disabled:opacity-50"
-                                      >
-                                        {isSr ? 'DA, POVUCI PONUDU' : 'YES, WITHDRAW'}
-                                      </button>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setWithdrawConfirmId(null);
-                                        }}
-                                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-brand-charcoal text-[9px] font-bold uppercase rounded-lg cursor-pointer"
-                                      >
-                                        {isSr ? 'ODUSTANI' : 'CANCEL'}
-                                      </button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="flex justify-end">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setWithdrawConfirmId(inq.matchId || inq.id);
-                                      }}
-                                      className="text-[9px] font-mono font-bold uppercase text-red-700/70 hover:text-red-700 hover:underline cursor-pointer flex items-center gap-1"
-                                    >
-                                      <span>✕</span>
-                                      <span>{isSr ? 'POVUCI PONUDU' : 'WITHDRAW PROPOSAL'}</span>
-                                    </button>
-                                  </div>
-                                )}
                               </div>
                             )}
                           </div>
-                        );
-                      })}
+                        )}
+
+                        {/* Submit Final Response / Offer Form for Accepted or Alternative Leads */}
+                        {(isAccepted || isAlternative) && (
+                          <div className="space-y-2 pt-2 border-t border-[#2D3025]/10 text-left">
+                            <span className="text-[8px] font-mono uppercase font-bold text-brand-charcoal/50 block">
+                              {isSr ? 'Pošaljite detaljnu ponudu / itinerer' : 'Transmit Professional Offer / Proposal'}
+                            </span>
+                            <textarea 
+                              placeholder={isSr ? 'Napišite vašu ponudu, cene, detalje ture ili uslove...' : 'Write your detailed offer, pricing, tour itinerary, or conditions...'}
+                              value={activeAnswerText[inq.id] || ''}
+                              onChange={e => {
+                                setActiveAnswerText(prev => ({ ...prev, [inq.id]: e.target.value }));
+                              }}
+                              className="w-full p-3 bg-white border border-[#2D3025]/15 rounded-xl text-xs focus:ring-1 focus:ring-[#8A1F1F]/20 focus:outline-none text-brand-charcoal"
+                              rows={3}
+                            />
+                            <div className="flex justify-end gap-2">
+                              <button 
+                                onClick={() => {
+                                  const ans = activeAnswerText[inq.id];
+                                  if (ans && ans.trim()) {
+                                    handlePartnerSubmitAnswer(inq.id, currentSimulatedPartner.id, ans);
+                                    setActiveAnswerText(prev => ({ ...prev, [inq.id]: '' }));
+                                  }
+                                }}
+                                className="px-4 py-2 bg-[#8A1F1F] hover:bg-[#8A1F1F]/90 text-white text-[9px] font-black uppercase tracking-wider rounded-xl cursor-pointer shadow-xs transition-colors"
+                              >
+                                {isSr ? 'Pošalji ponudu' : 'Transmit Proposal'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* WITHDRAW PROPOSAL ACTION FOR ACTIVE / PROPOSED OPPORTUNITIES */}
+                        {(isAlternative || inq.matchStatus === 'responded' || inq.matchStatus === 'proposed' || inq.matchStatus === 'counter_by_visitor') && inq.status !== 'Released' && (
+                          <div className="pt-2 border-t border-[#2D3025]/10 text-left">
+                            {withdrawConfirmId === (inq.matchId || inq.id) ? (
+                              <div className="p-3 bg-red-50 border border-red-200 rounded-xl space-y-2 text-left animate-fade-in">
+                                <p className="text-[10px] font-medium text-red-950 leading-snug">
+                                  {isSr 
+                                    ? 'Povuci ponudu? Posetilac može biti povezan sa drugim odgovarajućim partnerom.' 
+                                    : 'Withdraw this proposal? The visitor may be connected with another suitable partner.'}
+                                </p>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleExecuteWithdraw(inq.matchId || inq.id);
+                                    }}
+                                    disabled={actionLoading[inq.id] || actionLoading[inq.matchId || '']}
+                                    className="px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white text-[9px] font-black uppercase tracking-wider rounded-lg cursor-pointer transition-colors disabled:opacity-50"
+                                  >
+                                    {isSr ? 'DA, POVUCI PONUDU' : 'YES, WITHDRAW'}
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setWithdrawConfirmId(null);
+                                    }}
+                                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-brand-charcoal text-[9px] font-bold uppercase rounded-lg cursor-pointer"
+                                  >
+                                    {isSr ? 'ODUSTANI' : 'CANCEL'}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex justify-end">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setWithdrawConfirmId(inq.matchId || inq.id);
+                                  }}
+                                  className="text-[9px] font-mono font-bold uppercase text-red-700/70 hover:text-red-700 hover:underline cursor-pointer flex items-center gap-1"
+                                >
+                                  <span>✕</span>
+                                  <span>{isSr ? 'POVUCI PONUDU' : 'WITHDRAW PROPOSAL'}</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  };
+
+                  return (
+                    <div className="bg-white border border-[#2D3025]/10 rounded-[32px] p-6 shadow-sm text-left space-y-5">
+                      <div className="flex items-center justify-between border-b border-[#2D3025]/5 pb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="p-1.5 rounded-lg bg-amber-50 text-amber-700">
+                            <Briefcase size={14} />
+                          </span>
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[8px] uppercase tracking-widest font-mono text-brand-charcoal/40 font-bold block">Assigned Leads</span>
+                              {activeInquiries.length > 0 && (
+                                <span className="px-1.5 py-0.2 rounded-full text-[8px] font-mono font-bold bg-amber-500/20 text-amber-900 border border-amber-500/30">
+                                  {activeInquiries.length} {isSr ? 'aktivno' : 'active'}
+                                </span>
+                              )}
+                            </div>
+                            <h3 className="text-xs uppercase tracking-wide font-black text-brand-charcoal">
+                              {isSr ? 'MOJE PRILIKE I UPITI' : 'MY OPPORTUNITIES'}
+                            </h3>
+                          </div>
+                        </div>
+
+                        {assignedInquiries.length > 0 && (
+                          <button
+                            type="button"
+                            id="btn-clear-partner-opportunities"
+                            onClick={handleClearOpportunitiesForCurrentPartner}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-mono font-bold text-red-700/80 hover:text-red-800 bg-red-50/80 hover:bg-red-100/80 border border-red-200/60 transition-colors cursor-pointer"
+                            title={isSr ? 'Obriši sve prilike za ovog partnera (čista tabla)' : 'Clear all opportunities for this partner (clean board)'}
+                          >
+                            <Trash2 size={11} />
+                            <span>{isSr ? 'Očisti sve' : 'Clean board'}</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {partnerActionFeedback && (
+                        <div className={`p-3 rounded-2xl border text-left text-xs space-y-1 flex items-start gap-2.5 animate-fade-in ${
+                          partnerActionFeedback.type === 'success' 
+                            ? 'bg-emerald-50 border-emerald-300 text-emerald-950' 
+                            : 'bg-amber-50 border-amber-300 text-amber-950'
+                        }`}>
+                          <CheckCircle2 size={16} className="text-emerald-700 shrink-0 mt-0.5" />
+                          <div className="flex-1 text-[11px] leading-snug font-medium">
+                            {partnerActionFeedback.message}
+                          </div>
+                        </div>
+                      )}
+
+                      {assignedInquiries.length === 0 ? (
+                        <div className="text-center py-8 text-brand-charcoal/40 text-[11px] font-mono">
+                          {isSr ? 'Trenutno nema dodeljenih prilika.' : 'No active opportunities currently assigned.'}
+                        </div>
+                      ) : (
+                        <div className="space-y-5">
+                          {/* SECTION 1: ACTIVE OPPORTUNITIES */}
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] font-mono font-black uppercase tracking-wider text-brand-charcoal/70 flex items-center gap-1.5">
+                                <span className={`w-2 h-2 rounded-full ${activeInquiries.length > 0 ? 'bg-amber-500 animate-pulse' : 'bg-gray-300'}`} />
+                                <span>{isSr ? 'Aktivne prilike' : 'Active Opportunities'}</span>
+                                <span className="text-brand-charcoal/40">({activeInquiries.length})</span>
+                              </span>
+                            </div>
+
+                            {activeInquiries.length === 0 ? (
+                              <div className="p-4 rounded-2xl bg-[#FAF9F5]/40 border border-[#2D3025]/5 text-center text-[10.5px] font-mono text-brand-charcoal/40">
+                                {isSr ? 'Nema novih upita na čekanju. Sve prilike su obrađene.' : 'No pending opportunities. All inquiries have been handled.'}
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                {activeInquiries.map(inq => renderOpportunityCard(inq, false))}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* SECTION 2: ARCHIVED / PAST OPPORTUNITIES FOLDER */}
+                          {pastInquiries.length > 0 && (
+                            <div className="pt-3 border-t border-[#2D3025]/10 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <button
+                                  type="button"
+                                  id="btn-toggle-past-opportunities-folder"
+                                  onClick={() => setIsPastFolderOpen(prev => !prev)}
+                                  className="flex items-center gap-2 text-left cursor-pointer group py-1"
+                                >
+                                  <span className="p-1.5 rounded-lg bg-gray-100 group-hover:bg-gray-200 text-brand-charcoal/70 transition-colors">
+                                    <FolderArchive size={14} />
+                                  </span>
+                                  <div>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[10px] font-mono font-black uppercase tracking-wider text-brand-charcoal">
+                                        {isSr ? 'Arhiva obrađenih prilika' : 'Handled Opportunities Archive'}
+                                      </span>
+                                      <span className="px-1.5 py-0.2 rounded-full text-[8.5px] font-mono font-bold bg-brand-charcoal/10 text-brand-charcoal/70">
+                                        {pastInquiries.length}
+                                      </span>
+                                      <ChevronDown 
+                                        size={14} 
+                                        className={`text-brand-charcoal/60 transition-transform duration-200 ${isPastFolderOpen ? 'rotate-180' : ''}`} 
+                                      />
+                                    </div>
+                                    <span className="text-[8.5px] font-mono text-brand-charcoal/40 block">
+                                      {isPastFolderOpen 
+                                        ? (isSr ? 'Kliknite da skupite folder' : 'Click to collapse folder') 
+                                        : (isSr ? 'Prihvaćeni, predloženi i završeni upiti — kliknite da pregledate' : 'Accepted, proposed, or resolved inquiries — click to view')}
+                                    </span>
+                                  </div>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  id="btn-clear-archived-opportunities"
+                                  onClick={handleClearArchivedOpportunities}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[8.5px] font-mono font-semibold text-brand-charcoal/50 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
+                                  title={isSr ? 'Isprazni arhivu obrađenih upita' : 'Clear archived inquiries'}
+                                >
+                                  <Trash2 size={10} />
+                                  <span>{isSr ? 'Očisti arhivu' : 'Clear archive'}</span>
+                                </button>
+                              </div>
+
+                              {isPastFolderOpen && (
+                                <div className="space-y-3 pl-1 border-l-2 border-brand-charcoal/10 animate-fade-in pt-1">
+                                  {pastInquiries.map(inq => renderOpportunityCard(inq, true))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  );
+                })()}
 
                 {/* CARD 3: MESSAGES */}
+                {partnerWorkspaceTab === 'messages' && (
                 <div className="bg-white border border-[#2D3025]/10 rounded-[32px] p-6 shadow-sm text-left space-y-4">
                   <div className="flex items-center gap-2 border-b border-[#2D3025]/5 pb-3">
                     <span className="p-1.5 rounded-lg bg-indigo-50 text-indigo-700">
@@ -3995,6 +5063,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                     </button>
                   </div>
                 </div>
+                )}
               </div>
             );
           })()}

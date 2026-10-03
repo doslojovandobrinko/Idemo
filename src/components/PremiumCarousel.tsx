@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, useEffect, ReactNode } from 'react';
-import { motion, useMotionValue, useTransform, animate } from 'motion/react';
+import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
 
 const triggerHaptic = (pattern: number | number[] = 10) => {
   if (typeof navigator !== 'undefined' && navigator.vibrate) {

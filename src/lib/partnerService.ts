@@ -79,9 +79,11 @@ export interface PartnerProfileContent {
   intro_draft: string | null;
   draft_photo_path: string | null;
   draft_photo_mime: string | null;
+  draft_photo_signed_url?: string | null;
   intro_published: string | null;
   published_photo_path: string | null;
   published_photo_mime: string | null;
+  published_photo_signed_url?: string | null;
   draft_contact_phone?: string | null;
   draft_contact_email?: string | null;
   published_contact_phone?: string | null;
@@ -303,24 +305,7 @@ export async function fetchPartnerOpportunities(scope: 'new' | 'active' | 'histo
     return {
       success: true,
       scope,
-      opportunities: [
-        {
-          match_id: 'mock-match-1',
-          inquiry_id: 'mock-inquiry-1',
-          public_reference_code: 'REF-2026-9041',
-          recommendation_id: '1',
-          recommendation_title: 'Uvac Meanders',
-          visitor_notes: 'Traveling with family, we would like a private boat tour.',
-          requested_start_at: new Date(Date.now() + 86400000).toISOString(),
-          requested_end_at: new Date(Date.now() + 90000000).toISOString(),
-          created_at: new Date().toISOString(),
-          match_status: 'Unmatched',
-          inquiry_status: 'Unmatched',
-          visitor_contact: {
-            visitor_name: 'John Doe',
-          }
-        }
-      ]
+      opportunities: []
     };
   }
 
@@ -862,7 +847,7 @@ export async function savePartnerProfileDraft(
       success: !!data.success,
       status: data.status,
       message: data.message,
-      error: data.message || data.error,
+      error: data.success ? undefined : (data.error || data.message),
     };
   } catch (err: any) {
     return { success: false, error: `NETWORK_FAILURE: ${err?.message || String(err)}` };
@@ -1103,11 +1088,11 @@ export async function updatePartnerProfessionalContact(
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok || !data.success) {
-      // Robust fallback if /me/contact returns 404 on edge router
-      if (res.status === 404) {
+      // Robust secondary path: save draft contact details via /profile-content/draft
+      try {
         const profileContentRes = await getPartnerProfileContent();
         const currentContent = profileContentRes.content;
-        return await savePartnerProfileDraft(
+        const draftRes = await savePartnerProfileDraft(
           currentContent?.intro_draft || null,
           currentContent?.draft_photo_path || null,
           currentContent?.draft_photo_mime || null,
@@ -1115,7 +1100,16 @@ export async function updatePartnerProfessionalContact(
           contactPhone,
           contactEmail
         );
+        if (draftRes.success) {
+          return {
+            success: true,
+            message: draftRes.message || 'Professional contact details saved as draft for IDEMO review.',
+          };
+        }
+      } catch {
+        // Continue to return endpoint response below if draft fallback also fails
       }
+
       return {
         success: false,
         message: data.message,
@@ -1124,9 +1118,8 @@ export async function updatePartnerProfessionalContact(
     }
 
     return {
-      success: !!data.success,
+      success: true,
       message: data.message || 'Professional contact details saved.',
-      error: data.error,
     };
   } catch (err: any) {
     return { success: false, error: `NETWORK_FAILURE: ${err?.message || String(err)}` };

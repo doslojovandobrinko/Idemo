@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Compass, Sparkles, Sliders, Shield, Zap, Info, ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { Compass, Sparkles, Sliders, Shield, Zap, Info, ChevronLeft, ChevronRight, Check, Clock, Coins, Target } from 'lucide-react';
 import { safeStorage } from '../lib/safeStorage';
 
 export interface MoodOrbitProps {
@@ -295,7 +295,7 @@ export default function MoodOrbit({
         confidence: "Recommendation Confidence",
         manualTitle: "Manual Adjustment Panel",
         close: "Done",
-        longPressTip: "Hold center to open manual editor",
+        longPressTip: "HOLD CENTRE TO FINE-TUNE",
         heartOfConcierge: "Mood Orbit is the heart of your concierge.",
         alignedToMood: "Every recommendation is aligned to your mood, budget and time.",
         flowMoodOrbit: "Mood Orbit",
@@ -1037,23 +1037,25 @@ export default function MoodOrbit({
         <div className="absolute inset-8 rounded-full border border-dashed border-[#D5D3C8]/25 pointer-events-none" />
         <div className="absolute inset-20 rounded-full border border-[#D5D3C8]/15 pointer-events-none" />
 
-        {/* Grid Axis Labels (Premium High-Contrast Sun-Readable Scales) */}
-        <div className="absolute top-1 left-1/2 -translate-x-1/2 text-[13px] font-black uppercase tracking-[0.18em] text-brand-charcoal select-none pointer-events-none z-10 whitespace-nowrap">
-          {t.axisUrban} ↑
+        {/* Grid Axis Labels (Premium High-Contrast Sun-Readable Scales matching image.png) */}
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#2D3025] select-none pointer-events-none z-10 whitespace-nowrap flex items-center gap-1">
+          <span>{t.axisUrban}</span>
+          <span>↑</span>
         </div>
-        <div className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[13px] font-black uppercase tracking-[0.18em] text-brand-charcoal select-none pointer-events-none z-10 whitespace-nowrap">
-          ↓ {t.axisNature}
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#2D3025] select-none pointer-events-none z-10 whitespace-nowrap flex items-center gap-1">
+          <span>↓</span>
+          <span>{t.axisNature}</span>
         </div>
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 w-6 h-40 flex items-center justify-center z-10 select-none pointer-events-none">
-          <div className="text-[13px] font-black uppercase tracking-[0.18em] text-brand-charcoal whitespace-nowrap -rotate-90 flex items-center gap-1">
-            <span className="rotate-90 inline-block">←</span>
+        <div className="absolute left-1.5 top-1/2 -translate-y-1/2 w-6 h-40 flex items-center justify-center z-10 select-none pointer-events-none">
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#2D3025] whitespace-nowrap -rotate-90 flex items-center gap-1">
+            <span>↑</span>
             <span>{t.axisHedonist}</span>
           </div>
         </div>
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-40 flex items-center justify-center z-10 select-none pointer-events-none">
-          <div className="text-[13px] font-black uppercase tracking-[0.18em] text-brand-charcoal whitespace-nowrap rotate-90 flex items-center gap-1">
+        <div className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-40 flex items-center justify-center z-10 select-none pointer-events-none">
+          <div className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#2D3025] whitespace-nowrap rotate-90 flex items-center gap-1">
             <span>{t.axisAdventurer}</span>
-            <span className="-rotate-90 inline-block">→</span>
+            <span>↑</span>
           </div>
         </div>
 
@@ -1882,74 +1884,89 @@ export default function MoodOrbit({
         )}
       </AnimatePresence>
 
-      {/* Onboarding Tutorial HUD Overlay */}
+      {/* First-Use Light Premium Tutorial Card & Compact Recurring State Toggle */}
       <AnimatePresence>
-        {showOnboarding && (
+        {showOnboarding ? (
           <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 15 }}
+            initial={{ opacity: 0, y: 12, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 12, scale: 0.98 }}
             onPointerDown={(e) => e.stopPropagation()}
-            className="absolute bottom-3 left-3 right-3 bg-brand-charcoal/95 backdrop-blur-[6px] z-40 p-4 flex flex-col justify-between select-none pointer-events-auto text-white rounded-[20px] h-[175px] border border-white/10 shadow-2xl"
+            className="w-full bg-[#FAF9F5] border border-[#2D3025]/15 rounded-[24px] p-5 shadow-md text-brand-charcoal z-30 select-none pointer-events-auto text-center mt-3 space-y-4 relative"
+            id="mood-orbit-tutorial-card"
           >
-            {/* Animated HUD Corner Brackets */}
-            <div className="absolute top-3 left-3 w-3 h-3 border-t border-l border-amber-400" />
-            <div className="absolute top-3 right-3 w-3 h-3 border-t border-r border-amber-400" />
-            <div className="absolute bottom-3 left-3 w-3 h-3 border-b border-l border-amber-400" />
-            <div className="absolute bottom-3 right-3 w-3 h-3 border-b border-r border-amber-400" />
+            {/* Top Pointer Arrow */}
+            <div className="w-0 h-0 border-x-8 border-x-transparent border-b-8 border-b-[#FAF9F5] absolute -top-2 left-1/2 -translate-x-1/2 z-10" />
 
-            {/* Title */}
-            <div className="flex justify-between items-center text-white pb-1.5 border-b border-white/10">
-              <span className="text-[9px] uppercase tracking-[0.2em] font-black text-amber-400 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
-                {t.guideTitle}
+            {/* Header */}
+            <div className="text-center pb-1 border-b border-[#2D3025]/10">
+              <span className="font-mono text-[10px] font-black uppercase tracking-[0.25em] text-[#8C8A7D]">
+                {isSr ? 'KAKO TO RADI' : isZh ? '使用指南' : 'HOW IT WORKS'}
               </span>
             </div>
 
-            {/* Simple Instructions list */}
-            <div className="flex-1 flex flex-col justify-center space-y-1.5 py-1.5 text-left text-[9.5px] sm:text-[10px] font-medium leading-normal text-slate-200">
-              <div className="flex items-start gap-1.5">
-                <span className="text-cyan-400 text-xs leading-none">⏱️</span>
-                <span>
-                  {language === 'sr' ? (
-                    <><strong>Vreme:</strong> Izaberite raspoloživo vreme rotiranjem prstena.</>
-                  ) : language === 'zh' ? (
-                    <><strong>可用时间:</strong> 通过旋转最外侧轨环来选择行程可用时间。</>
-                  ) : (
-                    <><strong>Time:</strong> Select time available by rotating the ring.</>
-                  )}
+            {/* 3 Columns */}
+            <div className="grid grid-cols-3 gap-2.5 pt-1.5 text-center">
+              {/* Column 1: Rotate for time */}
+              <div className="flex flex-col items-center">
+                <div className="relative mb-2">
+                  <div className="w-10 h-10 rounded-full bg-[#E0F7FA] text-[#00838F] flex items-center justify-center shadow-2xs">
+                    <Clock size={18} />
+                  </div>
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#00838F] text-white text-[9px] font-black flex items-center justify-center shadow-xs">
+                    1
+                  </span>
+                </div>
+                <span className="text-xs font-black text-brand-charcoal mb-1 leading-snug">
+                  {isSr ? 'Rotirajte za vreme' : isZh ? '旋转调节时间' : 'Rotate for time'}
                 </span>
+                <p className="text-[13px] leading-snug text-brand-charcoal font-bold tracking-tight">
+                  {isSr ? 'Izaberite raspoloživo vreme rotiranjem prstena.' : isZh ? '通过旋转最外侧轨环来选择行程可用时间。' : 'Select time available by rotating the ring.'}
+                </p>
               </div>
-              <div className="flex items-start gap-1.5">
-                <span className="text-amber-400 text-xs leading-none">💰</span>
-                <span>
-                  {language === 'sr' ? (
-                    <><strong>Budžet:</strong> Podesite budžet povlačenjem prečnika unutra i spolja.</>
-                  ) : language === 'zh' ? (
-                    <><strong>预算上限:</strong> 通过向内或向外拉伸表壳以设置行旅预算。</>
-                  ) : (
-                    <><strong>Budget:</strong> Set the budget by pulling the diameter in and out.</>
-                  )}
+
+              {/* Column 2: Pull for budget */}
+              <div className="flex flex-col items-center border-x border-[#2D3025]/10 px-1">
+                <div className="relative mb-2">
+                  <div className="w-10 h-10 rounded-full bg-[#FFF8E1] text-[#F57F17] flex items-center justify-center shadow-2xs">
+                    <Coins size={18} />
+                  </div>
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#F57F17] text-white text-[9px] font-black flex items-center justify-center shadow-xs">
+                    2
+                  </span>
+                </div>
+                <span className="text-xs font-black text-brand-charcoal mb-1 leading-snug">
+                  {isSr ? 'Povucite za budžet' : isZh ? '拉伸调节预算' : 'Pull for budget'}
                 </span>
+                <p className="text-[13px] leading-snug text-brand-charcoal font-bold tracking-tight">
+                  {isSr ? 'Podesite budžet povlačenjem prečnika unutra i spolja.' : isZh ? '通过向内或向外拉伸表壳以设置行旅预算。' : 'Set the budget by pulling the diameter in and out.'}
+                </p>
               </div>
-              <div className="flex items-start gap-1.5">
-                <span className="text-rose-400 text-xs leading-none">🎯</span>
-                <span>
-                  {language === 'sr' ? (
-                    <><strong>Smer:</strong> Postavite centar tamo gde najbolje opisuje Vaše raspoloženje.</>
-                  ) : language === 'zh' ? (
-                    <><strong>旅行心情:</strong> 拖拽中心点，将其定位在最契合您当下心情的位置。</>
-                  ) : (
-                    <><strong>Mood:</strong> Place where best describes your current mood.</>
-                  )}
+
+              {/* Column 3: Drag for mood */}
+              <div className="flex flex-col items-center">
+                <div className="relative mb-2">
+                  <div className="w-10 h-10 rounded-full bg-[#FFEBEE] text-[#C62828] flex items-center justify-center shadow-2xs">
+                    <Target size={18} />
+                  </div>
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#C62828] text-white text-[9px] font-black flex items-center justify-center shadow-xs">
+                    3
+                  </span>
+                </div>
+                <span className="text-xs font-black text-brand-charcoal mb-1 leading-snug">
+                  {isSr ? 'Prevučite za raspoloženje' : isZh ? '拖拽标定心情' : 'Drag for mood'}
                 </span>
+                <p className="text-[13px] leading-snug text-brand-charcoal font-bold tracking-tight">
+                  {isSr ? 'Postavite centar tamo gde najbolje opisuje Vaše raspoloženje.' : isZh ? '拖拽中心点，将其定位在最契合您当下心情的位置。' : 'Place where best describes your current mood.'}
+                </p>
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex items-center justify-end pt-1.5 border-t border-white/10">
+            {/* Action Button */}
+            <div className="pt-2">
               <button
-                onPointerDown={(e) => {
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
                   e.stopPropagation();
                   triggerHapticProxy(12);
                   setShowOnboarding(false);
@@ -1959,15 +1976,40 @@ export default function MoodOrbit({
                     console.warn(err);
                   }
                 }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                }}
-                className="px-4 py-1 rounded-md bg-amber-500 text-brand-charcoal hover:bg-amber-400 font-black text-[9px] uppercase tracking-widest transition-all flex items-center gap-1 cursor-pointer outline-none shadow-md shadow-amber-500/20 pointer-events-auto"
+                className="w-full py-3.5 rounded-full bg-[#E5B842] hover:bg-[#D8AB37] text-brand-charcoal font-black text-xs uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 cursor-pointer outline-none shadow-sm active:scale-[0.98]"
+                id="mood-orbit-got-it-btn"
               >
-                <span>{language === 'sr' ? 'U REDU' : language === 'zh' ? '我知道了' : 'Got it'}</span>
-                <span>&rarr;</span>
+                <span>{isSr ? 'U REDU' : isZh ? '我知道了' : 'GOT IT'}</span>
+                <span className="text-sm">&rarr;</span>
               </button>
             </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 5 }}
+            className="w-full pt-1 pointer-events-auto"
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setShowOnboarding(true);
+                triggerHapticProxy(10);
+              }}
+              className="w-full py-2.5 px-3.5 rounded-xl bg-white/80 border border-[#2D3025]/10 hover:border-accent-teal/40 hover:bg-white text-brand-charcoal transition-all flex items-center justify-between text-xs font-bold cursor-pointer group shadow-2xs outline-none select-none"
+              id="how-mood-orbit-works-toggle"
+            >
+              <div className="flex items-center gap-2">
+                <Info size={13} className="text-accent-teal" />
+                <span className="font-mono text-[9.5px] uppercase tracking-wider font-extrabold text-[#2D3025]/75 group-hover:text-brand-charcoal">
+                  {isSr ? 'ⓘ Kako Mood Orbit™ radi' : isZh ? 'ⓘ 心情星轨使用指南' : 'ⓘ How Mood Orbit works'}
+                </span>
+              </div>
+              <span className="text-[10px] font-mono text-accent-teal font-extrabold group-hover:translate-x-0.5 transition-transform">
+                &rarr;
+              </span>
+            </button>
           </motion.div>
         )}
       </AnimatePresence>

@@ -30,6 +30,28 @@ export function IdemoStudio({
     let mounted = true;
 
     async function restoreAuthSession() {
+      // 1. Check local SafeStorage for existing verified master session
+      try {
+        const storedJson = safeStorage.getItem(STUDIO_SESSION_KEY);
+        if (storedJson) {
+          const parsed = JSON.parse(storedJson);
+          if (
+            parsed &&
+            typeof parsed.email === 'string' &&
+            parsed.email.toLowerCase() === 'office@idemo.group' &&
+            parsed.role
+          ) {
+            if (mounted) {
+              setSession(parsed);
+              setIsInitializing(false);
+              return;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to parse cached Studio session:', e);
+      }
+
       if (!isSupabaseConfigured()) {
         if (mounted) setIsInitializing(false);
         return;

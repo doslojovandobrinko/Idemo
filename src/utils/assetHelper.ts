@@ -12,27 +12,64 @@ interface CachedSignedUrl {
 
 const signedUrlCache = new Map<string, CachedSignedUrl>();
 
+const imageMap = new Map<string, string>();
+
+try {
+  if (typeof import.meta !== 'undefined' && typeof (import.meta as any).glob === 'function') {
+    const imageModules = (import.meta as any).glob(
+      ['/src/assets/images/*.{webp,png,jpg,jpeg}', '/public/assets/images/*.{webp,png,jpg,jpeg}'],
+      { eager: true, import: 'default' }
+    );
+    for (const [path, url] of Object.entries(imageModules)) {
+      if (typeof url === 'string') {
+        const filename = path.split('/').pop()?.toLowerCase() || '';
+        if (filename) {
+          imageMap.set(filename, url);
+          const base = filename.replace(/\.(webp|png|jpg|jpeg)$/i, '');
+          imageMap.set(base, url);
+        }
+      }
+    }
+  }
+} catch {
+  // Fallback for non-Vite environments
+}
+
 /**
- * Utility to map image assets to optimized WebP versions when available.
- * Provides a single point of asset resolution for the entire IDEMO platform,
- * allowing seamless migration to WebP without database modifications.
+ * Utility to map image assets to optimized WebP versions and Vite module URLs.
+ * Provides authoritative asset resolution for the entire IDEMO platform across all deployment environments.
  */
 export function getOptimizedImageUrl(src: string): string {
   if (!src) return '';
-  if (src.startsWith('blob:') || src.startsWith('data:')) {
-    return src;
-  }
-  if (src.startsWith('http://') || src.startsWith('https://')) {
+  if (src.startsWith('blob:') || src.startsWith('data:') || src.startsWith('http://') || src.startsWith('https://')) {
     return src;
   }
   
+  // Extract base filename
+  const parts = src.split('/');
+  const rawFilename = parts[parts.length - 1].toLowerCase();
+  
+  if (rawFilename) {
+    // 1. Direct filename lookup in Vite module map
+    if (imageMap.has(rawFilename)) {
+      return imageMap.get(rawFilename)!;
+    }
+    
+    // 2. Base name lookup (extension-agnostic, resolving .png references to .webp)
+    const baseName = rawFilename.replace(/\.(webp|png|jpg|jpeg)$/i, '');
+    if (imageMap.has(baseName)) {
+      return imageMap.get(baseName)!;
+    }
+  }
+  
+  // 3. Fallback: clean relative path without leading root slashes that break iframe origins
   let cleaned = src;
   if (cleaned.startsWith('/src/assets/images/')) {
-    cleaned = cleaned.replace('/src/assets/images/', '/assets/images/');
+    cleaned = cleaned.replace('/src/assets/images/', 'assets/images/');
   } else if (cleaned.startsWith('src/assets/images/')) {
-    cleaned = cleaned.replace('src/assets/images/', '/assets/images/');
-  } else if (cleaned.startsWith('assets/images/')) {
-    cleaned = '/' + cleaned;
+    cleaned = cleaned.replace('src/assets/images/', 'assets/images/');
+  } else if (cleaned.startsWith('/assets/images/')) {
+    cleaned = cleaned.replace('/assets/images/', 'assets/images/');
   }
   
   if (cleaned.endsWith('.png')) {

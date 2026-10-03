@@ -8,11 +8,7 @@ ALTER TABLE public.partner_profile_content
   ADD COLUMN IF NOT EXISTS published_contact_phone TEXT NULL,
   ADD COLUMN IF NOT EXISTS published_contact_email TEXT NULL;
 
--- 2. Deprecate public.partners.contact_phone and contact_email (columns retained for backward compatibility, unread by visitor resolution)
-COMMENT ON COLUMN public.partners.contact_phone IS 'DEPRECATED: Visitor-visible professional contact details are governed inside partner_profile_content (draft_contact_phone / published_contact_phone).';
-COMMENT ON COLUMN public.partners.contact_email IS 'DEPRECATED: Visitor-visible professional contact details are governed inside partner_profile_content (draft_contact_email / published_contact_email).';
-
--- 3. Replace save_partner_profile_draft_with_authorization_secure to accept draft contact info
+-- 2. Replace save_partner_profile_draft_with_authorization_secure to accept draft contact info
 CREATE OR REPLACE FUNCTION public.save_partner_profile_draft_with_authorization_secure(
   p_partner_id UUID,
   p_intro_draft TEXT,

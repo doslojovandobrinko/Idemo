@@ -10,6 +10,7 @@ import { Recommendation } from '../types';
 import { triggerHaptic } from '../App';
 import { getLocalizedValue } from '../lib/utils';
 import { trackMapOpenSignal } from '../lib/preferenceEngine';
+import { routeOutboundAction } from '../lib/outboundRouter';
 
 export interface Hub {
   id: string;
@@ -575,30 +576,53 @@ export function LocalTransitCard({
 
         {/* Dual Native Map Shortcuts */}
         <div className="grid grid-cols-2 gap-3 pt-3.5 border-t border-dashed border-[#E7E4DB]">
-          <a
-            href={`maps://?q=${encodeURIComponent(getLocalizedValue(recommendation, 'title', language || 'en'))}&ll=${recCoords.lat},${recCoords.lng}`}
+          <button
+            type="button"
             onClick={() => {
               triggerHaptic(10);
               trackMapOpenSignal(recommendation);
+              const recTitle = getLocalizedValue(recommendation, 'title', language || 'en');
+              const appleUrl = `maps://?q=${encodeURIComponent(recTitle)}&ll=${recCoords.lat},${recCoords.lng}`;
+              const googleWebUrl = `https://www.google.com/maps/search/?api=1&query=${recCoords.lat},${recCoords.lng}`;
+              const cleanAddress = (recommendation as any).address || recommendation.location || `${recTitle} (${recCoords.lat}, ${recCoords.lng})`;
+              routeOutboundAction({
+                url: appleUrl,
+                type: 'EXTERNAL_INTENT',
+                fallbackData: {
+                  fallbackUrl: googleWebUrl,
+                  address: cleanAddress,
+                  copyText: cleanAddress
+                }
+              });
             }}
-            className="p-3 bg-white border border-[#D5D3C8] hover:bg-brand-pearl rounded-xl text-center font-extrabold text-[11px] uppercase tracking-wider text-brand-charcoal flex items-center justify-center gap-1.5 transition-all outline-none"
+            className="p-3 bg-white border border-[#D5D3C8] hover:bg-brand-pearl rounded-xl text-center font-extrabold text-[11px] uppercase tracking-wider text-brand-charcoal flex items-center justify-center gap-1.5 transition-all outline-none cursor-pointer"
             id="open-apple-maps"
           >
             🍎 {language === 'sr' ? 'Apple Mape' : language === 'zh' ? '苹果地图' : 'Apple Maps'}
-          </a>
-          <a
-            href={`https://www.google.com/maps/search/?api=1&query=${recCoords.lat},${recCoords.lng}`}
-            target="_blank"
-            rel="noopener noreferrer"
+          </button>
+          <button
+            type="button"
             onClick={() => {
               triggerHaptic(10);
               trackMapOpenSignal(recommendation);
+              const recTitle = getLocalizedValue(recommendation, 'title', language || 'en');
+              const googleUrl = `https://www.google.com/maps/search/?api=1&query=${recCoords.lat},${recCoords.lng}`;
+              const cleanAddress = (recommendation as any).address || recommendation.location || `${recTitle} (${recCoords.lat}, ${recCoords.lng})`;
+              routeOutboundAction({
+                url: googleUrl,
+                type: 'EXTERNAL_INTENT',
+                fallbackData: {
+                  fallbackUrl: googleUrl,
+                  address: cleanAddress,
+                  copyText: cleanAddress
+                }
+              });
             }}
-            className="p-3 bg-white border border-[#D5D3C8] hover:bg-brand-pearl rounded-xl text-center font-extrabold text-[11px] uppercase tracking-wider text-brand-charcoal flex items-center justify-center gap-1.5 transition-all outline-none"
+            className="p-3 bg-white border border-[#D5D3C8] hover:bg-brand-pearl rounded-xl text-center font-extrabold text-[11px] uppercase tracking-wider text-brand-charcoal flex items-center justify-center gap-1.5 transition-all outline-none cursor-pointer"
             id="open-google-maps"
           >
             🌐 {language === 'sr' ? 'Google Mape' : language === 'zh' ? '谷歌地图' : 'Google Maps'}
-          </a>
+          </button>
         </div>
       </div>
     </div>

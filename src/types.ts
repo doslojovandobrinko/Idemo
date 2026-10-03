@@ -15,6 +15,7 @@ export enum Category {
 
 export type RecommendationLifecycleStatus = 
   | 'RESEARCH_CANDIDATE' 
+  | 'PROMOTED'
   | 'NEEDS_EDITORIAL_IMPROVEMENT' 
   | 'NEEDS_ADDITIONAL_RESEARCH' 
   | 'CANONICAL' 
@@ -108,6 +109,9 @@ export interface Recommendation {
     tagline?: string;
   }>;
   stagedPartners?: any[];
+  publicationValidation?: any;
+  curatorOverride?: any;
+  finalPublicationDecision?: any;
 }
 
 export interface Partner {
@@ -201,10 +205,16 @@ export interface ConfirmedArrangementRecord {
   match_id: string;
   partner_name: string;
   partner_code: string;
+  category?: string;
+  verification_status?: string;
   photo_url?: string | null;
   contact_phone: string | null;
   contact_email: string | null;
   introduction: string | null;
+  languages?: string[];
+  service_areas?: string[];
+  capabilities?: string[];
+  portfolio_items?: Array<{ title?: string; capability_id?: string; description?: string; item_type?: string }>;
   confirmed_terms: string;
   proposed_start_at: string | null;
   proposed_end_at?: string | null;

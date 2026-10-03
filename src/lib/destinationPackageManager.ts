@@ -90,10 +90,10 @@ export async function buildCanonicalSerbiaPackage(): Promise<DestinationPackage>
   const manifest: DestinationManifest = {
     destinationId: 'serbia',
     destinationName: 'Serbia',
-    contentVersion: '1.0.0',
-    packageVersion: '1.0.0',
+    contentVersion: '1.3.0',
+    packageVersion: '1.3.0',
     schemaVersion: '1.0',
-    publishedAt: '2026-07-23T00:00:00.000Z',
+    publishedAt: '2026-10-03T13:15:00.000Z',
     minSupportedAppVersion: '1.0.0',
     sha256: payloadHash,
     packageSizeBytes: rawSize,
@@ -174,11 +174,13 @@ export async function getActiveDestinationPackage(): Promise<DestinationPackage>
   if (cachedJson) {
     try {
       const parsed: DestinationPackage = JSON.parse(cachedJson);
+      const version = parsed?.manifest?.packageVersion || '1.0.0';
+      const hasBrokenImage = parsed?.recommendations?.some(r => !r.image || r.image === '/src/assets/images/.webp' || r.image.endsWith('/.webp'));
       const validation = await validateDestinationPackage(parsed);
-      if (validation.valid) {
+      if (validation.valid && version >= '1.3.0' && !hasBrokenImage) {
         return parsed;
       }
-      console.warn('[DestinationPackageManager] Active package validation failed:', validation.reason);
+      console.warn('[DestinationPackageManager] Active package invalid or outdated (v' + version + '), refreshing canonical baseline package:', validation.reason || 'OUTDATED_PACKAGE_VERSION');
     } catch (e) {
       console.error('[DestinationPackageManager] Failed to parse active package JSON:', e);
     }

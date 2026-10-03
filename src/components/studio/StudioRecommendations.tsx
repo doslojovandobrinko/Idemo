@@ -4,9 +4,12 @@ import { Recommendation, Category } from '../../types';
 import { INITIAL_RECOMMENDATIONS } from '../../constants';
 import { draftExpansionPool } from '../../data/recommendations/serbia/draft_expansion';
 import { RecommendationEditorModal } from './RecommendationEditorModal';
+import { CandidateDiscoveryModal } from './CandidateDiscoveryModal';
+import { DayPlanComposerModal } from './DayPlanComposerModal';
 import { calculateRecommendationCompleteness } from './utils/scoring';
 import { getLocalStudioDrafts, saveLocalStudioDraft, removeLocalStudioDraft, sanitizeStudioDraft, STUDIO_DRAFT_SCHEMA_VERSION, STORAGE_KEY_DRAFT_SCHEMA_VERSION } from '../../lib/recommendationWorkflowService';
 import { safeStorage } from '../../lib/safeStorage';
+import { isPublishedRecommendation } from '../../lib/idemo007v2/dayPlanComposer';
 
 interface StudioRecommendationsProps {
   customRecommendations?: Recommendation[];
@@ -28,6 +31,7 @@ export function StudioRecommendations({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
+  const [quickPreset, setQuickPreset] = useState<'ALL' | 'PLANNING_POOL' | 'NEEDS_REVIEW' | 'RETIRED'>('ALL');
   const [selectedRecId, setSelectedRecId] = useState<string | null>(null);
   const [toastNotification, setToastNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
@@ -51,6 +55,8 @@ export function StudioRecommendations({
 
   // Editor Modal state
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isDiscoveryOpen, setIsDiscoveryOpen] = useState(false);
+  const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [editingRec, setEditingRec] = useState<Recommendation | null>(null);
   const [localCustomRecs, setLocalCustomRecs] = useState<Recommendation[]>([]);
 
@@ -126,6 +132,32 @@ export function StudioRecommendations({
     return Array.from(map.values());
   }, [customRecommendations, localCustomRecs]);
 
+  // Preset Count Memos
+  const planningPoolCount = useMemo(() => {
+    return allRecs.filter(r => isPublishedRecommendation(r)).length;
+  }, [allRecs]);
+
+  const needsReviewCount = useMemo(() => {
+    return allRecs.filter(r => {
+      const currentStat = editorialStatuses[r.id] || (INITIAL_RECOMMENDATIONS.some(i => i.id === r.id && (i.publicationStatus === 'CANONICAL' || i.publicationStatus === 'PUBLISHED')) ? 'APPROVED' : 'CANDIDATE');
+      return (
+        currentStat === 'CANDIDATE' ||
+        currentStat === 'NEEDS RESEARCH' ||
+        currentStat === 'MERGE CANDIDATE' ||
+        r.publicationStatus === 'RESEARCH_CANDIDATE' ||
+        r.publicationStatus === 'NEEDS_ADDITIONAL_RESEARCH' ||
+        r.publicationStatus === 'NEEDS_EDITORIAL_IMPROVEMENT'
+      );
+    }).length;
+  }, [allRecs, editorialStatuses]);
+
+  const retiredCount = useMemo(() => {
+    return allRecs.filter(r => {
+      const currentStat = editorialStatuses[r.id] || (INITIAL_RECOMMENDATIONS.some(i => i.id === r.id && (i.publicationStatus === 'CANONICAL' || i.publicationStatus === 'PUBLISHED')) ? 'APPROVED' : 'CANDIDATE');
+      return currentStat === 'RETIRED' || r.publicationStatus === 'RETIRED';
+    }).length;
+  }, [allRecs, editorialStatuses]);
+
   const filteredRecs = useMemo(() => {
     return allRecs.filter(r => {
       const titleMatch = r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -136,11 +168,27 @@ export function StudioRecommendations({
       
       const currentStat = editorialStatuses[r.id] || (INITIAL_RECOMMENDATIONS.some(i => i.id === r.id && (i.publicationStatus === 'CANONICAL' || i.publicationStatus === 'PUBLISHED')) ? 'APPROVED' : 'CANDIDATE');
 
+      let presetMatch = true;
+      if (quickPreset === 'PLANNING_POOL') {
+        presetMatch = isPublishedRecommendation(r);
+      } else if (quickPreset === 'NEEDS_REVIEW') {
+        presetMatch = (
+          currentStat === 'CANDIDATE' ||
+          currentStat === 'NEEDS RESEARCH' ||
+          currentStat === 'MERGE CANDIDATE' ||
+          r.publicationStatus === 'RESEARCH_CANDIDATE' ||
+          r.publicationStatus === 'NEEDS_ADDITIONAL_RESEARCH' ||
+          r.publicationStatus === 'NEEDS_EDITORIAL_IMPROVEMENT'
+        );
+      } else if (quickPreset === 'RETIRED') {
+        presetMatch = currentStat === 'RETIRED' || r.publicationStatus === 'RETIRED';
+      }
+
       let statusMatch = false;
       if (selectedStatus === 'RETIRED') {
-        statusMatch = currentStat === 'RETIRED';
+        statusMatch = currentStat === 'RETIRED' || r.publicationStatus === 'RETIRED';
       } else {
-        if (currentStat === 'RETIRED') {
+        if ((currentStat === 'RETIRED' || r.publicationStatus === 'RETIRED') && quickPreset !== 'RETIRED') {
           statusMatch = false;
         } else if (selectedStatus === 'ALL') {
           statusMatch = true;
@@ -149,9 +197,9 @@ export function StudioRecommendations({
         }
       }
 
-      return titleMatch && catMatch && statusMatch;
+      return titleMatch && catMatch && presetMatch && statusMatch;
     });
-  }, [allRecs, searchQuery, selectedCategory, selectedStatus, editorialStatuses]);
+  }, [allRecs, searchQuery, selectedCategory, selectedStatus, editorialStatuses, quickPreset]);
 
   const activeRec = useMemo(() => {
     return allRecs.find(r => r.id === selectedRecId) || filteredRecs[0] || allRecs[0];
@@ -236,7 +284,7 @@ export function StudioRecommendations({
 
     setToastNotification({
       message: 'Recommendation retired and removed from active desk',
-      type: 'info'
+      type: 'success'
     });
   };
 
@@ -272,6 +320,22 @@ export function StudioRecommendations({
 
         <div className="flex items-center gap-3 font-mono text-xs">
           <button
+            onClick={() => setIsComposerOpen(true)}
+            className="px-4 py-2.5 rounded-xl bg-[#800020] text-white hover:bg-[#600018] font-bold flex items-center gap-2 cursor-pointer transition-all shadow-xs active:scale-95"
+          >
+            <Sparkles size={15} className="text-[#C5A059]" />
+            <span>Compose Day-Plan</span>
+          </button>
+
+          <button
+            onClick={() => setIsDiscoveryOpen(true)}
+            className="px-4 py-2.5 rounded-xl bg-white border border-[#23251E] text-[#1E2E20] hover:bg-[#FAF9F5] font-bold flex items-center gap-2 cursor-pointer transition-all shadow-xs active:scale-95"
+          >
+            <Compass size={15} className="text-[#C5A059]" />
+            <span>Discover Candidates</span>
+          </button>
+
+          <button
             onClick={handleCreateNew}
             className="px-4 py-2.5 rounded-xl bg-[#23251E] hover:bg-[#32352B] text-white font-bold flex items-center gap-2 cursor-pointer transition-all shadow-xs active:scale-95"
           >
@@ -283,6 +347,71 @@ export function StudioRecommendations({
             Total Items: {allRecs.length}
           </span>
         </div>
+      </div>
+
+      {/* Quick-Filter Presets Bar */}
+      <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
+        <button
+          type="button"
+          onClick={() => {
+            setQuickPreset('ALL');
+            setSelectedStatus('ALL');
+          }}
+          className={`px-3 py-2 rounded-xl font-bold transition-all cursor-pointer ${
+            quickPreset === 'ALL'
+              ? 'bg-[#23251E] text-white shadow-xs'
+              : 'bg-white border border-[#E5E3DB] text-[#8C8A7D] hover:text-[#1E2E20] hover:bg-[#FAF9F5]'
+          }`}
+        >
+          ALL ({allRecs.length})
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setQuickPreset('PLANNING_POOL');
+            setSelectedStatus('ALL');
+          }}
+          className={`px-3 py-2 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            quickPreset === 'PLANNING_POOL'
+              ? 'bg-[#1E2E20] text-[#C5A059] border border-[#2D4530] shadow-xs'
+              : 'bg-white border border-[#E5E3DB] text-[#1E2E20] hover:bg-[#FAF9F5]'
+          }`}
+        >
+          <ShieldCheck size={14} className="text-[#C5A059]" />
+          <span>PLANNING POOL ({planningPoolCount})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setQuickPreset('NEEDS_REVIEW');
+            setSelectedStatus('ALL');
+          }}
+          className={`px-3 py-2 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            quickPreset === 'NEEDS_REVIEW'
+              ? 'bg-[#800020] text-white shadow-xs'
+              : 'bg-white border border-[#E5E3DB] text-[#8C8A7D] hover:text-[#1E2E20] hover:bg-[#FAF9F5]'
+          }`}
+        >
+          <AlertCircle size={14} className={quickPreset === 'NEEDS_REVIEW' ? 'text-white' : 'text-[#800020]'} />
+          <span>NEEDS REVIEW ({needsReviewCount})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setQuickPreset('RETIRED');
+            setSelectedStatus('RETIRED');
+          }}
+          className={`px-3 py-2 rounded-xl font-bold transition-all cursor-pointer ${
+            quickPreset === 'RETIRED'
+              ? 'bg-[#8C8A7D] text-white shadow-xs'
+              : 'bg-white border border-[#E5E3DB] text-[#8C8A7D] hover:text-[#1E2E20] hover:bg-[#FAF9F5]'
+          }`}
+        >
+          RETIRED ({retiredCount})
+        </button>
       </div>
 
       {/* Filter Bar */}
@@ -564,6 +693,35 @@ export function StudioRecommendations({
         onClose={() => setIsEditorOpen(false)}
         onSave={handleSaveFromEditor}
         onDeleteDraft={handleDeleteFromEditor}
+      />
+
+      {/* Candidate Discovery Modal */}
+      <CandidateDiscoveryModal
+        isOpen={isDiscoveryOpen}
+        onClose={() => setIsDiscoveryOpen(false)}
+        existingRecommendations={allRecs}
+        onAdvanceCandidates={(newRecs) => {
+          setLocalCustomRecs(prev => [...newRecs, ...prev]);
+          if (newRecs.length > 0) {
+            setSelectedRecId(newRecs[0].id);
+            setToastNotification({
+              message: `Advanced ${newRecs.length} research candidates to Recommendations Desk (AMBER)`,
+              type: 'success',
+            });
+          }
+        }}
+      />
+
+      {/* Day-Plan Composer Modal */}
+      <DayPlanComposerModal
+        isOpen={isComposerOpen}
+        onClose={() => setIsComposerOpen(false)}
+        onPlanCreated={(plan) => {
+          setToastNotification({
+            message: `Created Day-Plan Proposal '${plan.title}' (${plan.stops.length} stops)`,
+            type: 'success',
+          });
+        }}
       />
     </div>
   );

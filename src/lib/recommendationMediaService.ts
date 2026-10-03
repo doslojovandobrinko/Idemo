@@ -139,10 +139,10 @@ export function getApprovedPrimaryMedia(recommendationId: string, defaultImage?:
   if (approvalRecord) {
     return approvalRecord.canonicalMediaRef || approvalRecord.proposedImage || approvalRecord.proposedMediaRef || '';
   }
-  if (recommendationId === '1' || recommendationId === 'rec-uvac-1') {
-    return '/src/assets/images/uvac_meanders_1778841048759.png';
+  if (defaultImage && !defaultImage.endsWith('/.webp') && defaultImage !== '/src/assets/images/.webp' && defaultImage !== '/assets/images/.webp') {
+    return defaultImage;
   }
-  return defaultImage || '';
+  return '/src/assets/images/uvac_meanders_1778841048759.webp';
 }
 
 /**

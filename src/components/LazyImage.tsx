@@ -12,6 +12,7 @@ interface LazyImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   className?: string;
   containerClassName?: string;
   isAdminPreview?: boolean;
+  loading?: 'lazy' | 'eager';
 }
 
 export const LazyImage: React.FC<LazyImageProps> = ({
@@ -21,6 +22,7 @@ export const LazyImage: React.FC<LazyImageProps> = ({
   containerClassName = 'w-full h-full',
   alt = '',
   isAdminPreview = false,
+  loading = 'eager',
   ...props
 }) => {
   // Safe helper to strip dev prefixes and ensure relative path for published and AppMyWeb builds
@@ -63,59 +65,67 @@ export const LazyImage: React.FC<LazyImageProps> = ({
   const isGovernedMedia = Boolean(src && (src.startsWith('recommendation-media/') || src.startsWith('/recommendation-media/')));
   const initialSrc = isGovernedMedia ? '' : getOptimizedImageUrl(cleanPath(src));
   const [imgSrc, setImgSrc] = useState<string>(initialSrc || resolvedFallback);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [hasError, setHasError] = useState(false);
-  const imgRef = React.useRef<HTMLImageElement>(null);
+  const [isLoaded, setIsLoaded] = useState<boolean>(true);
+  const [hasError, setHasError] = useState<boolean>(false);
+  const imgRef = React.useRef<HTMLImageElement | null>(null);
 
-  // Sync state when src changes (Critical for switching views and candidates)
+  // Synchronize imgSrc when src prop changes
   React.useEffect(() => {
     let active = true;
-    setIsLoaded(false);
-    setHasError(false);
 
     if (isGovernedMedia) {
       resolveMediaDisplayUrl(src)
         .then((resolvedUrl) => {
-          if (active) {
-            setImgSrc(resolvedUrl || resolvedFallback);
+          if (active && resolvedUrl) {
+            setImgSrc(resolvedUrl);
           }
         })
         .catch(() => {
           if (active) {
             setHasError(true);
-            setImgSrc(resolvedFallback);
+            if (resolvedFallback) setImgSrc(resolvedFallback);
           }
         });
     } else {
       const nextSrc = getOptimizedImageUrl(cleanPath(src));
-      setImgSrc(nextSrc || resolvedFallback);
+      if (nextSrc && nextSrc !== imgSrc) {
+        setImgSrc(nextSrc);
+        setIsLoaded(false);
+        setHasError(false);
+      }
     }
 
     return () => {
       active = false;
     };
-  }, [src, fallbackSrc, isGovernedMedia]);
+  }, [src, fallbackSrc, isGovernedMedia, imgSrc]);
 
-
-  // Handle cached images that are already loaded when ref is bound
-  React.useEffect(() => {
-    if (imgRef.current && imgRef.current.complete) {
+  // Handle image load verification
+  const checkComplete = (imgNode: HTMLImageElement | null) => {
+    if (imgNode && imgNode.complete && imgNode.naturalWidth > 0) {
       setIsLoaded(true);
     }
-  }, [imgSrc]);
+  };
+
+  const handleRef = (node: HTMLImageElement | null) => {
+    imgRef.current = node;
+    checkComplete(node);
+  };
+
+  const handleLoad = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    checkComplete(e.currentTarget);
+  };
 
   const handleError = () => {
     if (!hasError) {
       setHasError(true);
-      setImgSrc(resolvedFallback);
+      if (resolvedFallback && imgSrc !== resolvedFallback) {
+        setImgSrc(resolvedFallback);
+      }
     }
   };
 
-  const handleLoad = () => {
-    setIsLoaded(true);
-  };
-
-  const isPending = !src || src.includes('draft_placeholder') || hasError;
+  const isPending = !src || src.includes('draft_placeholder') || (hasError && !resolvedFallback);
 
   if (isPending && isAdminPreview) {
     return (
@@ -132,21 +142,19 @@ export const LazyImage: React.FC<LazyImageProps> = ({
 
   return (
     <div className={`relative overflow-hidden bg-neutral-900 ${containerClassName}`}>
-      {/* Shimmer/Skeleton loader when loading */}
       {!isLoaded && !hasError && (
-        <div className="absolute inset-0 animate-pulse bg-[#1E1D1A]/80 flex items-center justify-center">
+        <div className="absolute inset-0 animate-pulse bg-[#1E1D1A]/80 flex items-center justify-center pointer-events-none z-10">
           <span className="text-[#8A1F1F]/40 font-mono text-[9px] tracking-[0.25em] uppercase">IDEMO LOAD</span>
         </div>
       )}
       <img
-        ref={imgRef}
+        ref={handleRef}
         src={imgSrc || undefined}
         alt={alt}
-        loading="lazy"
+        loading={loading}
         onLoad={handleLoad}
         onError={handleError}
-        referrerPolicy="no-referrer"
-        className={`${className} transition-opacity duration-500 ease-out ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+        className={`${className} transition-opacity duration-300 ease-out ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
         {...props}
       />
     </div>

@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+  <defs>
+    <linearGradient id="warmBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2D3B2A" />
+      <stop offset="100%" stop-color="#1A2618" />
+    </linearGradient>
+    <linearGradient id="goldRim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#DFBA68" />
+      <stop offset="100%" stop-color="#9E7D34" />
+    </linearGradient>
+    <radialGradient id="faceGrad" cx="50%" cy="40%" r="50%">
+      <stop offset="0%" stop-color="#EEDAC5" />
+      <stop offset="85%" stop-color="#DCBEA0" />
+      <stop offset="100%" stop-color="#CAAA8A" />
+    </radialGradient>
+    <linearGradient id="jacketGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#233522" />
+      <stop offset="100%" stop-color="#121D11" />
+    </linearGradient>
+    <linearGradient id="shirtGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#EDE9DE" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Background Base Circle -->
+  <circle cx="80" cy="80" r="79" fill="url(#warmBg)" />
+  <circle cx="80" cy="80" r="77" fill="none" stroke="url(#goldRim)" stroke-width="2" />
+
+  <!-- Body / Attire (Editorial Linen Jacket + White Shirt) -->
+  <g id="body" filter="url(#shadow)">
+    <!-- Shoulders / Jacket -->
+    <path d="M 28 158 C 30 118, 52 110, 80 110 C 108 110, 130 118, 132 158 Z" fill="url(#jacketGrad)" />
+    <!-- White Shirt Collar V -->
+    <polygon points="80,132 66,110 94,110" fill="url(#shirtGrad)" />
+    <!-- Lapels -->
+    <path d="M 52 110 L 68 142 L 80 142 L 64 110 Z" fill="#2E442D" />
+    <path d="M 108 110 L 92 142 L 80 142 L 96 110 Z" fill="#253724" />
+    <!-- Official Guide Lapel Pin -->
+    <circle cx="56" cy="126" r="3.5" fill="url(#goldRim)" />
+    <circle cx="56" cy="126" r="1.8" fill="#FAF9F5" />
+  </g>
+
+  <!-- Neck -->
+  <path d="M 70 94 L 70 114 L 90 114 L 90 94 Z" fill="#CCA888" />
+  <path d="M 70 108 C 76 114, 84 114, 90 108 Z" fill="#BB9474" opacity="0.6" />
+
+  <!-- Head & Facial Features -->
+  <g id="head" filter="url(#shadow)">
+    <!-- Ears -->
+    <ellipse cx="50" cy="74" rx="4.5" ry="7" fill="#DCBEA0" />
+    <ellipse cx="110" cy="74" rx="4.5" ry="7" fill="#DCBEA0" />
+
+    <!-- Face Oval -->
+    <ellipse cx="80" cy="73" rx="27" ry="33" fill="url(#faceGrad)" />
+
+    <!-- Hair (Curated, Neat Styling) -->
+    <path d="M 53 66 C 52 42, 65 34, 80 34 C 95 34, 108 42, 107 66 C 102 50, 96 46, 80 46 C 64 46, 58 50, 53 66 Z" fill="#2C241D" />
+    <!-- Hair Volume Top -->
+    <path d="M 55 52 C 58 38, 70 32, 80 32 C 92 32, 103 38, 105 52 C 98 42, 88 40, 80 40 C 70 40, 62 43, 55 52 Z" fill="#3D3228" />
+
+    <!-- Eyebrows -->
+    <path d="M 64 63 Q 71 61 76 64" stroke="#2C241D" stroke-width="2" stroke-linecap="round" fill="none" />
+    <path d="M 84 64 Q 89 61 96 63" stroke="#2C241D" stroke-width="2" stroke-linecap="round" fill="none" />
+
+    <!-- Eyes (Warm, engaging) -->
+    <ellipse cx="70" cy="69" rx="3.5" ry="2.2" fill="#2C241D" />
+    <ellipse cx="90" cy="69" rx="3.5" ry="2.2" fill="#2C241D" />
+    <circle cx="69" cy="68" r="0.9" fill="#FFFFFF" />
+    <circle cx="89" cy="68" r="0.9" fill="#FFFFFF" />
+
+    <!-- Nose -->
+    <path d="M 80 67 L 78 78 L 83 78" stroke="#B89070" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+
+    <!-- Gentle Warm Smile -->
+    <path d="M 72 86 Q 80 92 88 86" stroke="#8C4A3A" stroke-width="2" stroke-linecap="round" fill="none" />
+    <!-- Subtle smile creases -->
+    <path d="M 68 84 Q 69 86 70 87" stroke="#BA9373" stroke-width="1" stroke-linecap="round" fill="none" />
+    <path d="M 92 84 Q 91 86 90 87" stroke="#BA9373" stroke-width="1" stroke-linecap="round" fill="none" />
+  </g>
+
+  <!-- IDEMO Verified Gold Seal Ribbon Badge -->
+  <g id="verifiedBadge" transform="translate(112, 112)">
+    <circle cx="16" cy="16" r="15" fill="url(#goldRim)" filter="url(#shadow)" />
+    <circle cx="16" cy="16" r="13" fill="#1E2E20" />
+    <path d="M 11 16 L 14.5 19.5 L 21 12.5" fill="none" stroke="url(#goldRim)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+</svg>

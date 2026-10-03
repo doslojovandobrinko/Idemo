@@ -4,9 +4,13 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { executeV2Synthesis } from './src/lib/idemo007v2/synthesisEngine';
+import { createFallbackConceptEntity } from './src/lib/idemo007v2/trustGuard';
+import { buildFactPack } from './src/lib/idemo007v2/factPackBuilder';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __filename = typeof import.meta !== 'undefined' && import.meta?.url ? fileURLToPath(import.meta.url) : '';
+const __dirname = __filename ? path.dirname(__filename) : process.cwd();
 
 // Lazy Gemini client helper
 let geminiClient: GoogleGenAI | null = null;
@@ -52,6 +56,7 @@ interface HumanProvidedMedia {
 }
 
 interface ResearchRequestPayload {
+  runId?: string;
   nameOrTitle: string;
   descriptionOrNotes?: string;
   destinationOrLocation?: string;
@@ -60,6 +65,151 @@ interface ResearchRequestPayload {
   additionalCuratorNotes?: string;
   targetServiceAreaId?: string;
   availableServiceAreas?: Array<{ id: string; name: string; destination_code?: string }>;
+}
+
+// Telemetry & Resource Metering Types
+export interface TelemetryRecord {
+  runId: string;
+  parentRunId?: string | null;
+  callType: 'RESEARCH' | 'SYNTHESIS' | 'LOCALIZATION';
+  model: string;
+  durationMs: number;
+  searchGroundingUsed: boolean;
+  researchCacheHit: boolean;
+  preflightInputTokens?: number | null;
+  promptTokenCount?: number | null;
+  candidateTokenCount?: number | null;
+  totalTokenCount?: number | null;
+  thoughtsTokenCount?: number | null;
+  cachedContentTokenCount?: number | null;
+  toolUsePromptTokenCount?: number | null;
+  inputCharacterCount: number;
+  outputCharacterCount: number;
+  success: boolean;
+  errorCode?: string | null;
+}
+
+export const telemetryStore: TelemetryRecord[] = [];
+
+let supabaseServerClient: SupabaseClient | null = null;
+function getSupabaseServerClient(): SupabaseClient | null {
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  if (!supabaseServerClient) {
+    supabaseServerClient = createClient(url, key);
+  }
+  return supabaseServerClient;
+}
+
+export async function persistTelemetry(record: TelemetryRecord) {
+  telemetryStore.push(record);
+  try {
+    const supabase = getSupabaseServerClient();
+    if (supabase) {
+      await supabase.from('agent_007_resource_telemetry').insert({
+        run_id: record.runId,
+        parent_run_id: record.parentRunId || null,
+        call_type: record.callType,
+        model: record.model,
+        duration_ms: record.durationMs,
+        search_grounding_used: record.searchGroundingUsed,
+        research_cache_hit: record.researchCacheHit,
+        preflight_input_tokens: record.preflightInputTokens ?? null,
+        prompt_token_count: record.promptTokenCount ?? null,
+        candidate_token_count: record.candidateTokenCount ?? null,
+        total_token_count: record.totalTokenCount ?? null,
+        thoughts_token_count: record.thoughtsTokenCount ?? null,
+        cached_content_token_count: record.cachedContentTokenCount ?? null,
+        tool_use_prompt_token_count: record.toolUsePromptTokenCount ?? null,
+        input_character_count: record.inputCharacterCount,
+        output_character_count: record.outputCharacterCount,
+        success: record.success,
+        error_code: record.errorCode || null,
+      });
+    }
+  } catch (err) {
+    console.warn('[telemetry] Failed to insert row into Supabase:', err);
+  }
+}
+
+// Safety Guard: Call Budget Limiter per 007_RUN_ID
+const runCallCounts = new Map<string, number>();
+
+function incrementAndCheckRunGuard(runId: string, maxAllowed: number): boolean {
+  const current = runCallCounts.get(runId) || 0;
+  if (current >= maxAllowed) {
+    console.error(`[SAFETY_GUARD_VIOLATION] Run ID "${runId}" exceeded maximum call budget limit of ${maxAllowed}. Aborting execution.`);
+    return false;
+  }
+  runCallCounts.set(runId, current + 1);
+  return true;
+}
+
+function logResourceSummary(runId: string) {
+  const records = telemetryStore.filter(r => r.runId === runId);
+  if (records.length === 0) return;
+
+  const researchCall = records.find(r => r.callType === 'RESEARCH');
+  const synthesisCall = records.find(r => r.callType === 'SYNTHESIS');
+  const localizationCalls = records.filter(r => r.callType === 'LOCALIZATION');
+
+  let totalInput = 0;
+  let totalOutput = 0;
+  let totalThinking = 0;
+  let totalTool = 0;
+  let totalCalls = records.length;
+  let totalWallTime = records.reduce((acc, r) => acc + r.durationMs, 0);
+
+  records.forEach(r => {
+    totalInput += (r.promptTokenCount ?? r.preflightInputTokens ?? 0);
+    totalOutput += (r.candidateTokenCount ?? 0);
+    totalThinking += (r.thoughtsTokenCount ?? 0);
+    totalTool += (r.toolUsePromptTokenCount ?? 0);
+  });
+
+  const searchCallsCount = records.filter(r => r.searchGroundingUsed).length;
+
+  console.log(`
+==================================================
+IDEMO 007 RESOURCE SUMMARY
+==================================================
+Run ID: ${runId}
+Total Gemini calls: ${totalCalls}
+Total Search calls: ${searchCallsCount}
+
+Research (Call 1): ${researchCall ? `
+  input (preflight): ${researchCall.preflightInputTokens ?? 'N/A'} tokens
+  actual prompt: ${researchCall.promptTokenCount ?? 'N/A'} tokens
+  output: ${researchCall.candidateTokenCount ?? 'N/A'} tokens
+  thinking: ${researchCall.thoughtsTokenCount ?? 'N/A (0)'}
+  tool/grounding: ${researchCall.searchGroundingUsed ? 'YES' : 'NO'}
+  duration: ${researchCall.durationMs} ms` : (synthesisCall?.researchCacheHit ? 'CACHE HIT (0 calls)' : 'SKIPPED')}
+
+Synthesis (Call 2): ${synthesisCall ? `
+  input (preflight): ${synthesisCall.preflightInputTokens ?? 'N/A'} tokens
+  actual prompt: ${synthesisCall.promptTokenCount ?? 'N/A'} tokens
+  output: ${synthesisCall.candidateTokenCount ?? 'N/A'} tokens
+  thinking: ${synthesisCall.thoughtsTokenCount ?? 'N/A (0)'}
+  cached: ${synthesisCall.cachedContentTokenCount ?? 0} tokens
+  duration: ${synthesisCall.durationMs} ms` : 'N/A'}
+
+${localizationCalls.length > 0 ? localizationCalls.map((l, idx) => `
+Localization Call ${idx + 1}:
+  input (preflight): ${l.preflightInputTokens ?? 'N/A'} tokens
+  actual prompt: ${l.promptTokenCount ?? 'N/A'} tokens
+  output: ${l.candidateTokenCount ?? 'N/A'} tokens
+  duration: ${l.durationMs} ms`).join('\n') : ''}
+
+TOTAL:
+  input tokens: ${totalInput}
+  output tokens: ${totalOutput}
+  thinking tokens: ${totalThinking}
+  tool tokens: ${totalTool}
+  Gemini calls: ${totalCalls}
+  wall time: ${totalWallTime} ms
+==================================================
+`);
 }
 
 // Agent 007 Quota Safety & Cache Helper Exports
@@ -146,8 +296,8 @@ export function logGeminiUsage(params: {
       callType: params.callType,
       status: 'SUCCESS',
       durationMs,
-      promptTokenCount: usage.promptTokenCount ?? usage.inputTokenCount ?? 0,
-      candidatesTokenCount: usage.candidatesTokenCount ?? usage.outputTokenCount ?? 0,
+      promptTokenCount: usage.promptTokenCount ?? 0,
+      candidatesTokenCount: usage.candidatesTokenCount ?? 0,
       cachedContentTokenCount: usage.cachedContentTokenCount ?? 0,
       totalTokenCount: usage.totalTokenCount ?? 0,
     });
@@ -173,10 +323,75 @@ async function startServer() {
     });
   });
 
+  // GET Endpoint for Telemetry Verification
+  app.get('/api/studio/recommendation-agent/telemetry', (_req: Request, res: Response) => {
+    res.json({
+      count: telemetryStore.length,
+      telemetry: telemetryStore,
+    });
+  });
+
+  // POST Endpoint to Clear Research Cache for fresh baseline testing
+  app.post('/api/studio/recommendation-agent/cache/clear', (_req: Request, res: Response) => {
+    researchCache.clear();
+    res.json({ success: true, message: 'Research cache cleared' });
+  });
+
+  // V2 Slice 4.1 Synthesis Compile Endpoint (Strict Editorial Authority & Application Assembly)
+  app.post('/api/agent007/v2/compile', async (req: Request, res: Response) => {
+    const {
+      factPack,
+      entityInput,
+      curatorNotes,
+      humanProvidedMedia,
+      partnerId,
+      existingRecommendationId,
+    } = req.body || {};
+
+    if (!factPack && !entityInput) {
+      return res.status(400).json({ error: 'factPack or entityInput is required for V2 compile' });
+    }
+
+    try {
+      let effectiveFactPack = factPack;
+      if (!effectiveFactPack && entityInput) {
+        // Concept fallback entity creation: STRICT FAIL-SAFE TO UNVERIFIED / PENDING_REVIEW
+        const fallbackEntity = createFallbackConceptEntity(
+          entityInput.nameOrTitle || 'Unknown Concept',
+          entityInput.destinationOrLocation || 'Serbia',
+          entityInput.entityType || 'PLACE'
+        );
+        effectiveFactPack = buildFactPack({
+          recommendationType: entityInput.recommendationType || 'PLACE',
+          entities: [fallbackEntity],
+          facts: [],
+          curatorInput: {
+            curatorNotes: curatorNotes || entityInput.descriptionOrNotes,
+            emphasis: entityInput.additionalCuratorNotes,
+          },
+        });
+      }
+
+      const synthesisResult = await executeV2Synthesis({
+        factPack: effectiveFactPack,
+        curatorNotes,
+        humanProvidedMedia,
+        partnerId,
+        existingRecommendationId,
+      });
+
+      return res.json(synthesisResult);
+    } catch (err: any) {
+      console.error('[agent007/v2/compile] Synthesis failed:', err);
+      return res.status(500).json({ error: err.message || 'V2 Synthesis failed' });
+    }
+  });
+
   // Server-Side Proposal Agent Research Endpoint
   app.post('/api/studio/recommendation-agent/research', async (req: Request, res: Response) => {
     const body: ResearchRequestPayload = req.body;
     const {
+      runId: incomingRunId,
       nameOrTitle,
       descriptionOrNotes,
       destinationOrLocation,
@@ -186,6 +401,8 @@ async function startServer() {
       targetServiceAreaId,
       availableServiceAreas = [],
     } = body;
+
+    const runId = incomingRunId || `run_007_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
     if (!nameOrTitle || !nameOrTitle.trim()) {
       return res.status(400).json({ error: 'nameOrTitle is required for research' });
@@ -237,7 +454,7 @@ async function startServer() {
       }
     };
 
-    req.on('close', onCloseHandler);
+    res.on('close', onCloseHandler);
 
     try {
       const ai = getGeminiClient();
@@ -264,7 +481,29 @@ async function startServer() {
             groundingMetadataReceived = cachedResearch.groundingMetadataReceived;
             searchQueriesCount = cachedResearch.searchQueriesCount;
             searchChunksCount = cachedResearch.searchChunksCount;
+
+            // Record telemetry for cache hit
+            await persistTelemetry({
+              runId,
+              callType: 'RESEARCH',
+              model: 'gemini-3.7-flash',
+              durationMs: 0,
+              searchGroundingUsed: false,
+              researchCacheHit: true,
+              preflightInputTokens: 0,
+              promptTokenCount: 0,
+              candidateTokenCount: 0,
+              totalTokenCount: 0,
+              inputCharacterCount: 0,
+              outputCharacterCount: researchFindings.length,
+              success: true,
+            });
           } else {
+            // Check Safety Guard before Call 1
+            if (!incrementAndCheckRunGuard(runId, 2)) {
+              throw new Error(`[SAFETY_GUARD_VIOLATION] Run ${runId} call budget exceeded`);
+            }
+
             // STEP 1: Live Grounded Web Research via Google Search tool
             const searchInquiry = `Search the live web using Google for verified official information about "${nameOrTitle}" in "${destinationOrLocation || 'Serbia'}".
 Official URL: "${referenceUrl || ''}"
@@ -277,6 +516,18 @@ Find and list the genuine verified facts:
 4. Editorial overview, background story, and key features.
 Important: State only verified facts found in sources. Do not fabricate missing information.`;
 
+            // Preflight countTokens for Call 1
+            let preflightInputTokensCall1: number | null = null;
+            try {
+              const countRes = await ai.models.countTokens({
+                model: 'gemini-3.7-flash',
+                contents: searchInquiry,
+              });
+              preflightInputTokensCall1 = countRes.totalTokens ?? null;
+            } catch (cntErr) {
+              console.warn('[preflight] countTokens call 1 failed:', cntErr);
+            }
+
             const startTimeGrounding = Date.now();
             try {
               const searchResponse = await ai.models.generateContent({
@@ -287,8 +538,10 @@ Important: State only verified facts found in sources. Do not fabricate missing 
                   abortSignal: abortController.signal,
                 },
               });
+              const durationMs = Date.now() - startTimeGrounding;
               logGeminiUsage({ callType: 'grounding', response: searchResponse, startTime: startTimeGrounding });
 
+              const usage = searchResponse.usageMetadata || {};
               const searchCandidate = searchResponse.candidates?.[0];
               const groundingMetadata = searchCandidate?.groundingMetadata;
 
@@ -310,6 +563,24 @@ Important: State only verified facts found in sources. Do not fabricate missing 
 
               researchFindings = searchResponse.text || '';
 
+              // Persist Telemetry for Call 1
+              await persistTelemetry({
+                runId,
+                callType: 'RESEARCH',
+                model: 'gemini-3.7-flash',
+                durationMs,
+                searchGroundingUsed: true,
+                researchCacheHit: false,
+                preflightInputTokens: preflightInputTokensCall1,
+                promptTokenCount: usage.promptTokenCount ?? null,
+                candidateTokenCount: usage.candidatesTokenCount ?? null,
+                totalTokenCount: usage.totalTokenCount ?? null,
+                cachedContentTokenCount: usage.cachedContentTokenCount ?? null,
+                inputCharacterCount: searchInquiry.length,
+                outputCharacterCount: researchFindings.length,
+                success: true,
+              });
+
               if (researchFindings) {
                 setCachedResearch(entityKey, {
                   findings: researchFindings,
@@ -320,7 +591,21 @@ Important: State only verified facts found in sources. Do not fabricate missing 
                 });
               }
             } catch (groundingErr: any) {
+              const durationMs = Date.now() - startTimeGrounding;
               logGeminiUsage({ callType: 'grounding', error: groundingErr, startTime: startTimeGrounding });
+              await persistTelemetry({
+                runId,
+                callType: 'RESEARCH',
+                model: 'gemini-3.7-flash',
+                durationMs,
+                searchGroundingUsed: true,
+                researchCacheHit: false,
+                preflightInputTokens: preflightInputTokensCall1,
+                inputCharacterCount: searchInquiry.length,
+                outputCharacterCount: 0,
+                success: false,
+                errorCode: groundingErr?.message || String(groundingErr),
+              });
               throw groundingErr;
             }
           }
@@ -328,6 +613,11 @@ Important: State only verified facts found in sources. Do not fabricate missing 
           if (abortController.signal.aborted || clientDisconnected) {
             console.warn(`[research-endpoint] Execution aborted for "${entityKey}": client disconnected`);
             return;
+          }
+
+          // Check Safety Guard before Call 2
+          if (!incrementAndCheckRunGuard(runId, 2)) {
+            throw new Error(`[SAFETY_GUARD_VIOLATION] Run ${runId} call budget exceeded limit of 2 calls`);
           }
 
           // STEP 2: Canonical 6-Step Structuring from Grounded Evidence
@@ -423,6 +713,18 @@ Return a strictly valid JSON object (no markdown code blocks, just raw JSON or j
 }
 `;
 
+          // Preflight countTokens for Call 2
+          let preflightInputTokensCall2: number | null = null;
+          try {
+            const countRes = await ai.models.countTokens({
+              model: 'gemini-3.7-flash',
+              contents: structuringPrompt,
+            });
+            preflightInputTokensCall2 = countRes.totalTokens ?? null;
+          } catch (cntErr) {
+            console.warn('[preflight] countTokens call 2 failed:', cntErr);
+          }
+
           const startTimeStruct = Date.now();
           try {
             const structResponse = await ai.models.generateContent({
@@ -432,9 +734,30 @@ Return a strictly valid JSON object (no markdown code blocks, just raw JSON or j
                 abortSignal: abortController.signal,
               },
             });
+            const durationMs = Date.now() - startTimeStruct;
             logGeminiUsage({ callType: 'structuring', response: structResponse, startTime: startTimeStruct });
 
+            const usage = structResponse.usageMetadata || {};
             const textOutput = structResponse.text || '';
+
+            // Persist Telemetry for Call 2
+            await persistTelemetry({
+              runId,
+              callType: 'SYNTHESIS',
+              model: 'gemini-3.7-flash',
+              durationMs,
+              searchGroundingUsed: false,
+              researchCacheHit: Boolean(cachedResearch),
+              preflightInputTokens: preflightInputTokensCall2,
+              promptTokenCount: usage.promptTokenCount ?? null,
+              candidateTokenCount: usage.candidatesTokenCount ?? null,
+              totalTokenCount: usage.totalTokenCount ?? null,
+              cachedContentTokenCount: usage.cachedContentTokenCount ?? null,
+              inputCharacterCount: structuringPrompt.length,
+              outputCharacterCount: textOutput.length,
+              success: true,
+            });
+
             if (textOutput) {
               // Extract JSON from output
               let cleanedJson = textOutput.trim();
@@ -453,7 +776,21 @@ Return a strictly valid JSON object (no markdown code blocks, just raw JSON or j
               }
             }
           } catch (structErr: any) {
+            const durationMs = Date.now() - startTimeStruct;
             logGeminiUsage({ callType: 'structuring', error: structErr, startTime: startTimeStruct });
+            await persistTelemetry({
+              runId,
+              callType: 'SYNTHESIS',
+              model: 'gemini-3.7-flash',
+              durationMs,
+              searchGroundingUsed: false,
+              researchCacheHit: Boolean(cachedResearch),
+              preflightInputTokens: preflightInputTokensCall2,
+              inputCharacterCount: structuringPrompt.length,
+              outputCharacterCount: 0,
+              success: false,
+              errorCode: structErr?.message || String(structErr),
+            });
             throw structErr;
           }
         } catch (apiErr: any) {
@@ -502,6 +839,9 @@ Return a strictly valid JSON object (no markdown code blocks, just raw JSON or j
         }
       );
 
+      // Log Resource Metering Summary
+      logResourceSummary(runId);
+
       return res.json(finalProposal);
     } catch (err: any) {
       console.error('[research-endpoint] Unexpected endpoint error:', err);
@@ -529,17 +869,19 @@ Return a strictly valid JSON object (no markdown code blocks, just raw JSON or j
       return res.json(finalProposal);
     } finally {
       activeResearchRuns.delete(entityKey);
-      req.removeListener('close', onCloseHandler);
+      res.removeListener('close', onCloseHandler);
     }
   });
 
   // Controlled Deferred Localization Endpoint
   app.post('/api/studio/recommendation-agent/localize', async (req: Request, res: Response) => {
     try {
-      const { recommendation, targetLanguages } = req.body || {};
+      const { recommendation, targetLanguages, runId: incomingRunId, parentRunId } = req.body || {};
       if (!recommendation || !recommendation.id) {
         return res.status(400).json({ error: 'Valid recommendation object required' });
       }
+
+      const runId = incomingRunId || `run_007_loc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
       const langsToGenerate = targetLanguages && Array.isArray(targetLanguages) && targetLanguages.length > 0
         ? targetLanguages
@@ -560,11 +902,16 @@ Return a strictly valid JSON object (no markdown code blocks, just raw JSON or j
         });
       }
 
-      if (!process.env.GEMINI_API_KEY) {
+      const ai = getGeminiClient();
+      if (!ai) {
         return res.status(500).json({ error: 'GEMINI_API_KEY not configured on server' });
       }
 
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      // Safety Guard: max 1 call per localization run
+      if (!incrementAndCheckRunGuard(runId, 1)) {
+        return res.status(429).json({ error: `[SAFETY_GUARD_VIOLATION] Localization run ${runId} call budget exceeded` });
+      }
+
       const prompt = `You are IDEMO's Luxury Concierge Translation Agent.
 Translate the following Serbian/English tourism recommendation into localized versions for: ${langsNeeded.join(', ')}.
 
@@ -587,44 +934,99 @@ OUTPUT FORMAT: Return raw JSON mapping each requested language code to its trans
 }
 `;
 
+      // Preflight countTokens
+      let preflightInputTokensLoc: number | null = null;
+      try {
+        const countRes = await ai.models.countTokens({
+          model: 'gemini-3.7-flash',
+          contents: prompt,
+        });
+        preflightInputTokensLoc = countRes.totalTokens ?? null;
+      } catch (cntErr) {
+        console.warn('[preflight] countTokens localization failed:', cntErr);
+      }
+
       const startTime = Date.now();
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.7-flash',
-        contents: prompt,
-      });
-      logGeminiUsage({ callType: 'structuring', response, startTime });
+      try {
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.7-flash',
+          contents: prompt,
+        });
+        const durationMs = Date.now() - startTime;
+        logGeminiUsage({ callType: 'structuring', response, startTime });
 
-      let textOutput = response.text || '';
-      if (textOutput.startsWith('```json')) {
-        textOutput = textOutput.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-      } else if (textOutput.startsWith('```')) {
-        textOutput = textOutput.replace(/^```\s*/, '').replace(/\s*```$/, '');
-      }
+        const usage = response.usageMetadata || {};
+        let textOutput = response.text || '';
 
-      const parsedTranslations = JSON.parse(textOutput.trim());
+        // Persist Telemetry
+        await persistTelemetry({
+          runId,
+          parentRunId: parentRunId || null,
+          callType: 'LOCALIZATION',
+          model: 'gemini-3.7-flash',
+          durationMs,
+          searchGroundingUsed: false,
+          researchCacheHit: false,
+          preflightInputTokens: preflightInputTokensLoc,
+          promptTokenCount: usage.promptTokenCount ?? null,
+          candidateTokenCount: usage.candidatesTokenCount ?? null,
+          totalTokenCount: usage.totalTokenCount ?? null,
+          cachedContentTokenCount: usage.cachedContentTokenCount ?? null,
+          inputCharacterCount: prompt.length,
+          outputCharacterCount: textOutput.length,
+          success: true,
+        });
 
-      const updatedTranslations = { ...existingTranslations };
-      for (const lang of langsNeeded) {
-        if (parsedTranslations[lang] && parsedTranslations[lang].shortDescription) {
-          updatedTranslations[lang] = {
-            title: parsedTranslations[lang].title || recommendation.title || '',
-            location: parsedTranslations[lang].location || recommendation.location || '',
-            shortDescription: parsedTranslations[lang].shortDescription || '',
-            longDescription: parsedTranslations[lang].longDescription || '',
-          };
+        if (textOutput.startsWith('```json')) {
+          textOutput = textOutput.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+        } else if (textOutput.startsWith('```')) {
+          textOutput = textOutput.replace(/^```\s*/, '').replace(/\s*```$/, '');
         }
+
+        const parsedTranslations = JSON.parse(textOutput.trim());
+
+        const updatedTranslations = { ...existingTranslations };
+        for (const lang of langsNeeded) {
+          if (parsedTranslations[lang] && parsedTranslations[lang].shortDescription) {
+            updatedTranslations[lang] = {
+              title: parsedTranslations[lang].title || recommendation.title || '',
+              location: parsedTranslations[lang].location || recommendation.location || '',
+              shortDescription: parsedTranslations[lang].shortDescription || '',
+              longDescription: parsedTranslations[lang].longDescription || '',
+            };
+          }
+        }
+
+        const updatedRecommendation = {
+          ...recommendation,
+          translations: updatedTranslations,
+        };
+
+        logResourceSummary(runId);
+
+        return res.json({
+          success: true,
+          translations: updatedTranslations,
+          recommendation: updatedRecommendation,
+        });
+      } catch (genErr: any) {
+        const durationMs = Date.now() - startTime;
+        await persistTelemetry({
+          runId,
+          parentRunId: parentRunId || null,
+          callType: 'LOCALIZATION',
+          model: 'gemini-3.7-flash',
+          durationMs,
+          searchGroundingUsed: false,
+          researchCacheHit: false,
+          preflightInputTokens: preflightInputTokensLoc,
+          inputCharacterCount: prompt.length,
+          outputCharacterCount: 0,
+          success: false,
+          errorCode: genErr?.message || String(genErr),
+        });
+        throw genErr;
       }
-
-      const updatedRecommendation = {
-        ...recommendation,
-        translations: updatedTranslations,
-      };
-
-      return res.json({
-        success: true,
-        translations: updatedTranslations,
-        recommendation: updatedRecommendation,
-      });
     } catch (err: any) {
       console.error('[localize-endpoint] Localization error:', err);
       const isQuota = String(err?.message || err).includes('429') || String(err?.message || err).includes('RESOURCE_EXHAUSTED');

@@ -278,18 +278,29 @@ serve(async (req: Request) => {
           let photoUrl: string | null = null;
 
           if (isConsentGiven && isConsentNotWithdrawn && hasPhotoPath) {
-            try {
-              const { data: signedData, error: signedErr } = await supabase.storage
-                .from("partner-passports")
-                .createSignedUrl(photoPath.trim(), 300);
+            const rawPhotoPath = photoPath.trim();
+            if (
+              rawPhotoPath.startsWith("/") ||
+              rawPhotoPath.startsWith("http://") ||
+              rawPhotoPath.startsWith("https://") ||
+              rawPhotoPath.startsWith("data:")
+            ) {
+              photoAvailable = true;
+              photoUrl = rawPhotoPath;
+            } else {
+              try {
+                const { data: signedData, error: signedErr } = await supabase.storage
+                  .from("partner-passports")
+                  .createSignedUrl(rawPhotoPath, 300);
 
-              if (!signedErr && signedData?.signedUrl) {
-                photoAvailable = true;
-                photoUrl = signedData.signedUrl;
+                if (!signedErr && signedData?.signedUrl) {
+                  photoAvailable = true;
+                  photoUrl = signedData.signedUrl;
+                }
+              } catch {
+                photoAvailable = false;
+                photoUrl = null;
               }
-            } catch {
-              photoAvailable = false;
-              photoUrl = null;
             }
           }
 
@@ -368,9 +379,15 @@ serve(async (req: Request) => {
     if (pathname.endsWith("/me") && req.method === "GET") {
       const { data: partnerRow } = await supabase
         .from("partners")
-        .select("id, public_code, name, status, is_open_for_inquiries, contact_preference, must_change_pin, contact_phone, contact_email")
+        .select("id, public_code, name, status, is_open_for_inquiries, contact_preference, must_change_pin, phone, email")
         .eq("id", partnerId)
         .single();
+
+      const { data: profileContent } = await supabase
+        .from("partner_profile_content")
+        .select("draft_contact_phone, draft_contact_email, published_contact_phone, published_contact_email")
+        .eq("partner_id", partnerId)
+        .maybeSingle();
 
       return jsonResponse({
         success: true,
@@ -383,8 +400,8 @@ serve(async (req: Request) => {
           contact_preference: partnerRow?.contact_preference || "WhatsApp",
           must_change_pin: sessionData.must_change_pin,
           expires_at: sessionData.expires_at,
-          contact_phone: partnerRow?.contact_phone || null,
-          contact_email: partnerRow?.contact_email || null,
+          contact_phone: profileContent?.published_contact_phone || profileContent?.draft_contact_phone || partnerRow?.phone || null,
+          contact_email: profileContent?.published_contact_email || profileContent?.draft_contact_email || partnerRow?.email || null,
         },
       });
     }
@@ -392,11 +409,14 @@ serve(async (req: Request) => {
     // ENDPOINT: /me/contact (POST)
     const cleanPathName = pathname.toLowerCase();
     if ((cleanPathName.endsWith("/me/contact") || cleanPathName.endsWith("/me/contact/")) && req.method.toUpperCase() === "POST") {
-      return jsonResponse({
-        success: false,
-        error: "ENDPOINT_DISABLED",
-        message: "Direct contact updating via /me/contact is disabled on this database version.",
-      }, 501);
+      const body = await req.json().catch(() => ({}));
+      const { contact_phone, contact_email } = body;
+
+      return invokeRpc(supabase, "update_partner_professional_contact_secure", {
+        p_partner_id: partnerId,
+        p_contact_phone: contact_phone !== undefined && contact_phone !== null ? String(contact_phone).trim() : null,
+        p_contact_email: contact_email !== undefined && contact_email !== null ? String(contact_email).trim() : null,
+      });
     }
 
     // ENDPOINT: /change-pin (POST)
@@ -467,28 +487,48 @@ serve(async (req: Request) => {
         let publishedPhotoSignedUrl: string | null = null;
 
         if (profileContent?.draft_photo_path) {
-          try {
-            const { data: signedData, error: signedErr } = await supabase.storage
-              .from("partner-passports")
-              .createSignedUrl(profileContent.draft_photo_path, 3600);
-            if (!signedErr && signedData?.signedUrl) {
-              draftPhotoSignedUrl = signedData.signedUrl;
+          const rawDraftPath = String(profileContent.draft_photo_path).trim();
+          if (
+            rawDraftPath.startsWith("/") ||
+            rawDraftPath.startsWith("http://") ||
+            rawDraftPath.startsWith("https://") ||
+            rawDraftPath.startsWith("data:")
+          ) {
+            draftPhotoSignedUrl = rawDraftPath;
+          } else {
+            try {
+              const { data: signedData, error: signedErr } = await supabase.storage
+                .from("partner-passports")
+                .createSignedUrl(rawDraftPath, 3600);
+              if (!signedErr && signedData?.signedUrl) {
+                draftPhotoSignedUrl = signedData.signedUrl;
+              }
+            } catch {
+              draftPhotoSignedUrl = null;
             }
-          } catch {
-            draftPhotoSignedUrl = null;
           }
         }
 
         if (profileContent?.published_photo_path) {
-          try {
-            const { data: signedData, error: signedErr } = await supabase.storage
-              .from("partner-passports")
-              .createSignedUrl(profileContent.published_photo_path, 3600);
-            if (!signedErr && signedData?.signedUrl) {
-              publishedPhotoSignedUrl = signedData.signedUrl;
+          const rawPubPath = String(profileContent.published_photo_path).trim();
+          if (
+            rawPubPath.startsWith("/") ||
+            rawPubPath.startsWith("http://") ||
+            rawPubPath.startsWith("https://") ||
+            rawPubPath.startsWith("data:")
+          ) {
+            publishedPhotoSignedUrl = rawPubPath;
+          } else {
+            try {
+              const { data: signedData, error: signedErr } = await supabase.storage
+                .from("partner-passports")
+                .createSignedUrl(rawPubPath, 3600);
+              if (!signedErr && signedData?.signedUrl) {
+                publishedPhotoSignedUrl = signedData.signedUrl;
+              }
+            } catch {
+              publishedPhotoSignedUrl = null;
             }
-          } catch {
-            publishedPhotoSignedUrl = null;
           }
         }
 
@@ -594,7 +634,15 @@ serve(async (req: Request) => {
     // ENDPOINT: /profile-content/draft (POST)
     if (pathname.endsWith("/profile-content/draft") && req.method === "POST") {
       const body = await req.json().catch(() => ({}));
-      const { intro_draft, draft_photo_path, draft_photo_mime, photo_consent, photo_consent_given } = body;
+      const {
+        intro_draft,
+        draft_photo_path,
+        draft_photo_mime,
+        photo_consent,
+        photo_consent_given,
+        draft_contact_phone,
+        draft_contact_email,
+      } = body;
 
       if (draft_photo_path) {
         if (!draft_photo_mime || !draft_photo_mime.trim()) {
@@ -630,6 +678,8 @@ serve(async (req: Request) => {
         p_draft_photo_path: draft_photo_path || null,
         p_draft_photo_mime: draft_photo_mime || null,
         p_photo_consent: !!(photo_consent ?? photo_consent_given),
+        p_draft_contact_phone: draft_contact_phone !== undefined && draft_contact_phone !== null ? String(draft_contact_phone).trim() : null,
+        p_draft_contact_email: draft_contact_email !== undefined && draft_contact_email !== null ? String(draft_contact_email).trim() : null,
       });
     }
 

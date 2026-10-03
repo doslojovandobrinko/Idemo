@@ -46,7 +46,8 @@ import {
   Star,
   Bookmark,
   MessageSquare,
-  ArrowLeft
+  ArrowLeft,
+  ArrowRight
 } from 'lucide-react';
 import { 
   AppScreen, 
@@ -72,10 +73,25 @@ import { PrepEtiquetteGuide } from './components/PrepEtiquetteGuide';
 import { AntiAdviceSection } from './components/AntiAdviceSection';
 import { getTruthCurationForRecommendation } from './lib/antiAdviceEngine';
 import { ConciergeSOSHub } from './components/ConciergeSOSHub';
+import { routeOutboundAction, copyToClipboardSafely } from './lib/outboundRouter';
 import { VibeSettings, DEFAULT_VIBE_SETTINGS, calculateVibeMatch, VibeCalibrationDashboard } from './components/VibeCalibration';
 import { REGIONS, LocalTransitCard, isLocationInRegion, calculateDistance, BASE_HUBS, getTaxiEstimation } from './components/AreaAndTransit';
 import { SlangCrypt } from './components/SlangCrypt';
 import MoodOrbit from './components/MoodOrbit';
+import { 
+  CustomHomeIcon, 
+  CustomExploreIcon, 
+  CustomPlannerIcon, 
+  CustomPartnersIcon, 
+  CustomProfileIcon 
+} from './components/IdemoCustomNavIcons';
+import {
+  EditorialSummitVapourIcon,
+  EditorialKafanaRitualIcon,
+  EditorialAfterHoursIcon,
+  EditorialStoriesCustomsIcon,
+  EditorialLocalWisdomIcon,
+} from './components/IdemoEditorialIcons';
 import MoodOrbGridAnalyzer from './components/MoodOrbGridAnalyzer';
 import MiniMoodGrid from './components/MiniMoodGrid';
 import PrivacyPolicyContent from './components/PrivacyPolicyContent';
@@ -189,8 +205,8 @@ const ITINERARY_LOCALIZATIONS: Record<string, any> = {
     recommended: "RECOMMENDED PLAN",
     title: "YOUR PERSONAL SERBIA JOURNEY",
     desc: "Tailored based on your calibrated Mood Orbit & Vibe.",
-    visitor_profile: "Calibrated Travel Style",
-    calendar_title: "Travel Horizon Calendar",
+    visitor_profile: "Your Travel Style",
+    calendar_title: "Travel Schedule",
     additional_months: "Additional scheduled dates below",
     essential_protocol: "Essential Protocol",
     currency: "Currency",
@@ -389,7 +405,7 @@ export function getDynamicStyle(language: string, selectedCats: string[], days: 
 
   const styleNames: Record<string, Record<string, string>> = {
     relaxed: {
-      en: "Relaxed Discovery",
+      en: "Discovery & Relaxation",
       sr: "Opušteno istraživanje",
       zh: "慢调探索",
       es: "Descubrimiento Relajado",
@@ -790,7 +806,14 @@ export default function App() {
   const [previewPreviousScreen, setPreviewPreviousScreen] = useState<AppScreen>('home');
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState<boolean>(true);
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
+    try {
+      return safeStorage.getItem('idemo_onboarded_v3') !== 'true';
+    } catch {
+      return true;
+    }
+  });
+  const [onboardingKey, setOnboardingKey] = useState<number>(0);
   const [hasUnreadPartnerProposal, setHasUnreadPartnerProposal] = useState<boolean>(() => checkHasUnreadProposals());
 
   // Synchronous state refs for rock-solid history event handling
@@ -932,6 +955,10 @@ export default function App() {
       let sanitizedAny = false;
       for (const [id, rec] of Object.entries(parsed)) {
         if (!rec) continue;
+        if (!rec.image || rec.image === '/src/assets/images/.webp' || rec.image.endsWith('/.webp')) {
+          delete rec.image;
+          sanitizedAny = true;
+        }
         const approved = getApprovedPrimaryMedia(id, rec.image);
         if (rec.image && approved && rec.image !== approved) {
           rec.image = approved;
@@ -1508,6 +1535,18 @@ export default function App() {
 
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [networkToast, setNetworkToast] = useState<'online' | 'offline' | null>(null);
+  const [actionToast, setActionToast] = useState<string | null>(null);
+  const setToastMessage = useCallback((msg: string) => {
+    setActionToast(msg);
+  }, []);
+
+  useEffect(() => {
+    if (actionToast) {
+      const timer = setTimeout(() => setActionToast(null), 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [actionToast]);
+
   const [pendingExternalLink, setPendingExternalLink] = useState<string | null>(null);
   pendingExternalLinkRef.current = pendingExternalLink;
 
@@ -1585,6 +1624,7 @@ export default function App() {
       safeStorage.removeItem('idemo_discovery_dismissed_v1');
     } catch (e) {}
     setShowOnboarding(true);
+    setOnboardingKey(prev => prev + 1);
   };
 
   React.useEffect(() => {
@@ -1604,18 +1644,24 @@ export default function App() {
       }
     };
 
-    // Global interceptor for external departure confirmation (safeguarding user attention)
+    // Centralized global interceptor for external link routing across IDEMO
     const handleGlobalClick = (e: MouseEvent) => {
       let target = e.target as HTMLElement | null;
       while (target && target !== document.body) {
         if (target.tagName === 'A') {
           const href = target.getAttribute('href');
-          // Match any web link (http/https) that doesn't navigate locally or internally
-          if (href && (href.startsWith('http://') || href.startsWith('https://')) && !href.includes(window.location.host)) {
-            e.preventDefault();
-            e.stopPropagation();
-            setPendingExternalLink(href);
-            return;
+          if (href) {
+            if ((href.startsWith('http://') || href.startsWith('https://')) && !href.includes(window.location.host)) {
+              e.preventDefault();
+              e.stopPropagation();
+              routeOutboundAction({ url: href, type: 'WEB', onToast: setToastMessage });
+              return;
+            } else if (href.startsWith('tel:') || href.startsWith('sms:') || href.startsWith('mailto:') || href.startsWith('maps:') || href.startsWith('viber:')) {
+              e.preventDefault();
+              e.stopPropagation();
+              routeOutboundAction({ url: href, type: 'EXTERNAL_INTENT', fallbackData: { copyText: href }, onToast: setToastMessage });
+              return;
+            }
           }
         }
         target = target.parentElement;
@@ -2085,7 +2131,8 @@ export default function App() {
     proximityReference,
     maxWalkingDistanceKm,
     orbitX,
-    orbitY
+    orbitY,
+    isCustomOrbit: customOrbit !== null
   };
 
   const userFacingRecommendations = useMemo(() => {
@@ -2114,7 +2161,7 @@ export default function App() {
       id: 'january',
       title: 'JANUARY 2027',
       subtitle: 'WINTER MAJESTY & ALPINE REST',
-      image: '/src/assets/images/january_kopaonik_1779810002641.png', // Winter snowy scene
+      image: '/src/assets/images/january_kopaonik_1779810002641.webp', // Winter snowy scene
       highlights: [
         { label: 'Kopaonik Boarding', linkId: '57' }, // Kopaonik Mountain Resort
         { label: 'Old Zemun Kafanas', linkId: '58' }, // Kafanas of Old Zemun
@@ -2131,7 +2178,7 @@ export default function App() {
       id: 'february',
       title: 'FEBRUARY 2027',
       subtitle: 'THERMAL SANCTUARIES & DETOX',
-      image: '/src/assets/images/february_spa_1779810023424.png', // Therapeutic spa wellness pool
+      image: '/src/assets/images/february_spa_1779810023424.webp', // Therapeutic spa wellness pool
       highlights: [
         { label: 'Japanese Head Spa', linkId: '89' }, // Medical Package: Japanese Head Spa & Anti-Stress Belgrade Circuit
         { label: 'Vrnjačka Thermal', linkId: '86' }, // Medical Package: Vrnjačka Banja Medical Spa Recovery Circuit
@@ -2148,7 +2195,7 @@ export default function App() {
       id: 'march',
       title: 'MARCH 2027',
       subtitle: 'CULTURAL HERITAGE & ARCHITECTURE',
-      image: '/src/assets/images/march_heritage_1779810042111.png', // Historic castle/monastery ruins
+      image: '/src/assets/images/march_heritage_1779810042111.webp', // Historic castle/monastery ruins
       highlights: [
         { label: 'Secession Design', linkId: '34' }, // Subotica & Palić
         { label: 'Baroque Heritage', linkId: '6' }, // Sremski Karlovci
@@ -2165,7 +2212,7 @@ export default function App() {
       id: 'april',
       title: 'APRIL 2027',
       subtitle: 'ECO-ADVENTURES & FOREST PATHING',
-      image: '/src/assets/images/april_fruska_gora_1779810058272.png', // Lush green forest/wooden path
+      image: '/src/assets/images/april_fruska_gora_1779810058272.webp', // Lush green forest/wooden path
       highlights: [
         { label: 'Fruška Gora Hiking', linkId: '21' }, // Fruška Gora
         { label: 'Zasavica Wetland', linkId: '5' }, // Zasavica Special Nature Reserve
@@ -2182,7 +2229,7 @@ export default function App() {
       id: 'may',
       title: 'MAY 2027',
       subtitle: 'SPRINGTIME AWAKENINGS',
-      image: '/src/assets/images/may_zasavica_1779810079166.png', // Lush spring valley
+      image: '/src/assets/images/may_zasavica_1779810079166.webp', // Lush spring valley
       highlights: [
         { label: 'Dance Festival', linkId: '96' }, // Belgrade Dance Festival
         { label: 'Tesla Legacies', linkId: '7' }, // Tesla Museum
@@ -2199,7 +2246,7 @@ export default function App() {
       id: 'june',
       title: 'JUNE 2027',
       subtitle: 'CREATIVE ENERGY & URBAN RHYTHMS',
-      image: '/src/assets/images/june_silosi_1779810096101.png', // Emerald river/kayaking
+      image: '/src/assets/images/june_silosi_1779810096101.webp', // Emerald river/kayaking
       highlights: [
         { label: 'Mikser Design', linkId: '97' }, // Mikser Festival
         { label: 'Arsenal Rock', linkId: '98' }, // Arsenal Fest
@@ -2216,7 +2263,7 @@ export default function App() {
       id: 'july',
       title: 'JULY 2027',
       subtitle: 'PEAK SUMMER IN THE BALKANS',
-      image: '/src/assets/images/july_exit_1779810113925.png', // Dramatic mountain river canyon
+      image: '/src/assets/images/july_exit_1779810113925.webp', // Dramatic mountain river canyon
       highlights: [
         { label: 'EXIT Festival', linkId: '99' }, // EXIT Festival
         { label: 'Sava Lake Swim', linkId: '80' }, // Ada Ciganlija
@@ -2233,7 +2280,7 @@ export default function App() {
       id: 'august',
       title: 'AUGUST 2027',
       subtitle: 'MID-SUMMER FESTIVITIES & ESCAPERIES',
-      image: '/src/assets/images/august_guca_1779810130927.png', // Golden late summer lake
+      image: '/src/assets/images/august_guca_1779810130927.webp', // Golden late summer lake
       highlights: [
         { label: 'Lovefest Beats', linkId: '100' }, // Lovefest
         { label: 'Nišville Jazz', linkId: '101' }, // Nišville Jazz Festival
@@ -2250,7 +2297,7 @@ export default function App() {
       id: 'september',
       title: 'SEPTEMBER 2027',
       subtitle: 'GOLDEN HARVESTS & STAGE ARTS',
-      image: '/src/assets/images/september_vineyards_1779810155795.png', // Vineyards golden mood
+      image: '/src/assets/images/september_vineyards_1779810155795.webp', // Vineyards golden mood
       highlights: [
         { label: 'Bitef Avant-Garde', linkId: '68' }, // Bitef Theatre & Festival
         { label: 'Šumadija Wine', linkId: '55' }, // Wine Routes of Šumadija
@@ -2267,7 +2314,7 @@ export default function App() {
       id: 'october',
       title: 'OCTOBER 2027',
       subtitle: 'CRIMSON FORESTS & HIGH OPERA',
-      image: '/src/assets/images/october_tara_1779810171643.png', // Autumn forest
+      image: '/src/assets/images/october_tara_1779810171643.webp', // Autumn forest
       highlights: [
         { label: 'Belgrade Jazz', linkId: '71' }, // Belgrade Jazz Festival Venues
         { label: 'Forest Hike', linkId: '75' }, // Tara Forest Reset & Banjska Stena Hike
@@ -2284,7 +2331,7 @@ export default function App() {
       id: 'november',
       title: 'NOVEMBER 2027',
       subtitle: 'RESTORATIVE WINTER DETOX CIRCUIT',
-      image: '/src/assets/images/november_temple_1779810188541.png', // Spa wellness interior
+      image: '/src/assets/images/november_temple_1779810188541.webp', // Spa wellness interior
       highlights: [
         { label: 'Anti-Stress Spa', linkId: '89' }, // Medical Package: Japanese Head Spa
         { label: 'Danube & Dental', linkId: '87' }, // Medical Package: Dental Tourism
@@ -2301,7 +2348,7 @@ export default function App() {
       id: 'december',
       title: 'DECEMBER 2027',
       subtitle: 'WINTER WONDERLANDS & HIGH ALPS',
-      image: '/src/assets/images/december_zemun_1779810208124.png', // Cozy snow cabins
+      image: '/src/assets/images/december_zemun_1779810208124.webp', // Cozy snow cabins
       highlights: [
         { label: 'Kopaonik Skiing', linkId: '57' }, // Kopaonik Mountain Resort
         { label: 'Snowy Peaks', linkId: '26' }, // Stara Planina
@@ -2456,6 +2503,8 @@ export default function App() {
           <LandingScreen 
             key="landing"
             onStart={() => {
+              setShowOnboarding(true);
+              setOnboardingKey(prev => prev + 1);
               navigateToScreen('home');
             }} 
             onEmblemTap={handleStudioEmblemTap}
@@ -2649,14 +2698,14 @@ export default function App() {
       {currentScreen !== 'landing' && (
         <nav className="fixed bottom-0 left-0 right-0 max-w-[420px] mx-auto bg-white/90 backdrop-blur-xl border-t border-border-main px-4 pt-4 pb-10 flex justify-between items-center z-[110] rounded-t-[40px] shadow-[0_-8px_40px_rgba(0,0,0,0.08)]">
           <div className="flex justify-between items-center flex-1 pr-6">
-            <NavButton icon={<HomeIcon size={25} />} label={t.home} active={currentScreen === 'home'} onClick={() => { triggerHaptic(8); navigateToScreen('home'); }} />
-            <NavButton icon={<Search size={25} />} label={t.explore} active={currentScreen === 'explore'} onClick={() => { triggerHaptic(8); navigateToScreen('explore'); }} />
-            <NavButton icon={<CalendarIcon size={25} />} label={t.plan} active={currentScreen === 'plan'} onClick={() => { triggerHaptic(8); navigateToScreen('plan'); }} showIndicator={hasUnreadPartnerProposal} />
-            <NavButton icon={<User size={25} />} label={t.profile} active={currentScreen === 'profile'} onClick={() => { triggerHaptic(8); navigateToScreen('profile'); }} />
+            <NavButton icon={<CustomHomeIcon size={25} />} label={t.home} active={currentScreen === 'home'} onClick={() => { triggerHaptic(8); navigateToScreen('home'); }} />
+            <NavButton icon={<CustomExploreIcon size={25} />} label={t.explore} active={currentScreen === 'explore'} onClick={() => { triggerHaptic(8); navigateToScreen('explore'); }} />
+            <NavButton icon={<CustomPlannerIcon size={25} />} label={t.plan} active={currentScreen === 'plan'} onClick={() => { triggerHaptic(8); navigateToScreen('plan'); }} showIndicator={hasUnreadPartnerProposal} />
+            <NavButton icon={<CustomProfileIcon size={25} />} label={t.profile} active={currentScreen === 'profile'} onClick={() => { triggerHaptic(8); navigateToScreen('profile'); }} />
           </div>
           <div className="pl-6 border-l border-transparent shrink-0 flex items-center justify-center">
             <NavButton 
-              icon={<ShieldCheck size={25} />} 
+              icon={<CustomPartnersIcon size={25} />} 
               label={t.partners || 'Partners'} 
               active={currentScreen === 'partners'} 
               onClick={() => { triggerHaptic(8); navigateToScreen('partners'); }} 
@@ -3230,12 +3279,26 @@ export default function App() {
             </div>
           </motion.div>
         )}
+        {actionToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            className="absolute top-20 left-4 right-4 z-[100] flex justify-center pointer-events-none"
+          >
+            <div className="px-4 py-2.5 w-full max-w-[340px] text-[10.5px] font-mono tracking-wider uppercase font-bold text-center border rounded-full backdrop-blur-md shadow-[0_10px_25px_rgba(0,0,0,0.15)] flex items-center justify-center gap-2 bg-[#1E2E20]/95 border-emerald-500/20 text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>{actionToast}</span>
+            </div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {/* Onboarding Overlay Flow */}
       <AnimatePresence>
         {showOnboarding && currentScreen !== 'landing' && (
           <OnboardingOverlay 
+            key={`onboarding-overlay-${onboardingKey}`}
             language={language}
             recommendations={userFacingRecommendations}
             onClose={() => {
@@ -3298,11 +3361,19 @@ export default function App() {
                 </div>
               )}
 
+              <p className="text-[10px] text-brand-charcoal/70 font-medium leading-relaxed mb-3">
+                {language === 'sr' 
+                  ? 'IDEMO ostaje otvoren u pozadini — jednostavno se vratite u aplikaciju kada završite.' 
+                  : language === 'zh'
+                  ? 'IDEMO 将在后台保持运行 — 完成访问后直接返回即可。'
+                  : 'IDEMO remains active in the background — simply return to this app when finished.'}
+              </p>
+
               <p className="text-[9.5px] text-brand-charcoal/40 italic leading-snug mb-5">
                 "{branding.notAffiliatedDisclaimer}"
               </p>
 
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <button
                   onClick={handleClosePendingExternalLink}
                   className="flex-1 py-3 text-[11px] uppercase tracking-wider font-extrabold text-brand-charcoal bg-white hover:bg-[#EAE8DF]/40 border border-[#D5D3C8] rounded-xl active:scale-[0.98] transition-all cursor-pointer select-none"
@@ -3312,7 +3383,19 @@ export default function App() {
                 <button
                   onClick={() => {
                     if (pendingExternalLink) {
-                      window.open(pendingExternalLink, '_blank', 'noopener,noreferrer');
+                      copyToClipboardSafely(pendingExternalLink).then(() => {
+                        setToastMessage(language === 'sr' ? 'Poveznica kopirana u međuspremnik' : 'Link copied to clipboard');
+                      });
+                    }
+                  }}
+                  className="flex-1 py-3 text-[11px] uppercase tracking-wider font-extrabold text-brand-charcoal bg-[#F3F1ED] hover:bg-[#EAE8DF] border border-[#D5D3C8] rounded-xl active:scale-[0.98] transition-all cursor-pointer select-none"
+                >
+                  {language === 'sr' ? 'Kopiraj link' : language === 'zh' ? '复制链接' : 'Copy Link'}
+                </button>
+                <button
+                  onClick={() => {
+                    if (pendingExternalLink) {
+                      routeOutboundAction({ url: pendingExternalLink, type: 'WEB', onToast: setToastMessage });
                     }
                     handleClosePendingExternalLink();
                   }}
@@ -3327,8 +3410,8 @@ export default function App() {
       </AnimatePresence>
     </div>
 
-    {/* Elegant printing portfolio with beautiful design elements, Cyrillic watermarks, Roman Constantine Coin and Tesla coils */}
-    <div id="print-portfolio-element" className="relative p-[1.6cm] bg-[#FAF9F5] text-[#2F3126] font-sans antialiased text-[11px] leading-relaxed select-text">
+    {/* Elegant printing portfolio - Hidden in web layout, visible only during print/PDF generation */}
+    <div id="print-portfolio-element" className="hidden print:block font-sans antialiased text-[11px] leading-relaxed select-text">
       {/* Absolute Svg Artistic Watermarks */}
       <div className="absolute top-[12%] left-[4%] opacity-[0.035] pointer-events-none z-[-10] w-[140px]">
         <svg viewBox="0 0 100 150" fill="none" stroke="#2D3025" strokeWidth="0.5" className="w-full h-auto">
@@ -3395,22 +3478,22 @@ export default function App() {
         }}
       >
         {language === 'sr' 
-          ? 'СРБИЈА • БЕОГРАД • ЕКСПО БЕОГРАД • ВИНЧА • ТЕСЛА' 
-          : 'SERBIA • BELGRADE • EXPO BELGRADE 2027 • VINCA • TESLA'}
+          ? 'СРБИЈА • БЕОГРАД • ВИНЧА • ТЕСЛА' 
+          : 'SERBIA • BELGRADE • VINCA • TESLA'}
       </div>
 
       {/* Crisp Header Box */}
       <div className="bg-white border border-[#E0DDD5] border-b-[3px] border-b-[#1E2E20] p-6 mb-6 rounded-lg relative">
         <div className="text-[8px] uppercase tracking-[0.4em] text-[#8F8B73] font-bold mb-1.5">
-          {language === 'sr' ? 'ЕКСПО БЕОГРАД • ОФИЦИЈЕЛНИ ДЕЛЕГАТСКИ ПЛАН' : 'EXPO BELGRADE • OFFICIAL DELEGATE PORTFOLIO'}
+          {language === 'sr' ? 'ИДЕМО • ЛИЧНИ ПЛАН ПУТОВАЊА' : 'IDEMO • PERSONAL TRAVEL PLAN'}
         </div>
         <h1 className="font-serif text-[26px] font-bold text-[#1E2E20] tracking-tight leading-none mb-2">
-          {language === 'sr' ? 'ИТИНЕРАР ЛИЧНИ СЛУЖБЕНИ ПУТ' : 'ELEGANT VISITOR ITINERARY'}
+          {language === 'sr' ? 'ВАШЕ ЛИЧНО ПУТОВАЊЕ КРОЗ СРБИЈУ' : 'YOUR PERSONAL SERBIA JOURNEY'}
         </h1>
         <p className="text-[10px] italic text-[#5C5E54] max-w-[80%] leading-relaxed">
           {language === 'sr' 
-            ? 'Dizajniran i kalibrisan izveštaj za posetioce – nezvaničan, premium i lokalno vođen.'
-            : 'A premium, custom-calibrated travel portfolio for visiting delegates and cultural explorers.'}
+            ? 'Prilagođen i kalibrisan plan puta za posetioce – privatno, premium i lokalno vođeno.'
+            : 'A premium, custom-calibrated travel plan for cultural explorers and visitors.'}
         </p>
       </div>
 
@@ -3420,7 +3503,7 @@ export default function App() {
         <div className="col-span-5 bg-white border-2 border-[#D5D3C8] rounded-xl p-5 flex flex-col justify-between shadow-xs">
           <div>
             <h2 className="font-serif text-[11.5px] font-extrabold text-[#5C5A4D] uppercase tracking-[0.18em] border-b-2 border-[#FAF9F5] pb-1.5 mb-2.5">
-              {language === 'sr' ? 'УСКЛАЂЕН ПРОФИЛ ПОСЕТИОЦА' : 'CALIBRATED VISITOR PROFILE'}
+              {language === 'sr' ? 'ВАШ СТИЛ ПУТОВАЊА' : 'YOUR TRAVEL STYLE'}
             </h2>
             <h3 className="font-serif text-[16px] font-black text-[#1B5E20] leading-snug mb-3">
               {getDynamicStyle(language, selectedCats, days, budget, time).styleName}
@@ -3439,7 +3522,7 @@ export default function App() {
         {/* Calendar Card */}
         <div className="col-span-4 bg-white border border-[#E5E3DB] rounded-xl p-4 flex flex-col">
           <h2 className="font-serif text-[11px] font-bold text-[#1E2E20] uppercase tracking-[0.15em] border-b border-[#E0DDD5] pb-1.5 mb-2">
-            {language === 'sr' ? 'КАЛЕНДАР ПОСЕТЕ' : 'TRAVEL HORIZON CALENDAR'}
+            {language === 'sr' ? 'КАЛЕНДАР ПУТОВАЊА' : 'SCHEDULED DATES'}
           </h2>
           <div className="flex-1 flex flex-col justify-center gap-1.5">
             {sortedMonths.slice(0, 1).map((m) => (
@@ -3502,7 +3585,7 @@ export default function App() {
       {/* Scheduled list cards sorted chronologically */}
       <div className="mb-6">
         <h2 className="font-serif text-[12px] font-bold text-[#1E2E20] uppercase tracking-[0.15em] border-b border-[#E0DDD5] pb-1.5 mb-4">
-          {language === 'sr' ? 'ХРОНОЛОШКИ ПЛАН И САТНИЦА' : 'CHRONOLOGICAL TRIP SCHEDULE'}
+          {language === 'sr' ? 'ХРОНОЛОШКИ ПЛАН И САТНИЦА' : 'YOUR ITINERARY'}
         </h2>
         
         <div className="space-y-3">
@@ -3668,7 +3751,7 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      className="flex-1 flex flex-col justify-between items-center py-2 xs:py-2.5 px-3.5 relative h-full max-h-full overflow-hidden premium-paper select-none gap-y-1.5"
+      className="flex-1 flex flex-col justify-between items-center py-2 xs:py-2.5 px-3.5 relative h-full max-h-full overflow-hidden bg-[#FAF9F5] select-none gap-y-1.5"
     >
       {/* 1. Top Section (Promotional Statement - Oxblood #800020, Scaled -20% for 1-Screen Precision & Extra BOLD) */}
       <div className="flex-shrink-0 flex flex-col justify-center items-center max-w-[360px] mx-auto w-full pt-0.5">
@@ -3748,9 +3831,9 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
           </motion.div>
         </div>
 
-        {/* Language Selector (Recessed control directly below IDEMO Button) */}
-        <div className="w-full max-w-[260px] px-1.5 z-50">
-          <div className="flex justify-between p-[2.5px] bg-[#FAF9F5]/40 rounded-full border border-brand-charcoal/[0.08] shadow-[0_1px_2px_rgba(255,255,255,0.9)]">
+        {/* Language Selector (Exact match to IMG_8431.png reference) */}
+        <div className="w-full max-w-[280px] px-1.5 z-50">
+          <div className="flex justify-between p-[3px] bg-white/40 rounded-full border border-[#E2DFD6]/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
             {LANGUAGES.map((lang) => {
               const isSelected = language === lang.code;
               return (
@@ -3761,17 +3844,15 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
                     setLanguage(lang.code);
                   }}
                   whileTap={{ scale: 0.95 }}
-                  className={`flex-1 py-1 rounded-full text-[9.5px] xs:text-[10.5px] font-bold uppercase tracking-wider transition-all duration-200 select-none cursor-pointer text-center relative ${
+                  className={`flex-1 py-1 rounded-full text-[9.5px] xs:text-[10.5px] tracking-wider transition-all duration-200 select-none cursor-pointer text-center relative ${
                     isSelected
-                      ? 'bg-[#EAE8E0]/50 text-brand-charcoal shadow-[inset_0_1.5px_3.5px_rgba(35,37,30,0.13)] border border-brand-charcoal/[0.02] font-black'
-                      : 'text-brand-charcoal/45 hover:text-brand-charcoal/75 bg-transparent border border-transparent'
+                      ? 'bg-[#800020] text-white font-extrabold border border-[#800020] shadow-xs active:translate-y-[1px]'
+                      : 'text-[#8C8A7D] hover:text-[#5C5A4D] font-bold bg-transparent border border-transparent'
                   }`}
                   style={{ touchAction: 'manipulation' }}
                   id={`premium-lang-${lang.code}`}
                 >
-                  {/* Invisible padding expansion for touch target */}
-                  <span className="absolute -inset-1 rounded-full bg-transparent" />
-                  <span className="relative z-10">{lang.code}</span>
+                  <span className="relative z-10">{lang.code.toUpperCase()}</span>
                 </motion.button>
               );
             })}
@@ -3779,25 +3860,23 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
         </div>
       </div>
 
-      {/* 3. Bottom Section (Disclaimer Card - Compact Precision) */}
-      <div className="flex-shrink-0 w-full max-w-[325px] mx-auto pt-0 pb-0.5">
-        <div className="text-center space-y-0.5 bg-white/30 border border-border-main/8 rounded-[11px] py-1.5 px-3 shadow-[0_1.5px_8px_rgba(35,37,30,0.01)] backdrop-blur-xs flex flex-col items-center justify-center" id="refined-disclaimer-card">
-          <p className="text-[9.5px] xs:text-[10px] font-bold uppercase tracking-[0.11em] text-brand-charcoal/50 leading-tight">
+      {/* 3. Bottom Section (Disclaimer Card - Exact match to IMG_8431.png reference) */}
+      <div className="flex-shrink-0 w-full max-w-[340px] mx-auto pt-0 pb-1">
+        <div className="text-center space-y-2 bg-[#F5F4EC]/60 border border-[#E5E3DB]/60 rounded-[16px] py-3.5 px-4 shadow-2xs backdrop-blur-xs flex flex-col items-center justify-center" id="refined-disclaimer-card">
+          <p className="text-[9.5px] xs:text-[10px] font-medium uppercase tracking-[0.08em] text-[#8C8A7D] leading-normal">
             {t.disclaimer_1}
           </p>
-          <div className="h-[1px] bg-border-main/10 my-0.5 w-1/5 mx-auto" />
-          <p className="text-[9px] xs:text-[9.5px] uppercase tracking-[0.09em] text-brand-charcoal/50 leading-tight font-semibold">
+          <p className="text-[9px] xs:text-[9.5px] font-medium uppercase tracking-[0.07em] text-[#8C8A7D] leading-normal">
             {t.disclaimer_2}
           </p>
-          <div className="h-[1px] bg-border-main/10 my-0.5 w-1/5 mx-auto" />
           <button
             onClick={() => {
               triggerHaptic(10);
               setShowPrivacy(true);
             }}
-            className="text-[9px] xs:text-[9.5px] uppercase tracking-[0.1em] text-accent-teal hover:text-accent-teal/85 transition-colors font-bold cursor-pointer underline decoration-dotted underline-offset-2"
+            className="text-[9.5px] font-bold uppercase tracking-[0.1em] text-[#1B6B68] hover:text-[#1B6B68]/80 transition-colors cursor-pointer underline decoration-dotted underline-offset-3 pt-0.5"
           >
-            {language === 'sr' ? 'Politika Privatnosti' : language === 'es' ? 'Política de Privacidad' : language === 'de' ? 'Datenschutzerklärung' : language === 'ru' ? 'Политика конфиденциальности' : language === 'zh' ? '隐私政策' : 'Privacy Policy'}
+            {language === 'sr' ? 'POLITIKA PRIVATNOSTI' : language === 'es' ? 'POLÍTICA DE PRIVACIDAD' : language === 'de' ? 'DATENSCHUTZERKLÄRUNG' : language === 'ru' ? 'ПОЛИТИКА КОНФИДЕНЦИАЛЬНОСТИ' : language === 'zh' ? '隐私政策' : 'PRIVACY POLICY'}
           </button>
         </div>
       </div>
@@ -3807,7 +3886,7 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
           <>
             {/* Backdrop */}
             <motion.div 
-              className="fixed inset-0 bg-black/60 backdrop-blur-md z-[600]"
+              className="fixed inset-0 bg-black/50 backdrop-blur-md z-[600]"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -3818,25 +3897,25 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed inset-x-4 top-[10%] bottom-[10%] max-w-[400px] mx-auto bg-brand-bg rounded-[24px] border border-border-main p-6 z-[610] shadow-2xl flex flex-col"
+              className="fixed inset-x-4 top-[8%] bottom-[8%] max-w-[420px] mx-auto bg-[#FAF9F5]/82 backdrop-blur-md rounded-[28px] border border-[#E5E3DB] p-6 z-[610] shadow-[0_25px_60px_rgba(0,0,0,0.25)] flex flex-col overflow-hidden"
             >
-              <div className="flex justify-between items-center pb-3 border-b border-border-main/20 shrink-0">
-                <h3 className="font-serif text-[12px] font-black text-brand-charcoal uppercase tracking-wider">
+              <div className="flex justify-between items-center pb-3 border-b border-[#E5E3DB] shrink-0">
+                <h3 className="font-serif text-[12.5px] font-black text-brand-charcoal uppercase tracking-wider">
                   {language === 'sr' ? 'Politika Privatnosti (GDPR)' : language === 'es' ? 'Política de Privacidad (GDPR)' : language === 'de' ? 'Datenschutzerklärung (DSGVO)' : language === 'ru' ? 'Политика конфиденциальности (GDPR)' : language === 'zh' ? '隐私政策 (GDPR)' : 'Privacy Policy (GDPR Compliant)'}
                 </h3>
                 <button
                   onClick={() => setShowPrivacy(false)}
-                  className="w-8 h-8 rounded-full bg-brand-charcoal/5 flex items-center justify-center text-brand-charcoal text-xs font-bold hover:bg-brand-charcoal/10 transition-colors cursor-pointer shrink-0"
+                  className="w-8 h-8 rounded-full bg-brand-charcoal/10 flex items-center justify-center text-brand-charcoal text-xs font-bold hover:bg-brand-charcoal/20 active:scale-95 transition-all cursor-pointer shrink-0"
                 >
                   ✕
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto py-4 no-scrollbar space-y-4 text-left">
+              <div className="flex-1 overflow-y-auto py-4 space-y-4 text-left pb-6">
                 <PrivacyPolicyContent language={language} />
               </div>
               <button
                 onClick={() => setShowPrivacy(false)}
-                className="w-full h-11 shrink-0 rounded-xl bg-brand-charcoal text-white font-bold text-[10px] uppercase tracking-widest active:scale-95 transition-all cursor-pointer mt-2"
+                className="w-full h-11 shrink-0 rounded-xl bg-[#800020] hover:bg-[#660019] text-white font-sans font-bold text-[11px] uppercase tracking-widest active:translate-y-[1px] active:shadow-none transition-all cursor-pointer mt-3 shadow-xs border border-[#800020]/20"
               >
                 {language === 'sr' ? 'Zatvori' : language === 'es' ? 'Cerrar' : language === 'de' ? 'Schließen' : language === 'ru' ? 'Закрыть' : language === 'zh' ? '关闭' : 'Close'}
               </button>
@@ -4475,7 +4554,7 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, onNaviga
             className="h-[125px] bg-[#FAF9F6] border border-[#EBEBE6] rounded-[24px] flex flex-col justify-between p-4 transition-all active:scale-[0.97] duration-200 group relative overflow-hidden shadow-sm hover:shadow-md text-left cursor-pointer min-h-[48px]"
           >
             <div className="flex justify-between items-start w-full">
-              <span className="text-xl">⛰️</span>
+              <EditorialSummitVapourIcon size={24} className="text-brand-charcoal" />
               <div className="w-5 h-5 rounded-full bg-[#8A1F1F]/10 border border-[#8A1F1F]/30 flex items-center justify-center">
                 <div className="w-2 h-2 rounded-full bg-[#8A1F1F] shadow-sm" />
               </div>
@@ -4496,7 +4575,7 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, onNaviga
             className="h-[125px] bg-[#FAF9F6] border border-[#EBEBE6] rounded-[24px] flex flex-col justify-between p-4 transition-all active:scale-[0.97] duration-200 group relative overflow-hidden shadow-sm hover:shadow-md text-left cursor-pointer min-h-[48px]"
           >
             <div className="flex justify-between items-start w-full">
-              <span className="text-xl">🍷</span>
+              <EditorialKafanaRitualIcon size={24} className="text-brand-charcoal" />
               <div className="w-5 h-5 rounded-full bg-[#8A1F1F]/10 border border-[#8A1F1F]/30 flex items-center justify-center">
                 <div className="w-2 h-2 rounded-full bg-[#8A1F1F] shadow-sm" />
               </div>
@@ -4517,7 +4596,7 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, onNaviga
             className="h-[125px] bg-[#FAF9F6] border border-[#EBEBE6] rounded-[24px] flex flex-col justify-between p-4 transition-all active:scale-[0.97] duration-200 group relative overflow-hidden shadow-sm hover:shadow-md text-left cursor-pointer min-h-[48px]"
           >
             <div className="flex justify-between items-start w-full">
-              <span className="text-xl">🌃</span>
+              <EditorialAfterHoursIcon size={24} className="text-brand-charcoal" />
               <div className="w-5 h-5 rounded-full bg-[#8A1F1F]/10 border border-[#8A1F1F]/30 flex items-center justify-center">
                 <div className="w-2 h-2 rounded-full bg-[#8A1F1F] shadow-sm" />
               </div>
@@ -4590,7 +4669,7 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, onNaviga
                       triggerHaptic([10, 30]);
                       setEnvelopeRevealed(true);
                     }}
-                    className="w-full h-11 bg-brand-charcoal text-[#F6F5F2] rounded-xl font-serif text-sm tracking-tight hover:bg-brand-charcoal/90 transition-all flex items-center justify-center gap-2 shadow-sm border border-brand-charcoal/10 cursor-pointer"
+                    className="w-full h-11 bg-[#800020] hover:bg-[#660019] text-white rounded-xl font-sans font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-xs border border-[#800020]/20 active:translate-y-[1px] active:shadow-none cursor-pointer"
                   >
                     Break Wax Seal & Read
                   </button>
@@ -4601,63 +4680,71 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, onNaviga
                   animate={{ opacity: 1, y: 0 }}
                   className="space-y-6 py-2 w-full text-left"
                 >
-                  <div className="border-b border-border-main/50 pb-4">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-[8px] uppercase tracking-[0.2em] font-black text-accent-red">REVEALED DISPATCH</span>
-                      <span className="text-[9px] font-mono text-[#8C8A7D]">🌿 DYNAMIC CALIBRATION MATCH</span>
-                    </div>
-                    <h4 className="text-2xl font-serif text-brand-charcoal tracking-tight">
-                      {getMysteryRec(openedEnvelope).title}
-                    </h4>
-                    {CYRILLIC_DICTIONARY[getMysteryRec(openedEnvelope).id] && (
-                      <p className="text-xs font-serif italic text-[#8C8A7D] mt-1">
-                        Serbian: {CYRILLIC_DICTIONARY[getMysteryRec(openedEnvelope).id].cyrillic}
-                      </p>
-                    )}
-                  </div>
+                  {(() => {
+                    const mystery = getMysteryRec(openedEnvelope) || {};
+                    const mysteryId = mystery.id || '';
+                    return (
+                      <>
+                        <div className="border-b border-border-main/50 pb-4">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-[8px] uppercase tracking-[0.2em] font-black text-accent-red">REVEALED DISPATCH</span>
+                            <span className="text-[9px] font-mono text-[#8C8A7D]">🌿 DYNAMIC CALIBRATION MATCH</span>
+                          </div>
+                          <h4 className="text-2xl font-serif text-brand-charcoal tracking-tight">
+                            {mystery.title || 'Exclusive Secret'}
+                          </h4>
+                          {CYRILLIC_DICTIONARY[mysteryId] && (
+                            <p className="text-xs font-serif italic text-[#8C8A7D] mt-1">
+                              Serbian: {CYRILLIC_DICTIONARY[mysteryId].cyrillic}
+                            </p>
+                          )}
+                        </div>
 
-                  <div className="space-y-3.5">
-                    <div className="p-4 bg-[#F5F4EE] rounded-2xl border border-border-main/40 text-xs text-[#3A3D32] leading-relaxed relative">
-                      <p className="font-serif italic text-brand-charcoal/80 mb-2 font-medium font-bold text-accent-red">Concierge Secret Note:</p>
-                      <p className="font-sans font-light">
-                        {CYRILLIC_DICTIONARY[getMysteryRec(openedEnvelope).id]?.tip || getMysteryRec(openedEnvelope).shortDescription}
-                      </p>
-                    </div>
+                        <div className="space-y-3.5">
+                          <div className="p-4 bg-[#F5F4EE] rounded-2xl border border-border-main/40 text-xs text-[#3A3D32] leading-relaxed relative">
+                            <p className="font-serif italic text-brand-charcoal/80 mb-2 font-medium font-bold text-accent-red">Concierge Secret Note:</p>
+                            <p className="font-sans font-light">
+                              {CYRILLIC_DICTIONARY[mysteryId]?.tip || mystery.shortDescription || 'Calibrated experience.'}
+                            </p>
+                          </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-[10px] text-brand-charcoal/70 bg-white/40 border border-[#EBEBE6] p-3 rounded-2xl">
-                      <div>
-                        <span className="block text-[#8C8A7D] uppercase tracking-wider text-[7.5px] font-bold">Duration</span>
-                        <span className="font-medium text-brand-charcoal">{getMysteryRec(openedEnvelope).duration}</span>
-                      </div>
-                      <div>
-                        <span className="block text-[#8C8A7D] uppercase tracking-wider text-[7.5px] font-bold">Transit</span>
-                        <span className="font-medium text-brand-charcoal">{getMysteryRec(openedEnvelope).preferredTransport}</span>
-                      </div>
-                    </div>
-                  </div>
+                          <div className="grid grid-cols-2 gap-2 text-[10px] text-brand-charcoal/70 bg-white/40 border border-[#EBEBE6] p-3 rounded-2xl">
+                            <div>
+                              <span className="block text-[#8C8A7D] uppercase tracking-wider text-[7.5px] font-bold">Duration</span>
+                              <span className="font-medium text-brand-charcoal">{mystery.duration || 'Flexible'}</span>
+                            </div>
+                            <div>
+                              <span className="block text-[#8C8A7D] uppercase tracking-wider text-[7.5px] font-bold">Transit</span>
+                              <span className="font-medium text-brand-charcoal">{mystery.preferredTransport || 'Central'}</span>
+                            </div>
+                          </div>
+                        </div>
 
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => {
-                        onSelectRec(getMysteryRec(openedEnvelope).id);
-                        setOpenedEnvelope(null);
-                        setEnvelopeRevealed(false);
-                        triggerHaptic(10);
-                      }}
-                      className="flex-1 h-11 bg-accent-teal text-white rounded-xl font-serif text-xs tracking-wide hover:bg-accent-teal/90 transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
-                    >
-                      <Eye size={14} /> View Details
-                    </button>
-                    <button 
-                      onClick={() => {
-                        setOpenedEnvelope(null);
-                        setEnvelopeRevealed(false);
-                      }}
-                      className="px-4 h-11 bg-white border border-[#E5E3DB] text-brand-charcoal rounded-xl text-xs hover:bg-[#F3F2EC] transition-all cursor-pointer"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => {
+                              if (mysteryId) onSelectRec(mysteryId);
+                              setOpenedEnvelope(null);
+                              setEnvelopeRevealed(false);
+                              triggerHaptic(10);
+                            }}
+                            className="flex-1 h-11 bg-[#800020] hover:bg-[#660019] text-white rounded-xl font-sans font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-xs border border-[#800020]/20 active:translate-y-[1px] active:shadow-none cursor-pointer"
+                          >
+                            <Eye size={14} /> View Details
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setOpenedEnvelope(null);
+                              setEnvelopeRevealed(false);
+                            }}
+                            className="px-4 h-11 bg-white border border-[#E5E3DB] text-brand-charcoal font-sans font-bold rounded-xl text-xs hover:bg-[#F3F2EC] active:translate-y-[1px] transition-all cursor-pointer"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </motion.div>
               )}
             </motion.div>
@@ -4721,38 +4808,79 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, onNaviga
 
                 {(selectedTip.link || selectedTip.androidLink || selectedTip.iosLink) && (
                   <div className="pt-4 border-t border-border-main/20 flex flex-wrap gap-2 items-center justify-end w-full">
-                    {selectedTip.androidLink && (
-                      <a 
-                        href={selectedTip.androidLink} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-brand-charcoal text-[#FAF9F5] hover:bg-brand-charcoal/95 transition-all active:scale-95"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        Android <ExternalLink size={10} />
-                      </a>
-                    )}
-                    {selectedTip.iosLink && (
-                      <a 
-                        href={selectedTip.iosLink} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-brand-charcoal text-[#FAF9F5] hover:bg-brand-charcoal/95 transition-all active:scale-95"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        iOS App <ExternalLink size={10} />
-                      </a>
-                    )}
-                    {selectedTip.link && !selectedTip.androidLink && !selectedTip.iosLink && (
-                      <a 
-                        href={selectedTip.link} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-[13.5px] uppercase tracking-widest font-bold text-accent-red hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {t.action_link || 'Learn More'} <ExternalLink size={12} />
-                      </a>
+                    {selectedTip.id === 'belgrade-parking' ? (
+                      <div className="flex flex-col sm:flex-row gap-2.5 w-full justify-between items-center">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            routeOutboundAction({
+                              type: 'INTERNAL',
+                              onInternalAction: () => {
+                                setSelectedTip(null);
+                                if (onNavigateToProfile) onNavigateToProfile();
+                              }
+                            });
+                          }}
+                          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider bg-[#8A1F1F] text-white hover:bg-[#721919] transition-all active:scale-95 cursor-pointer shadow-sm"
+                        >
+                          {language === 'sr' ? 'Otvori Pomoćnik za parking (IDEMO)' : language === 'zh' ? '打开 IDEMO 停车助手' : 'Open IDEMO Parking Assistant'} <ArrowRight size={12} />
+                        </button>
+                        {selectedTip.link && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              routeOutboundAction({ url: selectedTip.link, type: 'WEB' });
+                            }}
+                            className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-wider font-bold text-brand-charcoal/70 hover:underline cursor-pointer py-1"
+                          >
+                            {language === 'sr' ? 'Zvanični sajt (Parking Servis)' : language === 'zh' ? '官方网站' : 'Official Site'} <ExternalLink size={11} />
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        {selectedTip.androidLink && (
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              routeOutboundAction({ 
+                                url: selectedTip.androidLink, 
+                                type: 'EXTERNAL_INTENT', 
+                                fallbackData: { fallbackUrl: selectedTip.link }
+                              });
+                            }} 
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-brand-charcoal text-[#FAF9F5] hover:bg-brand-charcoal/95 transition-all active:scale-95 cursor-pointer"
+                          >
+                            Android <ExternalLink size={10} />
+                          </button>
+                        )}
+                        {selectedTip.iosLink && (
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              routeOutboundAction({ 
+                                url: selectedTip.iosLink, 
+                                type: 'EXTERNAL_INTENT', 
+                                fallbackData: { fallbackUrl: selectedTip.link }
+                              });
+                            }} 
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-brand-charcoal text-[#FAF9F5] hover:bg-brand-charcoal/95 transition-all active:scale-95 cursor-pointer"
+                          >
+                            iOS App <ExternalLink size={10} />
+                          </button>
+                        )}
+                        {selectedTip.link && !selectedTip.androidLink && !selectedTip.iosLink && (
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              routeOutboundAction({ url: selectedTip.link, type: 'WEB' });
+                            }} 
+                            className="inline-flex items-center gap-1.5 text-[13.5px] uppercase tracking-widest font-bold text-accent-red hover:underline cursor-pointer"
+                          >
+                            {t.action_link || 'Learn More'} <ExternalLink size={12} />
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -4830,8 +4958,8 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, onNaviga
         {/* Tab switcher */}
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 pt-1 border-b border-border-main/10">
           {[
-            { id: 'stories', label: language === 'sr' ? 'Priče i običaji' : language === 'zh' ? '故事与习俗' : 'Stories & Customs', icon: '✦' },
-            { id: 'wisdom', label: language === 'sr' ? 'Lokalna mudrost' : language === 'zh' ? '地方智慧' : 'Local Wisdom', icon: '❂' },
+            { id: 'stories', label: language === 'sr' ? 'Priče i običaji' : language === 'zh' ? '故事与习俗' : 'Stories & Customs', icon: <EditorialStoriesCustomsIcon size={18} /> },
+            { id: 'wisdom', label: language === 'sr' ? 'Lokalna mudrost' : language === 'zh' ? '地方智慧' : 'Local Wisdom', icon: <EditorialLocalWisdomIcon size={18} /> },
             { id: 'slang', label: language === 'sr' ? 'Sleng i bonton' : language === 'zh' ? '社交礼仪与方言' : 'Social Codes & Slang', icon: '💬' }
           ].map(tab => (
             <button
@@ -4840,10 +4968,10 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, onNaviga
                 triggerHaptic(6);
                 setActiveBriefingTab(tab.id as any);
               }}
-              className={`px-4 py-2.5 rounded-xl text-[12px] font-black uppercase tracking-wider flex items-center gap-1.5 border transition-all shrink-0 cursor-pointer min-h-[44px] ${
+              className={`px-4 py-2.5 rounded-xl text-[12px] font-black uppercase tracking-wider flex items-center gap-1.5 border transition-all shrink-0 cursor-pointer min-h-[44px] active:translate-y-[1px] ${
                 activeBriefingTab === tab.id
-                  ? 'bg-brand-charcoal text-white border-brand-charcoal shadow-sm font-bold'
-                  : 'bg-[#FAF9F5] hover:bg-[#FAF9F5] border-border-main text-[#5C5A4D]'
+                  ? 'bg-[#800020] text-white border-[#800020] shadow-xs font-bold'
+                  : 'bg-[#FAF9F5] hover:bg-[#F3F2EC] border-border-main text-[#5C5A4D]'
               }`}
             >
               <span>{tab.icon}</span>
@@ -4900,35 +5028,61 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, onNaviga
                         </span>
                         {(tip.link || tip.androidLink || tip.iosLink) && (
                           <div className="flex flex-wrap gap-2 items-center" onClick={(e) => e.stopPropagation()}>
-                            {tip.androidLink && (
-                              <a 
-                                href={tip.androidLink} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-brand-charcoal text-[#FAF9F5] hover:bg-brand-charcoal/95 transition-all active:scale-95"
+                            {tip.id === 'belgrade-parking' ? (
+                              <button
+                                onClick={() => {
+                                  routeOutboundAction({
+                                    type: 'INTERNAL',
+                                    onInternalAction: () => {
+                                      if (onNavigateToProfile) onNavigateToProfile();
+                                    }
+                                  });
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-[#8A1F1F] text-white hover:bg-[#721919] transition-all active:scale-95 cursor-pointer"
                               >
-                                Android <ExternalLink size={10} />
-                              </a>
-                            )}
-                            {tip.iosLink && (
-                              <a 
-                                href={tip.iosLink} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-brand-charcoal text-[#FAF9F5] hover:bg-brand-charcoal/95 transition-all active:scale-95"
-                              >
-                                iOS <ExternalLink size={10} />
-                              </a>
-                            )}
-                            {tip.link && !tip.androidLink && !tip.iosLink && (
-                              <a 
-                                href={tip.link} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 text-[13.5px] uppercase tracking-widest font-bold text-accent-red hover:underline"
-                              >
-                                {t.action_link} <ExternalLink size={12} />
-                              </a>
+                                {language === 'sr' ? 'Parking Pomoćnik' : language === 'zh' ? '停车助手' : 'Parking Assistant'} <ArrowRight size={10} />
+                              </button>
+                            ) : (
+                              <>
+                                {tip.androidLink && (
+                                  <button 
+                                    onClick={() => {
+                                      routeOutboundAction({ 
+                                        url: tip.androidLink, 
+                                        type: 'EXTERNAL_INTENT', 
+                                        fallbackData: { fallbackUrl: tip.link }
+                                      });
+                                    }} 
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-brand-charcoal text-[#FAF9F5] hover:bg-brand-charcoal/95 transition-all active:scale-95 cursor-pointer"
+                                  >
+                                    Android <ExternalLink size={10} />
+                                  </button>
+                                )}
+                                {tip.iosLink && (
+                                  <button 
+                                    onClick={() => {
+                                      routeOutboundAction({ 
+                                        url: tip.iosLink, 
+                                        type: 'EXTERNAL_INTENT', 
+                                        fallbackData: { fallbackUrl: tip.link }
+                                      });
+                                    }} 
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-brand-charcoal text-[#FAF9F5] hover:bg-brand-charcoal/95 transition-all active:scale-95 cursor-pointer"
+                                  >
+                                    iOS <ExternalLink size={10} />
+                                  </button>
+                                )}
+                                {tip.link && !tip.androidLink && !tip.iosLink && (
+                                  <button 
+                                    onClick={() => {
+                                      routeOutboundAction({ url: tip.link, type: 'WEB' });
+                                    }} 
+                                    className="flex items-center gap-1.5 text-[13.5px] uppercase tracking-widest font-bold text-accent-red hover:underline cursor-pointer"
+                                  >
+                                    {t.action_link} <ExternalLink size={12} />
+                                  </button>
+                                )}
+                              </>
                             )}
                           </div>
                         )}
@@ -5430,10 +5584,10 @@ function AccordionSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-[#FAF9F5]/40 border border-border-main rounded-2.5xl overflow-hidden transition-all duration-200">
+    <div className="bg-[#FAF9F5]/70 border border-[#E5E3DB] rounded-3xl overflow-hidden shadow-[0_2px_8px_rgba(35,37,30,0.03)] transition-all duration-200">
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-5.5 text-left active:bg-[#FAF9F5] transition-colors focus:outline-none focus:ring-1 focus:ring-accent-red/20 min-h-[60px] cursor-pointer"
+        className="w-full flex items-center justify-between p-5 text-left active:bg-[#FAF9F5] transition-colors focus:outline-none focus:ring-1 focus:ring-[#800020]/20 min-h-[60px] cursor-pointer"
         aria-expanded={isOpen}
         id={`accordion-trigger-${id}`}
       >
@@ -5451,7 +5605,7 @@ function AccordionSection({
           </div>
         </div>
         <ChevronRight 
-          className={`size-5 text-brand-charcoal/65 shrink-0 transition-transform duration-300 ${isOpen ? 'rotate-90 text-accent-red opacity-100' : ''}`} 
+          className={`size-5 text-brand-charcoal/65 shrink-0 transition-transform duration-300 ${isOpen ? 'rotate-90 text-[#800020] opacity-100' : ''}`} 
         />
       </button>
 
@@ -5463,7 +5617,7 @@ function AccordionSection({
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.25, ease: [0.25, 1, 0.5, 1] }}
           >
-            <div className="p-5.5 pt-1 border-t border-border-main/40">
+            <div className="p-5 pt-1 border-t border-[#E5E3DB]/60">
               {children}
             </div>
           </motion.div>
@@ -5623,7 +5777,7 @@ function DetailsCTA({
         onClick={onAdd}
         whileTap={{ y: 2 }}
         transition={{ type: "tween", ease: "easeOut", duration: 0.14 }}
-        className={`w-full h-13 rounded-2xl bg-accent-red hover:bg-accent-red/90 text-white font-bold uppercase text-[12px] xs:text-[13px] sm:text-[14px] tracking-wider transition-all cursor-pointer shadow-sm flex items-center justify-center gap-1.5 px-4 border border-accent-red/15 active:shadow-inner ${
+        className={`w-full h-13 rounded-2xl bg-[#800020] hover:bg-[#660019] text-white font-bold uppercase text-[12px] xs:text-[13px] sm:text-[14px] tracking-wider transition-all cursor-pointer shadow-xs flex items-center justify-center gap-1.5 px-4 border border-[#800020]/20 active:shadow-inner active:scale-98 ${
           isAdding ? 'opacity-50 cursor-not-allowed' : ''
         }`}
         id={`${idPrefix}-add-to-plan`}
@@ -6050,6 +6204,47 @@ function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedu
             </p>
           </div>
 
+          {/* INSIDER INSIGHT (GOVERNED CONDITIONAL CALLOUT) */}
+          {(() => {
+            const rawTip = getLocalizedValue(recommendation, 'insiderTip', language);
+            if (typeof rawTip !== 'string') return null;
+            const trimmedTip = rawTip.trim();
+            if (!trimmedTip || trimmedTip === '[insiderTip]') return null;
+
+            const normalizeInsightText = (value: string) =>
+              value
+                .normalize('NFKC')
+                .toLocaleLowerCase()
+                .replace(/[^\p{L}\p{N}]+/gu, '');
+
+            const fullCurationText = getLocalizedValue(recommendation, 'longDescription', language) || '';
+            const normTip = normalizeInsightText(trimmedTip);
+            const normCuration = normalizeInsightText(fullCurationText);
+
+            if (normTip && normCuration && (normCuration.includes(normTip) || normTip.includes(normCuration))) {
+              return null;
+            }
+
+            return (
+              <div className="pt-3 pb-1 border-t border-[#E7E4DB]/40 mt-3 text-left">
+                <div className="bg-[#FAF9F5] border border-[#E5E3DB] rounded-3xl p-4.5 space-y-1.5 shadow-[0_2px_8px_rgba(35,37,30,0.03)]">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 bg-[#8A1F1F] rounded-full" />
+                    <span className="text-[9px] uppercase tracking-[0.2em] font-black text-[#8C8A7D]">
+                      IDEMO • LOCAL INTELLIGENCE
+                    </span>
+                  </div>
+                  <h4 className="text-[13px] font-serif font-bold text-brand-charcoal leading-tight">
+                    Insider Insight
+                  </h4>
+                  <p className="text-[12.5px] font-sans text-brand-charcoal/90 leading-relaxed italic font-medium">
+                    {trimmedTip}
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* QUICK FACTS STRIP */}
           <div className="py-2.5 relative">
             <div 
@@ -6206,7 +6401,7 @@ function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedu
               {(() => {
                 const walkInfo = getRecommendationWalkability(recommendation, language);
                 return (
-                  <div className="bg-white border border-[#E7E4DB] rounded-2xl p-4 flex gap-3.5 items-start shadow-sm">
+                  <div className="bg-white border border-[#E5E3DB] rounded-3xl p-4 flex gap-3.5 items-start shadow-[0_2px_8px_rgba(35,37,30,0.03)]">
                     <div className="w-9 h-9 rounded-xl bg-accent-teal/10 text-accent-teal flex items-center justify-center shrink-0 font-sans text-base">
                       🚶‍♂️
                     </div>
@@ -6233,7 +6428,7 @@ function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedu
                   triggerHaptic(60);
                   setShowDriverCard(true);
                 }}
-                className="w-full flex items-center justify-between p-4 bg-brand-charcoal hover:bg-brand-charcoal/90 text-white rounded-2xl transition-all shadow-md active:scale-99 select-none group border border-brand-charcoal/30 min-h-[52px]"
+                className="w-full flex items-center justify-between p-4 bg-brand-charcoal hover:bg-brand-charcoal/90 text-white rounded-3xl transition-all shadow-xs active:scale-99 select-none group border border-brand-charcoal/30 min-h-[52px]"
                 id="show-taxi-address-card-accordion"
               >
                 <div className="flex items-center gap-3">
@@ -6354,7 +6549,7 @@ function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedu
                           triggerHaptic(15);
                           onSelectRec(comp);
                         }}
-                        className="p-4 bg-white border border-[#E7E4DB] hover:border-accent-red/30 rounded-2xl transition-all cursor-pointer flex justify-between items-center group shadow-sm active:scale-99"
+                        className="p-4 bg-white border border-[#E5E3DB] hover:border-[#800020]/30 rounded-3xl transition-all cursor-pointer flex justify-between items-center group shadow-[0_2px_8px_rgba(35,37,30,0.03)] active:scale-99"
                       >
                         <div className="space-y-1 pr-4">
                           <div className="flex items-center gap-2">
@@ -6390,7 +6585,7 @@ function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedu
             >
               <div className="py-2.5 space-y-4">
                 <div className="flex gap-4">
-                  <div className="flex-1 bg-white border border-[#E7E4DB] rounded-2xl p-4 text-center shadow-sm">
+                  <div className="flex-1 bg-white border border-[#E5E3DB] rounded-3xl p-4 text-center shadow-[0_2px_8px_rgba(35,37,30,0.03)]">
                     <span className="block text-[10px] uppercase tracking-wider text-[#8C8A7D] font-extrabold mb-1">
                       {language === 'sr' ? 'LOKALNI NAZIV' : 'LOCAL NAME'}
                     </span>
@@ -6398,7 +6593,7 @@ function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedu
                       {CYRILLIC_DICTIONARY[recommendation.id].cyrillic}
                     </span>
                   </div>
-                  <div className="flex-1 bg-white border border-[#E7E4DB] rounded-2xl p-4 text-center shadow-sm">
+                  <div className="flex-1 bg-white border border-[#E5E3DB] rounded-3xl p-4 text-center shadow-[0_2px_8px_rgba(35,37,30,0.03)]">
                     <span className="block text-[10px] uppercase tracking-wider text-[#8C8A7D] font-extrabold mb-1">
                       {language === 'sr' ? 'IZGOVOR' : 'PRONUNCIATION'}
                     </span>
@@ -7032,6 +7227,15 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
     }
   };
 
+  const escapeIcsText = (str: string): string => {
+    if (!str) return '';
+    return str
+      .replace(/\\/g, '\\\\')
+      .replace(/;/g, '\\;')
+      .replace(/,/g, '\\,')
+      .replace(/\r?\n/g, '\\n');
+  };
+
   const handleSyncCalendar = () => {
     triggerHaptic(5);
     
@@ -7075,28 +7279,60 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
       let icsContent = [
         'BEGIN:VCALENDAR',
         'VERSION:2.0',
-        'PRODID:-//IDEMO//EN',
+        'PRODID:-//IDEMO//Travel Concierge//EN',
         'CALSCALE:GREGORIAN',
-        'METHOD:PUBLISH'
+        'METHOD:PUBLISH',
+        'X-WR-CALNAME:IDEMO Travel Plan'
       ];
 
       scheduledItems.forEach((item: any) => {
         if (item.isAvailable === false) return;
-        const date = item.scheduledDate ? new Date(item.scheduledDate) : new Date();
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        
-        const dateStr = `${year}${month}${day}`;
+        const startDate = item.scheduledDate ? new Date(item.scheduledDate) : new Date();
+        const startYear = startDate.getFullYear();
+        const startMonth = String(startDate.getMonth() + 1).padStart(2, '0');
+        const startDay = String(startDate.getDate()).padStart(2, '0');
+        const startDateStr = `${startYear}${startMonth}${startDay}`;
+
+        // RFC 5545 specifies DTEND for all-day events is exclusive (+1 day)
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + 1);
+        const endYear = endDate.getFullYear();
+        const endMonth = String(endDate.getMonth() + 1).padStart(2, '0');
+        const endDay = String(endDate.getDate()).padStart(2, '0');
+        const endDateStr = `${endYear}${endMonth}${endDay}`;
+
+        const itemTitle = getLocalizedValue(item, 'title', language) || item.title || 'IDEMO Experience';
+        const itemLocation = getLocalizedValue(item, 'location', language) || item.location || 'Serbia';
+        const itemCategory = formatCategory(item.category, t);
+        const itemDesc = getLocalizedValue(item, 'shortDescription', language) || getLocalizedValue(item, 'longDescription', language) || item.shortDescription || item.longDescription || '';
+        const itemTransit = item.preferredTransport ? `Transport: ${item.preferredTransport}` : '';
+        const itemDuration = item.travelTime ? `Duration: ${item.travelTime}` : '';
+
+        const descriptionParts = [
+          t.event_description ? t.event_description(itemCategory, itemLocation) : `IDEMO Experience: ${itemCategory} at ${itemLocation}`,
+          itemDesc ? `Overview: ${itemDesc}` : '',
+          itemTransit,
+          itemDuration,
+          'IDEMO Curated Travel — Private & Offline-Ready'
+        ].filter(Boolean);
+
+        const fullDescription = descriptionParts.join('\\n\\n');
 
         icsContent.push('BEGIN:VEVENT');
-        icsContent.push(`UID:${item.id}-${Date.now()}@idemo.com`);
+        icsContent.push(`UID:idemo-rec-${item.id}-${startDateStr}@idemo.app`);
         icsContent.push(`DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z`);
-        icsContent.push(`DTSTART;VALUE=DATE:${dateStr}`);
-        icsContent.push(`DTEND;VALUE=DATE:${dateStr}`);
-        icsContent.push(`SUMMARY:${getLocalizedValue(item, 'title', language)}`);
-        icsContent.push(`DESCRIPTION:${t.event_description(formatCategory(item.category, t), getLocalizedValue(item, 'location', language))}`);
-        icsContent.push(`LOCATION:${getLocalizedValue(item, 'location', language)}`);
+        icsContent.push(`DTSTART;VALUE=DATE:${startDateStr}`);
+        icsContent.push(`DTEND;VALUE=DATE:${endDateStr}`);
+        icsContent.push(`SUMMARY:${escapeIcsText(itemTitle)}`);
+        icsContent.push(`DESCRIPTION:${escapeIcsText(fullDescription)}`);
+        icsContent.push(`LOCATION:${escapeIcsText(itemLocation)}`);
+
+        if (item.coordinates && typeof item.coordinates.lat === 'number' && typeof item.coordinates.lng === 'number') {
+          icsContent.push(`GEO:${item.coordinates.lat.toFixed(6)};${item.coordinates.lng.toFixed(6)}`);
+        }
+
+        icsContent.push('STATUS:CONFIRMED');
+        icsContent.push('TRANSP:TRANSPARENT');
         icsContent.push('END:VEVENT');
 
         // Learn quietly from calendar sync
@@ -7109,7 +7345,7 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', 'expo2027_trip_plan.ics');
+      link.setAttribute('download', 'idemo-travel-plan.ics');
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -7189,8 +7425,14 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
 
   const urlToBase64Cover = (url: string, targetW: number, targetH: number): Promise<string | null> => {
     return new Promise((resolve) => {
+      const resolvedPath = url.startsWith('/') ? url : '/' + url;
+      const finalSrc = resolveImage(resolvedPath);
+
       const img = new Image();
-      img.crossOrigin = 'Anonymous';
+      if (!finalSrc.startsWith('data:')) {
+        img.crossOrigin = 'anonymous';
+      }
+
       img.onload = () => {
         try {
           const canvas = document.createElement('canvas');
@@ -7222,11 +7464,43 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
           resolve(null);
         }
       };
-      img.onerror = () => {
+
+      img.onerror = async () => {
+        try {
+          const res = await fetch(finalSrc);
+          if (res.ok) {
+            const blob = await res.blob();
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const fallbackImg = new Image();
+              fallbackImg.onload = () => {
+                try {
+                  const canvas = document.createElement('canvas');
+                  const scale = 10;
+                  canvas.width = targetW * scale;
+                  canvas.height = targetH * scale;
+                  const ctx = canvas.getContext('2d');
+                  if (!ctx) return resolve(null);
+                  ctx.drawImage(fallbackImg, 0, 0, canvas.width, canvas.height);
+                  resolve(canvas.toDataURL('image/png'));
+                } catch {
+                  resolve(null);
+                }
+              };
+              fallbackImg.onerror = () => resolve(null);
+              fallbackImg.src = reader.result as string;
+            };
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+            return;
+          }
+        } catch {
+          // ignore
+        }
         resolve(null);
       };
-      const resolvedPath = url.startsWith('/') ? url : '/' + url;
-      img.src = resolveImage(resolvedPath);
+
+      img.src = finalSrc;
     });
   };
 
@@ -8708,54 +8982,44 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
 
   const handlePrintPDF = async () => {
     if (scheduledItems.length === 0) return;
-    const doc = await generatePdfDocument();
-    if (!doc) return;
 
+    // 1. On mobile devices with native share sheet supporting files, offer direct sharing
     try {
-      const pdfBlob = doc.output('blob');
-      const pdfFile = new File([pdfBlob], 'idemo-event-planner.pdf', { type: 'application/pdf' });
-
-      if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-        try {
-          await navigator.share({
-            files: [pdfFile],
-            title: language === 'sr' ? 'IDEMO Planer Događaja' : 'IDEMO Event Planner',
-            text: language === 'sr' ? 'Pogledaj moj skrojeni plan za Srbiju!' : 'Check out my custom itinerary for Serbia!'
-          });
-          return;
-        } catch (shareErr) {
-          console.log('Native file sharing rejected', shareErr);
+      if (typeof navigator !== 'undefined' && navigator.canShare) {
+        const doc = await generatePdfDocument();
+        if (doc) {
+          const pdfBlob = doc.output('blob');
+          const pdfFile = new File([pdfBlob], 'idemo-travel-plan.pdf', { type: 'application/pdf' });
+          if (navigator.canShare({ files: [pdfFile] })) {
+            try {
+              await navigator.share({
+                files: [pdfFile],
+                title: language === 'sr' ? 'IDEMO Planer Događaja' : 'IDEMO Event Planner',
+                text: language === 'sr' ? 'Pogledaj moj skrojeni plan za Srbiju!' : 'Check out my custom itinerary for Serbia!'
+              });
+              return;
+            } catch (shareErr: any) {
+              if (shareErr.name === 'AbortError') {
+                return; // User intentionally dismissed share sheet
+              }
+              console.log('Native file sharing rejected', shareErr);
+            }
+          }
         }
       }
     } catch (blobErr) {
-      console.error('Failed to prepare PDF blob for sharing', blobErr);
+      console.warn('Share check fallback', blobErr);
     }
 
-    try {
-      const pdfBlob = doc.output('blob');
-      const blobUrl = URL.createObjectURL(pdfBlob);
-      let opened = false;
-      try {
-        const newWin = window.open(blobUrl, '_blank');
-        if (newWin && !newWin.closed) {
-          newWin.focus();
-          opened = true;
-        }
-      } catch (e) {
-        console.log('window.open blocked or failed in WebView', e);
-      }
-      if (!opened) {
-        doc.save('idemo-travel-plan.pdf');
-      }
-    } catch (tabErr) {
-      console.log('Failed to open new tab or blob, downloading instead', tabErr);
-      doc.save('idemo-travel-plan.pdf');
-    }
-
+    // 2. Direct print of the styled itinerary document while keeping preview mounted
     try {
       window.print();
     } catch (pErr) {
-      console.warn('Direct iframe print blocked', pErr);
+      console.warn('Direct window.print blocked in iframe, downloading PDF instead', pErr);
+      const doc = await generatePdfDocument();
+      if (doc) {
+        doc.save('idemo-travel-plan.pdf');
+      }
     }
   };
 
@@ -8791,67 +9055,68 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
         )}
       </AnimatePresence>
 
-      <header className="flex justify-between items-start">
+      <header className="flex justify-between items-start mb-4">
         <div className="space-y-1">
-           <p className="text-[10px] uppercase tracking-[0.4em] text-accent-red font-black">{t.personal_concierge}</p>
-           <h2 className="text-4xl font-serif text-brand-charcoal tracking-tighter">{t.my_travel_plan}</h2>
+           <p className="text-[10px] uppercase tracking-[0.4em] text-accent-red font-black">
+             {language === 'sr' ? 'ЛИЧНИ КОНСИЈЕРЖ' : 'PERSONAL CONCIERGE'}
+           </p>
+           <h2 className="text-4xl font-serif text-brand-charcoal tracking-tighter font-extrabold">
+             {language === 'sr' ? 'Мој Планер Догађаја' : 'My Event Planner'}
+           </h2>
         </div>
       </header>
 
       {scheduledItems.length === 0 ? (
         <div className="py-2">
-          <div className="relative overflow-hidden rounded-2xl border border-border-main/20 bg-transparent p-6 sm:p-8 text-center my-2">
+          <div className="relative overflow-hidden rounded-[28px] border border-white/15 bg-[#1C2018] p-8 sm:p-10 text-center my-2 shadow-2xl">
             {/* Minimalist Serbia Journey Route Motif (Faint decorative route line) */}
-            <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-15 select-none overflow-hidden">
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-10 select-none overflow-hidden">
               <svg width="340" height="180" viewBox="0 0 340 180" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full max-w-md">
                 {/* Smooth route path */}
                 <path 
                   d="M 30 140 C 90 140, 100 40, 170 80 C 240 120, 260 30, 310 50" 
-                  stroke="#800020" 
+                  stroke="#FFFFFF" 
                   strokeWidth="1.5" 
                   strokeDasharray="4 4" 
                   strokeLinecap="round" 
                   fill="none" 
-                  className="opacity-50"
+                  className="opacity-60"
                 />
-                {/* Waypoint 1 */}
-                <circle cx="30" cy="140" r="4" fill="#1E2E20" className="opacity-70" />
-                <circle cx="30" cy="140" r="8" stroke="#1E2E20" strokeWidth="1" fill="none" className="opacity-40" />
-                {/* Waypoint 2 */}
-                <circle cx="120" cy="60" r="3.5" fill="#800020" className="opacity-80" />
-                {/* Waypoint 3 */}
-                <circle cx="210" cy="100" r="3.5" fill="#1E2E20" className="opacity-70" />
-                {/* Waypoint 4 */}
-                <circle cx="310" cy="50" r="4" fill="#800020" className="opacity-90" />
-                <circle cx="310" cy="50" r="8" stroke="#800020" strokeWidth="1" fill="none" className="opacity-50" />
+                {/* Waypoints */}
+                <circle cx="30" cy="140" r="4" fill="#FFFFFF" className="opacity-80" />
+                <circle cx="30" cy="140" r="8" stroke="#FFFFFF" strokeWidth="1" fill="none" className="opacity-40" />
+                <circle cx="120" cy="60" r="3.5" fill="#FFFFFF" className="opacity-80" />
+                <circle cx="210" cy="100" r="3.5" fill="#FFFFFF" className="opacity-80" />
+                <circle cx="310" cy="50" r="4" fill="#FFFFFF" className="opacity-90" />
+                <circle cx="310" cy="50" r="8" stroke="#FFFFFF" strokeWidth="1" fill="none" className="opacity-50" />
               </svg>
             </div>
 
-            <div className="relative z-10 space-y-4 max-w-md mx-auto">
-              <div className="w-11 h-11 rounded-full bg-brand-sand/40 border border-border-main/30 flex items-center justify-center mx-auto text-accent-red shadow-2xs mb-1">
-                <Compass size={20} className="text-accent-red" />
+            <div className="relative z-10 space-y-5 max-w-md mx-auto">
+              <div className="w-12 h-12 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mx-auto text-white shadow-inner mb-2">
+                <Compass size={22} className="text-white" />
               </div>
 
-              <h3 className="text-sm sm:text-base font-serif font-black text-brand-charcoal tracking-tight uppercase px-2">
+              <h3 className="text-base sm:text-lg font-serif font-black text-white tracking-tight uppercase px-2 leading-snug">
                 {t.empty_plan_headline || 'YOUR SERBIA JOURNEY STARTS HERE'}
               </h3>
 
-              <p className="text-[13.5px] sm:text-[14.5px] text-brand-charcoal/85 leading-relaxed max-w-sm sm:max-w-md mx-auto font-normal">
+              <p className="text-[13.5px] sm:text-[14.5px] text-white/80 leading-relaxed max-w-sm sm:max-w-md mx-auto font-normal">
                 {t.empty_plan_sub || 'Save what inspires you and build your journey. Tell us what you need, IDEMO finds the best-matched partner, and you connect directly.'}
               </p>
 
               <div className="pt-1 pb-1">
-                <span className="inline-block text-[9px] font-black uppercase tracking-[0.2em] text-accent-teal bg-accent-teal/8 px-4 py-1.5 rounded-full border border-accent-teal/20">
+                <span className="inline-block text-[9.5px] font-black uppercase tracking-[0.2em] text-white/90 bg-white/10 px-5 py-2 rounded-full border border-white/20">
                   {t.journey_cues || '2–3 HOURS · HALF DAY · FULL DAY'}
                 </span>
               </div>
 
-              <div className="pt-1">
+              <div className="pt-2">
                 <button 
                   onClick={onExplore}
-                  className="text-[9.5px] uppercase tracking-[0.22em] font-black text-white bg-accent-red hover:bg-accent-red/90 px-7 py-3 rounded-full active:scale-95 transition-all cursor-pointer shadow-xs border border-accent-red/20 inline-flex items-center gap-2"
+                  className="text-[10px] uppercase tracking-[0.25em] font-black text-white bg-transparent hover:bg-white/10 border-2 border-white/40 px-8 py-3.5 rounded-full active:scale-95 transition-all cursor-pointer inline-flex items-center gap-2"
                 >
-                  <span>{t.start_exploring}</span>
+                  <span>{t.start_exploring ? t.start_exploring.toUpperCase() : 'START EXPLORING'}</span>
                 </button>
               </div>
             </div>
@@ -9061,7 +9326,7 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
                           </div>
                         </div>
 
-                        {/* Travel Horizon Calendar */}
+                        {/* Scheduled Travel Calendar */}
                         <div className="bg-white border border-[#E5E3DB] rounded-xl p-3.5 space-y-2">
                           <span className="text-[7.5px] text-[#8C8A7D] uppercase font-bold tracking-widest block border-b border-[#F3F1ED] pb-1">
                             {(ITINERARY_LOCALIZATIONS[language] || ITINERARY_LOCALIZATIONS['en']).calendar_title}
@@ -9226,10 +9491,7 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
                           {modalDownloadLabels[language] || modalDownloadLabels['en']}
                         </button>
                         <button
-                          onClick={() => {
-                            setShowLivePreview(false);
-                            setTimeout(() => handlePrintPDF(), 250);
-                          }}
+                          onClick={handlePrintPDF}
                           className="h-11 border border-border-main bg-white hover:bg-[#FAF9F5] text-brand-charcoal rounded-xl text-[8px] font-black uppercase tracking-wider active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                         >
                           <Printer size={11} className="text-[#8C8A7D]" />
@@ -9760,8 +10022,8 @@ function ExploreScreen({
                 setSelectedAreaId(null);
                 triggerHaptic(10);
               }}
-              className={`flex-1 py-1.5 text-[12px] uppercase tracking-widest font-black rounded-xl transition-all cursor-pointer h-[40px] flex items-center justify-center ${
-                exploreMode === 'categories' ? 'bg-white text-brand-charcoal shadow-sm border border-border-main/20' : 'text-[#5C5A4D]'
+              className={`flex-1 py-1.5 text-[12px] uppercase tracking-widest font-black rounded-xl transition-all cursor-pointer h-[40px] flex items-center justify-center active:translate-y-[1px] ${
+                exploreMode === 'categories' ? 'bg-[#800020] text-white shadow-sm border border-[#800020]' : 'text-[#5C5A4D] hover:text-brand-charcoal'
               }`}
             >
               {t.categories_label}
@@ -9772,11 +10034,11 @@ function ExploreScreen({
                 setSelectedCategory(null);
                 triggerHaptic(10);
               }}
-              className={`flex-1 py-1.5 text-[12px] uppercase tracking-widest font-black rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer h-[40px] ${
-                exploreMode === 'areas' ? 'bg-white text-brand-charcoal shadow-sm border border-[#D5D3C8] border-opacity-30' : 'text-[#5C5A4D]'
+              className={`flex-1 py-1.5 text-[12px] uppercase tracking-widest font-black rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer h-[40px] active:translate-y-[1px] ${
+                exploreMode === 'areas' ? 'bg-[#800020] text-white shadow-sm border border-[#800020]' : 'text-[#5C5A4D] hover:text-brand-charcoal'
               }`}
             >
-              <Compass size={13} className="text-accent-red" />
+              <Compass size={13} className={exploreMode === 'areas' ? 'text-white' : 'text-accent-red'} />
               {t.areas_label}
             </button>
           </div>
@@ -9786,13 +10048,13 @@ function ExploreScreen({
               setVibeFilterOpen(!vibeFilterOpen);
               triggerHaptic(10);
             }}
-            className={`h-13 px-4 rounded-2xl border transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-95 min-w-[50px] ${
+            className={`h-13 px-4 rounded-2xl border transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:translate-y-[1px] active:shadow-none min-w-[50px] ${
               vibeFilterOpen || selectedVibes.length > 0
-                ? 'bg-accent-red/10 border-accent-red/40 text-accent-red font-black'
+                ? 'bg-[#800020] border-[#800020] text-white font-black'
                 : 'bg-white border-[#C2C0B5] text-brand-charcoal hover:bg-brand-pearl'
             }`}
           >
-            <Heart size={14} fill={selectedVibes.length > 0 ? '#8A1F1F' : 'none'} className="text-accent-red transition-all duration-300" />
+            <Heart size={14} fill={(vibeFilterOpen || selectedVibes.length > 0) ? '#FFFFFF' : 'none'} className={(vibeFilterOpen || selectedVibes.length > 0) ? 'text-white' : 'text-accent-red'} />
             <span className="text-[12px] uppercase tracking-wider font-extrabold whitespace-nowrap">
               {t.vibe_label}
               {selectedVibes.length > 0 && ` (${selectedVibes.length})`}
@@ -9819,7 +10081,7 @@ function ExploreScreen({
                         setSelectedVibes([]);
                         triggerHaptic(10);
                       }}
-                      className="text-[12px] uppercase tracking-wider font-extrabold text-accent-red hover:underline cursor-pointer min-h-[36px] flex items-center"
+                      className="text-[12px] uppercase tracking-wider font-extrabold text-[#800020] hover:underline cursor-pointer min-h-[36px] flex items-center"
                     >
                       {t.clear_all}
                     </button>
@@ -9832,13 +10094,13 @@ function ExploreScreen({
                       toggleVibeFilter('like');
                       triggerHaptic(10);
                     }}
-                    className={`py-3 px-1.5 rounded-xl border text-center font-bold text-[12px] uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer min-h-[44px] ${
+                    className={`py-3 px-1.5 rounded-xl border text-center font-bold text-[12px] uppercase tracking-wider flex items-center justify-center gap-1.5 active:translate-y-[1px] transition-all cursor-pointer min-h-[44px] ${
                       selectedVibes.includes('like')
-                        ? 'bg-accent-red/10 border-accent-red/40 text-accent-red shadow-sm'
-                        : 'bg-white border-border-main text-[#5C5A4D] hover:bg-brand-pearl hover:text-accent-red'
+                        ? 'bg-[#800020] border-[#800020] text-white shadow-sm'
+                        : 'bg-white border-border-main text-[#5C5A4D] hover:bg-brand-pearl hover:text-[#800020]'
                     }`}
                   >
-                    <Heart size={13} fill={selectedVibes.includes('like') ? '#8A1F1F' : 'none'} className="text-accent-red" />
+                    <Heart size={13} fill={selectedVibes.includes('like') ? '#FFFFFF' : 'none'} className={selectedVibes.includes('like') ? 'text-white' : 'text-accent-red'} />
                     <span>{(FEEDBACK_TRANSLATIONS[language] || FEEDBACK_TRANSLATIONS['en']).perfect}</span>
                   </button>
 
@@ -9847,13 +10109,13 @@ function ExploreScreen({
                       toggleVibeFilter('intrigue');
                       triggerHaptic(10);
                     }}
-                    className={`py-3 px-1.5 rounded-xl border text-center font-bold text-[12px] uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer min-h-[44px] ${
+                    className={`py-3 px-1.5 rounded-xl border text-center font-bold text-[12px] uppercase tracking-wider flex items-center justify-center gap-1.5 active:translate-y-[1px] transition-all cursor-pointer min-h-[44px] ${
                       selectedVibes.includes('intrigue')
-                        ? 'bg-[#EAB308]/10 border-yellow-500/40 text-[#EAB308] shadow-sm'
-                        : 'bg-white border-border-main text-[#5C5A4D] hover:bg-brand-pearl hover:text-[#EAB308]'
+                        ? 'bg-[#800020] border-[#800020] text-white shadow-sm'
+                        : 'bg-white border-border-main text-[#5C5A4D] hover:bg-brand-pearl hover:text-[#800020]'
                     }`}
                   >
-                    <Heart size={13} fill={selectedVibes.includes('intrigue') ? '#EAB308' : 'none'} className="text-[#EAB308]" />
+                    <Heart size={13} fill={selectedVibes.includes('intrigue') ? '#FFFFFF' : 'none'} className={selectedVibes.includes('intrigue') ? 'text-white' : 'text-[#EAB308]'} />
                     <span>{(FEEDBACK_TRANSLATIONS[language] || FEEDBACK_TRANSLATIONS['en']).intrigue}</span>
                   </button>
 
@@ -9862,7 +10124,7 @@ function ExploreScreen({
                       toggleVibeFilter('dislike');
                       triggerHaptic(10);
                     }}
-                    className={`py-3 px-1.5 rounded-xl border text-center font-bold text-[12px] uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer min-h-[44px] ${
+                    className={`py-3 px-1.5 rounded-xl border text-center font-bold text-[12px] uppercase tracking-wider flex items-center justify-center gap-1.5 active:translate-y-[1px] transition-all cursor-pointer min-h-[44px] ${
                       selectedVibes.includes('dislike')
                         ? 'bg-brand-charcoal border-brand-charcoal text-white shadow-sm'
                         : 'bg-white border-border-main text-[#5C5A4D] hover:bg-brand-pearl'
@@ -9885,8 +10147,8 @@ function ExploreScreen({
               setSelectedCategory(null);
               triggerHaptic(10);
             }}
-            className={`px-5 py-3 rounded-full text-[12px] font-black uppercase tracking-widest border transition-all whitespace-nowrap shadow-sm active:scale-95 cursor-pointer min-h-[44px] ${
-              !selectedCategory ? 'bg-brand-charcoal text-white border-brand-charcoal font-bold' : 'bg-white text-[#5C5A4D] border-border-main'
+            className={`px-5 py-3 rounded-full text-[12px] font-black uppercase tracking-widest border transition-all whitespace-nowrap shadow-xs active:translate-y-[1px] cursor-pointer min-h-[44px] ${
+              !selectedCategory ? 'bg-[#800020] text-white border-[#800020] font-bold' : 'bg-white text-[#5C5A4D] border-border-main hover:bg-[#F8F7F2]'
             }`}
           >
             {t.all}
@@ -9903,8 +10165,8 @@ function ExploreScreen({
                   trackCategoryViewSignal(cat.id);
                 }
               }}
-              className={`flex items-center gap-2 px-5 py-3 rounded-full text-[12px] font-black uppercase tracking-widest border transition-all whitespace-nowrap shadow-sm active:scale-95 cursor-pointer min-h-[44px] ${
-                selectedCategory === cat.id ? 'bg-brand-charcoal text-white border-brand-charcoal font-bold' : 'bg-white text-[#5C5A4D] border-border-main'
+              className={`flex items-center gap-2 px-5 py-3 rounded-full text-[12px] font-black uppercase tracking-widest border transition-all whitespace-nowrap shadow-xs active:translate-y-[1px] cursor-pointer min-h-[44px] ${
+                selectedCategory === cat.id ? 'bg-[#800020] text-white border-[#800020] font-bold' : 'bg-white text-[#5C5A4D] border-border-main hover:bg-[#F8F7F2]'
               }`}
             >
               {cat.icon}
@@ -9919,8 +10181,8 @@ function ExploreScreen({
               setSelectedAreaId(null);
               triggerHaptic(10);
             }}
-            className={`px-5 py-3 rounded-full text-[12px] font-black uppercase tracking-widest border transition-all whitespace-nowrap shadow-sm active:scale-95 cursor-pointer min-h-[44px] ${
-              !selectedAreaId ? 'bg-brand-charcoal text-white border-brand-charcoal font-bold' : 'bg-white text-[#5C5A4D] border-border-main'
+            className={`px-5 py-3 rounded-full text-[12px] font-black uppercase tracking-widest border transition-all whitespace-nowrap shadow-xs active:translate-y-[1px] cursor-pointer min-h-[44px] ${
+              !selectedAreaId ? 'bg-[#800020] text-white border-[#800020] font-bold' : 'bg-white text-[#5C5A4D] border-border-main hover:bg-[#F8F7F2]'
             }`}
           >
             {t.all}
@@ -9932,11 +10194,11 @@ function ExploreScreen({
                 setSelectedAreaId(reg.id);
                 triggerHaptic(10);
               }}
-              className={`flex items-center gap-1.5 px-5 py-3 rounded-full text-[12px] font-black uppercase tracking-widest border transition-all whitespace-nowrap shadow-sm active:scale-95 cursor-pointer min-h-[44px] ${
-                selectedAreaId === reg.id ? 'bg-brand-charcoal text-white border-brand-charcoal font-bold' : 'bg-white text-[#5C5A4D] border-border-main'
+              className={`flex items-center gap-1.5 px-5 py-3 rounded-full text-[12px] font-black uppercase tracking-widest border transition-all whitespace-nowrap shadow-xs active:translate-y-[1px] cursor-pointer min-h-[44px] ${
+                selectedAreaId === reg.id ? 'bg-[#800020] text-white border-[#800020] font-bold' : 'bg-white text-[#5C5A4D] border-border-main hover:bg-[#F8F7F2]'
               }`}
             >
-              <span className="text-accent-teal">{reg.icon}</span>
+              <span className={selectedAreaId === reg.id ? 'text-white' : 'text-accent-teal'}>{reg.icon}</span>
               <span>{reg.name[language as keyof typeof reg.name] || reg.name.en}</span>
             </button>
           ))}

@@ -21,7 +21,10 @@ import {
   Sparkles,
   HelpCircle,
   AlertTriangle,
-  X
+  X,
+  User,
+  Clock,
+  Coins
 } from 'lucide-react';
 import { Category, Recommendation } from '../types';
 import { TRANSLATIONS } from '../constants';
@@ -1054,23 +1057,46 @@ export default function ProfileScreen({
         className="flex-1 p-6 pt-10 space-y-6 overflow-y-auto overflow-x-hidden pb-32 no-scrollbar text-brand-charcoal"
         id="profile-view-root"
       >
-      {/* 1. Header with logo and secret Admin long-press trigger */}
-      <div className="flex flex-col mb-4">
-        <div 
-          onMouseDown={handleLogoPressStart}
-          onMouseUp={handleLogoPressEnd}
-          onMouseLeave={handleLogoPressEnd}
-          onTouchStart={handleLogoPressStart}
-          onTouchEnd={handleLogoPressEnd}
-          onClick={handleLogoTap}
-          className="cursor-default select-none pb-2.5 flex items-center border-b border-[#2D3025]/5 mb-2.5 active:opacity-90 transition-opacity"
-          id="admin-logo-trigger"
-        >
-          <span className="font-mono text-[10px] font-black uppercase tracking-[0.45em] text-brand-charcoal">
-            {isSr ? 'IDEMO PROFIL' : isZh ? 'IDEMO 个人主页' : 'IDEMO PROFILE'}
-          </span>
-          <span className="ml-auto w-1.5 h-1.5 rounded-full bg-accent-teal/60"></span>
+      {/* 1. Header with logo, top bar, and profile details */}
+      <div className="flex flex-col mb-4 space-y-3">
+        {/* Top Logo Bar */}
+        <div className="flex items-center justify-between pb-2.5 border-b border-[#2D3025]/10">
+          <div 
+            onMouseDown={handleLogoPressStart}
+            onMouseUp={handleLogoPressEnd}
+            onMouseLeave={handleLogoPressEnd}
+            onTouchStart={handleLogoPressStart}
+            onTouchEnd={handleLogoPressEnd}
+            onClick={handleLogoTap}
+            className="flex flex-col cursor-pointer select-none"
+            id="admin-logo-trigger"
+          >
+            <span className="font-serif text-xl sm:text-2xl font-black uppercase tracking-[0.35em] text-brand-charcoal">
+              I D E M O
+            </span>
+            <span className="font-mono text-[8px] uppercase tracking-[0.3em] text-[#2D3025]/50 font-bold -mt-0.5">
+              TRAVEL DEEPER
+            </span>
+          </div>
+
+          <div className="w-9 h-9 rounded-full border border-[#2D3025]/20 flex items-center justify-center text-brand-charcoal bg-white/60 shadow-2xs">
+            <User size={18} />
+          </div>
         </div>
+
+        {/* Section Title & Subtitle */}
+        <div className="flex items-start justify-between pt-0.5">
+          <span className="font-mono text-xs font-black uppercase tracking-[0.35em] text-brand-charcoal">
+            MY PROFILE
+          </span>
+          <div className="flex items-center gap-1.5 text-right">
+            <Sparkles className="w-3.5 h-3.5 text-[#2D3025]/40 shrink-0" />
+            <span className="font-mono text-[8px] uppercase tracking-[0.15em] text-[#2D3025]/50 font-extrabold max-w-[110px] leading-tight">
+              A MORE MEANINGFUL WORLD
+            </span>
+          </div>
+        </div>
+
         <p className="text-[11px] leading-relaxed text-[#2D3025]/60 font-medium">
           {isSr 
             ? 'Upravljajte Vašim lokalnim putnim profilom, rekalibrišite raspoloženje i pregledajte sačuvana mesta u Beogradu.' 
@@ -1081,12 +1107,34 @@ export default function ProfileScreen({
       </div>
 
       {/* QUESTION 1: How do I feel today? -> Mood Orbit (Hero) */}
-      <section className="bg-brand-pearl rounded-3xl border border-[#2D3025]/10 p-5 space-y-4 shadow-[0_2px_8px_rgba(35,37,30,0.02)]" id="mood-orbit-section">
-        <div className="flex items-center gap-2">
-          <Sparkles className="text-accent-teal w-4 h-4" />
-          <h2 className="text-xs uppercase tracking-[0.25em] font-black text-brand-charcoal">
-            {isSr ? 'KAKO SE DANAS OSEĆATE?' : isZh ? '您今天感觉如何？' : 'HOW DO I FEEL TODAY?'}
-          </h2>
+      <section className="bg-brand-pearl rounded-[28px] border border-[#2D3025]/10 p-5 space-y-4 shadow-[0_2px_8px_rgba(35,37,30,0.02)] relative" id="mood-orbit-section">
+        {/* Card Header Row */}
+        <div className="flex items-start justify-between border-b border-[#2D3025]/10 pb-3">
+          <div className="flex flex-col gap-1 text-left">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="text-accent-teal w-3.5 h-3.5" />
+              <h2 className="text-[10px] uppercase tracking-[0.22em] font-black text-brand-charcoal">
+                {isSr ? 'KAKO SE DANAS OSEĆATE?' : isZh ? '您今天感觉如何？' : 'HOW DO I FEEL TODAY?'}
+              </h2>
+            </div>
+            <span className="font-serif text-2xl font-black text-brand-charcoal tracking-tight">
+              Mood Orbit™
+            </span>
+          </div>
+
+          <div className="flex flex-col items-end text-right">
+            <span className="text-[8px] uppercase tracking-[0.2em] font-black text-[#2D3025]/50 mb-0.5">
+              {isSr ? 'VAŠ DANAŠNJI VAJB' : isZh ? '您今天的氛围' : 'YOUR MOOD TODAY'}
+            </span>
+            <span className="text-xs sm:text-sm font-serif font-black text-brand-charcoal uppercase tracking-tight max-w-[120px] leading-tight mb-1">
+              {currentArchetype ? (currentArchetype.name[language] || currentArchetype.name.en) : 'BALANCED VOYAGER'}
+            </span>
+            <div className="inline-flex items-center gap-1 bg-[#E0F2F1] border border-[#80CBC4]/40 px-2.5 py-0.5 rounded-full">
+              <span className="text-[8px] font-mono font-black uppercase tracking-wider text-[#00796B]">
+                {isSr ? 'KALIBRISANO' : isZh ? '已校准' : 'CALIBRATED'}
+              </span>
+            </div>
+          </div>
         </div>
         
         <div className="rounded-2xl overflow-hidden bg-white/40 p-2 border border-[#2D3025]/5 shadow-inner">
@@ -1116,10 +1164,41 @@ export default function ProfileScreen({
           />
         </div>
 
-        {/* EXPLICIT MOOD ORBIT COMMIT CONTROL */}
-        <div className="pt-1 flex flex-col items-center gap-2">
+        {/* TIME & BUDGET SUMMARY PILLS */}
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          <div className="bg-white border border-[#2D3025]/10 rounded-full py-2.5 px-4 flex items-center gap-3 shadow-2xs">
+            <div className="w-8 h-8 rounded-full border border-[#2D3025]/15 flex items-center justify-center text-[#2D3025]/70 shrink-0">
+              <Clock size={15} />
+            </div>
+            <div className="flex flex-col text-left">
+              <span className="text-sm font-black text-brand-charcoal leading-none">
+                {time} h
+              </span>
+              <span className="text-[8px] uppercase tracking-wider text-[#2D3025]/50 font-black mt-0.5">
+                {isSr ? 'RASPOLOŽIVO VREME' : isZh ? '可用时间' : 'TIME AVAILABLE'}
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-white border border-[#2D3025]/10 rounded-full py-2.5 px-4 flex items-center gap-3 shadow-2xs">
+            <div className="w-8 h-8 rounded-full border border-[#2D3025]/15 flex items-center justify-center text-[#2D3025]/70 shrink-0">
+              <Coins size={15} />
+            </div>
+            <div className="flex flex-col text-left">
+              <span className="text-sm font-black text-brand-charcoal leading-none">
+                €{Math.round(budget)}
+              </span>
+              <span className="text-[8px] uppercase tracking-wider text-[#2D3025]/50 font-black mt-0.5">
+                {isSr ? 'BUDŽET' : isZh ? '预算上限' : 'BUDGET'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* PRIMARY TEAL COMMIT / SHOW MATCHES CONTROL */}
+        <div className="pt-2 flex flex-col items-center gap-2">
           <button
-            id="apply-mood-orbit-btn"
+            id="show-my-matches-btn"
             onClick={() => {
               if (onOrbitChange) {
                 onOrbitChange(orbitX, orbitY, budget, time);
@@ -1127,12 +1206,16 @@ export default function ProfileScreen({
 
               setAppliedToast(true);
               playHaptic(10);
-              setTimeout(() => setAppliedToast(false), 2500);
+              if (onNavigate) {
+                onNavigate('explore');
+              } else {
+                setTimeout(() => setAppliedToast(false), 2500);
+              }
             }}
             className={`w-full py-3.5 px-4 rounded-xl font-mono text-xs uppercase tracking-[0.2em] font-black transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer select-none active:scale-[0.98] ${
               appliedToast
                 ? 'bg-emerald-600 text-white border border-emerald-500 shadow-emerald-600/30'
-                : 'bg-brand-charcoal text-white hover:bg-black border border-white/10 shadow-brand-charcoal/20'
+                : 'bg-accent-teal text-white hover:bg-accent-teal/90 border border-teal-500/30 shadow-accent-teal/20'
             }`}
           >
             {appliedToast ? (
@@ -1142,8 +1225,8 @@ export default function ProfileScreen({
               </>
             ) : (
               <>
-                <Sparkles className="w-4 h-4 text-accent-teal" />
-                <span>{isSr ? 'PRIMENI MOOD ORBITU' : isZh ? '应用 MOOD ORBIT' : 'APPLY MOOD ORBIT'}</span>
+                <span>{isSr ? 'PRIKAŽI MOJE PREPORUKE' : isZh ? '显示我的专属推荐' : 'SHOW MY MATCHES'}</span>
+                <span className="text-base">&rarr;</span>
               </>
             )}
           </button>
@@ -1273,7 +1356,7 @@ export default function ProfileScreen({
             className={`w-full h-11 rounded-xl flex items-center justify-center gap-2 font-bold tracking-widest uppercase text-[10px] transition-all border shadow-sm cursor-pointer ${
               refineOpen
                 ? 'bg-[#FAF9F5] border-[#2D3025]/20 text-brand-charcoal hover:bg-[#F5F4EE]'
-                : 'bg-accent-teal text-white border-accent-teal hover:bg-accent-teal/95 active:scale-95'
+                : 'bg-[#800020] text-white border-[#800020] hover:bg-[#660019] active:scale-95'
             }`}
           >
             <Sliders size={14} />
@@ -1359,9 +1442,9 @@ export default function ProfileScreen({
                           <button
                             key={catObj.id}
                             onClick={() => toggleCat(catObj.id)}
-                            className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase transition-all border cursor-pointer flex items-center gap-1 ${
+                            className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase transition-all border cursor-pointer flex items-center gap-1 active:translate-y-[1px] ${
                               active 
-                                ? 'bg-accent-teal text-white border-accent-teal shadow-xs' 
+                                ? 'bg-[#800020] text-white border-[#800020] shadow-xs' 
                                 : 'bg-white/40 border-[#2D3025]/10 text-brand-charcoal/70 hover:bg-white/60'
                             }`}
                           >
@@ -1458,9 +1541,9 @@ export default function ProfileScreen({
                               setDays(dayOpt);
                               playHaptic(8);
                             }}
-                            className={`h-9 rounded-xl text-[10px] font-black uppercase transition-all border cursor-pointer ${
+                            className={`h-9 rounded-xl text-[10px] font-black uppercase transition-all border cursor-pointer active:translate-y-[1px] ${
                               active 
-                                ? 'bg-[#2D3025] text-brand-pearl border-[#2D3025] shadow-sm' 
+                                ? 'bg-[#800020] text-white border-[#800020] shadow-xs' 
                                 : 'bg-white/40 border-[#2D3025]/10 text-brand-charcoal/60 hover:bg-white/60'
                             }`}
                           >
@@ -1491,9 +1574,9 @@ export default function ProfileScreen({
                               setTimeOfDay(tOpt);
                               playHaptic(8);
                             }}
-                            className={`h-9 rounded-xl text-[10px] font-black uppercase transition-all border cursor-pointer ${
+                            className={`h-9 rounded-xl text-[10px] font-black uppercase transition-all border cursor-pointer active:translate-y-[1px] ${
                               active 
-                                ? 'bg-[#2D3025] text-brand-pearl border-[#2D3025] shadow-sm' 
+                                ? 'bg-[#800020] text-white border-[#800020] shadow-xs' 
                                 : 'bg-white/40 border-[#2D3025]/10 text-brand-charcoal/60 hover:bg-white/60'
                             }`}
                           >

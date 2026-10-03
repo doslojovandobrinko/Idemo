@@ -41,6 +41,8 @@ import { INITIAL_RECOMMENDATIONS } from '../../constants';
 import { draftExpansionPool } from '../../data/recommendations/serbia/draft_expansion';
 import { PARTNERS as PARTNERS_DATABASE } from '../../data/partners';
 import { StudioTab } from './types';
+import { CuratorReviewSection } from './CuratorReviewSection';
+import { saveLocalStudioDraft } from '../../lib/recommendationWorkflowService';
 import { 
   fetchPartnerProfileReviewQueue, 
   adminReviewPartnerProfile, 
@@ -1405,9 +1407,11 @@ export function StudioEditorialReview({
                     <span className="font-mono text-xs font-bold text-[#1E2E20]">
                       6-LANGUAGE SIDE-BY-SIDE LOCALIZATION WORKSPACE
                     </span>
-                    <span className="text-[10px] font-mono text-[#8C8A7D]">
-                      EN, SR, DE, RU, ES, ZH Baseline
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-mono text-[#8C8A7D]">
+                        EN, SR, DE, RU, ES, ZH Baseline
+                      </span>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 gap-4">
@@ -1584,33 +1588,28 @@ export function StudioEditorialReview({
                 <div className="space-y-4 font-mono text-xs">
                   <div className="flex items-center justify-between border-b border-[#E5E3DB] pb-2">
                     <span className="font-bold text-[#1E2E20]">
-                      DESTINATION PACKAGE INCLUSION & PUBLICATION STATUS
+                      DESTINATION PACKAGE INCLUSION & PUBLICATION GOVERNANCE
                     </span>
                     <span className="text-[#8C8A7D] text-[10px]">
-                      Serbia Baseline v2
+                      IDEMO 007 V2 Curator Authority
                     </span>
                   </div>
 
-                  <div className="p-5 bg-[#FAF9F5] border border-[#E5E3DB] rounded-2xl space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span>Destination Package Snapshot:</span>
-                      <strong className="text-[#2E7D32]">Included in serbia-concierge-v1.2.0.pkg</strong>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span>Publication Eligibility Gate:</span>
-                      <span className={`px-2.5 py-0.5 rounded-md font-bold uppercase ${
-                        healthMetrics.publicationReady ? 'bg-[#E8F5E9] text-[#2E7D32]' : 'bg-[#FFF8E1] text-[#F57F17]'
-                      }`}>
-                        {healthMetrics.publicationReady ? 'APPROVED FOR RELEASE' : 'NEEDS EDITORIAL VERIFICATION'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span>Affected Destinations:</span>
-                      <strong className="text-[#1E2E20]">Serbia (Belgrade, Novi Sad, Niš, Zlatibor)</strong>
-                    </div>
-                  </div>
+                  <CuratorReviewSection
+                    recommendation={activeRec}
+                    onUpdateCuratorDecision={(override, finalDecision) => {
+                      const updatedRec = {
+                        ...activeRec,
+                        curatorOverride: override,
+                        finalPublicationDecision: finalDecision,
+                        publicationStatus: finalDecision.finalPublishable ? 'PUBLISHED' : 'NEEDS_EDITORIAL_IMPROVEMENT',
+                      };
+                      saveLocalStudioDraft(updatedRec as Recommendation);
+                      if (onAddCustomRecommendation) {
+                        onAddCustomRecommendation(updatedRec as Recommendation);
+                      }
+                    }}
+                  />
                 </div>
               )}
 
@@ -1718,6 +1717,7 @@ export function StudioEditorialReview({
           </div>
         </div>
       )}
+
     </div>
   );
 }

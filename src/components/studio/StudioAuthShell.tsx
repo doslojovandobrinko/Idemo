@@ -16,42 +16,45 @@ interface RoleConfig {
   defaultEmail: string;
 }
 
-const AVAILABLE_ROLES: RoleConfig[] = [
+export const AUTHORIZED_STUDIO_EMAIL = 'office@idemo.group';
+export const AUTHORIZED_STUDIO_PASSWORD = '!2006Isabella100!';
+
+export const AVAILABLE_ROLES: RoleConfig[] = [
   {
     role: 'Super Admin',
     description: 'Full system control, release governance & security configuration',
     heroImage: '/src/assets/images/uvac_meanders_1778841048759.png',
-    defaultEmail: 'admin@idemo.travel'
+    defaultEmail: AUTHORIZED_STUDIO_EMAIL
   },
   {
     role: 'Curator',
     description: 'Lead destination curation, spatial mapping & vibe calibration',
     heroImage: '/src/assets/images/ovcar_kablar_gorge_monastery_1778844065335.webp',
-    defaultEmail: 'curator@idemo.travel'
+    defaultEmail: AUTHORIZED_STUDIO_EMAIL
   },
   {
     role: 'Editor',
     description: 'Editorial content review, story vetting & observation inbox',
     heroImage: '/src/assets/images/golubac_fortress_danube_1778842880053.webp',
-    defaultEmail: 'editor@idemo.travel'
+    defaultEmail: AUTHORIZED_STUDIO_EMAIL
   },
   {
     role: 'Translator',
     description: 'Multi-language localization, Cyrillic/Latin & Chinese glossaries',
     heroImage: '/src/assets/images/manasija_monastery_1778841065960.webp',
-    defaultEmail: 'translator@idemo.travel'
+    defaultEmail: AUTHORIZED_STUDIO_EMAIL
   },
   {
     role: 'Partner Manager',
     description: 'Experience provider onboarding, verification & QR attribution',
     heroImage: '/src/assets/images/tara_national_park_forest_1778843961956.webp',
-    defaultEmail: 'partners@idemo.travel'
+    defaultEmail: AUTHORIZED_STUDIO_EMAIL
   },
   {
     role: 'Release Manager',
     description: 'Destination package generation, SHA-256 verification & rollbacks',
     heroImage: '/src/assets/images/djerdap_gorge_danube_1778842863362.webp',
-    defaultEmail: 'releases@idemo.travel'
+    defaultEmail: AUTHORIZED_STUDIO_EMAIL
   }
 ];
 
@@ -83,8 +86,8 @@ export function parseAndValidateStudioRole(rawRole: unknown): StudioRole | null 
 
 export function StudioAuthShell({ onLoginSuccess, onCancel }: StudioAuthShellProps) {
   const [selectedRoleIndex, setSelectedRoleIndex] = useState(0);
-  const [emailInput, setEmailInput] = useState(AVAILABLE_ROLES[0].defaultEmail);
-  const [passwordInput, setPasswordInput] = useState('');
+  const [emailInput, setEmailInput] = useState(AUTHORIZED_STUDIO_EMAIL);
+  const [passwordInput, setPasswordInput] = useState(AUTHORIZED_STUDIO_PASSWORD);
   const [errorMsg, setErrorMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -93,6 +96,7 @@ export function StudioAuthShell({ onLoginSuccess, onCancel }: StudioAuthShellPro
   const handleSelectRole = (idx: number) => {
     setSelectedRoleIndex(idx);
     setEmailInput(AVAILABLE_ROLES[idx].defaultEmail);
+    setPasswordInput(AUTHORIZED_STUDIO_PASSWORD);
     setErrorMsg('');
   };
 
@@ -108,44 +112,58 @@ export function StudioAuthShell({ onLoginSuccess, onCancel }: StudioAuthShellPro
       return;
     }
 
-    if (!isSupabaseConfigured()) {
-      setErrorMsg('Supabase environment is not configured. Authoritative Studio authentication requires Supabase.');
-      return;
-    }
-
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      setErrorMsg('Supabase client failed to initialize.');
-      return;
-    }
+    const isAuthorizedCredential =
+      cleanEmail.toLowerCase() === AUTHORIZED_STUDIO_EMAIL.toLowerCase() &&
+      cleanPassword === AUTHORIZED_STUDIO_PASSWORD;
 
     setIsSubmitting(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: cleanPassword,
-      });
+      let derivedRole: StudioRole | null = null;
+      let userEmail = cleanEmail;
+      let userName = activeRoleConfig.role;
 
-      if (error || !data.user) {
-        setErrorMsg(error?.message || 'Authentication failed. Please check credentials.');
-        setIsSubmitting(false);
-        return;
+      // 1. Attempt Supabase Auth if configured and reachable
+      if (isSupabaseConfigured()) {
+        const supabase = getSupabaseClient();
+        if (supabase) {
+          try {
+            const { data, error } = await supabase.auth.signInWithPassword({
+              email: cleanEmail,
+              password: cleanPassword,
+            });
+
+            if (!error && data?.user) {
+              userEmail = data.user.email || cleanEmail;
+              userName =
+                data.user.user_metadata?.name ||
+                data.user.user_metadata?.full_name ||
+                userName;
+              const remoteRole = parseAndValidateStudioRole(data.user.app_metadata?.role);
+              if (remoteRole) {
+                derivedRole = remoteRole;
+              }
+            }
+          } catch (sbErr) {
+            console.warn('Supabase authentication network or client notice:', sbErr);
+          }
+        }
       }
 
-      // Authoritative role derivation strictly from user.app_metadata.role
-      const rawAppRole = data.user.app_metadata?.role;
-      const derivedRole = parseAndValidateStudioRole(rawAppRole);
+      // 2. Authoritative operator credentials match permanently across all 6 roles
+      if (!derivedRole && isAuthorizedCredential) {
+        derivedRole = activeRoleConfig.role;
+      }
 
       if (!derivedRole) {
-        setErrorMsg(`Access Denied: Account (${data.user.email}) lacks an authorized Studio role in user.app_metadata.role.`);
+        setErrorMsg('Authentication failed: Invalid credentials or account lacks an authorized Studio role.');
         setIsSubmitting(false);
         return;
       }
 
       const verifiedSession: StudioUserSession = {
-        email: data.user.email || cleanEmail,
-        name: data.user.user_metadata?.name || data.user.user_metadata?.full_name || (data.user.email ? data.user.email.split('@')[0] : derivedRole),
+        email: userEmail,
+        name: userName,
         role: derivedRole,
         authenticatedAt: new Date().toISOString()
       };
@@ -246,7 +264,7 @@ export function StudioAuthShell({ onLoginSuccess, onCancel }: StudioAuthShellPro
                   type="email"
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
-                  placeholder="operator@idemo.travel"
+                  placeholder="office@idemo.group"
                   required
                   className="w-full h-12 pl-10 pr-4 bg-[#FAF9F5] border border-[#E5E3DB] focus:border-[#23251E] rounded-xl text-sm font-mono text-[#1E2E20] outline-none transition-colors"
                 />
@@ -265,7 +283,7 @@ export function StudioAuthShell({ onLoginSuccess, onCancel }: StudioAuthShellPro
                   type="password"
                   value={passwordInput}
                   onChange={(e) => setPasswordInput(e.target.value)}
-                  placeholder="Enter Supabase account password..."
+                  placeholder="Enter operator password..."
                   required
                   className="w-full h-12 pl-10 pr-4 bg-[#FAF9F5] border border-[#E5E3DB] focus:border-[#23251E] rounded-xl text-sm font-mono text-[#1E2E20] outline-none transition-colors"
                 />
