@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Compass, Sparkles, Sliders, Shield, Zap, Info, ChevronLeft, ChevronRight, Check, Clock, Coins, Target } from 'lucide-react';
+import { Compass, Sparkles, Sliders, Shield, Zap, Info, ChevronLeft, ChevronRight, Check, Clock, Coins, Target, Building2, TreePine, Wine, Footprints } from 'lucide-react';
 import { safeStorage } from '../lib/safeStorage';
+import { ONBOARDING_TRANSLATIONS } from './OnboardingOverlay';
 
 export interface MoodOrbitProps {
   /**
@@ -24,6 +25,10 @@ export interface MoodOrbitProps {
    * Range [4, 48].
    */
   time?: number;
+  /**
+   * Active interaction mode: 'move' (Mood), 'resize' (Budget), or 'rotate' (Time).
+   */
+  activeMode?: 'move' | 'resize' | 'rotate';
   /**
    * Callback fired when any of the parameters change.
    */
@@ -82,6 +87,7 @@ export default function MoodOrbit({
   y: propY = 0.5,
   budget: propBudget = 100,
   time: propTime = 24,
+  activeMode,
   onChange,
   onHaptic,
   language = 'en',
@@ -94,10 +100,10 @@ export default function MoodOrbit({
   const [localY, setLocalY] = useState(propY);
   const [localBudget, setLocalBudget] = useState(propBudget);
   const [localTime, setLocalTime] = useState(propTime);
-  const [learnOpen, setLearnOpen] = useState(false);
 
   const isSr = language === 'sr';
   const isZh = language === 'zh';
+  const onboardingCard0 = (ONBOARDING_TRANSLATIONS[language] || ONBOARDING_TRANSLATIONS.en).cards[0];
 
   // Gestures active tracking
   const [activeGesture, setActiveGesture] = useState<'position' | 'budget' | 'time' | null>(null);
@@ -121,7 +127,6 @@ export default function MoodOrbit({
         dragEndingTimeoutRef.current = null;
       }
     } else {
-      // Cooldown buffer lets parent components safely stabilize without triggering a snap-back
       dragEndingTimeoutRef.current = setTimeout(() => {
         isDraggingRef.current = false;
       }, 800);
@@ -133,10 +138,8 @@ export default function MoodOrbit({
     };
   }, [activeGesture]);
 
-  // Handle external prop changes (like presets/category button clicks) while completely ignoring self-induced drag feedback
+  // Handle external prop changes while completely ignoring self-induced drag feedback
   useEffect(() => {
-    // If the user was recently dragging, absorb the incoming changes as synchronized but do NOT override
-    // the precise, high-fidelity continuous local coordinates with discrete parent averages
     if (isDraggingRef.current) {
       lastSyncedPropX.current = propX;
       lastSyncedPropY.current = propY;
@@ -170,34 +173,11 @@ export default function MoodOrbit({
     }
   }, [propX, propY, propBudget, propTime]);
   
-  // User selected mode that locks down adjustments to one specific control (Position, Budget, or Time)
-  const [selectedMode, setSelectedMode] = useState<'position' | 'budget' | 'time' | null>(null);
-  
   // Accessibility panel toggle
   const [showAccessibility, setShowAccessibility] = useState(false);
-  const [showCorrelationModal, setShowCorrelationModal] = useState(false);
-
-  // Onboarding guide state (auto-shows on first visit, can be manually triggered)
-  const [showOnboarding, setShowOnboarding] = useState(() => {
-    try {
-      return safeStorage.getItem('idemo_mood_orbit_onboarding_seen') !== 'true';
-    } catch {
-      return true;
-    }
-  });
-  const [onboardingStep, setOnboardingStep] = useState<number>(0);
 
   // Long press timer ref for opening accessibility panel
   const longPressTimeout = useRef<NodeJS.Timeout | null>(null);
-
-  // One-time interactive hints dismissed flags (managed via localStorage)
-  const [ringHintDismissed, setRingHintDismissed] = useState(() => {
-    try {
-      return safeStorage.getItem('idemo_time_ring_hint_dismissed') === 'true';
-    } catch {
-      return false;
-    }
-  });
 
   // Reference elements for pointer tracker relative calculations
   const fieldRef = useRef<HTMLDivElement>(null);
@@ -399,20 +379,41 @@ export default function MoodOrbit({
     return Math.pow((b - 100) / 400, 1 / 1.5);
   };
 
-  // Orb Diameter based on budget size
+  // Orb Diameter based on budget size - doubled maximum rendered diameter on Profile
   const orbDiameter = useMemo(() => {
-    // Starting default size at 100 euro is 85px.
-    // Double size at 500 euro is 170px.
-    const startD = 85; 
-    const ratio = (localBudget - 100) / 400; // ranges from 0.0 to 1.0
-    return startD * (1 + ratio);
+    const ratio = (localBudget - 100) / 400;
+    // Preserves 68px minimum at €100, reaching 212px at €500 (doubled from previous 106px maximum)
+    return Math.max(68, 68 + ratio * 144);
   }, [localBudget]);
 
-  // Multi-bezel metallic ring thickness scales subtly with budget
+  // Titanium outer bezel width matching Intro Card 1
   const outerBezelWidth = useMemo(() => {
-    const s = computeSFromBudget(localBudget);
-    return 8 + s * 6; // Thicker ring as budget expands
+    const ratio = (localBudget - 100) / 400;
+    return 8 + ratio * 4;
   }, [localBudget]);
+
+  // Measure field width for safe visual boundary clamping without mutating normalized mood coordinates
+  const [fieldWidth, setFieldWidth] = useState(340);
+  useEffect(() => {
+    if (!fieldRef.current) return;
+    const updateWidth = () => {
+      if (fieldRef.current) {
+        const w = fieldRef.current.getBoundingClientRect().width;
+        if (w > 0) setFieldWidth(w);
+      }
+    };
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
+
+  // Visual boundary handling: keep the orb strictly within the field at every permitted size and position,
+  // without mutating the underlying normalized mood coordinates (localX, localY).
+  const visualMargin = (orbDiameter / 2 + 2) / (fieldWidth || 340);
+  const visualMin = Math.min(0.5, visualMargin);
+  const visualMax = Math.max(0.5, 1 - visualMargin);
+  const visualX = Math.max(visualMin, Math.min(visualMax, localX));
+  const visualY = Math.max(visualMin, Math.min(visualMax, localY));
 
   // Synchronize time value directly to polar angle coordinates
   const computeAngleFromTime = (time: number) => {
@@ -607,13 +608,6 @@ export default function MoodOrbit({
       startAngle: initialAngle,
       startTime: localTime
     };
-
-    if (!ringHintDismissed) {
-      try {
-        safeStorage.setItem('idemo_time_ring_hint_dismissed', 'true');
-      } catch {}
-      setRingHintDismissed(true);
-    }
   };
 
   // Pointer movement tracking loop
@@ -646,19 +640,22 @@ export default function MoodOrbit({
         if (Math.abs(computedY - 0.5) < 0.035) computedY = 0.5;
 
         // Elastic overscroll simulation: resist dragging beyond standard boundaries [0.08, 0.92]
+        const minBound = 0.08;
+        const maxBound = 0.92;
+
         let finalX = computedX;
         let finalY = computedY;
 
-        if (computedX < 0.08) {
-          finalX = 0.08 - (0.08 - computedX) * 0.35; // compressive resistance
-        } else if (computedX > 0.92) {
-          finalX = 0.92 + (computedX - 0.92) * 0.35;
+        if (computedX < minBound) {
+          finalX = minBound - (minBound - computedX) * 0.35; // compressive resistance
+        } else if (computedX > maxBound) {
+          finalX = maxBound + (computedX - maxBound) * 0.35;
         }
 
-        if (computedY < 0.08) {
-          finalY = 0.08 - (0.08 - computedY) * 0.35;
-        } else if (computedY > 0.92) {
-          finalY = 0.92 + (computedY - 0.92) * 0.35;
+        if (computedY < minBound) {
+          finalY = minBound - (minBound - computedY) * 0.35;
+        } else if (computedY > maxBound) {
+          finalY = maxBound + (computedY - maxBound) * 0.35;
         }
 
         setLocalX(finalX);
@@ -666,8 +663,8 @@ export default function MoodOrbit({
         triggerHapticProxy(4);
 
         // Clip actual trigger values so background remains calibrated
-        const triggerX = Math.min(0.92, Math.max(0.08, finalX));
-        const triggerY = Math.min(0.92, Math.max(0.08, finalY));
+        const triggerX = Math.min(maxBound, Math.max(minBound, finalX));
+        const triggerY = Math.min(maxBound, Math.max(minBound, finalY));
         if (onChange) onChange(triggerX, triggerY, localBudget, localTime);
       }
 
@@ -803,201 +800,15 @@ export default function MoodOrbit({
   };
 
   return (
-    <div className="w-full max-w-md mx-auto bg-white border border-[#D5D3C8] rounded-[32px] p-6 shadow-tactile text-left select-none relative overflow-hidden flex flex-col gap-4">
-      {/* Premium ambient backdrop shading */}
-      <div className="absolute inset-0 bg-radial-gradient from-[#FAF9F5] to-transparent pointer-events-none opacity-40" />
-
-      {/* Premium Bezel Design Header */}
-      <div className="flex justify-between items-start z-10 relative">
-        <div className="space-y-0.5">
-          <h3 className="text-xl font-serif text-brand-charcoal font-black tracking-tight">{t.title}</h3>
-        </div>
-      </div>
-
-      {/* TODAY'S CONCIERGE box placed above Learn Mood Orbit box */}
-      <div 
-        onClick={() => {
-          if (onSelectConcierge) {
-            onSelectConcierge();
-          } else {
-            setShowCorrelationModal(true);
-          }
-          triggerHapticProxy(6);
-        }}
-        className="bg-white rounded-[24px] border border-[#D5D3C8] p-4.5 shadow-xs text-left relative overflow-hidden cursor-pointer hover:border-accent-teal/30 active:scale-[0.99] transition-all group z-10 w-full"
-      >
-        <div className="absolute -right-12 -top-12 w-28 h-28 rounded-full bg-accent-teal/5 blur-xl pointer-events-none" />
-        
-        <div className="flex justify-between items-center">
-          <div className="space-y-0.5">
-            <p className="text-[9px] uppercase tracking-[0.25em] text-accent-teal font-extrabold flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent-teal animate-pulse" />
-              <span>{language === 'sr' ? 'DANAŠNJI KONSJERŽ' : language === 'zh' ? '今日专属管家' : language === 'es' ? 'EL CONSERJE DE HOY' : language === 'de' ? 'DER HEUTIGE CONCIERGE' : language === 'ru' ? 'СЕГОДНЯŠНИЙ КОНSJERŽ' : "TODAY'S CONCIERGE"}</span>
-              <span className="text-[8px] font-sans font-bold text-accent-teal opacity-0 group-hover:opacity-100 transition-opacity">({language === 'sr' ? 'Saznaj više' : language === 'zh' ? '了解更多' : 'Learn more'})</span>
-            </p>
-            <h3 className="font-serif font-black text-lg text-brand-charcoal tracking-tight group-hover:text-accent-teal transition-colors">
-              {conciergeStyleName || liveInterpretation.tag}
-            </h3>
-          </div>
-          <span className="text-[8.5px] uppercase font-bold bg-accent-teal/10 text-accent-teal px-2.5 py-0.5 rounded-full select-none group-hover:bg-accent-teal/20 transition-colors">
-            {language === 'sr' ? 'Usklađeno' : language === 'zh' ? '已校准' : language === 'es' ? 'Calibrado' : language === 'de' ? 'Kalibriert' : language === 'ru' ? 'Откалиброван' : 'Calibrated'}
-          </span>
-        </div>
-      </div>
-
-      {/* Learn Mood Orbit Collapsible Accordion */}
-      <div className="z-10 relative mt-1">
-        <button
-          onClick={() => {
-            setLearnOpen(!learnOpen);
-            triggerHapticProxy(6);
-          }}
-          className="w-full h-10 rounded-xl flex items-center justify-between px-4 font-bold tracking-widest uppercase text-[9.5px] bg-[#FAF9F5] border border-[#D5D3C8] text-brand-charcoal hover:bg-[#F5F3EB] transition-all cursor-pointer outline-none"
-        >
-          <span className="flex items-center gap-2">
-            <Info size={14} className="text-accent-teal" />
-            <span>{language === 'sr' ? 'Saznajte više o Mood Orbit-u' : language === 'zh' ? '了解情绪星轨仪' : 'Learn Mood Orbit'}</span>
-          </span>
-          <span className="text-lg leading-none">{learnOpen ? '−' : '+'}</span>
-        </button>
-        
-        <AnimatePresence initial={false}>
-          {learnOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0, marginTop: 0 }}
-              animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
-              exit={{ opacity: 0, height: 0, marginTop: 0 }}
-              transition={{ duration: 0.2 }}
-              className="overflow-hidden space-y-4"
-            >
-              {/* 2.5. Mood Flow Copy & Concept visualizer */}
-              <div className="bg-[#FAF9F5]/60 border border-[#D5D3C8]/40 rounded-[24px] p-4 space-y-3 select-none relative overflow-hidden">
-                {/* Decorative light reflection highlight */}
-                <div className="absolute top-0 right-0 w-20 h-20 bg-accent-teal/5 rounded-full blur-xl pointer-events-none" />
-
-                <div className="text-center space-y-1">
-                  <p className="text-[11.5px] font-serif font-black text-brand-charcoal tracking-tight leading-snug">
-                    “{t.heartOfConcierge}”
-                  </p>
-                  <p className="text-[9.5px] font-medium text-brand-charcoal/65 leading-normal max-w-[280px] mx-auto">
-                    {t.alignedToMood}
-                  </p>
-                </div>
-
-                {/* Horizontal Flow visualizer */}
-                <div className="flex items-center justify-between px-1.5 pt-0.5 relative">
-                  {/* Connector Track passing precisely through the center of 32px bubbles */}
-                  <div className="absolute left-8 right-8 top-[16px] h-[1px] bg-gradient-to-r from-accent-teal/30 via-amber-500/30 via-rose-500/30 to-accent-teal/30 pointer-events-none z-0" />
-                  
-                  {/* Step 1: Mood Orbit */}
-                  <div className="flex flex-col items-center space-y-1.5 flex-1 z-10">
-                    <div className="w-8 h-8 rounded-full bg-[#FAF9F5] border border-accent-teal/30 flex items-center justify-center text-accent-teal shadow-xs">
-                      <Compass size={11} className="animate-spin-slow" />
-                    </div>
-                    <span className="text-[7.5px] font-black uppercase tracking-wider text-brand-charcoal/60 text-center leading-none">
-                      {t.flowMoodOrbit}
-                    </span>
-                  </div>
-
-                  {/* Step 2: Live Profile */}
-                  <div className="flex flex-col items-center space-y-1.5 flex-1 z-10">
-                    <div className="w-8 h-8 rounded-full bg-[#FAF9F5] border border-amber-500/30 flex items-center justify-center text-amber-600 shadow-xs">
-                      <Sparkles size={11} />
-                    </div>
-                    <span className="text-[7.5px] font-black uppercase tracking-wider text-brand-charcoal/60 text-center leading-none">
-                      {t.flowLiveProfile}
-                    </span>
-                  </div>
-
-                  {/* Step 3: Recommendations */}
-                  <div className="flex flex-col items-center space-y-1.5 flex-1 z-10">
-                    <div className="w-8 h-8 rounded-full bg-[#FAF9F5] border border-rose-500/30 flex items-center justify-center text-rose-500 shadow-xs">
-                      <Zap size={11} />
-                    </div>
-                    <span className="text-[7.5px] font-black uppercase tracking-wider text-brand-charcoal/60 text-center leading-none">
-                      {t.flowRecommendations}
-                    </span>
-                  </div>
-
-                  {/* Step 4: Itinerary */}
-                  <div className="flex flex-col items-center space-y-1.5 flex-1 z-10">
-                    <div className="w-8 h-8 rounded-full bg-[#FAF9F5] border border-accent-teal/30 flex items-center justify-center text-accent-teal shadow-xs">
-                      <Sliders size={11} />
-                    </div>
-                    <span className="text-[7.5px] font-black uppercase tracking-wider text-brand-charcoal/60 text-center leading-none">
-                      {t.flowItinerary}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Interactive Guide Quick Access Button */}
-              <div>
-                <button
-                  onClick={() => {
-                    setShowOnboarding(true);
-                    setOnboardingStep(0);
-                    triggerHapticProxy(15);
-                  }}
-                  className="w-full py-3 px-4.5 rounded-2xl bg-[#FAF9F5] hover:bg-[#F5F3EB] border-2 border-[#D5D3C8] text-brand-charcoal transition-all flex items-center justify-between text-xs font-bold cursor-pointer group shadow-xs outline-none"
-                >
-                  <span className="font-sans uppercase tracking-[0.2em] text-[10.5px] text-[#5C5A4D] font-black group-hover:text-brand-charcoal transition-colors">
-                    {language === 'sr' ? '> POKRENI INTERAKTIVNI VODIČ' : language === 'zh' ? '> 开启互动指南' : '> START INTERACTIVE GUIDE'}
-                  </span>
-                  <span className="text-[11px] text-[#8C8A7D] font-serif italic group-hover:translate-x-1 transition-transform">
-                    &rarr;
-                  </span>
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* Active Profile Calibration Panel hidden at this moment but preserved as requested */}
-      {false && (
-        <div className="bg-[#FAF9F5] rounded-[24px] border border-[#D5D3C8] p-4.5 space-y-2.5 z-10 select-none">
-          <div className="flex justify-between items-center border-b border-[#D5D3C8]/30 pb-2">
-            <div className="space-y-0.5">
-              <span className="text-[8.5px] uppercase tracking-[0.2em] text-[#8C8A7D] font-black">
-                LIVE PROFILE CALIBRATION
-              </span>
-              <h4 className="font-serif font-black text-base text-brand-charcoal leading-none tracking-tight">
-                {liveInterpretation.tag}
-              </h4>
-            </div>
-            <span className="px-2 py-0.5 rounded bg-brand-charcoal text-white text-[8px] font-black uppercase tracking-widest leading-none">
-              €{Math.round(localBudget)} • {getSnappedTime(localTime)} {language === 'sr' ? 'SATI' : 'HRS'}
-            </span>
-          </div>
-
-          <p className="text-[11px] text-brand-charcoal/85 font-medium leading-relaxed">
-            {liveInterpretation.desc}
-          </p>
-
-          <div className="p-2.5 bg-white border border-[#D5D3C8]/40 rounded-xl space-y-1">
-            <div className="flex items-center gap-1.5">
-              <Shield className="text-emerald-600" style={{ width: 11, height: 11 }} />
-              <p className="text-[9px] font-black uppercase tracking-wider text-emerald-700">
-                {t.privacy}
-              </p>
-            </div>
-            <p className="text-[9px] text-brand-charcoal/70 leading-relaxed font-semibold">
-              {t.privacyDesc}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Primary Coordinate Field Area */}
+    <div className="w-full relative select-none flex flex-col items-center">
+      {/* Primary Coordinate Field Area (Dominant Interactive Canvas) */}
       <div 
         ref={fieldRef}
         onPointerDown={(e) => {
-          // If the user clicks on the field background (not inside the watch orb), and selectedMode is null or position
-          if (e.target === fieldRef.current && (!selectedMode || selectedMode === 'position')) {
+          if (e.target === fieldRef.current) {
             const rect = fieldRef.current.getBoundingClientRect();
-            const clickX = (e.clientX - rect.left) / rect.width;
-            const clickY = (e.clientY - rect.top) / rect.height;
+            const clickX = Math.max(0.08, Math.min(0.92, (e.clientX - rect.left) / rect.width));
+            const clickY = Math.max(0.08, Math.min(0.92, (e.clientY - rect.top) / rect.height));
             
             setLocalX(clickX);
             setLocalY(clickY);
@@ -1020,51 +831,49 @@ export default function MoodOrbit({
             setLocalX(0.5);
             setLocalY(0.5);
             if (onChange) onChange(0.5, 0.5, localBudget, localTime);
-            triggerHapticProxy(25); // Premium reset tactile indicator
+            triggerHapticProxy(25);
           }
         }}
-        className={`w-full aspect-square relative bg-white border border-[#D5D3C8] rounded-[24px] overflow-hidden select-none touch-none cursor-crosshair z-10 transition-all duration-300 ${
-          activeGesture === 'position' ? 'shadow-inner bg-[#FAF9F5]/40 border-rose-500/35' : 'shadow-xs hover:border-[#BEBBB2]'
+        className={`w-full aspect-square max-w-[420px] relative bg-white/80 backdrop-blur-md border border-[#E2DFC2]/80 rounded-[28px] overflow-hidden select-none touch-none shadow-sm mx-auto flex items-center justify-center p-2 cursor-pointer z-10 transition-all duration-300 ${
+          activeGesture === 'position' ? 'shadow-inner bg-[#FAF9F5]/40 border-[#800020]/35' : 'hover:border-[#BEBBB2]'
         }`}
       >
-        {/* Alignment radar reticles */}
+        {/* Subtle Grid Reticles */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-full h-[1px] bg-[#D5D3C8]/45" />
-          <div className="absolute h-full w-[1px] bg-[#D5D3C8]/45" />
+          <div className="w-full h-[1px] bg-[#D5D3C8]/40" />
+          <div className="absolute h-full w-[1px] bg-[#D5D3C8]/40" />
         </div>
 
-        {/* Sensory guide circles */}
-        <div className="absolute inset-8 rounded-full border border-dashed border-[#D5D3C8]/25 pointer-events-none" />
-        <div className="absolute inset-20 rounded-full border border-[#D5D3C8]/15 pointer-events-none" />
+        {/* Compass Axis 1: URBAN (Top) */}
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 flex flex-col items-center text-[9px] font-mono font-bold uppercase tracking-widest text-[#23251E] pointer-events-none z-10">
+          <Building2 size={13} className="text-[#23251E] mb-0.5" />
+          <span>{onboardingCard0.axis_urban}</span>
+        </div>
 
-        {/* Grid Axis Labels (Premium High-Contrast Sun-Readable Scales matching image.png) */}
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#2D3025] select-none pointer-events-none z-10 whitespace-nowrap flex items-center gap-1">
-          <span>{t.axisUrban}</span>
-          <span>↑</span>
+        {/* Compass Axis 2: NATURE (Bottom) */}
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex flex-col items-center text-[9px] font-mono font-bold uppercase tracking-widest text-[#23251E] pointer-events-none z-10">
+          <TreePine size={13} className="text-[#23251E] mb-0.5" />
+          <span>{onboardingCard0.axis_nature}</span>
         </div>
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#2D3025] select-none pointer-events-none z-10 whitespace-nowrap flex items-center gap-1">
-          <span>↓</span>
-          <span>{t.axisNature}</span>
+
+        {/* Compass Axis 3: HEDONIST (Left) */}
+        <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col items-center text-[9px] font-mono font-bold uppercase tracking-widest text-[#23251E] pointer-events-none z-10">
+          <Wine size={13} className="text-[#23251E] mb-0.5" />
+          <span>{onboardingCard0.axis_hedonist}</span>
         </div>
-        <div className="absolute left-1.5 top-1/2 -translate-y-1/2 w-6 h-40 flex items-center justify-center z-10 select-none pointer-events-none">
-          <div className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#2D3025] whitespace-nowrap -rotate-90 flex items-center gap-1">
-            <span>↑</span>
-            <span>{t.axisHedonist}</span>
-          </div>
-        </div>
-        <div className="absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-40 flex items-center justify-center z-10 select-none pointer-events-none">
-          <div className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#2D3025] whitespace-nowrap rotate-90 flex items-center gap-1">
-            <span>{t.axisAdventurer}</span>
-            <span>↑</span>
-          </div>
+
+        {/* Compass Axis 4: ADVENTURER (Right) */}
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center text-[9px] font-mono font-bold uppercase tracking-widest text-[#23251E] pointer-events-none z-10">
+          <Footprints size={13} className="text-[#23251E] mb-0.5" />
+          <span>{onboardingCard0.axis_adventurer}</span>
         </div>
 
         {/* Precision Instrument Center Orb */}
         <motion.div
           ref={orbRef}
           animate={{
-            left: `${localX * 100}%`,
-            top: `${localY * 100}%`,
+            left: `${visualX * 100}%`,
+            top: `${visualY * 100}%`,
             width: orbDiameter,
             height: orbDiameter,
           }}
@@ -1075,28 +884,29 @@ export default function MoodOrbit({
             mass: 0.85
           }}
           style={{
+            position: 'absolute',
             transform: 'translate(-50%, -50%)',
           }}
-          className={`absolute rounded-full flex items-center justify-center select-none pointer-events-auto shadow-2xl border border-white/90 bg-transparent ${
-            activeGesture ? 'shadow-rose-500/20 scale-[1.04]' : 'hover:shadow-xl'
+          className={`z-20 cursor-pointer pointer-events-auto filter drop-shadow-md flex items-center justify-center ${
+            activeGesture ? 'scale-[1.04]' : ''
           }`}
+          onPointerDown={(e) => {
+            if (activeMode === 'resize') {
+              handleBudgetStart(e);
+            } else if (activeMode === 'rotate') {
+              handleTimeStart(e);
+            } else {
+              handlePositionStart(e);
+            }
+          }}
         >
           <svg 
             viewBox="-100 -100 200 200" 
-            onPointerDown={(e) => {
-              if (selectedMode === 'position') {
-                handlePositionStart(e);
-              } else if (selectedMode === 'budget') {
-                handleBudgetStart(e);
-              } else if (selectedMode === 'time') {
-                handleTimeStart(e);
-              }
-            }}
-            className="w-full h-full rounded-full select-none overflow-hidden"
+            className="w-full h-full select-none pointer-events-none overflow-visible"
           >
             <defs>
-              {/* Bezel Metallic Titanium Ring Brushed Stop Gradients */}
-              <linearGradient id="silverBezel" x1="0" y1="0" x2="1" y2="1">
+              {/* Metallic Titanium Outer Ring Bezel */}
+              <linearGradient id="moodOrbBezel" x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0%" stopColor="#FFFFFF" />
                 <stop offset="20%" stopColor="#F4F4F5" />
                 <stop offset="40%" stopColor="#D4D4D8" />
@@ -1107,437 +917,122 @@ export default function MoodOrbit({
                 <stop offset="100%" stopColor="#18181B" />
               </linearGradient>
 
-              {/* Lower Segment Space Dark Slate Gradient */}
-              <linearGradient id="timeGrad" x1="0" y1="0" x2="0" y2="1">
+              {/* Slate Navy Time Segment */}
+              <linearGradient id="moodOrbTime" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#1E293B" />
                 <stop offset="100%" stopColor="#0F172A" />
               </linearGradient>
 
-              {/* Upper Segment Premium Rose Gold Gradient (Vibrancy adjusts dynamically with budget scale) */}
-              <linearGradient id="budgetGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={localBudget >= 300 ? "#FB7185" : "#FDA4AF"} />
-                <stop offset="100%" stopColor={localBudget >= 300 ? "#E11D48" : "#F43F5E"} />
+              {/* IDEMO Oxblood Red Budget Segment */}
+              <linearGradient id="moodOrbBudget" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={localBudget >= 300 ? "#9E2A2A" : "#800020"} />
+                <stop offset="100%" stopColor={localBudget >= 300 ? "#6B001B" : "#500014"} />
               </linearGradient>
 
-              {/* Crown Mechanical Ridged Texture Gradient */}
-              <linearGradient id="crownGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#FFFFFF" />
-                <stop offset="25%" stopColor="#D4D4D8" />
-                <stop offset="50%" stopColor="#71717A" />
-                <stop offset="75%" stopColor="#D4D4D8" />
-                <stop offset="100%" stopColor="#18181B" />
-              </linearGradient>
-
-              {/* Glass Convex Reflection Layer Highlight */}
-              <radialGradient id="glassReflection" cx="30%" cy="30%" r="70%">
+              {/* Glass Convex Reflection */}
+              <radialGradient id="moodOrbReflection" cx="30%" cy="30%" r="70%">
                 <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.45" />
                 <stop offset="50%" stopColor="#FFFFFF" stopOpacity="0.08" />
                 <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
               </radialGradient>
 
-              {/* Sapphire Glass Anti-Reflective (AR) Coating Sheen */}
-              <linearGradient id="sapphireAR" x1="0" y1="0" x2="1" y2="1">
+              {/* Sapphire glass AR Sheen */}
+              <linearGradient id="moodOrbSapphire" x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0%" stopColor="#38BDF8" stopOpacity="0.12" />
                 <stop offset="30%" stopColor="#818CF8" stopOpacity="0.04" />
                 <stop offset="70%" stopColor="#C084FC" stopOpacity="0" />
                 <stop offset="100%" stopColor="#38BDF8" stopOpacity="0.06" />
               </linearGradient>
-
-              {/* Chromalight Glow Filter for Luxury Watch Luminescence */}
-              <filter id="chromalightGlow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur in="SourceGraphic" stdDeviation="1.2" result="blur1" />
-                <feGaussianBlur in="SourceGraphic" stdDeviation="3.0" result="blur2" />
-                <feMerge>
-                  <feMergeNode in="blur2" />
-                  <feMergeNode in="blur1" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-
-              {/* Luminous paint gradient mimicking Rolex Chromalight */}
-              <linearGradient id="lumeFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#E0F2FE" />
-                <stop offset="60%" stopColor="#00F0FF" />
-                <stop offset="100%" stopColor="#0284C7" />
-              </linearGradient>
-
-              {/* Embedded luxury watch motion style for sweeping seconds */}
-              <style>{`
-                @keyframes watchSecondHandSweep {
-                  0% { transform: rotate(0deg); }
-                  100% { transform: rotate(360deg); }
-                }
-                .watch-second-hand-sweep {
-                  transform-origin: 0px 0px;
-                  animation: watchSecondHandSweep 60s linear infinite;
-                }
-              `}</style>
             </defs>
 
             {/* Time Segment base layer */}
-            <circle r="98" fill="url(#timeGrad)" stroke="#334155" strokeWidth="1" />
+            <circle r="98" fill="url(#moodOrbTime)" stroke="#334155" strokeWidth="1" />
 
-            {/* Upper Budget segment overlaid & divided dynamically by organic wavy liquid line */}
+            {/* Budget segment overlaid */}
             <path 
-              d={`M -90,0 C -45,${12 + wiggle} 45,${-(12 + wiggle)} 90,0 A 90,90 0 0,0 -90,0 Z`} 
-              fill="url(#budgetGrad)" 
+              d="M -90,0 C -45,12 45,-12 90,0 A 90,90 0 0,0 -90,0 Z" 
+              fill="url(#moodOrbBudget)" 
               transform={`rotate(${visualAngle})`}
-              className="transition-all duration-75"
             />
 
-            {/* Polished Metallic Beveled Divider on Dial Seam to split segments elegantly */}
+            {/* Beveled Seam Divider */}
             <path 
-              d={`M -90,0 C -45,${12 + wiggle} 45,${-(12 + wiggle)} 90,0`} 
+              d="M -90,0 C -45,12 45,-12 90,0" 
               fill="none" 
               stroke="#0F172A" 
               strokeWidth="2" 
-              className="opacity-45 pointer-events-none transition-all duration-75"
+              className="opacity-45 pointer-events-none"
               transform={`rotate(${visualAngle})`}
             />
             <path 
-              d={`M -90,0 C -45,${12 + wiggle} 45,${-(12 + wiggle)} 90,0`} 
+              d="M -90,0 C -45,12 45,-12 90,0" 
               fill="none" 
               stroke="#E2E8F0" 
               strokeWidth="0.75" 
-              className="opacity-90 pointer-events-none transition-all duration-75"
+              className="opacity-90 pointer-events-none"
               transform={`rotate(${visualAngle})`}
             />
 
-            {/* Rolex Explorer Fine 60-Minute Dial Track */}
-            {Array.from({ length: 60 }).map((_, i) => {
-              const angle = i * 6;
-              const isHourMarker = i % 5 === 0;
-              
-              // Skip drawing standard ticks on positions with big Arabic numerals or the triangle index
-              if (isHourMarker) {
-                const hour = i / 5;
-                if (hour === 0 || hour === 3 || hour === 6 || hour === 9) {
-                  return null;
-                }
-              }
-              
-              const r1 = isHourMarker ? 80 : 83;
-              const r2 = 85;
-              const rad = (angle * Math.PI) / 180;
-              const x1 = r1 * Math.cos(rad);
-              const y1 = r1 * Math.sin(rad);
-              const x2 = r2 * Math.cos(rad);
-              const y2 = r2 * Math.sin(rad);
-              
-              return (
-                <line 
-                  key={i} 
-                  x1={x1} 
-                  y1={y1} 
-                  x2={x2} 
-                  y2={y2} 
-                  stroke="#FFFFFF" 
-                  className={isHourMarker ? 'opacity-40' : 'opacity-15'}
-                  strokeWidth={isHourMarker ? 0.75 : 0.4} 
-                />
-              );
-            })}
-
-            {/* Rolex Explorer 12 O'Clock Inverted Triangle (Chromalight) */}
-            <polygon 
-              points="-5.5,-83 5.5,-83 0,-71" 
-              fill="url(#lumeFill)" 
-              stroke="#E4E4E7" 
-              strokeWidth="0.5" 
-              filter="url(#chromalightGlow)" 
-              className="pointer-events-none"
-            />
-
-            {/* Rolex Explorer High-Contrast 3, 6, 9 Numerals (Chromalight) */}
-            <text
-              x="73"
-              y="0"
-              textAnchor="middle"
-              dominantBaseline="central"
-              fill="url(#lumeFill)"
-              stroke="#E4E4E7"
-              strokeWidth="0.5"
-              filter="url(#chromalightGlow)"
-              className="font-sans font-black select-none pointer-events-none"
-              style={{ fontSize: '11px', letterSpacing: '-0.05em' }}
+            {/* Time text indicator in dial */}
+            <text 
+              x="0" 
+              y="-32" 
+              textAnchor="middle" 
+              fill="#FFFFFF" 
+              fontSize="18" 
+              fontWeight="bold" 
+              fontFamily="sans-serif"
+              className="select-none pointer-events-none"
             >
-              3
+              {localTime}h
             </text>
 
-            <text
-              x="0"
-              y="73"
-              textAnchor="middle"
-              dominantBaseline="central"
-              fill="url(#lumeFill)"
-              stroke="#E4E4E7"
-              strokeWidth="0.5"
-              filter="url(#chromalightGlow)"
-              className="font-sans font-black select-none pointer-events-none"
-              style={{ fontSize: '11px', letterSpacing: '-0.05em' }}
+            {/* Budget text indicator in dial */}
+            <text 
+              x="0" 
+              y="42" 
+              textAnchor="middle" 
+              fill="#FFFFFF" 
+              fontSize="18" 
+              fontWeight="bold" 
+              fontFamily="sans-serif"
+              className="select-none pointer-events-none"
             >
-              6
+              €{Math.round(localBudget)}
             </text>
 
-            <text
-              x="-73"
-              y="0"
-              textAnchor="middle"
-              dominantBaseline="central"
-              fill="url(#lumeFill)"
-              stroke="#E4E4E7"
-              strokeWidth="0.5"
-              filter="url(#chromalightGlow)"
-              className="font-sans font-black select-none pointer-events-none"
-              style={{ fontSize: '11px', letterSpacing: '-0.05em' }}
-            >
-              9
-            </text>
-
-            {/* Rolex Explorer Baton Hour Indices (Chromalight) */}
-            {[1, 2, 4, 5, 7, 8, 10, 11].map(h => {
-              const angle = h * 30;
-              return (
-                <g key={h} transform={`rotate(${angle})`}>
-                  <rect 
-                    x="-1.8" 
-                    y="-83" 
-                    width="3.6" 
-                    height="9" 
-                    rx="0.5"
-                    fill="url(#lumeFill)" 
-                    stroke="#E4E4E7" 
-                    strokeWidth="0.5" 
-                    filter="url(#chromalightGlow)" 
-                    className="pointer-events-none"
-                  />
-                </g>
-              );
-            })}
-
-            {/* Thick Bezel Ring Frame */}
-            <circle r={98 - outerBezelWidth / 2} fill="none" stroke="url(#silverBezel)" strokeWidth={outerBezelWidth} className="opacity-85 pointer-events-none" />
-            
-            {/* Sapphire glass and convex reflection overlays */}
-            <circle r="96" fill="url(#glassReflection)" className="pointer-events-none mix-blend-overlay" />
-            <circle r="96" fill="url(#sapphireAR)" className="pointer-events-none mix-blend-screen" />
-
-            {/* Watch Bezel Hand-Polished Chamfer Ring */}
-            <circle r="97.5" fill="none" stroke="#FFFFFF" strokeWidth="0.75" className="opacity-60 pointer-events-none" />
-
-            {/* Inner dark bezel shadow step/rim separating bezel and dial face */}
-            <circle r={98 - outerBezelWidth} fill="none" stroke="#090d16" strokeWidth="1.25" className="opacity-35 pointer-events-none" />
-
-            {/* Mechanical Watch Crown Rotatable Indicator Pointer */}
-            <g transform={`rotate(${visualAngle}) translate(92, 0)`}>
-              {/* Dropshadow */}
-              <rect x="-6.5" y="-13" width="13" height="26" rx="2" fill="#000" className="opacity-15 pointer-events-none" transform="translate(1, 1)" />
-              
-              {/* Precision casing */}
-              <rect x="-6.5" y="-13" width="13" height="26" rx="2.5" fill="url(#silverBezel)" stroke="#1F2937" strokeWidth="0.75" />
-              
-              {/* Elegant circular inset with emerald/teal gemstone centerpiece */}
-              <circle r="2.5" fill="#14B8A6" stroke="#0D9488" strokeWidth="0.5" cx="0" cy="0" className="shadow-xs" />
-              
-              {/* Micro-machined physical grip ridges */}
-              <line x1="-4.5" y1="-9" x2="4.5" y2="-9" stroke="#374151" strokeWidth="0.75" />
-              <line x1="-4.5" y1="-6" x2="4.5" y2="-6" stroke="#374151" strokeWidth="0.75" />
-              <line x1="-4.5" y1="-3" x2="4.5" y2="-3" stroke="#374151" strokeWidth="0.75" />
-              <line x1="-4.5" y1="3" x2="4.5" y2="3" stroke="#374151" strokeWidth="0.75" />
-              <line x1="-4.5" y1="6" x2="4.5" y2="6" stroke="#374151" strokeWidth="0.75" />
-              <line x1="-4.5" y1="9" x2="4.5" y2="9" stroke="#374151" strokeWidth="0.75" />
+            {/* Center Compass Needle */}
+            <g className="pointer-events-none">
+              <polygon points="0,-22 5,0 0,6 -5,0" fill="#FFFFFF" />
+              <polygon points="0,22 5,0 0,6 -5,0" fill="#94A3B8" />
+              <circle r="3" fill="#800020" />
             </g>
 
-            {/* Symmetrically Centered Live Value Displays inside segments */}
-            {/* Budget text */}
-            <g transform={`translate(${centroids.budgetX}, ${centroids.budgetY})`}>
-              {/* Elegant text background drop shadow for readability on bright colors */}
-              <text 
-                textAnchor="middle" 
-                dominantBaseline="middle" 
-                className="fill-black/30 font-sans font-black tracking-tight"
-                style={{ fontSize: '18.5px', userSelect: 'none', transform: 'translateY(1.5px)' }}
-              >
-                €{Math.round(localBudget)}
-              </text>
-              <text 
-                textAnchor="middle" 
-                dominantBaseline="middle" 
-                className="fill-white font-sans font-black tracking-tight"
-                style={{ fontSize: '18px', userSelect: 'none' }}
-              >
-                €{Math.round(localBudget)}
-              </text>
-              <text 
-                textAnchor="middle" 
-                dominantBaseline="middle" 
-                className="fill-black/20 font-sans font-extrabold tracking-widest"
-                style={{ fontSize: '7.5px', transform: 'translateY(14.5px)', userSelect: 'none' }}
-              >
-                BUDGET
-              </text>
-              <text 
-                textAnchor="middle" 
-                dominantBaseline="middle" 
-                className="fill-white/75 font-sans font-extrabold tracking-widest"
-                style={{ fontSize: '7.5px', transform: 'translateY(13.5px)', userSelect: 'none' }}
-              >
-                BUDGET
-              </text>
-            </g>
+            {/* Bezel Ring */}
+            <circle r={98 - outerBezelWidth / 2} fill="none" stroke="url(#moodOrbBezel)" strokeWidth={outerBezelWidth} className="opacity-85 pointer-events-none" />
 
-            {/* Time text */}
-            <g transform={`translate(${centroids.timeX}, ${centroids.timeY})`}>
-              {/* Background text drop shadow */}
-              <text 
-                textAnchor="middle" 
-                dominantBaseline="middle" 
-                className="fill-black/35 font-sans font-black tracking-tight"
-                style={{ fontSize: '18.5px', userSelect: 'none', transform: 'translateY(1.5px)' }}
-              >
-                {getSnappedTime(localTime)} h
-              </text>
-              <text 
-                textAnchor="middle" 
-                dominantBaseline="middle" 
-                className="fill-white font-sans font-black tracking-tight"
-                style={{ fontSize: '18px', userSelect: 'none' }}
-              >
-                {getSnappedTime(localTime)} h
-              </text>
-              <text 
-                textAnchor="middle" 
-                dominantBaseline="middle" 
-                className="fill-black/20 font-sans font-extrabold tracking-widest"
-                style={{ fontSize: '7.5px', transform: 'translateY(14.5px)', userSelect: 'none' }}
-              >
-                TIME
-              </text>
-              <text 
-                textAnchor="middle" 
-                dominantBaseline="middle" 
-                className="fill-white/75 font-sans font-extrabold tracking-widest"
-                style={{ fontSize: '7.5px', transform: 'translateY(13.5px)', userSelect: 'none' }}
-              >
-                TIME
-              </text>
-            </g>
+            {/* Sapphire glass and reflection */}
+            <circle r="96" fill="url(#moodOrbReflection)" className="pointer-events-none mix-blend-overlay" />
+            <circle r="96" fill="url(#moodOrbSapphire)" className="pointer-events-none mix-blend-screen" />
 
-            {/* Rolex Explorer Mercedes Hour Hand */}
-            <g transform={`rotate(${visualAngle})`} className="pointer-events-none">
-              {/* Silver outline shadow */}
-              <path 
-                d="M 0,0 L -1.5,-6 L -1.5,-23 A 4.5,4.5 0 0,1 -4,-26.5 A 4.5,4.5 0 0,1 -1.5,-30.5 L -1.5,-38 L 0,-41 L 1.5,-38 L 1.5,-30.5 A 4.5,4.5 0 0,1 4,-26.5 A 4.5,4.5 0 0,1 1.5,-23 L 1.5,-6 Z" 
-                fill="#3F3F46" 
-                className="opacity-40" 
-                transform="translate(0, 0.5)"
-              />
-              {/* Main Hand body with Chromalight lume */}
-              <path 
-                d="M 0,0 L -1.2,-6 L -1.2,-23 A 4.2,4.2 0 0,1 -3.5,-26.5 A 4.2,4.2 0 0,1 -1.2,-30 L -1.2,-37 L 0,-40 L 1.2,-37 L 1.2,-30 A 4.2,4.2 0 0,1 3.5,-26.5 A 4.2,4.2 0 0,1 1.2,-23 L 1.2,-6 Z" 
-                fill="url(#lumeFill)" 
-                stroke="#E4E4E7" 
-                strokeWidth="0.75" 
-                filter="url(#chromalightGlow)"
-              />
-              {/* Mercedes logo star divider inside the circle */}
-              <circle cx="0" cy="-26.5" r="3.2" fill="none" stroke="#52525B" strokeWidth="0.5" />
-              <line x1="0" y1="-26.5" x2="0" y2="-29.7" stroke="#52525B" strokeWidth="0.55" />
-              <line x1="0" y1="-26.5" x2="-2.77" y2="-24.9" stroke="#52525B" strokeWidth="0.55" />
-              <line x1="0" y1="-26.5" x2="2.77" y2="-24.9" stroke="#52525B" strokeWidth="0.55" />
-            </g>
 
-            {/* Rolex Explorer Tapered Minute Hand */}
-            <g transform={`rotate(${budgetAngle})`} className="pointer-events-none">
-              {/* Silver outline shadow */}
-              <path 
-                d="M 0,0 L -1.5,-8 L -1.5,-55 L 0,-59 L 1.5,-55 L 1.5,-8 Z" 
-                fill="#3F3F46" 
-                className="opacity-40" 
-                transform="translate(0, 0.5)"
-              />
-              {/* Main Hand body with Chromalight lume */}
-              <path 
-                d="M 0,0 L -1.1,-8 L -1.1,-54 L 0,-58 L 1.1,-54 L 1.1,-8 Z" 
-                fill="url(#lumeFill)" 
-                stroke="#E4E4E7" 
-                strokeWidth="0.75" 
-                filter="url(#chromalightGlow)"
-              />
-              {/* Center rib lines */}
-              <line x1="0" y1="-8" x2="0" y2="-53" stroke="#52525B" strokeWidth="0.5" className="opacity-40" />
-            </g>
 
-            {/* Rolex Explorer Lollipop Second Hand (Mesmerizing Continuous Sweep) */}
-            <g className="watch-second-hand-sweep pointer-events-none">
-              {/* Main ultra-thin needle */}
-              <line x1="0" y1="15" x2="0" y2="-66" stroke="#E2E8F0" strokeWidth="0.5" />
-              
-              {/* Lollipop luminescent bubble */}
-              <circle cx="0" cy="-48" r="3.2" fill="url(#lumeFill)" stroke="#E4E4E7" strokeWidth="0.5" filter="url(#chromalightGlow)" />
-              
-              {/* Counterweight circular balance at the tail */}
-              <circle cx="0" cy="12" r="1.5" fill="#E2E8F0" />
-            </g>
 
-            {/* Watch crown Position Anchor Core Center Button (Chronograph Style) */}
-            <g 
+            {/* Interactive Hit Targets to preserve touch gestures */}
+            <circle 
+              r="24" 
+              fill="transparent" 
+              className="cursor-move pointer-events-auto"
               onPointerDown={(e) => {
-                if (!selectedMode) {
+                if (activeMode === 'resize') {
+                  handleBudgetStart(e);
+                } else if (activeMode === 'rotate') {
+                  handleTimeStart(e);
+                } else {
                   handlePositionStart(e);
                 }
               }}
-              className="cursor-move group pointer-events-auto"
-            >
-              <circle r="24" fill="transparent" /> {/* Large catch target */}
-              
-              {/* Dropshadow for 3D depth */}
-              <circle r="16.5" fill="#000" className="opacity-15 pointer-events-none" transform="translate(0, 1.5)" />
-              
-              {/* Outer high-polished steel collar/bezel */}
-              <circle 
-                r="15" 
-                fill="url(#silverBezel)" 
-                stroke="#4B5563" 
-                strokeWidth="0.5" 
-                className="transition-transform duration-200 group-hover:scale-105" 
-              />
-              
-              {/* Machined outer teeth/ridges (minimal tactile detents for crown feel) */}
-              {Array.from({ length: 12 }).map((_, i) => {
-                const angle = i * 30;
-                const rad = (angle * Math.PI) / 180;
-                const x1 = 12 * Math.cos(rad);
-                const y1 = 12 * Math.sin(rad);
-                const x2 = 14.5 * Math.cos(rad);
-                const y2 = 14.5 * Math.sin(rad);
-                return (
-                  <line 
-                    key={i} 
-                    x1={x1} 
-                    y1={y1} 
-                    x2={x2} 
-                    y2={y2} 
-                    stroke="#374151" 
-                    strokeWidth="0.75" 
-                    className="opacity-70 pointer-events-none" 
-                  />
-                );
-              })}
-              
-              {/* Inner bezel core rim */}
-              <circle r="11" fill="#111827" stroke="#9CA3AF" strokeWidth="0.5" className="opacity-90" />
-              
-              {/* Dome crown cabochon face with precision-engraved target rings */}
-              <circle r="8.5" fill="url(#crownGrad)" stroke="#111827" strokeWidth="0.5" />
-              <circle r="5" fill="none" stroke="#374151" strokeWidth="0.5" className="opacity-40" />
-              
-              {/* Glowing or colored central jewel pivot (sapphire/teal dot) */}
-              <circle r="2.5" fill="#14B8A6" className="opacity-90" />
-              
-              {/* Soft asymmetric light reflection on dome */}
-              <circle r="4" fill="#FFFFFF" className="opacity-30" cx="-1.5" cy="-1.5" />
-            </g>
+            />
 
             {/* Outer Dial Track Ring to Adjust Time limit (Rotatable Bezel Track) */}
             <circle 
@@ -1547,7 +1042,11 @@ export default function MoodOrbit({
               strokeWidth="20" 
               className="cursor-pointer pointer-events-auto"
               onPointerDown={(e) => {
-                if (!selectedMode || selectedMode === 'time') {
+                if (activeMode === 'move') {
+                  handlePositionStart(e);
+                } else if (activeMode === 'resize') {
+                  handleBudgetStart(e);
+                } else {
                   handleTimeStart(e);
                 }
               }}
@@ -1561,7 +1060,11 @@ export default function MoodOrbit({
               strokeWidth="50" 
               className="cursor-pointer pointer-events-auto"
               onPointerDown={(e) => {
-                if (!selectedMode || selectedMode === 'budget') {
+                if (activeMode === 'move') {
+                  handlePositionStart(e);
+                } else if (activeMode === 'rotate') {
+                  handleTimeStart(e);
+                } else {
                   handleBudgetStart(e);
                 }
               }}
@@ -1694,325 +1197,6 @@ export default function MoodOrbit({
           )}
         </AnimatePresence>
       </div>
-
-      {/* Manual Calibration Access longpress trigger helper text */}
-      <div className="text-center text-[8.5px] text-[#8C8A7D] font-black uppercase tracking-widest py-0.5">
-        ⚡ {t.longPressTip}
-      </div>
-
-      {/* Interactive Tooltips explaining sensory gesture inputs */}
-      <div className="grid grid-cols-3 gap-2.5 py-1.5 z-10 select-none text-center">
-        {/* POSITION button */}
-        <button 
-          onClick={() => {
-            const next = selectedMode === 'position' ? null : 'position';
-            setSelectedMode(next);
-            triggerHapticProxy(15);
-          }}
-          className={`px-1.5 py-2.5 rounded-xl transition-all duration-150 cursor-pointer flex flex-col items-center justify-center outline-none ${
-            selectedMode === 'position' 
-              ? 'bg-amber-50/80 border border-amber-500 border-b-[1px] translate-y-[3px] shadow-[inset_0_2px_4px_rgba(245,158,11,0.2)]' 
-              : 'bg-gradient-to-b from-white to-[#FAF9F5] border border-[#D5D3C8] border-b-[4px] shadow-[0_2px_4px_rgba(0,0,0,0.05),_0_2px_0_#D5D3C8] hover:to-amber-50/10 hover:border-amber-400/40 active:translate-y-[2px] active:border-b-[2px]'
-          }`}
-        >
-          <span className={`text-[13px] mb-1 transition-transform ${selectedMode === 'position' ? 'scale-90 translate-y-0.5' : 'scale-100'}`}>🎯</span>
-          <span className={`text-[8.5px] font-black uppercase tracking-wider leading-none mb-0.5 ${selectedMode === 'position' ? 'text-amber-700' : 'text-brand-charcoal'}`}>POSITION</span>
-          <span className="text-[7px] font-bold text-[#8C8A7D] leading-tight scale-90">{t.tipPosition}</span>
-        </button>
-
-        {/* BUDGET button */}
-        <button 
-          onClick={() => {
-            const next = selectedMode === 'budget' ? null : 'budget';
-            setSelectedMode(next);
-            triggerHapticProxy(15);
-          }}
-          className={`px-1.5 py-2.5 rounded-xl transition-all duration-150 cursor-pointer flex flex-col items-center justify-center outline-none ${
-            selectedMode === 'budget' 
-              ? 'bg-rose-50/80 border border-rose-500 border-b-[1px] translate-y-[3px] shadow-[inset_0_2px_4px_rgba(244,63,94,0.2)]' 
-              : 'bg-gradient-to-b from-white to-[#FAF9F5] border border-[#D5D3C8] border-b-[4px] shadow-[0_2px_4px_rgba(0,0,0,0.05),_0_2px_0_#D5D3C8] hover:to-rose-50/10 hover:border-rose-400/40 active:translate-y-[2px] active:border-b-[2px]'
-          }`}
-        >
-          <span className={`text-[13px] mb-1 transition-transform ${selectedMode === 'budget' ? 'scale-90 translate-y-0.5' : 'scale-100'}`}>📐</span>
-          <span className={`text-[8.5px] font-black uppercase tracking-wider leading-none mb-0.5 ${selectedMode === 'budget' ? 'text-rose-700' : 'text-brand-charcoal'}`}>BUDGET</span>
-          <span className="text-[7px] font-bold text-[#8C8A7D] leading-tight scale-90">{t.tipBudget}</span>
-        </button>
-
-        {/* TIME button */}
-        <button 
-          onClick={() => {
-            const next = selectedMode === 'time' ? null : 'time';
-            setSelectedMode(next);
-            triggerHapticProxy(15);
-          }}
-          className={`px-1.5 py-2.5 rounded-xl transition-all duration-150 cursor-pointer flex flex-col items-center justify-center outline-none ${
-            selectedMode === 'time' 
-              ? 'bg-teal-50/80 border border-teal-500 border-b-[1px] translate-y-[3px] shadow-[inset_0_2px_4px_rgba(20,184,166,0.2)]' 
-              : 'bg-gradient-to-b from-white to-[#FAF9F5] border border-[#D5D3C8] border-b-[4px] shadow-[0_2px_4px_rgba(0,0,0,0.05),_0_2px_0_#D5D3C8] hover:to-teal-50/10 hover:border-teal-400/40 active:translate-y-[2px] active:border-b-[2px]'
-          }`}
-        >
-          <span className={`text-[13px] mb-1 transition-transform ${selectedMode === 'time' ? 'scale-90 translate-y-0.5' : 'scale-100'}`}>⏱️</span>
-          <span className={`text-[8.5px] font-black uppercase tracking-wider leading-none mb-0.5 ${selectedMode === 'time' ? 'text-teal-700' : 'text-brand-charcoal'}`}>TIME</span>
-          <span className="text-[7px] font-bold text-[#8C8A7D] leading-tight scale-90">{t.tipTime}</span>
-        </button>
-      </div>
-
-      {/* Direct Fine-Tuning Discoverability Bridge */}
-      {onOpenFineTuning && (
-        <button
-          type="button"
-          onClick={() => {
-            onOpenFineTuning();
-            triggerHapticProxy(10);
-          }}
-          className="w-full py-2 px-3 rounded-xl bg-[#FAF9F5] border border-[#D5D3C8] hover:border-accent-teal/40 hover:bg-[#F5F3EB] text-brand-charcoal transition-all flex items-center justify-between text-xs font-bold cursor-pointer group shadow-xs outline-none select-none z-10"
-        >
-          <div className="flex items-center gap-2">
-            <Sliders size={13} className="text-accent-teal" />
-            <span className="font-mono text-[9px] uppercase tracking-wider font-extrabold text-[#5C5A4D] group-hover:text-brand-charcoal">
-              {isSr ? 'Precizno podešavanje (Klizači)' : isZh ? '精确数值微调 (滑块)' : 'Exact Fine-Tuning (Sliders)'}
-            </span>
-          </div>
-          <span className="text-[9.5px] font-mono text-accent-teal font-extrabold group-hover:translate-x-0.5 transition-transform flex items-center gap-1">
-            <span>{isSr ? 'Otvori' : isZh ? '展开' : 'Open'}</span>
-            <span>&rarr;</span>
-          </span>
-        </button>
-      )}
-
-      {/* Dynamic correlation explanatory modal */}
-      <AnimatePresence>
-        {showCorrelationModal && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm" id="mood-orbit-correlation-modal">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              transition={{ type: "spring", damping: 25, stiffness: 350 }}
-              className="bg-[#FAF9F5] border-2 border-[#E3DFD5] w-full max-w-[360px] rounded-[28px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.15)] p-6 flex flex-col relative text-left select-none"
-            >
-              {/* Close Button */}
-              <button
-                onClick={() => {
-                  setShowCorrelationModal(false);
-                  triggerHapticProxy(10);
-                }}
-                className="absolute top-4 right-4 w-7 h-7 rounded-full bg-brand-charcoal/5 flex items-center justify-center text-brand-charcoal hover:bg-brand-charcoal/10 transition-colors cursor-pointer"
-                id="close-mood-orbit-correlation-modal"
-              >
-                ✕
-              </button>
-
-              <div className="space-y-4 pt-2">
-                <span className="text-[8px] uppercase tracking-[0.25em] text-accent-teal font-black block leading-none">
-                  {isSr ? 'POVEZANOST I UTICAJ NA PREPORUKE' : isZh ? '画像关联与推荐机制' : 'ALIGNMENT & OFFER INFLUENCE'}
-                </span>
-                
-                <h4 className="text-base font-serif font-black text-brand-charcoal tracking-tight leading-snug">
-                  {isCultural && !isSr && !isZh ? (
-                    'How Do Your Persona & Vibe Work Together?'
-                  ) : (
-                    isSr ? 'Kako se Vaša Persona i Vajb dopunjuju?' : isZh ? '您的旅行人格与核心氛围如何相辅相成？' : 'How Do Your Persona & Vibe Relate?'
-                  )}
-                </h4>
-
-                <div className="space-y-3.5 text-[#2D3025] text-[11.5px] leading-relaxed font-medium">
-                  {isCultural && !isSr && !isZh ? (
-                    <>
-                      <p>
-                        Your <strong>Mood Orbit</strong> is where personalization begins. By adjusting it, you tell IDEMO how you feel today.
-                      </p>
-                      <p className="border-t border-[#2D3025]/10 pt-3">
-                        Your <strong>Vibe</strong> reflects your current mood, while your <strong>Persona</strong> represents your broader travel style, shaped over time by your preferences and interactions.
-                      </p>
-                      <p>
-                        Together, they help IDEMO curate recommendations that feel personal and relevant—all processed privately on your device.
-                      </p>
-                      <p className="border-t border-[#2D3025]/10 pt-3 text-xs font-bold text-accent-teal">
-                        <strong>New to IDEMO?</strong> Visit <strong>Profile</strong> and calibrate your Mood Orbit for more personalized recommendations.
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p>
-                        {isSr ? (
-                          <>
-                            Vaša <strong>Preovlađujuća Persona</strong> predstavlja Vaš osnovni, dugoročni stil putovanja (određen položajem Mood Orbite). S druge strane, <strong>Atmosfera / Vajb</strong> je trenutni dinamički odraz Vaših izabranih kategorija interesovanja.
-                          </>
-                        ) : isZh ? (
-                          <>
-                            您的<strong>核心旅行人格</strong>代表您长期且本质的探索方式（由情绪星轨定义），而<strong>核心氛围</strong>则是您当前选择的兴趣品类的动态映射。
-                          </>
-                        ) : (
-                          <>
-                            Your <strong>Prevailing Persona</strong> acts as your overarching travel signature (derived from your Mood Orbit), while your <strong>Atmosphere / Vibe</strong> is a real-time reflection of your selected category interests.
-                          </>
-                        )}
-                      </p>
-
-                      <p className="border-t border-[#2D3025]/10 pt-3">
-                        {isSr ? (
-                          <>
-                            <strong>Uticaj na ponudu:</strong> Persona postavlja osnovni stil kustosiranja (npr. naglašavajući skrivena mesta naspram elitnog nasleđa), dok aktivni Vajb direktno utiče na težinu i redosled preporuka u katalogu, izdvajajući na vrh beogradska mesta koja se najviše poklapaju sa Vašim trenutnim raspoloženjem.
-                          </>
-                        ) : isZh ? (
-                          <>
-                            <strong>推荐影响：</strong>核心旅行人格设定了整体推荐内容的深度与调性，而核心氛围则根据当下的兴趣标签直接对贝尔格莱德的地标点位进行排序与加权，确保展示最契合您的特色行程。
-                          </>
-                        ) : (
-                          <>
-                            <strong>Consequence on offer selection:</strong> The Persona sets the qualitative curation threshold (e.g., prioritizing hidden gems versus historic heritage), while the active Vibe directly weights and prioritizes the list of Belgrade spots—bringing locations that maximize both your active mindset and your selected interests straight to the top of your catalog.
-                          </>
-                        )}
-                      </p>
-                    </>
-                  )}
-                </div>
-
-                <button
-                  onClick={() => {
-                    setShowCorrelationModal(false);
-                    triggerHapticProxy(10);
-                  }}
-                  className="w-full h-10 mt-2 bg-brand-charcoal text-[#F6F5F2] rounded-xl font-serif text-xs tracking-tight hover:bg-brand-charcoal/90 transition-all flex items-center justify-center gap-2 shadow-sm border border-brand-charcoal/10 cursor-pointer"
-                >
-                  {isSr ? 'Razumem' : isZh ? '我知道了' : 'Understood'}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* First-Use Light Premium Tutorial Card & Compact Recurring State Toggle */}
-      <AnimatePresence>
-        {showOnboarding ? (
-          <motion.div
-            initial={{ opacity: 0, y: 12, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 12, scale: 0.98 }}
-            onPointerDown={(e) => e.stopPropagation()}
-            className="w-full bg-[#FAF9F5] border border-[#2D3025]/15 rounded-[24px] p-5 shadow-md text-brand-charcoal z-30 select-none pointer-events-auto text-center mt-3 space-y-4 relative"
-            id="mood-orbit-tutorial-card"
-          >
-            {/* Top Pointer Arrow */}
-            <div className="w-0 h-0 border-x-8 border-x-transparent border-b-8 border-b-[#FAF9F5] absolute -top-2 left-1/2 -translate-x-1/2 z-10" />
-
-            {/* Header */}
-            <div className="text-center pb-1 border-b border-[#2D3025]/10">
-              <span className="font-mono text-[10px] font-black uppercase tracking-[0.25em] text-[#8C8A7D]">
-                {isSr ? 'KAKO TO RADI' : isZh ? '使用指南' : 'HOW IT WORKS'}
-              </span>
-            </div>
-
-            {/* 3 Columns */}
-            <div className="grid grid-cols-3 gap-2.5 pt-1.5 text-center">
-              {/* Column 1: Rotate for time */}
-              <div className="flex flex-col items-center">
-                <div className="relative mb-2">
-                  <div className="w-10 h-10 rounded-full bg-[#E0F7FA] text-[#00838F] flex items-center justify-center shadow-2xs">
-                    <Clock size={18} />
-                  </div>
-                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#00838F] text-white text-[9px] font-black flex items-center justify-center shadow-xs">
-                    1
-                  </span>
-                </div>
-                <span className="text-xs font-black text-brand-charcoal mb-1 leading-snug">
-                  {isSr ? 'Rotirajte za vreme' : isZh ? '旋转调节时间' : 'Rotate for time'}
-                </span>
-                <p className="text-[13px] leading-snug text-brand-charcoal font-bold tracking-tight">
-                  {isSr ? 'Izaberite raspoloživo vreme rotiranjem prstena.' : isZh ? '通过旋转最外侧轨环来选择行程可用时间。' : 'Select time available by rotating the ring.'}
-                </p>
-              </div>
-
-              {/* Column 2: Pull for budget */}
-              <div className="flex flex-col items-center border-x border-[#2D3025]/10 px-1">
-                <div className="relative mb-2">
-                  <div className="w-10 h-10 rounded-full bg-[#FFF8E1] text-[#F57F17] flex items-center justify-center shadow-2xs">
-                    <Coins size={18} />
-                  </div>
-                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#F57F17] text-white text-[9px] font-black flex items-center justify-center shadow-xs">
-                    2
-                  </span>
-                </div>
-                <span className="text-xs font-black text-brand-charcoal mb-1 leading-snug">
-                  {isSr ? 'Povucite za budžet' : isZh ? '拉伸调节预算' : 'Pull for budget'}
-                </span>
-                <p className="text-[13px] leading-snug text-brand-charcoal font-bold tracking-tight">
-                  {isSr ? 'Podesite budžet povlačenjem prečnika unutra i spolja.' : isZh ? '通过向内或向外拉伸表壳以设置行旅预算。' : 'Set the budget by pulling the diameter in and out.'}
-                </p>
-              </div>
-
-              {/* Column 3: Drag for mood */}
-              <div className="flex flex-col items-center">
-                <div className="relative mb-2">
-                  <div className="w-10 h-10 rounded-full bg-[#FFEBEE] text-[#C62828] flex items-center justify-center shadow-2xs">
-                    <Target size={18} />
-                  </div>
-                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#C62828] text-white text-[9px] font-black flex items-center justify-center shadow-xs">
-                    3
-                  </span>
-                </div>
-                <span className="text-xs font-black text-brand-charcoal mb-1 leading-snug">
-                  {isSr ? 'Prevučite za raspoloženje' : isZh ? '拖拽标定心情' : 'Drag for mood'}
-                </span>
-                <p className="text-[13px] leading-snug text-brand-charcoal font-bold tracking-tight">
-                  {isSr ? 'Postavite centar tamo gde najbolje opisuje Vaše raspoloženje.' : isZh ? '拖拽中心点，将其定位在最契合您当下心情的位置。' : 'Place where best describes your current mood.'}
-                </p>
-              </div>
-            </div>
-
-            {/* Action Button */}
-            <div className="pt-2">
-              <button
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  triggerHapticProxy(12);
-                  setShowOnboarding(false);
-                  try {
-                    safeStorage.setItem('idemo_mood_orbit_onboarding_seen', 'true');
-                  } catch (err) {
-                    console.warn(err);
-                  }
-                }}
-                className="w-full py-3.5 rounded-full bg-[#E5B842] hover:bg-[#D8AB37] text-brand-charcoal font-black text-xs uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 cursor-pointer outline-none shadow-sm active:scale-[0.98]"
-                id="mood-orbit-got-it-btn"
-              >
-                <span>{isSr ? 'U REDU' : isZh ? '我知道了' : 'GOT IT'}</span>
-                <span className="text-sm">&rarr;</span>
-              </button>
-            </div>
-          </motion.div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 5 }}
-            className="w-full pt-1 pointer-events-auto"
-          >
-            <button
-              type="button"
-              onClick={() => {
-                setShowOnboarding(true);
-                triggerHapticProxy(10);
-              }}
-              className="w-full py-2.5 px-3.5 rounded-xl bg-white/80 border border-[#2D3025]/10 hover:border-accent-teal/40 hover:bg-white text-brand-charcoal transition-all flex items-center justify-between text-xs font-bold cursor-pointer group shadow-2xs outline-none select-none"
-              id="how-mood-orbit-works-toggle"
-            >
-              <div className="flex items-center gap-2">
-                <Info size={13} className="text-accent-teal" />
-                <span className="font-mono text-[9.5px] uppercase tracking-wider font-extrabold text-[#2D3025]/75 group-hover:text-brand-charcoal">
-                  {isSr ? 'ⓘ Kako Mood Orbit™ radi' : isZh ? 'ⓘ 心情星轨使用指南' : 'ⓘ How Mood Orbit works'}
-                </span>
-              </div>
-              <span className="text-[10px] font-mono text-accent-teal font-extrabold group-hover:translate-x-0.5 transition-transform">
-                &rarr;
-              </span>
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

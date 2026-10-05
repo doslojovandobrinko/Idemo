@@ -95,7 +95,7 @@ import {
 import MoodOrbGridAnalyzer from './components/MoodOrbGridAnalyzer';
 import MiniMoodGrid from './components/MiniMoodGrid';
 import PrivacyPolicyContent from './components/PrivacyPolicyContent';
-import ProfileScreen, { ARCHETYPES } from './components/ProfileScreen';
+import ProfileScreen, { ARCHETYPES, deriveArchetype } from './components/ProfileScreen';
 import PartnersScreen from './components/PartnersScreen';
 import OnboardingOverlay from './components/OnboardingOverlay';
 
@@ -1830,39 +1830,6 @@ export default function App() {
   const [maxWalkingDistanceKm, setMaxWalkingDistanceKm] = useState<number>(0);
   const [showEverything, setShowEverything] = useState<boolean>(false);
 
-  // Dynamically derive visitor archetype in real-time, based strictly on budget, time, and categories
-  const currentArchetype = React.useMemo(() => {
-    let closestArch = ARCHETYPES[0];
-    let minDivergence = Infinity;
-
-    for (const arch of ARCHETYPES) {
-      // 1. Budget divergence (scaled to 0-1 range)
-      const budgetDiff = Math.abs(budget - arch.targetBudget) / 400;
-
-      // 2. Time available divergence (scaled to 0-1 range)
-      const timeDiff = Math.abs(time - arch.targetTime) / 48;
-
-      // 3. Category overlap score (0 is complete overlap, 1 is no overlap)
-      const maxCats = arch.categories.length;
-      let catMatchedCount = 0;
-      for (const c of arch.categories) {
-        if (selectedCats.includes(c)) {
-          catMatchedCount++;
-        }
-      }
-      const catDivergence = 1 - (catMatchedCount / Math.max(1, maxCats));
-
-      // 4. Weighted global divergence strictly on these three factors
-      const totalDivergence = (catDivergence * 0.5) + (budgetDiff * 0.25) + (timeDiff * 0.25);
-
-      if (totalDivergence < minDivergence) {
-        minDivergence = totalDivergence;
-        closestArch = arch;
-      }
-    }
-    return closestArch;
-  }, [budget, time, selectedCats]);
-
   const [ratings, setRatings] = useState<Record<string, { vibe: 'like' | 'intrigue' | 'dislike', tags: string[] }>>(() => {
     try {
       const saved = safeStorage.getItem('idemo_ratings');
@@ -2092,6 +2059,11 @@ export default function App() {
 
     return { orbitX: ox, orbitY: oy };
   }, [selectedCats, budget, time, customOrbit]);
+
+  // Dynamically derive visitor archetype in real-time based on spatial coordinates, budget, time, and categories
+  const currentArchetype = React.useMemo(() => {
+    return deriveArchetype(orbitX, orbitY, budget, time, selectedCats);
+  }, [orbitX, orbitY, budget, time, selectedCats]);
 
   // Synchronize canonical orbit coordinates and budget/time preferences to safeStorage
   useEffect(() => {

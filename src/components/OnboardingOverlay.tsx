@@ -27,6 +27,7 @@ import { Recommendation } from '../types';
 import { INITIAL_RECOMMENDATIONS } from '../constants';
 import { getApprovedPrimaryMedia } from '../lib/recommendationMediaService';
 import { resolveImage } from '../utils/assetHelper';
+import { deriveArchetype } from './ProfileScreen';
 
 export const triggerHaptic = (pattern: number | number[] = 10) => {
   if (typeof window !== 'undefined' && 'navigator' in window && 'vibrate' in navigator) {
@@ -630,6 +631,11 @@ export function OnboardingOverlay({
   const archData = CARD1_ARCHETYPES[language] || CARD1_ARCHETYPES['en'];
   const current = t.cards[cardIndex];
 
+  // Live dynamic archetype derived from Intro Card 1 orb coordinates, budget, and time
+  const liveArchetype = useMemo(() => {
+    return deriveArchetype(card1X, card1Y, card1Budget, card1Time, []);
+  }, [card1X, card1Y, card1Budget, card1Time]);
+
   const recList = recommendations && recommendations.length > 0 ? recommendations : INITIAL_RECOMMENDATIONS;
   const uvacRec = recList.find(r => r.id === '1');
   const uvacImage = resolveImage(getApprovedPrimaryMedia('1', uvacRec?.image));
@@ -964,7 +970,37 @@ export function OnboardingOverlay({
             {/* CARD 1 HERO VISUAL: Approved Horological Orb Instrument over Compass Axes */}
             {cardIndex === 0 && (
               <div className="flex-1 min-h-0 w-full flex flex-col items-center justify-center my-1">
-                <div className="w-full aspect-square max-w-[210px] xs:max-w-[230px] sm:max-w-[250px] max-h-[28vh] relative bg-white/80 backdrop-blur-md border border-[#E2DFC2]/80 rounded-[28px] overflow-hidden select-none shadow-sm mx-auto flex items-center justify-center p-2">
+                {/* Dynamic Live Profile-Name Label */}
+                <div 
+                  id="intro-live-profile-label"
+                  className="w-full text-center px-4 h-[52px] flex items-center justify-center flex-shrink-0 mb-1"
+                >
+                  <span className="font-sans text-[17px] font-bold text-[#800020] text-center leading-snug break-words">
+                    {liveArchetype.name[language] || liveArchetype.name.en}
+                  </span>
+                </div>
+
+                <div 
+                  className="w-full aspect-square max-w-[210px] xs:max-w-[230px] sm:max-w-[250px] max-h-[28vh] relative bg-white/80 backdrop-blur-md border border-[#E2DFC2]/80 rounded-[28px] overflow-hidden select-none shadow-sm mx-auto flex items-center justify-center p-2 cursor-pointer"
+                  onPointerDown={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = Math.max(0.08, Math.min(0.92, (e.clientX - rect.left) / rect.width));
+                    const y = Math.max(0.08, Math.min(0.92, (e.clientY - rect.top) / rect.height));
+                    setCard1X(x);
+                    setCard1Y(y);
+                    setPauseAutoCycle(true);
+                  }}
+                  onPointerMove={(e) => {
+                    if (e.buttons > 0) {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const x = Math.max(0.08, Math.min(0.92, (e.clientX - rect.left) / rect.width));
+                      const y = Math.max(0.08, Math.min(0.92, (e.clientY - rect.top) / rect.height));
+                      setCard1X(x);
+                      setCard1Y(y);
+                      setPauseAutoCycle(true);
+                    }
+                  }}
+                >
                   
                   {/* Subtle Grid Reticles */}
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
