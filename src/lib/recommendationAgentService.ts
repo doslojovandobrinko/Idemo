@@ -241,7 +241,7 @@ export function compileClientSemanticFallback(
   const textCombined = `${input.nameOrTitle} ${input.destinationOrLocation || ''} ${input.descriptionOrNotes || ''} ${input.additionalCuratorNotes || ''}`.toLowerCase();
 
   // 1. Semantic Category Detection
-  let primaryCategory = Category.GASTRONOMY;
+  let primaryCategory: Category = Category.GASTRONOMY;
   let expertiseIds = ['exp-culture-museums'];
   let categories: string[] = ['Culture'];
 

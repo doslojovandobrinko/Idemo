@@ -3,15 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export enum Category {
-  WELLBEING = 'Wellbeing',
-  MEDICAL = 'Medical',
-  NATURE = 'Nature',
-  HISTORY = 'History',
-  GASTRONOMY = 'Gastronomy',
-  TRAVEL = 'Travel',
-  CLUBBING = 'Clubbing',
-}
+export const Category = {
+  WELLBEING: 'Wellbeing',
+  MEDICAL: 'Medical',
+  NATURE: 'Nature',
+  HISTORY: 'History',
+  GASTRONOMY: 'Gastronomy',
+  TRAVEL: 'Travel',
+  CLUBBING: 'Clubbing',
+  SHOPPING: 'Shopping',
+  NIGHTLIFE: 'Nightlife',
+  CULTURE: 'Culture',
+} as const;
+
+export type Category = (typeof Category)[keyof typeof Category];
 
 export type RecommendationLifecycleStatus = 
   | 'RESEARCH_CANDIDATE' 
@@ -281,14 +286,16 @@ export interface VisitorActionResult {
   error?: string;
 }
 
-export enum EditorialCollectionCategory {
-  HISTORY_HERITAGE = 'History & Heritage',
-  SPIRITUAL_CULTURE = 'Spiritual & Culture',
-  NATURE_TRAILS = 'Nature & Trails',
-  URBAN_MODERN = 'Urban & Modern',
-  GASTRONOMY_WINE = 'Gastronomy & Wine',
-  SPECIAL_JOURNEY = 'Special Journey',
-}
+export const EditorialCollectionCategory = {
+  HISTORY_HERITAGE: 'History & Heritage',
+  SPIRITUAL_CULTURE: 'Spiritual & Culture',
+  NATURE_TRAILS: 'Nature & Trails',
+  URBAN_MODERN: 'Urban & Modern',
+  GASTRONOMY_WINE: 'Gastronomy & Wine',
+  SPECIAL_JOURNEY: 'Special Journey',
+} as const;
+
+export type EditorialCollectionCategory = (typeof EditorialCollectionCategory)[keyof typeof EditorialCollectionCategory];
 
 export interface EditorialCollectionMapRouteItem {
   latitude: number;

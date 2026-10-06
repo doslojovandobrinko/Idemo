@@ -3769,7 +3769,12 @@ export default function App() {
 // --- SUB-COMPONENTS ---
 
 function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemTap, triggerHaptic: propHaptic }: any) {
-  const triggerHaptic = propHaptic || defaultHaptic || (() => {});
+  const safeHaptic = (pattern: number | number[] = 10) => {
+    try {
+      if (typeof propHaptic === 'function') propHaptic(pattern);
+      else triggerHaptic(pattern);
+    } catch (e) {}
+  };
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const t = TRANSLATIONS[language] || TRANSLATIONS['en'];
@@ -3831,24 +3836,24 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
       className="flex-1 flex flex-col justify-between items-center py-2 xs:py-2.5 px-3.5 relative h-full max-h-full overflow-hidden bg-[#FAF9F5] select-none gap-y-1.5"
     >
       {/* 1. Top Section (Promotional Statement - Oxblood #800020, Scaled -20% for 1-Screen Precision & Extra BOLD) */}
-      <div className="flex-shrink-0 flex flex-col justify-center items-center max-w-[360px] mx-auto w-full pt-0.5">
-        <div className="text-center w-full flex flex-col justify-center items-center gap-y-0.5">
-          <p className="font-sans text-[18px] xs:text-[21px] sm:text-[24px] text-[#800020] font-black uppercase tracking-[0.04em] xs:tracking-[0.05em] text-center leading-[1.15] whitespace-nowrap">
+      <div className="flex-shrink-0 flex flex-col justify-center items-center max-w-[360px] mx-auto w-full pt-1 pb-1 z-20 relative">
+        <div className="text-center w-full flex flex-col justify-center items-center gap-y-0.5 px-2">
+          <p className="font-sans text-[15px] xs:text-[18px] sm:text-[21px] text-[#800020] font-black uppercase tracking-[0.03em] xs:tracking-[0.04em] text-center leading-[1.2]">
             {t.serbia_subheadline_line1_l1}
           </p>
-          <p className="font-sans text-[18px] xs:text-[21px] sm:text-[24px] text-[#800020] font-black uppercase tracking-[0.04em] xs:tracking-[0.05em] text-center leading-[1.15] whitespace-nowrap">
+          <p className="font-sans text-[15px] xs:text-[18px] sm:text-[21px] text-[#800020] font-black uppercase tracking-[0.03em] xs:tracking-[0.04em] text-center leading-[1.2]">
             {t.serbia_subheadline_line1_l2}
           </p>
         </div>
       </div>
 
       {/* 2. Middle Section (Tactile IDEMO Button + Language Selector - Seamless Background Blend) */}
-      <div className="flex-1 flex flex-col justify-center items-center gap-y-1.5 xs:gap-y-2 my-auto w-full min-h-0">
-        {/* IDEMO Hero Emblem (Prime Ultra-Resolution +50% Footprint, Seamless Blend, Locked 1122:1402) */}
+      <div className="flex-1 flex flex-col justify-center items-center gap-y-2 my-auto w-full min-h-0 relative z-10">
+        {/* IDEMO Hero Emblem (Prime Ultra-Resolution, Seamless Blend, Locked 1122:1402) */}
         <div 
-          className={`relative flex justify-center items-center ${
+          className={`relative flex justify-center items-center shrink min-h-0 ${
             USE_CUSTOM_HERO_IMAGE 
-              ? "w-[360px] xs:w-[420px] sm:w-[480px] md:w-[520px] aspect-[1122/1402] max-h-[58vh] xs:max-h-[62vh] max-w-[calc(100vw-24px)]" 
+              ? "w-full max-w-[290px] xs:max-w-[330px] sm:max-w-[370px] aspect-[1122/1402] max-h-[38vh] xs:max-h-[42vh] rounded-[22px] overflow-hidden" 
               : "w-[210px] h-[52px]"
           }`} 
           style={{ perspective: "1000px" }}
@@ -3867,21 +3872,12 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
                 ? "bg-transparent border-none shadow-none p-0" 
                 : "bg-[#FAF9F5] rounded-[14px] px-4 border border-brand-charcoal/[0.12]"
             }`}
-            initial={{ 
-              scale: 1,
-              y: 0,
-            }}
-            whileHover={{ 
-              scale: 1.025,
-              y: -1,
-            }}
-            whileTap={{ 
-              scale: 0.97,
-              y: 2,
-            }}
+            initial={{ scale: 1, y: 0 }}
+            whileHover={{ scale: 1.02, y: -1 }}
+            whileTap={{ scale: 0.97, y: 2 }}
             transition={{ type: "spring", stiffness: 450, damping: 25 }}
-            onMouseDown={() => triggerHaptic(8)}
-            onTouchStart={() => triggerHaptic(8)}
+            onMouseDown={() => safeHaptic(8)}
+            onTouchStart={() => safeHaptic(8)}
             id="tactile-hero-logo"
           >
             {/* Premium Glass reflection glaze (Only for plaque mode) */}
@@ -3890,7 +3886,7 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
             )}
             
             {USE_CUSTOM_HERO_IMAGE ? (
-              <div className="relative w-full h-full flex items-center justify-center">
+              <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={activeHeroIndex}
@@ -3909,21 +3905,21 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
                         draggable={false}
                       />
                     ) : (
-                      <div className="relative w-full h-full rounded-[24px] overflow-hidden border border-[#23251E]/12 shadow-[0_8px_32px_rgba(0,0,0,0.08)] bg-stone-900 group">
+                      <div className="relative w-full h-full rounded-[20px] overflow-hidden border border-[#23251E]/12 shadow-[0_6px_24px_rgba(0,0,0,0.08)] bg-stone-900 group">
                         <img 
                           src={activeCard.src} 
                           alt={activeCard.titleEn} 
                           className="w-full h-full object-cover select-none pointer-events-none transition-transform duration-700 group-hover:scale-105"
                           draggable={false}
                         />
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-3.5 pt-8 flex flex-col justify-end text-left pointer-events-none">
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent px-3.5 pb-8 pt-8 flex flex-col justify-end text-left pointer-events-none z-20">
                           <span className="text-[9px] font-mono font-bold tracking-[0.12em] text-[#C5A059] uppercase block drop-shadow-xs">
                             ✦ {language === 'sr' ? activeCard.dayNameSr : activeCard.dayNameEn}
                           </span>
-                          <span className="font-serif text-xs xs:text-sm font-bold text-white tracking-tight leading-tight block drop-shadow-xs">
+                          <span className="font-serif text-xs font-bold text-white tracking-tight leading-tight block drop-shadow-xs mt-0.5">
                             {language === 'sr' ? activeCard.titleSr : activeCard.titleEn}
                           </span>
-                          <span className="text-[9.5px] font-mono text-white/80 tracking-wide block mt-0.5">
+                          <span className="text-[9.5px] font-mono text-white/90 tracking-wide block mt-0.5">
                             📍 {language === 'sr' ? activeCard.locationSr : activeCard.locationEn}
                           </span>
                         </div>
@@ -3935,13 +3931,13 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
                 {/* 7 Daily Rotating Carousel Controls */}
                 <div 
                   onClick={(e) => e.stopPropagation()}
-                  className="absolute bottom-1.5 z-30 flex items-center gap-1.5 px-2.5 py-1 bg-white/85 backdrop-blur-md rounded-full border border-[#E2DFD6] shadow-xs"
+                  className="absolute bottom-1.5 z-30 flex items-center gap-1.5 px-2.5 py-0.5 bg-white/90 backdrop-blur-md rounded-full border border-[#E2DFD6] shadow-xs"
                 >
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (triggerHaptic) triggerHaptic(6);
+                      safeHaptic(6);
                       setActiveHeroIndex((prev) => (prev === 0 ? 6 : prev - 1));
                     }}
                     className="text-[11px] font-mono font-bold text-[#8C8A7D] hover:text-[#1E2E20] px-1 cursor-pointer select-none"
@@ -3958,7 +3954,7 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (triggerHaptic) triggerHaptic(8);
+                          safeHaptic(8);
                           setActiveHeroIndex(idx);
                         }}
                         className={`h-2 rounded-full transition-all duration-300 cursor-pointer relative ${
@@ -3978,7 +3974,7 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (triggerHaptic) triggerHaptic(6);
+                      safeHaptic(6);
                       setActiveHeroIndex((prev) => (prev === 6 ? 0 : prev + 1));
                     }}
                     className="text-[11px] font-mono font-bold text-[#8C8A7D] hover:text-[#1E2E20] px-1 cursor-pointer select-none"
@@ -4008,7 +4004,7 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
                 <motion.button
                   key={lang.code}
                   onClick={() => {
-                    triggerHaptic(10);
+                    safeHaptic(10);
                     setLanguage(lang.code);
                   }}
                   whileTap={{ scale: 0.95 }}
@@ -4511,7 +4507,12 @@ function PulsatingProfileButton({ onClick, language, size = 48, iconSize = 20 }:
 }
 
 function HomeScreen({ likedIds, onSelectRec, language, recommendations, onNavigateToProfile, seasonalTips, vibeSettings, ratings, lowSignalMode, onToggleLowSignal, onEmblemTap, triggerHaptic: propHaptic }: any) {
-  const triggerHaptic = propHaptic || defaultHaptic || (() => {});
+  const triggerHaptic = (pattern: number | number[] = 10) => {
+    try {
+      if (typeof propHaptic === 'function') propHaptic(pattern);
+      else defaultHaptic(pattern);
+    } catch (e) {}
+  };
   const t = TRANSLATIONS[language] || TRANSLATIONS['en'];
   const [activeRecIndex, setActiveRecIndex] = useState(0);
   const [activeTooltipId, setActiveTooltipId] = useState<string | null>(null);
@@ -5966,7 +5967,12 @@ function DetailsCTA({
 }
 
 function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedule, onNavigate, onRemove, language, rating, onSaveRating, vibeSettings, onSelectRec, lowSignalMode, allRecommendations, isAdminPreview = false, onConfirmAccuracy, onNestedModalStateChange, triggerHaptic: propHaptic }: any) {
-  const triggerHaptic = propHaptic || defaultHaptic || (() => {});
+  const triggerHaptic = (pattern: number | number[] = 10) => {
+    try {
+      if (typeof propHaptic === 'function') propHaptic(pattern);
+      else defaultHaptic(pattern);
+    } catch (e) {}
+  };
   const [expanded, setExpanded] = useState(false);
   const [activeAccordion, setActiveAccordion] = useState<string | null>(null);
   const [scrolledPast, setScrolledPast] = useState(false);
@@ -7309,7 +7315,12 @@ function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedu
 }
 
 function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, language, onExplore, currentArchetype, sortedMonths, onAddBundle, lowSignalMode, allRecommendations, budget, time, days, timeOfDay, selectedCats = [], orbitX, orbitY, triggerHaptic: propHaptic }: any) {
-  const triggerHaptic = propHaptic || defaultHaptic || (() => {});
+  const triggerHaptic = (pattern: number | number[] = 10) => {
+    try {
+      if (typeof propHaptic === 'function') propHaptic(pattern);
+      else defaultHaptic(pattern);
+    } catch (e) {}
+  };
   const t = TRANSLATIONS[language] || TRANSLATIONS['en'];
   const dynamicStyle = React.useMemo(() => {
     return getDynamicStyle(language, selectedCats, days, budget, time);
@@ -9944,7 +9955,12 @@ function ExploreScreen({
   orbitY,
   triggerHaptic: propHaptic
 }: any) {
-  const triggerHaptic = propHaptic || defaultHaptic || (() => {});
+  const triggerHaptic = (pattern: number | number[] = 10) => {
+    try {
+      if (typeof propHaptic === 'function') propHaptic(pattern);
+      else defaultHaptic(pattern);
+    } catch (e) {}
+  };
   const t = TRANSLATIONS[language] || TRANSLATIONS['en'];
   const dynamicConciergeStyle = useMemo(() => {
     return getDynamicStyle(language, selectedCats || [], days || '1', budget || 100, time || 24);
