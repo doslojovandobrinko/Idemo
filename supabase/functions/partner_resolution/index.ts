@@ -422,7 +422,7 @@ serve(async (req: Request) => {
     // ENDPOINT: /change-pin (POST)
     if (pathname.endsWith("/change-pin") && req.method === "POST") {
       const body = await req.json().catch(() => ({}));
-      const { current_pin, new_pin, confirm_new_pin } = body;
+      const { current_pin, new_pin, confirm_new_pin, partner_name } = body;
 
       if (!current_pin || !new_pin || !confirm_new_pin) {
         return jsonResponse({
@@ -432,11 +432,20 @@ serve(async (req: Request) => {
         }, 400);
       }
 
+      if (partner_name && String(partner_name).trim().length > 16) {
+        return jsonResponse({
+          success: false,
+          error: "NAME_TOO_LONG",
+          message: "Naziv partnera ne može biti duži od 16 karaktera.",
+        }, 400);
+      }
+
       return invokeRpc(supabase, "change_partner_pin_secure", {
         p_partner_id: partnerId,
         p_current_pin: String(current_pin).trim(),
         p_new_pin: String(new_pin).trim(),
         p_confirm_new_pin: String(confirm_new_pin).trim(),
+        p_partner_name: partner_name ? String(partner_name).trim() : null,
       });
     }
 
@@ -642,6 +651,10 @@ serve(async (req: Request) => {
         photo_consent_given,
         draft_contact_phone,
         draft_contact_email,
+        proposed_rec_title,
+        proposed_rec_category,
+        proposed_rec_location,
+        proposed_rec_rationale,
       } = body;
 
       if (draft_photo_path) {
@@ -672,15 +685,28 @@ serve(async (req: Request) => {
         }
       }
 
-      return invokeRpc(supabase, "save_partner_profile_draft_with_authorization_secure", {
-        p_partner_id: partnerId,
-        p_intro_draft: intro_draft || null,
-        p_draft_photo_path: draft_photo_path || null,
-        p_draft_photo_mime: draft_photo_mime || null,
-        p_photo_consent: !!(photo_consent ?? photo_consent_given),
-        p_draft_contact_phone: draft_contact_phone !== undefined && draft_contact_phone !== null ? String(draft_contact_phone).trim() : null,
-        p_draft_contact_email: draft_contact_email !== undefined && draft_contact_email !== null ? String(draft_contact_email).trim() : null,
-      });
+        const { data: updateData, error: updateErr } = await supabase
+          .from("partner_profile_content")
+          .upsert({
+            partner_id: partnerId,
+            intro_draft: intro_draft || null,
+            draft_photo_path: draft_photo_path || null,
+            draft_photo_mime: draft_photo_mime || null,
+            photo_consent_given: !!(photo_consent ?? photo_consent_given),
+            draft_contact_phone: draft_contact_phone !== undefined && draft_contact_phone !== null ? String(draft_contact_phone).trim() : null,
+            draft_contact_email: draft_contact_email !== undefined && draft_contact_email !== null ? String(draft_contact_email).trim() : null,
+            proposed_rec_title: proposed_rec_title !== undefined && proposed_rec_title !== null ? String(proposed_rec_title).trim() : null,
+            proposed_rec_category: proposed_rec_category !== undefined && proposed_rec_category !== null ? String(proposed_rec_category).trim() : null,
+            proposed_rec_location: proposed_rec_location !== undefined && proposed_rec_location !== null ? String(proposed_rec_location).trim() : null,
+            proposed_rec_rationale: proposed_rec_rationale !== undefined && proposed_rec_rationale !== null ? String(proposed_rec_rationale).trim() : null,
+            updated_at: new Date().toISOString()
+          }, { onConflict: "partner_id" });
+
+        if (updateErr) {
+          return jsonResponse({ success: false, error: "DATABASE_ERROR", message: updateErr.message }, 500);
+        }
+
+        return jsonResponse({ success: true, message: "Draft saved successfully." });
     }
 
     // ENDPOINT: /profile-content/submit (POST)

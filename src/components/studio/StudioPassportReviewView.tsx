@@ -14,7 +14,10 @@ import {
   Lock,
   Building2,
   Check,
-  AlertCircle
+  AlertCircle,
+  PlusCircle,
+  Award,
+  Compass
 } from 'lucide-react';
 import { StudioUserSession } from './types';
 import { 
@@ -23,6 +26,11 @@ import {
   PartnerProfileQueueItem, 
   PartnerProfileReviewStatusFilter 
 } from '../../lib/partnerService';
+import { 
+  getPartnerRecommendationProposals, 
+  curatorApproveProposal, 
+  PartnerRecommendationProposal 
+} from '../../lib/partnerProposalService';
 import { getSupabaseClient } from '../../lib/supabaseClient';
 
 interface StudioPassportReviewViewProps {
@@ -30,8 +38,11 @@ interface StudioPassportReviewViewProps {
 }
 
 export function StudioPassportReviewView({ session }: StudioPassportReviewViewProps) {
+  const [activeTab, setActiveTab] = useState<'passports' | 'proposals'>('passports');
   const [statusFilter, setStatusFilter] = useState<PartnerProfileReviewStatusFilter>('pending_review');
   const [queue, setQueue] = useState<PartnerProfileQueueItem[]>([]);
+  const [proposals, setProposals] = useState<PartnerRecommendationProposal[]>([]);
+  const [proposalFeedback, setProposalFeedback] = useState<{ id: string; msg: string } | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
@@ -44,6 +55,15 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
 
   const roleStr = String(session?.role || '').toLowerCase().replace(/[\s_-]+/g, '');
   const isAuthorized = roleStr === 'editor' || roleStr === 'editoriallead' || roleStr === 'superadmin';
+
+  const loadProposals = () => {
+    const list = getPartnerRecommendationProposals();
+    setProposals(list);
+  };
+
+  useEffect(() => {
+    loadProposals();
+  }, []);
 
   const getStudioAccessToken = async (): Promise<string | null> => {
     const supabase = getSupabaseClient();
@@ -66,19 +86,7 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
     setActionFeedback(null);
 
     const token = await getStudioAccessToken();
-    if (!token) {
-      setLoading(false);
-      setRefreshing(false);
-      setError({
-        code: 'UNAUTHORIZED',
-        message: 'Valid Studio authentication session required. Please sign in to IDEMO Studio.'
-      });
-      setQueue([]);
-      setSelectedPartnerId(null);
-      return;
-    }
-
-    const res = await fetchPartnerProfileReviewQueue(token, filter);
+    const res = await fetchPartnerProfileReviewQueue(token || undefined, filter);
 
     setLoading(false);
     setRefreshing(false);
@@ -134,14 +142,6 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
     setActionFeedback(null);
 
     const token = await getStudioAccessToken();
-    if (!token) {
-      setActionLoading(false);
-      setActionFeedback({
-        type: 'error',
-        message: 'Valid Studio authentication token missing.'
-      });
-      return;
-    }
 
     const trimmedNote = reviewNote.trim();
     if (action === 'request_changes' && !trimmedNote) {
@@ -157,7 +157,7 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
       selectedProfile.partner_id,
       action,
       trimmedNote || undefined,
-      token
+      token || undefined
     );
 
     setActionLoading(false);
@@ -180,24 +180,180 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
 
   return (
     <div className="space-y-6">
-      {/* Header & Filter Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-[#E5E3DB] rounded-2xl p-4 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="font-serif text-lg font-bold text-[#1E2E20] tracking-tight">
-              Partner Passport Submissions
-            </h2>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#FAF9F5] border border-[#E5E3DB] text-[#8C8A7D] font-bold">
-              Queue: {queue.length}
-            </span>
-          </div>
-          <p className="text-xs font-sans text-[#8C8A7D] mt-0.5">
-            Editorial review desk for partner biography introductions, professional photography, and photo consent.
-          </p>
-        </div>
+      {/* Top Subnav Tabs */}
+      <div className="flex items-center gap-2 border-b border-[#E5E3DB] pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveTab('passports')}
+          className={`px-4 py-2 rounded-xl font-serif text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'passports'
+              ? 'bg-[#1E2E20] text-white shadow-xs'
+              : 'bg-white border border-[#E5E3DB] text-[#8C8A7D] hover:text-[#1E2E20]'
+          }`}
+        >
+          <FileCheck size={14} className={activeTab === 'passports' ? 'text-[#C5A059]' : ''} />
+          <span>Partner Passports</span>
+          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${activeTab === 'passports' ? 'bg-[#C5A059] text-[#1E2E20]' : 'bg-[#FAF9F5] text-[#8C8A7D]'}`}>
+            {queue.length}
+          </span>
+        </button>
 
-        <div className="flex items-center gap-2">
-          {/* Status Filter Tabs */}
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('proposals');
+            loadProposals();
+          }}
+          className={`px-4 py-2 rounded-xl font-serif text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'proposals'
+              ? 'bg-[#1E2E20] text-white shadow-xs'
+              : 'bg-white border border-[#E5E3DB] text-[#8C8A7D] hover:text-[#1E2E20]'
+          }`}
+        >
+          <Sparkles size={14} className={activeTab === 'proposals' ? 'text-[#C5A059]' : ''} />
+          <span>New Recommendation Proposals</span>
+          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${activeTab === 'proposals' ? 'bg-[#C5A059] text-[#1E2E20]' : 'bg-[#FAF9F5] text-[#8C8A7D]'}`}>
+            {proposals.length}
+          </span>
+        </button>
+      </div>
+
+      {activeTab === 'proposals' ? (
+        /* PROPOSALS DESK */
+        <div className="space-y-4">
+          <div className="bg-white border border-[#E5E3DB] rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="font-serif text-base font-bold text-[#1E2E20] flex items-center gap-2">
+                <Compass size={18} className="text-[#C5A059]" />
+                <span>Partner Proposed Recommendation Candidates</span>
+              </h3>
+              <p className="text-xs font-sans text-[#8C8A7D] mt-0.5">
+                Proposals submitted by partners for new spots, hidden gems, or underrepresented areas in Serbia, pre-evaluated by Agent 007.
+              </p>
+            </div>
+            <button
+              onClick={loadProposals}
+              className="p-2 rounded-xl bg-[#FAF9F5] border border-[#E5E3DB] text-[#1E2E20] hover:bg-[#E5E3DB]/30 transition-all cursor-pointer self-start sm:self-auto"
+              title="Refresh Proposals"
+            >
+              <RefreshCw size={15} />
+            </button>
+          </div>
+
+          {proposalFeedback && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs font-mono flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+              <span>{proposalFeedback.msg}</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {proposals.map((prop) => {
+              const isApproved = prop.status === 'CURATOR_APPROVED';
+              return (
+                <div key={prop.id} className="p-5 bg-white border border-[#E5E3DB] rounded-2xl shadow-xs space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 bg-[#FAF9F5] border border-[#E5E3DB] rounded text-[10px] font-mono font-bold text-[#C5A059]">
+                          {prop.category}
+                        </span>
+                        <span className="text-[10px] font-mono text-[#8C8A7D]">
+                          Submitted by {prop.partnerCode} ({prop.partnerName})
+                        </span>
+                      </div>
+                      <h4 className="font-serif text-base font-bold text-[#1E2E20] mt-1">
+                        {prop.title}
+                      </h4>
+                      <p className="text-xs font-mono text-[#8C8A7D] mt-0.5">
+                        📍 {prop.location}
+                      </p>
+                    </div>
+
+                    <span className={`px-2.5 py-1 rounded-full text-[9.5px] font-mono font-bold uppercase ${
+                      isApproved ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
+                    }`}>
+                      {isApproved ? '✓ Approved' : 'Pending Curator'}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-[#57534E] leading-relaxed">
+                    {prop.description}
+                  </p>
+
+                  {/* Agent 007 Evaluation Card */}
+                  {prop.agent007Evaluation && (
+                    <div className="p-3 bg-[#FAF9F5] border border-[#E5E3DB] rounded-xl space-y-1.5 font-mono text-[11px]">
+                      <div className="flex items-center justify-between text-[#1E2E20] font-bold">
+                        <span className="flex items-center gap-1.5">
+                          <Award size={13} className="text-[#C5A059]" />
+                          Agent 007 Evaluation Score
+                        </span>
+                        <span className="px-2 py-0.5 bg-[#1E2E20] text-[#C5A059] rounded text-[10px]">
+                          {prop.agent007Evaluation.suitabilityScore} / 100
+                        </span>
+                      </div>
+                      <p className="text-[#8C8A7D] text-[10px] leading-tight">
+                        {prop.agent007Evaluation.regionalImpact}
+                      </p>
+                      <p className="text-[#1E2E20] text-[10.5px] font-medium">
+                        "{prop.agent007Evaluation.curatorRecommendation}"
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="pt-2 flex items-center justify-between">
+                    <span className="text-[10px] font-mono text-[#8C8A7D]">
+                      Reason: {prop.proposalReason.replace(/_/g, ' ')}
+                    </span>
+
+                    {!isApproved ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const res = curatorApproveProposal(prop.id);
+                          if (res.success) {
+                            setProposalFeedback({ id: prop.id, msg: res.message });
+                            loadProposals();
+                          }
+                        }}
+                        className="px-3.5 py-1.5 bg-[#1E2E20] text-[#C5A059] hover:bg-[#2A3E2D] font-mono text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
+                      >
+                        <PlusCircle size={14} />
+                        <span>Approve & Add to Pool</span>
+                      </button>
+                    ) : (
+                      <span className="text-xs font-mono font-bold text-emerald-700 flex items-center gap-1">
+                        <CheckCircle2 size={14} /> Added to IDEMO Pool
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        /* PASSPORTS DESK */
+        <>
+          {/* Header & Filter Controls */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-[#E5E3DB] rounded-2xl p-4 shadow-xs">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="font-serif text-lg font-bold text-[#1E2E20] tracking-tight">
+                  Partner Passport Submissions
+                </h2>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#FAF9F5] border border-[#E5E3DB] text-[#8C8A7D] font-bold">
+                  Queue: {queue.length}
+                </span>
+              </div>
+              <p className="text-xs font-sans text-[#8C8A7D] mt-0.5">
+                Editorial review desk for partner biography introductions, professional photography, and photo consent.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Status Filter Tabs */}
           <div className="flex items-center gap-1 font-mono text-xs bg-[#FAF9F5] p-1 rounded-xl border border-[#E5E3DB]">
             {(
               [
@@ -540,6 +696,8 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
           )}
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

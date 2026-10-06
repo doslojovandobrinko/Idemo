@@ -123,8 +123,11 @@ export function StudioAuthShell({ onLoginSuccess, onCancel }: StudioAuthShellPro
       let userEmail = cleanEmail;
       let userName = activeRoleConfig.role;
 
-      // 1. Attempt Supabase Auth if configured and reachable
-      if (isSupabaseConfigured()) {
+      // 1. Authoritative operator credentials match permanently across all 6 roles
+      if (isAuthorizedCredential) {
+        derivedRole = activeRoleConfig.role;
+      } else if (isSupabaseConfigured()) {
+        // 2. Attempt Supabase Auth for registered remote users
         const supabase = getSupabaseClient();
         if (supabase) {
           try {
@@ -143,16 +146,15 @@ export function StudioAuthShell({ onLoginSuccess, onCancel }: StudioAuthShellPro
               if (remoteRole) {
                 derivedRole = remoteRole;
               }
+            } else if (error) {
+              setErrorMsg(error.message || 'Authentication failed: Invalid credentials.');
+              setIsSubmitting(false);
+              return;
             }
           } catch (sbErr) {
             console.warn('Supabase authentication network or client notice:', sbErr);
           }
         }
-      }
-
-      // 2. Authoritative operator credentials match permanently across all 6 roles
-      if (!derivedRole && isAuthorizedCredential) {
-        derivedRole = activeRoleConfig.role;
       }
 
       if (!derivedRole) {

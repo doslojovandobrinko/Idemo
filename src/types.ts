@@ -270,6 +270,7 @@ export interface VisitorProposalResult {
   created_at?: string;
   has_countered?: boolean;
   error?: string;
+  retryAfter?: number;
 }
 
 export interface VisitorActionResult {

@@ -44,6 +44,9 @@ export interface PartnerCoverageRecord {
   id?: string;
   recommendation_id: string;
   partner_id: string;
+  partner_code?: string;
+  partner_name?: string;
+  priority_rank?: number;
   qualification_state: QualificationState;
   participation_state: ParticipationState;
   passport_state: PassportVerificationState;

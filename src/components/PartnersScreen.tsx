@@ -932,6 +932,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   } | null>(null);
 
   const [mustChangePinMode, setMustChangePinMode] = useState<boolean>(false);
+  const [changePartnerName, setChangePartnerName] = useState<string>('');
   const [changePinCurrent, setChangePinCurrent] = useState<string>('');
   const [changePinNew, setChangePinNew] = useState<string>('');
   const [changePinConfirm, setChangePinConfirm] = useState<string>('');
@@ -1421,7 +1422,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       id: `msg-${Date.now()}`,
       sender: 'You' as const,
       text: text.trim(),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      recipient: 'office@idemo.group'
     };
     const updatedThread = [...currentThread, newMessage];
     const updatedAll = { ...partnerMessages, [partnerId]: updatedThread };
@@ -1431,6 +1433,25 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     } catch (e) {
       console.error(e);
     }
+
+    // Trigger direct mailto dispatch hook to office@idemo.group
+    try {
+      const pName = currentSimulatedPartner?.name || partnerId;
+      const pCode = currentSimulatedPartner?.publicCode || partnerId;
+      const subject = encodeURIComponent(`IDEMO Partner Message - ${pName} (${pCode})`);
+      const body = encodeURIComponent(`Partner Message:\n\n${text.trim()}\n\n---\nPartner Name: ${pName}\nPartner Code: ${pCode}\nDispatched via IDEMO Partner Portal`);
+      const mailtoUrl = `mailto:office@idemo.group?subject=${subject}&body=${body}`;
+      
+      // Safe fallback window open for email client
+      const a = document.createElement('a');
+      a.href = mailtoUrl;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.click();
+    } catch (e) {
+      console.warn('Mailto dispatch notice:', e);
+    }
+
     triggerHaptic(10);
   };
 
@@ -1800,6 +1821,12 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     setChangePinError('');
     setChangePinSuccess('');
 
+    if (changePartnerName.trim().length > 16) {
+      setChangePinError(isSr ? 'Naziv partnera ne može biti duži od 16 karaktera.' : 'Partner name cannot exceed 16 characters.');
+      triggerHaptic(6);
+      return;
+    }
+
     if (changePinNew.length !== 4) {
       setChangePinError(isSr ? 'Novi PIN mora sadržati tačno 4 cifre.' : 'New PIN must be exactly 4 digits.');
       triggerHaptic(6);
@@ -1812,18 +1839,19 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       return;
     }
 
-    const res = await changePartnerPin(changePinCurrent, changePinNew, changePinConfirm);
+    const res = await changePartnerPin(changePinCurrent, changePinNew, changePinConfirm, changePartnerName.trim() || undefined);
     if (res.success) {
-      setChangePinSuccess(isSr ? 'PIN uspešno promenjen. Molimo prijavite se ponovo sa novim PIN-om.' : 'PIN changed successfully. Please log in again with your new PIN.');
+      setChangePinSuccess(isSr ? 'Podaci uspešno promenjeni. Molimo prijavite se ponovo sa novim PIN-om.' : 'Credentials successfully updated. Please log in again with your new PIN.');
       setMustChangePinMode(false);
       setPortalRole('guest');
       setActivePartnerId(null);
+      setChangePartnerName('');
       setChangePinCurrent('');
       setChangePinNew('');
       setChangePinConfirm('');
       triggerHaptic([30, 20, 30]);
     } else {
-      setChangePinError(res.error || res.message || (isSr ? 'Greška pri promeni PIN-a.' : 'Failed to change PIN.'));
+      setChangePinError(res.error || res.message || (isSr ? 'Greška pri promeni podataka.' : 'Failed to update credentials.'));
       triggerHaptic([60, 40]);
     }
   };
@@ -2619,6 +2647,25 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
               </p>
 
               <form onSubmit={handleChangePinSubmit} className="space-y-4 pt-1">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[9px] uppercase tracking-widest font-black text-brand-charcoal/50 block">
+                      Novi naziv partnera (opciono, max 16 karaktera)
+                    </label>
+                    <span className="text-[9px] font-mono font-bold text-brand-charcoal/40">
+                      {changePartnerName.length} / 16
+                    </span>
+                  </div>
+                  <input 
+                    type="text" 
+                    maxLength={16}
+                    placeholder="npr. IDEMO Partner"
+                    value={changePartnerName}
+                    onChange={e => setChangePartnerName(e.target.value)}
+                    className="w-full text-center text-sm font-sans font-bold h-11 bg-[#FAF9F5] border border-[#2D3025]/15 rounded-xl text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none px-3"
+                  />
+                </div>
+
                 <div className="space-y-1.5">
                   <label className="text-[9px] uppercase tracking-widest font-black text-brand-charcoal/50 block">
                     Trenutni privremeni PIN
@@ -5011,7 +5058,9 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                       <MessageCircle size={14} />
                     </span>
                     <div className="space-y-0.5">
-                      <span className="text-[8px] uppercase tracking-widest font-mono text-brand-charcoal/40 font-bold block">Secure Thread</span>
+                      <span className="text-[8px] uppercase tracking-widest font-mono text-brand-charcoal/40 font-bold block">
+                        Secure Thread • office@idemo.group
+                      </span>
                       <h3 className="text-xs uppercase tracking-wide font-black text-brand-charcoal">MESSAGES WITH IDEMO</h3>
                     </div>
                   </div>
@@ -5027,10 +5076,10 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                               ? 'bg-brand-charcoal text-white rounded-tr-none' 
                               : 'bg-[#FAF9F5] border border-[#2D3025]/10 text-brand-charcoal rounded-tl-none'
                           }`}>
-                            ${msg.text}
+                            {msg.text}
                           </div>
                           <span className="text-[8px] font-mono text-brand-charcoal/40 px-1">
-                            ${isMe ? 'You' : 'IDEMO Curation'} • ${new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {isMe ? 'You → office@idemo.group' : 'IDEMO Curation'} • {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
                       );

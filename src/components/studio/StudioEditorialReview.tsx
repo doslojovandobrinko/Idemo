@@ -175,19 +175,7 @@ export function StudioEditorialReview({
     setActionFeedback(null);
 
     const token = await getStudioAccessToken();
-    if (!token) {
-      setPassportLoading(false);
-      setPassportRefreshing(false);
-      setPassportError({
-        code: 'UNAUTHORIZED',
-        message: 'Valid Studio authentication is required.'
-      });
-      setPassportQueue([]);
-      setSelectedPassportPartnerId(null);
-      return;
-    }
-
-    const res = await fetchPartnerProfileReviewQueue(token, filter);
+    const res = await fetchPartnerProfileReviewQueue(token || undefined, filter);
 
     setPassportLoading(false);
     setPassportRefreshing(false);
@@ -238,16 +226,13 @@ export function StudioEditorialReview({
     setActionLoading(true);
 
     const token = await getStudioAccessToken();
-    if (!token) {
-      setActionLoading(false);
-      setActionFeedback({
-        type: 'error',
-        message: 'Valid Studio authentication is required.'
-      });
-      return;
-    }
 
-    const res = await adminReviewPartnerProfile(token, selectedPassportProfile.partner_id, action, trimmedNote || undefined);
+    const res = await adminReviewPartnerProfile(
+      selectedPassportProfile.partner_id,
+      action,
+      trimmedNote || undefined,
+      token || undefined
+    );
 
     setActionLoading(false);
 

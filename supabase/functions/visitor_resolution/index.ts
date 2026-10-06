@@ -90,17 +90,18 @@ function isRateLimited(ip: string): boolean {
   return false;
 }
 
-function errorResponse(status: number, publicMessage: string, logMessage?: string) {
+function errorResponse(status: number, publicMessage: string, logMessage?: string, retryAfterSeconds?: number) {
   if (logMessage) {
     console.error(`[Edge Gateway Error] ${logMessage}`);
   }
-  return new Response(
-    JSON.stringify({ success: false, error: publicMessage }),
-    {
-      status,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    }
-  );
+  const headers: Record<string, string> = { ...corsHeaders, "Content-Type": "application/json" };
+  const body: Record<string, any> = { success: false, error: publicMessage };
+  if (status === 429) {
+    const retrySec = retryAfterSeconds || 900;
+    headers["Retry-After"] = String(retrySec);
+    body.retry_after = retrySec;
+  }
+  return new Response(JSON.stringify(body), { status, headers });
 }
 
 serve(async (req) => {
@@ -196,34 +197,75 @@ serve(async (req) => {
       return errorResponse(400, "Access denied", "Invalid match UUID format.");
     }
 
-    // 5. Cryptographic Non-Reversible Rate Limit Bucket Generation (Throttling occurs before DB lookup)
-    const sourceHash = await hmacSha256(secret, clientIp);
-    const targetHash = await hmacSha256(secret, `${clientIp}:${inquiryId}`);
+    // Token format validation
+    const tokenFormatValid = /^idm_rc_[0-9a-f]{32}$/i.test(rawToken);
+    if (!tokenFormatValid) {
+      return errorResponse(400, "Access denied", "Invalid token format.");
+    }
 
-    // Execute PostgreSQL-backed durable rate limiter inside one atomic transaction
-    const { data: limitAllowed, error: limitError } = await supabase.rpc("check_and_increment_rate_limits", {
-      p_source_bucket: sourceHash,
-      p_source_max: 30,
+    // 5. Pre-validation Admission Guard: Atomically reserve capacity before credential validation.
+    // Uses check_and_increment_rate_limits with dedicated admission buckets to prevent concurrent bypass.
+    const isReadOnly = path.endsWith("/proposal") || path.endsWith("/status");
+    const admissionScope = isReadOnly ? "admission:read" : "admission:mutation";
+    const admissionSourceHash = await hmacSha256(secret, `${clientIp}:${admissionScope}`);
+    const admissionTargetHash = await hmacSha256(secret, `${clientIp}:${inquiryId}:${admissionScope}`);
+
+    const admissionTargetMax = isReadOnly ? 80 : 5;
+    const admissionSourceMax = isReadOnly ? 60 : 10;
+
+    const { data: admissionAllowed, error: admissionError } = await supabase.rpc("check_and_increment_rate_limits", {
+      p_source_bucket: admissionSourceHash,
+      p_source_max: admissionSourceMax,
       p_source_window: "1 minute",
       p_source_cooldown: "5 minutes",
-      p_target_bucket: targetHash,
-      p_target_max: 5,
+      p_target_bucket: admissionTargetHash,
+      p_target_max: admissionTargetMax,
       p_target_window: "15 minutes",
       p_target_cooldown: "15 minutes",
     });
 
-    // FAIL-CLOSED behavior: Block processing if the durable limiter is unavailable, times out, or errors out.
-    if (limitError || limitAllowed === null || limitAllowed === undefined) {
+    // FAIL-CLOSED behavior: If rate-limiter errors or quota is exhausted, block before credential validation
+    if (admissionError || admissionAllowed === null || admissionAllowed === undefined) {
       return errorResponse(
         500,
         "Your request cannot be checked at this moment. Please try again shortly.",
-        `Durable rate limiter check failed or returned invalid response: ${limitError?.message || "No response data"}`
+        `Admission rate limiter check failed: ${admissionError?.message || "No response data"}`
       );
-    } else if (!limitAllowed) {
-      return errorResponse(429, "Too many requests. Please slow down.", "Durable rate limit blocked hashes.");
+    } else if (!admissionAllowed) {
+      return errorResponse(429, "Too many requests. Please slow down.", "Admission rate limit exceeded.", 900);
     }
 
-    // 6. Route handling & safe RPC invocation
+    // 6. Authenticate visitor token credential (executed ONLY after admission capacity is atomically reserved)
+    const { data: inquiryData, error: valError } = await supabase.rpc("validate_and_get_inquiry", {
+      p_inquiry_id: inquiryId,
+      p_raw_token: rawToken,
+    });
+    const isAuthenticated = !valError && !!inquiryData;
+
+    // 7. Post-validation: Enforce strict invalid-token and unauthenticated limits
+    if (!isAuthenticated) {
+      const unauthSourceHash = await hmacSha256(secret, `${clientIp}:unauth`);
+      const unauthTargetHash = await hmacSha256(secret, `${clientIp}:${inquiryId}:unauth`);
+
+      const { data: unauthAllowed } = await supabase.rpc("check_and_increment_rate_limits", {
+        p_source_bucket: unauthSourceHash,
+        p_source_max: 10,
+        p_source_window: "1 minute",
+        p_source_cooldown: "5 minutes",
+        p_target_bucket: unauthTargetHash,
+        p_target_max: 5,
+        p_target_window: "15 minutes",
+        p_target_cooldown: "15 minutes",
+      });
+
+      if (unauthAllowed === false) {
+        return errorResponse(429, "Too many requests. Please slow down.", "Invalid token attempt limit exceeded.", 900);
+      }
+
+      return errorResponse(403, "Access denied", `Visitor validation failed: ${valError?.message || "Invalid credential"}`);
+    }
+
+    // 8. Route handling & safe RPC invocation
     let rpcName = "";
     let rpcParams: Record<string, any> = {
       p_inquiry_id: inquiryId,

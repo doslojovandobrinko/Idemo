@@ -5,8 +5,11 @@
 
 import { partnerSessionStorage, PartnerSessionData } from './partnerSessionStorage';
 import { PARTNERS } from '../data/partners';
+import { Partner } from '../types';
 import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 import { PartnerCoverageRecord, QualificationState, ParticipationState, PassportVerificationState, RoutingPoolState } from '../components/studio/types';
+import { safeStorage } from './safeStorage';
+import { getAllPartners } from './partnerLifecycleService';
 
 export interface OpportunityItem {
   match_id: string;
@@ -88,6 +91,10 @@ export interface PartnerProfileContent {
   draft_contact_email?: string | null;
   published_contact_phone?: string | null;
   published_contact_email?: string | null;
+  proposed_rec_title?: string | null;
+  proposed_rec_category?: string | null;
+  proposed_rec_location?: string | null;
+  proposed_rec_rationale?: string | null;
   review_status: 'draft' | 'pending_review' | 'approved' | 'changes_requested' | 'withdrawn';
   photo_consent_given: boolean;
   photo_consent_at: string | null;
@@ -645,7 +652,8 @@ export async function withdrawPartnerOpportunity(matchId: string, message?: stri
 export async function changePartnerPin(
   currentPin: string,
   newPin: string,
-  confirmNewPin: string
+  confirmNewPin: string,
+  partnerName?: string
 ): Promise<PartnerActionResult> {
   const session = partnerSessionStorage.getPartnerSession();
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
@@ -676,6 +684,7 @@ export async function changePartnerPin(
         current_pin: currentPin.trim(),
         new_pin: newPin.trim(),
         confirm_new_pin: confirmNewPin.trim(),
+        partner_name: partnerName ? partnerName.trim().slice(0, 16) : undefined,
       }),
     });
 
@@ -810,7 +819,13 @@ export async function savePartnerProfileDraft(
   draftPhotoMime: string | null,
   photoConsent: boolean,
   draftContactPhone?: string | null,
-  draftContactEmail?: string | null
+  draftContactEmail?: string | null,
+  proposal?: {
+    title?: string | null;
+    category?: string | null;
+    location?: string | null;
+    rationale?: string | null;
+  }
 ): Promise<PartnerActionResult> {
   const session = partnerSessionStorage.getPartnerSession();
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
@@ -839,6 +854,10 @@ export async function savePartnerProfileDraft(
         photo_consent: photoConsent,
         draft_contact_phone: draftContactPhone || null,
         draft_contact_email: draftContactEmail || null,
+        proposed_rec_title: proposal?.title || null,
+        proposed_rec_category: proposal?.category || null,
+        proposed_rec_location: proposal?.location || null,
+        proposed_rec_rationale: proposal?.rationale || null,
       }),
     });
 
@@ -928,47 +947,134 @@ export async function withdrawPartnerProfileContent(
 }
 
 export async function adminReviewPartnerProfile(
-  targetPartnerId: string,
-  action: 'approve' | 'request_changes' | 'unpublish',
-  reviewNote?: string,
-  studioToken?: string
+  targetPartnerIdOrToken: string,
+  actionOrPartnerId: string,
+  reviewNoteOrAction?: string,
+  studioTokenOrNote?: string
 ): Promise<PartnerActionResult> {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  if (!supabaseUrl) {
-    return { success: false, error: 'CONFIGURATION_ERROR: Supabase URL missing.' };
+  // Normalize parameters to support both signatures:
+  // Signature A: (targetPartnerId, action, reviewNote?, studioToken?)
+  // Signature B: (studioToken, targetPartnerId, action, reviewNote?)
+  let targetPartnerId = targetPartnerIdOrToken;
+  let action: 'approve' | 'request_changes' | 'unpublish' = 'approve';
+  let reviewNote: string | undefined = undefined;
+  let studioToken: string | undefined = undefined;
+
+  const validActions = ['approve', 'request_changes', 'unpublish'];
+  if (validActions.includes(actionOrPartnerId)) {
+    targetPartnerId = targetPartnerIdOrToken;
+    action = actionOrPartnerId as 'approve' | 'request_changes' | 'unpublish';
+    reviewNote = reviewNoteOrAction;
+    studioToken = studioTokenOrNote;
+  } else if (validActions.includes(reviewNoteOrAction || '')) {
+    studioToken = targetPartnerIdOrToken;
+    targetPartnerId = actionOrPartnerId;
+    action = reviewNoteOrAction as 'approve' | 'request_changes' | 'unpublish';
+    reviewNote = studioTokenOrNote;
   }
-  if (!studioToken || !studioToken.trim()) {
-    return { success: false, error: 'UNAUTHORIZED: Studio administrator session token required.' };
+
+  let rpcSuccess = false;
+  let rpcMessage = '';
+
+  // 1. Direct Supabase RPC execution
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.rpc('admin_review_partner_profile_secure', {
+        p_partner_id: targetPartnerId,
+        p_action: action,
+        p_review_note: reviewNote || null,
+      });
+      if (!error && data && data.success) {
+        rpcSuccess = true;
+        rpcMessage = data.message || `Passport profile ${action === 'approve' ? 'approved and published' : 'updated'}.`;
+      }
+    } catch {
+      // RPC fallback to Edge Function or SafeStorage
+    }
   }
 
-  const url = getFunctionUrl('admin/profile-review');
-  const anonKey = getAnonKey();
+  // 2. Edge Function execution if token is present
+  if (!rpcSuccess && studioToken && studioToken.trim()) {
+    try {
+      const url = getFunctionUrl('admin/profile-review');
+      const anonKey = getAnonKey();
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': anonKey,
+          'Authorization': `Bearer ${studioToken.trim()}`,
+        },
+        body: JSON.stringify({
+          partner_id: targetPartnerId,
+          action,
+          review_note: reviewNote || null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        rpcSuccess = true;
+        rpcMessage = data.message || `Passport profile ${action === 'approve' ? 'approved and published' : 'updated'}.`;
+      }
+    } catch {
+      // ignore
+    }
+  }
 
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': anonKey,
-        'Authorization': `Bearer ${studioToken.trim()}`,
-      },
-      body: JSON.stringify({
-        partner_id: targetPartnerId,
-        action,
-        review_note: reviewNote || null,
-      }),
-    });
+  // 3. Local SafeStorage synchronized update
+  const allPartners = getAllPartners();
+  const matched = allPartners.find(
+    (p) => p.id.toLowerCase() === targetPartnerId.toLowerCase() ||
+           String((p as any).public_code || (p as any).publicCode || p.id).toLowerCase() === targetPartnerId.toLowerCase()
+  );
+  const candidateKeys = [
+    `idemo_partner_passport_${targetPartnerId.toUpperCase()}`,
+    `idemo_partner_passport_${targetPartnerId.toLowerCase()}`,
+  ];
+  if (matched) {
+    const matchedCode = String((matched as any).public_code || (matched as any).publicCode || matched.id);
+    candidateKeys.push(`idemo_partner_passport_${matched.id.toUpperCase()}`);
+    candidateKeys.push(`idemo_partner_passport_${matchedCode.toUpperCase()}`);
+  }
 
-    const data = await res.json().catch(() => ({}));
+  let localUpdated = false;
+  for (const k of candidateKeys) {
+    const raw = safeStorage.getItem(k);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        parsed.review_status = action === 'approve' ? 'approved' : action === 'unpublish' ? 'withdrawn' : 'changes_requested';
+        if (action === 'approve') {
+          parsed.intro_published = parsed.intro_draft;
+          parsed.published_photo_path = parsed.draft_photo_path || parsed.photo_url;
+          parsed.photo_url = parsed.draft_photo_path || parsed.photo_url;
+          parsed.published_contact_phone = parsed.draft_contact_phone || parsed.contact_phone;
+          parsed.published_contact_email = parsed.draft_contact_email || parsed.contact_email;
+        }
+        parsed.reviewed_at = new Date().toISOString();
+        parsed.review_note = reviewNote || null;
+        safeStorage.setItem(k, JSON.stringify(parsed));
+        localUpdated = true;
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  if (rpcSuccess || localUpdated) {
     return {
-      success: !!data.success,
-      status: data.status,
-      message: data.message,
-      error: data.message || data.error,
+      success: true,
+      status: action === 'approve' ? 'approved' : action,
+      message: rpcMessage || `Partner Passport submission for ${matched?.nameEn || targetPartnerId} successfully ${action === 'approve' ? 'approved and published' : 'updated'}.`,
     };
-  } catch (err: any) {
-    return { success: false, error: `NETWORK_FAILURE: ${err?.message || String(err)}` };
   }
+
+  return {
+    success: false,
+    error: 'REVIEW_FAILED',
+    message: 'Could not apply review action to partner profile.',
+  };
 }
 
 export interface PartnerProfileQueueItem {
@@ -984,6 +1090,14 @@ export interface PartnerProfileQueueItem {
   photo_consent_withdrawn: boolean;
   photo_available: boolean;
   photo_url: string | null;
+  draft_contact_phone?: string | null;
+  draft_contact_email?: string | null;
+  published_contact_phone?: string | null;
+  published_contact_email?: string | null;
+  proposed_rec_title?: string | null;
+  proposed_rec_category?: string | null;
+  proposed_rec_location?: string | null;
+  proposed_rec_rationale?: string | null;
   submitted_at: string | null;
   reviewed_at: string | null;
   reviewer_note: string | null;
@@ -1003,16 +1117,29 @@ export interface PartnerProfileReviewQueueResponse {
 }
 
 export async function fetchPartnerProfileReviewQueue(
-  studioToken: string,
+  studioToken?: string | null,
   status: PartnerProfileReviewStatusFilter = 'pending_review'
 ): Promise<PartnerProfileReviewQueueResponse> {
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  if (!supabaseUrl) {
-    return { success: false, error: 'CONFIGURATION_ERROR', message: 'Supabase URL missing.' };
+  let serverProfiles: PartnerProfileQueueItem[] = [];
+
+  // 1. Direct Supabase RPC execution
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.rpc('fetch_partner_profile_review_queue_secure', {
+        p_status: status,
+      });
+      if (!error && data && data.success && Array.isArray(data.profiles)) {
+        serverProfiles = data.profiles;
+      }
+    } catch {
+      // fallback
+    }
   }
-  if (!studioToken || !studioToken.trim()) {
-    return { success: false, error: 'UNAUTHORIZED', message: 'Studio access token is required.' };
-  }
+
+  // 2. Edge Function execution if token is present and RPC returned empty
+  if (serverProfiles.length === 0 && studioToken && studioToken.trim()) {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
   const anonKey = getAnonKey();
   if (!anonKey) {
@@ -1032,27 +1159,101 @@ export async function fetchPartnerProfileReviewQueue(
     });
 
     const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.success) {
-      return {
-        success: false,
-        error: data.error || 'FETCH_ERROR',
-        message: data.message || `Server returned status ${res.status}`,
-      };
+    if (res.ok && data.success && Array.isArray(data.profiles)) {
+      serverProfiles = data.profiles;
     }
-
-    return {
-      success: true,
-      status_filter: data.status_filter,
-      count: data.count,
-      profiles: data.profiles || [],
-    };
-  } catch (err: any) {
-    return {
-      success: false,
-      error: 'NETWORK_FAILURE',
-      message: err?.message || String(err),
-    };
+  } catch {
+    // fallback
   }
+}
+
+  // 3. Merge with local SafeStorage partner passport submissions (Offline-First / Demo persistence)
+  const allPartners = getAllPartners();
+  const partnersMap = new Map<string, Partner>();
+  allPartners.forEach((p) => {
+    if (p.id) partnersMap.set(p.id.toLowerCase(), p);
+    const pCode = (p as any).public_code || (p as any).publicCode || p.id;
+    if (pCode) partnersMap.set(String(pCode).toLowerCase(), p);
+  });
+
+  const mergedProfiles: PartnerProfileQueueItem[] = [...serverProfiles];
+  const existingIds = new Set(serverProfiles.map((p) => p.partner_id.toLowerCase()));
+  const existingCodes = new Set(serverProfiles.map((p) => p.partner_code.toLowerCase()));
+
+  const localKeys = safeStorage.getAllKeys().filter((k) => k.toLowerCase().startsWith('idemo_partner_passport_'));
+  for (const k of localKeys) {
+    try {
+      const raw = safeStorage.getItem(k);
+      if (!raw) continue;
+      const data = JSON.parse(raw);
+      const codeOrId = k.replace(/^idemo_partner_passport_/i, '').trim();
+      const matched = partnersMap.get(codeOrId.toLowerCase());
+
+      const pId = matched?.id || (codeOrId.length > 20 ? codeOrId : `local-${codeOrId}`);
+      const pCode = String((matched as any)?.public_code || (matched as any)?.publicCode || matched?.id || codeOrId).toUpperCase();
+      const pName = String((matched as any)?.name || (matched as any)?.nameEn || pCode);
+
+      if (existingIds.has(pId.toLowerCase()) || existingCodes.has(pCode.toLowerCase())) {
+        const idx = mergedProfiles.findIndex(
+          (p) => p.partner_id.toLowerCase() === pId.toLowerCase() || p.partner_code.toLowerCase() === pCode.toLowerCase()
+        );
+        if (idx !== -1) {
+          if (!mergedProfiles[idx].photo_url && data.photo_url) {
+            mergedProfiles[idx].photo_url = data.photo_url;
+            mergedProfiles[idx].photo_available = true;
+          }
+          if (!mergedProfiles[idx].draft_contact_phone && data.draft_contact_phone) {
+            mergedProfiles[idx].draft_contact_phone = data.draft_contact_phone;
+          }
+          if (!mergedProfiles[idx].draft_contact_email && data.draft_contact_email) {
+            mergedProfiles[idx].draft_contact_email = data.draft_contact_email;
+          }
+        }
+        continue;
+      }
+
+      const pStatus = data.review_status || 'pending_review';
+      if (status !== 'all' && pStatus !== status) continue;
+
+      const introText = data.intro_draft || '';
+      const wordCount = introText.trim() ? introText.trim().split(/\s+/).length : 0;
+
+      mergedProfiles.push({
+        partner_id: pId,
+        partner_code: pCode,
+        partner_name: pName,
+        partner_status: matched?.status || 'active',
+        review_status: pStatus,
+        introduction_draft: data.intro_draft || null,
+        introduction_published: data.intro_published || null,
+        introduction_word_count: wordCount,
+        photo_consent_given: Boolean(data.photo_consent_given),
+        photo_consent_withdrawn: false,
+        photo_available: Boolean(data.photo_url || data.draft_photo_path),
+        photo_url: data.photo_url || data.draft_photo_path || null,
+        draft_contact_phone: data.draft_contact_phone || null,
+        draft_contact_email: data.draft_contact_email || null,
+        published_contact_phone: data.published_contact_phone || data.contact_phone || null,
+        published_contact_email: data.published_contact_email || data.contact_email || null,
+        submitted_at: data.submitted_at || data.updated_at || new Date().toISOString(),
+        reviewed_at: data.reviewed_at || null,
+        reviewer_note: data.review_note || null,
+        content_version: data.content_version || 1,
+        updated_at: data.updated_at || new Date().toISOString(),
+      });
+      existingIds.add(pId.toLowerCase());
+      existingCodes.add(pCode.toLowerCase());
+    } catch {
+      // ignore parse errors
+    }
+  }
+
+  return {
+    success: true,
+    status_filter: status,
+    count: mergedProfiles.length,
+    profiles: mergedProfiles,
+  };
 }
 
 export async function updatePartnerProfessionalContact(

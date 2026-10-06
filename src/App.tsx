@@ -68,6 +68,98 @@ import PremiumBadge from './components/PremiumBadge';
 import PlanCard from './components/PlanCard';
 import QRScanner from './components/QRScanner';
 import { LazyImage } from './components/LazyImage';
+import uvacHeroImg from './assets/images/uvac_meanders_1778841048759.webp';
+import golubacHeroImg from './assets/images/golubac_fortress_danube_1778842880053.webp';
+import manasijaHeroImg from './assets/images/manasija_monastery_1778841065960.webp';
+import banjskaHeroImg from './assets/images/banjska_stena_outlook_1778841232535.webp';
+import splavoviHeroImg from './assets/images/belgrade_splavovi_1778841081901.webp';
+import sremskiHeroImg from './assets/images/sremski_karlovci_town_1778841131222.webp';
+
+export interface DailyHeroCard {
+  dayIndex: number;
+  dayNameEn: string;
+  dayNameSr: string;
+  titleEn: string;
+  titleSr: string;
+  locationEn: string;
+  locationSr: string;
+  src: string;
+  isCustomHeroPng?: boolean;
+}
+
+export const HERO_DAILY_COLLECTION: DailyHeroCard[] = [
+  {
+    dayIndex: 0, // Sunday
+    dayNameEn: "SUNDAY FEATURE",
+    dayNameSr: "NEDELJA IZDVAJAMO",
+    titleEn: "Master Serbia Travel Pass Map",
+    titleSr: "Glavna Karta Srbije i Putna Propusnica",
+    locationEn: "National Serbia Network",
+    locationSr: "Nacionalna Mreža Srbije",
+    src: "/idemo_hero_custom.png",
+    isCustomHeroPng: true,
+  },
+  {
+    dayIndex: 1, // Monday
+    dayNameEn: "MONDAY HIGHLIGHT",
+    dayNameSr: "PONEDELJAK IZDVAJAMO",
+    titleEn: "Uvac River Canyon Meanders",
+    titleSr: "Meandri Reke Uvac",
+    locationEn: "Sjenica & Special Nature Reserve",
+    locationSr: "Sjenica i Specijalni Rezervat Prirode",
+    src: uvacHeroImg,
+  },
+  {
+    dayIndex: 2, // Tuesday
+    dayNameEn: "TUESDAY HIGHLIGHT",
+    dayNameSr: "UTORAK IZDVAJAMO",
+    titleEn: "Golubac Danube Fortress",
+    titleSr: "Golubačka Tvrđava na Dunavu",
+    locationEn: "Djerdap Gorge & Iron Gates",
+    locationSr: "Đerdapska Klisura",
+    src: golubacHeroImg,
+  },
+  {
+    dayIndex: 3, // Wednesday
+    dayNameEn: "WEDNESDAY HIGHLIGHT",
+    dayNameSr: "SREDA IZDVAJAMO",
+    titleEn: "Manasija Royal Monastery",
+    titleSr: "Kraljevski Manastir Manasija",
+    locationEn: "Despotovac, Resava Valley",
+    locationSr: "Despotovac, Resavska Dolina",
+    src: manasijaHeroImg,
+  },
+  {
+    dayIndex: 4, // Thursday
+    dayNameEn: "THURSDAY HIGHLIGHT",
+    dayNameSr: "ČETVRTAK IZDVAJAMO",
+    titleEn: "Banjska Stena Tara Viewpoint",
+    titleSr: "Vidikovac Banjska Stena",
+    locationEn: "Tara National Park",
+    locationSr: "Nacionalni Park Tara",
+    src: banjskaHeroImg,
+  },
+  {
+    dayIndex: 5, // Friday
+    dayNameEn: "FRIDAY HIGHLIGHT",
+    dayNameSr: "PETAK IZDVAJAMO",
+    titleEn: "Belgrade River Splavovi & Nightlife",
+    titleSr: "Beogradski Splavovi i Rečni Život",
+    locationEn: "Sava & Danube Confluence",
+    locationSr: "Ušće Save i Dunava",
+    src: splavoviHeroImg,
+  },
+  {
+    dayIndex: 6, // Saturday
+    dayNameEn: "SATURDAY HIGHLIGHT",
+    dayNameSr: "SUBOTA IZDVAJAMO",
+    titleEn: "Sremski Karlovci Vineyards",
+    titleSr: "Sremski Karlovci i Vinogradi",
+    locationEn: "Fruška Gora Wine District",
+    locationSr: "Fruškogorsko Vinogorje",
+    src: sremskiHeroImg,
+  },
+];
 import { ContextEnginePanel } from './components/ContextEnginePanel';
 import { PrepEtiquetteGuide } from './components/PrepEtiquetteGuide';
 import { AntiAdviceSection } from './components/AntiAdviceSection';
@@ -371,6 +463,7 @@ export const triggerHaptic = (pattern: number | number[] = 10) => {
     }
   }
 };
+const defaultHaptic = triggerHaptic;
 
 const isOfflineReady = (item: any) => {
   return !!(
@@ -2487,6 +2580,7 @@ export default function App() {
             setLanguage={setLanguage}
             seasonalTips={SEASONAL_TIPS}
             landingImage={landingImage}
+            triggerHaptic={triggerHaptic}
           />
         )}
 
@@ -2504,6 +2598,7 @@ export default function App() {
             lowSignalMode={lowSignalMode}
             onToggleLowSignal={toggleLowSignalMode}
             onEmblemTap={handleStudioEmblemTap}
+            triggerHaptic={triggerHaptic}
           />
         )}
 
@@ -2527,6 +2622,7 @@ export default function App() {
             isAdminPreview={isPreviewMode || isAdmin}
             onConfirmAccuracy={() => handleOpenAccuracyModal(selectedRec)}
             onNestedModalStateChange={handleDetailNestedModalStateChange}
+            triggerHaptic={triggerHaptic}
           />
         )}
 
@@ -2551,6 +2647,7 @@ export default function App() {
             selectedCats={selectedCats}
             orbitX={orbitX}
             orbitY={orbitY}
+            triggerHaptic={triggerHaptic}
           />
         )}
 
@@ -2588,6 +2685,7 @@ export default function App() {
             selectedCats={selectedCats}
             orbitX={orbitX}
             orbitY={orbitY}
+            triggerHaptic={triggerHaptic}
           />
         )}
 
@@ -3670,10 +3768,17 @@ export default function App() {
 
 // --- SUB-COMPONENTS ---
 
-function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemTap }: any) {
+function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemTap, triggerHaptic: propHaptic }: any) {
+  const triggerHaptic = propHaptic || defaultHaptic || (() => {});
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const t = TRANSLATIONS[language] || TRANSLATIONS['en'];
+
+  // Default day index (0 = Sunday, 1 = Monday ... 6 = Saturday)
+  const defaultDayIndex = new Date().getDay();
+  const [activeHeroIndex, setActiveHeroIndex] = useState<number>(defaultDayIndex);
+
+  const activeCard = HERO_DAILY_COLLECTION[activeHeroIndex] || HERO_DAILY_COLLECTION[0];
 
   const subData = {
     en: {
@@ -3785,13 +3890,104 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
             )}
             
             {USE_CUSTOM_HERO_IMAGE ? (
-              <img 
-                src="/idemo_hero_custom.png" 
-                alt="IDEMO" 
-                className="w-full h-full object-contain select-none pointer-events-none drop-shadow-[0_8px_24px_rgba(35,37,30,0.06)]"
-                style={{ imageRendering: "-webkit-optimize-contrast" }}
-                draggable={false}
-              />
+              <div className="relative w-full h-full flex items-center justify-center">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={activeHeroIndex}
+                    initial={{ opacity: 0.85, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0.85, scale: 0.98 }}
+                    transition={{ duration: 0.3, ease: 'easeOut' }}
+                    className="w-full h-full flex items-center justify-center"
+                  >
+                    {activeCard.isCustomHeroPng ? (
+                      <img 
+                        src={activeCard.src} 
+                        alt="IDEMO" 
+                        className="w-full h-full object-contain select-none pointer-events-none drop-shadow-[0_8px_24px_rgba(35,37,30,0.06)]"
+                        style={{ imageRendering: "-webkit-optimize-contrast" }}
+                        draggable={false}
+                      />
+                    ) : (
+                      <div className="relative w-full h-full rounded-[24px] overflow-hidden border border-[#23251E]/12 shadow-[0_8px_32px_rgba(0,0,0,0.08)] bg-stone-900 group">
+                        <img 
+                          src={activeCard.src} 
+                          alt={activeCard.titleEn} 
+                          className="w-full h-full object-cover select-none pointer-events-none transition-transform duration-700 group-hover:scale-105"
+                          draggable={false}
+                        />
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-3.5 pt-8 flex flex-col justify-end text-left pointer-events-none">
+                          <span className="text-[9px] font-mono font-bold tracking-[0.12em] text-[#C5A059] uppercase block drop-shadow-xs">
+                            ✦ {language === 'sr' ? activeCard.dayNameSr : activeCard.dayNameEn}
+                          </span>
+                          <span className="font-serif text-xs xs:text-sm font-bold text-white tracking-tight leading-tight block drop-shadow-xs">
+                            {language === 'sr' ? activeCard.titleSr : activeCard.titleEn}
+                          </span>
+                          <span className="text-[9.5px] font-mono text-white/80 tracking-wide block mt-0.5">
+                            📍 {language === 'sr' ? activeCard.locationSr : activeCard.locationEn}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+
+                {/* 7 Daily Rotating Carousel Controls */}
+                <div 
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute bottom-1.5 z-30 flex items-center gap-1.5 px-2.5 py-1 bg-white/85 backdrop-blur-md rounded-full border border-[#E2DFD6] shadow-xs"
+                >
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (triggerHaptic) triggerHaptic(6);
+                      setActiveHeroIndex((prev) => (prev === 0 ? 6 : prev - 1));
+                    }}
+                    className="text-[11px] font-mono font-bold text-[#8C8A7D] hover:text-[#1E2E20] px-1 cursor-pointer select-none"
+                    title="Previous Day"
+                  >
+                    ‹
+                  </button>
+                  {HERO_DAILY_COLLECTION.map((card, idx) => {
+                    const isActive = idx === activeHeroIndex;
+                    const isToday = idx === defaultDayIndex;
+                    return (
+                      <button
+                        key={card.dayIndex}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (triggerHaptic) triggerHaptic(8);
+                          setActiveHeroIndex(idx);
+                        }}
+                        className={`h-2 rounded-full transition-all duration-300 cursor-pointer relative ${
+                          isActive
+                            ? 'w-4.5 bg-[#800020]'
+                            : 'w-2 bg-[#8C8A7D]/40 hover:bg-[#8C8A7D]/70'
+                        }`}
+                        title={`${card.dayNameEn}: ${card.titleEn}${isToday ? ' (Today)' : ''}`}
+                      >
+                        {isToday && !isActive && (
+                          <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#C5A059] rounded-full" />
+                        )}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (triggerHaptic) triggerHaptic(6);
+                      setActiveHeroIndex((prev) => (prev === 6 ? 0 : prev + 1));
+                    }}
+                    className="text-[11px] font-mono font-bold text-[#8C8A7D] hover:text-[#1E2E20] px-1 cursor-pointer select-none"
+                    title="Next Day"
+                  >
+                    ›
+                  </button>
+                </div>
+              </div>
             ) : (
               <IdemoLogo 
                 width="100%" 
@@ -4314,7 +4510,8 @@ function PulsatingProfileButton({ onClick, language, size = 48, iconSize = 20 }:
   );
 }
 
-function HomeScreen({ likedIds, onSelectRec, language, recommendations, onNavigateToProfile, seasonalTips, vibeSettings, ratings, lowSignalMode, onToggleLowSignal, onEmblemTap }: any) {
+function HomeScreen({ likedIds, onSelectRec, language, recommendations, onNavigateToProfile, seasonalTips, vibeSettings, ratings, lowSignalMode, onToggleLowSignal, onEmblemTap, triggerHaptic: propHaptic }: any) {
+  const triggerHaptic = propHaptic || defaultHaptic || (() => {});
   const t = TRANSLATIONS[language] || TRANSLATIONS['en'];
   const [activeRecIndex, setActiveRecIndex] = useState(0);
   const [activeTooltipId, setActiveTooltipId] = useState<string | null>(null);
@@ -5768,7 +5965,8 @@ function DetailsCTA({
   );
 }
 
-function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedule, onNavigate, onRemove, language, rating, onSaveRating, vibeSettings, onSelectRec, lowSignalMode, allRecommendations, isAdminPreview = false, onConfirmAccuracy, onNestedModalStateChange }: any) {
+function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedule, onNavigate, onRemove, language, rating, onSaveRating, vibeSettings, onSelectRec, lowSignalMode, allRecommendations, isAdminPreview = false, onConfirmAccuracy, onNestedModalStateChange, triggerHaptic: propHaptic }: any) {
+  const triggerHaptic = propHaptic || defaultHaptic || (() => {});
   const [expanded, setExpanded] = useState(false);
   const [activeAccordion, setActiveAccordion] = useState<string | null>(null);
   const [scrolledPast, setScrolledPast] = useState(false);
@@ -7110,7 +7308,8 @@ function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedu
   );
 }
 
-function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, language, onExplore, currentArchetype, sortedMonths, onAddBundle, lowSignalMode, allRecommendations, budget, time, days, timeOfDay, selectedCats = [], orbitX, orbitY }: any) {
+function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, language, onExplore, currentArchetype, sortedMonths, onAddBundle, lowSignalMode, allRecommendations, budget, time, days, timeOfDay, selectedCats = [], orbitX, orbitY, triggerHaptic: propHaptic }: any) {
+  const triggerHaptic = propHaptic || defaultHaptic || (() => {});
   const t = TRANSLATIONS[language] || TRANSLATIONS['en'];
   const dynamicStyle = React.useMemo(() => {
     return getDynamicStyle(language, selectedCats, days, budget, time);
@@ -9742,8 +9941,10 @@ function ExploreScreen({
   days,
   selectedCats,
   orbitX,
-  orbitY
+  orbitY,
+  triggerHaptic: propHaptic
 }: any) {
+  const triggerHaptic = propHaptic || defaultHaptic || (() => {});
   const t = TRANSLATIONS[language] || TRANSLATIONS['en'];
   const dynamicConciergeStyle = useMemo(() => {
     return getDynamicStyle(language, selectedCats || [], days || '1', budget || 100, time || 24);

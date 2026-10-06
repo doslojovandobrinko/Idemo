@@ -18,15 +18,16 @@ const STORAGE_KEY_TIMESTAMPS = 'idemo_visitor_req_timestamps_v1';
 
 // Server rolling window configuration
 const ROLLING_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-// Hard cap: maximum 4 requests per rolling 15m window across all components and request types
-// Leaving 1 guaranteed request safety margin so client NEVER reaches the 5-request server limit
-const MAX_REQUESTS_PER_WINDOW = 4;
+// Dedicated bounded budget for read-only proposal polling (60 scheduled polls @ 15s + 20 foreground/refocus headroom)
+const MAX_PROPOSAL_REQUESTS_PER_WINDOW = 80;
+// Bounded budget for sensitive/mutation requests (preserved at 4 to guarantee safety margin below 5 server limit)
+const MAX_MUTATION_REQUESTS_PER_WINDOW = 4;
 
 // Cooldown intervals per request kind and role
 const MIN_INTERVAL_STATUS_BACKGROUND_MS = 8 * 60 * 1000; // 8 minutes between background status checks for same inquiry
 const MIN_INTERVAL_PROPOSAL_AUTO_MS = 3 * 60 * 1000; // 3 minutes between auto proposal fetches on PlanCard mount
 const MIN_INTERVAL_PROPOSAL_MANUAL_MS = 30 * 1000; // 30 seconds between manual "CHECK STATUS" proposal checks
-const MIN_SAME_KIND_INTERVAL_MS = 15 * 1000; // 15 seconds minimum between identical kind requests for same inquiry
+const MIN_SAME_KIND_INTERVAL_MS = 5 * 1000; // 5 seconds minimum spacing for same inquiry (prevents duplicate bursts on rapid refocus)
 
 export type VisitorRequestRole = 'background' | 'plan_auto' | 'plan_manual';
 export type VisitorRequestKind = 'STATUS' | 'PROPOSAL';
@@ -43,8 +44,11 @@ export interface CoordinatedRequestResult<T> {
 
 interface InquiryLedgerRecord {
   allTimestamps: number[];
+  proposalTimestamps?: number[];
   lastStatusAt?: number;
   lastProposalAt?: number;
+  blockedUntil?: number;
+  proposalBlockedUntil?: number;
 }
 
 // In-flight mutex per inquiry: holds the active promise and what kind it is
@@ -54,10 +58,10 @@ const inFlightRequests = new Map<string, { promise: Promise<any>; kind: VisitorR
 function getInquiryLedger(inquiryId: string): InquiryLedgerRecord {
   try {
     const raw = safeStorage.getItem(STORAGE_KEY_TIMESTAMPS);
-    if (!raw) return { allTimestamps: [] };
+    if (!raw) return { allTimestamps: [], proposalTimestamps: [] };
     const parsed = JSON.parse(raw);
     const item = parsed[inquiryId];
-    if (!item) return { allTimestamps: [] };
+    if (!item) return { allTimestamps: [], proposalTimestamps: [] };
 
     const now = Date.now();
 
@@ -66,20 +70,25 @@ function getInquiryLedger(inquiryId: string): InquiryLedgerRecord {
       const validTimestamps = item.filter((t: number) => now - t < ROLLING_WINDOW_MS);
       return {
         allTimestamps: validTimestamps,
+        proposalTimestamps: [...validTimestamps],
         lastStatusAt: undefined,
         lastProposalAt: undefined,
       };
     }
 
-    // New format: { allTimestamps: number[], lastStatusAt?: number, lastProposalAt?: number }
+    // Modern format: { allTimestamps: number[], proposalTimestamps?: number[], lastStatusAt?: number, lastProposalAt?: number, blockedUntil?: number, proposalBlockedUntil?: number }
     const timestamps = (item.allTimestamps || []).filter((t: number) => now - t < ROLLING_WINDOW_MS);
+    const proposalTimestamps = (item.proposalTimestamps || []).filter((t: number) => now - t < ROLLING_WINDOW_MS);
     return {
       allTimestamps: timestamps,
+      proposalTimestamps,
       lastStatusAt: item.lastStatusAt,
       lastProposalAt: item.lastProposalAt,
+      blockedUntil: item.blockedUntil && item.blockedUntil > now ? item.blockedUntil : undefined,
+      proposalBlockedUntil: item.proposalBlockedUntil && item.proposalBlockedUntil > now ? item.proposalBlockedUntil : undefined,
     };
   } catch (err) {
-    return { allTimestamps: [] };
+    return { allTimestamps: [], proposalTimestamps: [] };
   }
 }
 
@@ -100,15 +109,23 @@ function saveInquiryLedger(inquiryId: string, record: InquiryLedgerRecord): void
       const entry = store[id];
       if (Array.isArray(entry)) {
         store[id] = entry.filter((t: number) => now - t < ROLLING_WINDOW_MS);
-      } else if (entry && entry.allTimestamps) {
-        entry.allTimestamps = entry.allTimestamps.filter((t: number) => now - t < ROLLING_WINDOW_MS);
+      } else if (entry) {
+        if (entry.allTimestamps) {
+          entry.allTimestamps = entry.allTimestamps.filter((t: number) => now - t < ROLLING_WINDOW_MS);
+        }
+        if (entry.proposalTimestamps) {
+          entry.proposalTimestamps = entry.proposalTimestamps.filter((t: number) => now - t < ROLLING_WINDOW_MS);
+        }
       }
     }
 
     store[inquiryId] = {
       allTimestamps: record.allTimestamps.filter((t: number) => now - t < ROLLING_WINDOW_MS),
+      proposalTimestamps: (record.proposalTimestamps || []).filter((t: number) => now - t < ROLLING_WINDOW_MS),
       lastStatusAt: record.lastStatusAt,
       lastProposalAt: record.lastProposalAt,
+      blockedUntil: record.blockedUntil && record.blockedUntil > now ? record.blockedUntil : undefined,
+      proposalBlockedUntil: record.proposalBlockedUntil && record.proposalBlockedUntil > now ? record.proposalBlockedUntil : undefined,
     };
 
     safeStorage.setItem(STORAGE_KEY_TIMESTAMPS, JSON.stringify(store));
@@ -162,17 +179,54 @@ export function canExecuteVisitorRequest(
   const now = Date.now();
   const ledger = getInquiryLedger(inquiryId);
 
-  // 2. Hard budget check: rolling 15-minute window across ALL request kinds
-  if (ledger.allTimestamps.length >= MAX_REQUESTS_PER_WINDOW) {
-    const oldestTimestamp = ledger.allTimestamps[0];
-    const waitSeconds = Math.ceil((ROLLING_WINDOW_MS - (now - oldestTimestamp)) / 1000);
-    return {
-      allowed: false,
-      reason: `Rate budget limit reached (max ${MAX_REQUESTS_PER_WINDOW}/15m). Available in ${waitSeconds}s`,
-    };
+  // 2. Check server-imposed cooldown / 429 lockout
+  if (kind === 'PROPOSAL') {
+    const activeCooldown = (ledger.proposalBlockedUntil && now < ledger.proposalBlockedUntil)
+      ? ledger.proposalBlockedUntil
+      : (ledger.blockedUntil && now < ledger.blockedUntil ? ledger.blockedUntil : undefined);
+    if (activeCooldown) {
+      const waitSeconds = Math.ceil((activeCooldown - now) / 1000);
+      return {
+        allowed: false,
+        reason: `Server rate cooldown active (429). Available in ${waitSeconds}s`,
+      };
+    }
+  } else {
+    // Non-proposal / mutation requests are ONLY blocked if general ledger.blockedUntil is active.
+    // Read-specific proposal cooldown does NOT block mutations or status requests.
+    if (ledger.blockedUntil && now < ledger.blockedUntil) {
+      const waitSeconds = Math.ceil((ledger.blockedUntil - now) / 1000);
+      return {
+        allowed: false,
+        reason: `Server rate cooldown active (429). Available in ${waitSeconds}s`,
+      };
+    }
   }
 
-  // 3. Capability / Kind-specific Freshness Checks
+  // 3. Operation-specific budget check across rolling 15-minute window
+  if (kind === 'PROPOSAL') {
+    const proposalTimestamps = ledger.proposalTimestamps || [];
+    if (proposalTimestamps.length >= MAX_PROPOSAL_REQUESTS_PER_WINDOW) {
+      const oldestTimestamp = proposalTimestamps[0];
+      const waitSeconds = Math.ceil((ROLLING_WINDOW_MS - (now - oldestTimestamp)) / 1000);
+      return {
+        allowed: false,
+        reason: `Proposal rate budget limit reached (max ${MAX_PROPOSAL_REQUESTS_PER_WINDOW}/15m). Available in ${waitSeconds}s`,
+      };
+    }
+  } else {
+    // Non-proposal / mutation budget
+    if (ledger.allTimestamps.length >= MAX_MUTATION_REQUESTS_PER_WINDOW) {
+      const oldestTimestamp = ledger.allTimestamps[0];
+      const waitSeconds = Math.ceil((ROLLING_WINDOW_MS - (now - oldestTimestamp)) / 1000);
+      return {
+        allowed: false,
+        reason: `Rate budget limit reached (max ${MAX_MUTATION_REQUESTS_PER_WINDOW}/15m). Available in ${waitSeconds}s`,
+      };
+    }
+  }
+
+  // 4. Capability / Kind-specific Freshness Checks
   if (kind === 'STATUS') {
     // STATUS request: Check if STATUS was fetched very recently
     if (ledger.lastStatusAt && (now - ledger.lastStatusAt < MIN_SAME_KIND_INTERVAL_MS)) {
@@ -298,12 +352,31 @@ export async function executeCoordinatedVisitorRequest<T>(
       
       // Update persistent ledger with kind-specific timestamp and increment rolling count
       const ledger = getInquiryLedger(inquiryId);
-      ledger.allTimestamps.push(completionTime);
-      if (kind === 'STATUS') {
-        ledger.lastStatusAt = completionTime;
-      } else if (kind === 'PROPOSAL') {
+      if (kind === 'PROPOSAL') {
+        if (!ledger.proposalTimestamps) ledger.proposalTimestamps = [];
+        ledger.proposalTimestamps.push(completionTime);
         ledger.lastProposalAt = completionTime;
+      } else {
+        ledger.allTimestamps.push(completionTime);
+        if (kind === 'STATUS') {
+          ledger.lastStatusAt = completionTime;
+        }
       }
+
+      // If backend response payload indicates a 429 or rate limit warning
+      const resAny = data as any;
+      if (resAny && (resAny.error?.includes('Too many requests') || resAny.error?.includes('RATE_LIMIT_EXCEEDED') || resAny.code === 'RATE_LIMIT_EXCEEDED')) {
+        const retrySec = Number.isFinite(resAny.retryAfter) ? resAny.retryAfter : (Number.isFinite(resAny.retry_after) ? resAny.retry_after : undefined);
+        // Valid server Retry-After is respected in full without shortening to 15m.
+        // Bounded fallback (ROLLING_WINDOW_MS = 15m) applies ONLY when retry metadata is missing/invalid.
+        const cooldownMs = retrySec !== undefined ? Math.max(retrySec * 1000, 1000) : ROLLING_WINDOW_MS;
+        if (kind === 'PROPOSAL') {
+          ledger.proposalBlockedUntil = completionTime + cooldownMs;
+        } else {
+          ledger.blockedUntil = completionTime + cooldownMs;
+        }
+      }
+
       saveInquiryLedger(inquiryId, ledger);
 
       return data;
@@ -311,12 +384,27 @@ export async function executeCoordinatedVisitorRequest<T>(
       const completionTime = Date.now();
       // Record failed attempt in sliding-window ledger to protect backend from retry bursts
       const ledger = getInquiryLedger(inquiryId);
-      ledger.allTimestamps.push(completionTime);
-      if (kind === 'STATUS') {
-        ledger.lastStatusAt = completionTime;
-      } else if (kind === 'PROPOSAL') {
+      if (kind === 'PROPOSAL') {
+        if (!ledger.proposalTimestamps) ledger.proposalTimestamps = [];
+        ledger.proposalTimestamps.push(completionTime);
         ledger.lastProposalAt = completionTime;
+      } else {
+        ledger.allTimestamps.push(completionTime);
+        if (kind === 'STATUS') {
+          ledger.lastStatusAt = completionTime;
+        }
       }
+
+      if (err?.message?.includes('429') || err?.message?.includes('Too many requests')) {
+        const retrySec = Number.isFinite(err?.retryAfter) ? err.retryAfter : (Number.isFinite(err?.retry_after) ? err.retry_after : undefined);
+        const cooldownMs = retrySec !== undefined ? Math.max(retrySec * 1000, 1000) : ROLLING_WINDOW_MS;
+        if (kind === 'PROPOSAL') {
+          ledger.proposalBlockedUntil = completionTime + cooldownMs;
+        } else {
+          ledger.blockedUntil = completionTime + cooldownMs;
+        }
+      }
+
       saveInquiryLedger(inquiryId, ledger);
 
       throw err;

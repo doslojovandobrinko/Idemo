@@ -268,6 +268,32 @@ export async function fetchInquiryStatus(inquiryId: string): Promise<VisitorStat
   }
 }
 
+/**
+ * Parses HTTP Retry-After header (either decimal integer seconds or HTTP-date as per RFC 9110 § 10.2.3)
+ * with optional fallback to JSON body retry_after.
+ */
+export function parseRetryAfter(header: string | null | undefined, bodyValue?: any): number | undefined {
+  if (header) {
+    const trimmed = header.trim();
+    // 1. Decimal integer seconds
+    if (/^\d+$/.test(trimmed)) {
+      const sec = parseInt(trimmed, 10);
+      if (Number.isFinite(sec) && sec >= 0) return sec;
+    }
+    // 2. HTTP-date format
+    const parsedDate = Date.parse(trimmed);
+    if (!Number.isNaN(parsedDate)) {
+      const diffSec = Math.ceil((parsedDate - Date.now()) / 1000);
+      return Math.max(diffSec, 0);
+    }
+  }
+  // 3. Fallback to response body retry_after if numeric
+  if (typeof bodyValue === 'number' && Number.isFinite(bodyValue) && bodyValue >= 0) {
+    return bodyValue;
+  }
+  return undefined;
+}
+
 export async function fetchActiveProposal(inquiryId: string): Promise<VisitorProposalResult> {
   const token = getVisitorCredential(inquiryId);
   if (!token) {
@@ -290,6 +316,15 @@ export async function fetchActiveProposal(inquiryId: string): Promise<VisitorPro
 
     const resData = await response.json();
     if (!response.ok || !resData.success) {
+      if (response.status === 429) {
+        const headerRetry = response.headers.get('Retry-After');
+        const retryAfterSec = parseRetryAfter(headerRetry, resData.retry_after);
+        return {
+          success: false,
+          error: 'RATE_LIMIT_EXCEEDED: Too many requests. Please slow down.',
+          retryAfter: retryAfterSec,
+        };
+      }
       return { success: false, error: 'Access denied or error retrieving proposal details.' };
     }
 

@@ -58,6 +58,76 @@ import { RecommendationEditorModal } from './RecommendationEditorModal';
 // Authoritative default PIN resolution adhering strictly to SSOT and V9 security guidelines.
 // Plaintext onboarding PINs are never stored in a secondary duplicate map.
 // The presence of cryptographic pinHash in the canonical Partner entity is reported without storing duplicate maps.
+export function resolvePartnerDisplayInfo(
+  partnerId: string, 
+  partnerObj?: Partner, 
+  dbRecord?: PartnerCoverageRecord
+): {
+  partnerCode: string;
+  partnerName: string;
+  priorityRank?: number;
+  tierLabel?: string;
+} {
+  const normId = (partnerId || '').toLowerCase().trim();
+  const dbCode = dbRecord?.partner_code;
+  const dbName = dbRecord?.partner_name;
+  const dbRank = dbRecord?.priority_rank;
+
+  // 1. Synthetic test partner mapping
+  if (normId === 'a0000000-0000-0000-0000-000000000099' || dbCode === 'UNO3') {
+    return {
+      partnerCode: 'UNO3',
+      partnerName: 'UNO3 — Universal Test Partner 3 (office@idemo.group)',
+      priorityRank: dbRank || 1,
+      tierLabel: 'Tier 1 • Primary'
+    };
+  }
+  if (normId === 'a0000000-0000-0000-0000-000000000091' || dbCode === 'UNO1') {
+    return {
+      partnerCode: 'UNO1',
+      partnerName: 'UNO1 — Ethno Village Sunčana Reka (uno1.test@idemo.internal)',
+      priorityRank: dbRank || 2,
+      tierLabel: 'Tier 2 • Secondary'
+    };
+  }
+  if (normId === 'a0000000-0000-0000-0000-000000000092' || dbCode === 'UNO2') {
+    return {
+      partnerCode: 'UNO2',
+      partnerName: 'UNO2 — Transfer & Adventure Specialist (uno2.test@idemo.internal)',
+      priorityRank: dbRank || 3,
+      tierLabel: 'Tier 3 • Tertiary'
+    };
+  }
+
+  // 2. Static partner lookup
+  if (partnerObj) {
+    return {
+      partnerCode: partnerObj.id,
+      partnerName: partnerObj.nameEn,
+      priorityRank: dbRank,
+      tierLabel: dbRank ? `Tier ${dbRank}` : undefined
+    };
+  }
+
+  // 3. DB record fields if available
+  if (dbCode || dbName) {
+    return {
+      partnerCode: dbCode || partnerId,
+      partnerName: dbName || dbCode || partnerId,
+      priorityRank: dbRank,
+      tierLabel: dbRank ? `Tier ${dbRank}` : undefined
+    };
+  }
+
+  // 4. Default fallback
+  return {
+    partnerCode: partnerId.length > 12 ? partnerId.slice(0, 8) + '...' : partnerId,
+    partnerName: partnerId,
+    priorityRank: dbRank,
+    tierLabel: dbRank ? `Tier ${dbRank}` : undefined
+  };
+}
+
 export function resolveDefaultPartnerPin(
   partnerId: string, 
   partnerName?: string, 
@@ -124,6 +194,63 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
   const [isRecEditorOpen, setIsRecEditorOpen] = useState<boolean>(false);
   const [editingRecommendation, setEditingRecommendation] = useState<Recommendation | null>(null);
 
+  // Compute comprehensive selectable partners list (including UNO1, UNO2, UNO3 mock partners & DB partners)
+  const allSelectablePartners = useMemo(() => {
+    const list: Array<{ id: string; code: string; nameEn: string; email?: string; phone?: string }> = [];
+
+    // 1. Prominent Mock Test Partners for QA & Testing
+    list.push({
+      id: 'a0000000-0000-0000-0000-000000000099',
+      code: 'UNO3',
+      nameEn: '⭐ UNO3 — Universal Test Partner 3 (Primary)',
+      email: 'office@idemo.group',
+      phone: '+381600000003'
+    });
+    list.push({
+      id: 'a0000000-0000-0000-0000-000000000091',
+      code: 'UNO1',
+      nameEn: '⭐ UNO1 — Ethno Village Sunčana Reka (Secondary)',
+      email: 'uno1.test@idemo.internal',
+      phone: '+381600000001'
+    });
+    list.push({
+      id: 'a0000000-0000-0000-0000-000000000092',
+      code: 'UNO2',
+      nameEn: '⭐ UNO2 — Transfer & Adventure Specialist (Tertiary)',
+      email: 'uno2.test@idemo.internal',
+      phone: '+381600000002'
+    });
+
+    // 2. Static production partners
+    PARTNERS.forEach(p => {
+      if (!list.some(item => item.id === p.id)) {
+        list.push({
+          id: p.id,
+          code: p.id,
+          nameEn: p.nameEn,
+          email: p.email,
+          phone: p.phone
+        });
+      }
+    });
+
+    // 3. Dynamic DB partners from coverageRecords
+    coverageRecords.forEach(c => {
+      if (c.partner_id && !list.some(item => item.id === c.partner_id)) {
+        const info = resolvePartnerDisplayInfo(c.partner_id, undefined, c);
+        list.push({
+          id: c.partner_id,
+          code: info.partnerCode,
+          nameEn: info.partnerName,
+          email: c.contact_email,
+          phone: c.contact_phone
+        });
+      }
+    });
+
+    return list;
+  }, [coverageRecords]);
+
   // Load Matrix Data from Supabase RPC or synthesize baseline from static partners
   const loadMatrix = async () => {
     setRefreshing(true);
@@ -156,7 +283,10 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
 
       const partnerRows: Array<{
         partnerId: string;
+        partnerCode: string;
         partnerName: string;
+        priorityRank?: number;
+        tierLabel?: string;
         qualificationState: QualificationState;
         participationState: ParticipationState;
         passportState: PassportVerificationState;
@@ -177,13 +307,16 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
 
       // Process DB records
       dbEligibilities.forEach(db => {
-        const partnerObj = PARTNERS.find(p => p.id === db.partner_id || p.nameEn === db.partner_id);
-        const partnerName = partnerObj?.nameEn || db.partner_id;
-        const defaultPin = resolveDefaultPartnerPin(db.partner_id, partnerName, partnerObj);
+        const partnerObj = PARTNERS.find(p => p.id === db.partner_id || p.nameEn === db.partner_id || p.id === db.partner_code);
+        const info = resolvePartnerDisplayInfo(db.partner_id, partnerObj, db);
+        const defaultPin = resolveDefaultPartnerPin(db.partner_id, info.partnerName, partnerObj);
 
         partnerRows.push({
           partnerId: db.partner_id,
-          partnerName,
+          partnerCode: info.partnerCode,
+          partnerName: info.partnerName,
+          priorityRank: info.priorityRank,
+          tierLabel: info.tierLabel,
           qualificationState: db.qualification_state,
           participationState: db.participation_state,
           passportState: db.passport_state,
@@ -206,10 +339,14 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
       // Include static partners not yet in DB records
       staticPartners.forEach(p => {
         if (!partnerRows.some(pr => pr.partnerId === p.id)) {
+          const info = resolvePartnerDisplayInfo(p.id, p);
           const defaultPin = resolveDefaultPartnerPin(p.id, p.nameEn, p);
           partnerRows.push({
             partnerId: p.id,
-            partnerName: p.nameEn,
+            partnerCode: info.partnerCode,
+            partnerName: info.partnerName,
+            priorityRank: info.priorityRank,
+            tierLabel: info.tierLabel,
             qualificationState: p.conciergeRoutingEligible === 'Yes' ? 'idemo_selected' : 'preliminary',
             participationState: (p.email || p.phone) ? 'introduction_ready' : 'not_contacted',
             passportState: p.verificationStatus === 'VERIFIED' ? 'verified' : 'not_started',
@@ -228,6 +365,9 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
           });
         }
       });
+
+      // Sort partnerRows by priorityRank ASC (Tier 1 Primary first, then Tier 2, then Tier 3)
+      partnerRows.sort((a, b) => (a.priorityRank || 100) - (b.priorityRank || 100));
 
       // Calculate Coverage Health based on ACTIVE routing pool count
       const activeCount = partnerRows.filter(pr => pr.routingState === 'active').length;
@@ -826,7 +966,7 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
                           <div className="flex items-center gap-2 mt-0.5 text-xs text-stone-500">
                             <span>Category: <strong className="text-stone-700">{rec.category}</strong></span>
                             <span>•</span>
-                            <span>Region: <strong className="text-stone-700">{rec.region || 'Serbia'}</strong></span>
+                            <span>Region: <strong className="text-stone-700">{(rec as any).region || rec.location || 'Serbia'}</strong></span>
                           </div>
                         </div>
                       </div>
@@ -876,12 +1016,20 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
                           return (
                             <div key={pRow.partnerId} className="p-4 hover:bg-stone-50/50 transition flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                               {/* Partner Details */}
-                              <div className="space-y-2 lg:w-1/3">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono text-[11px] font-semibold text-stone-500 bg-stone-100 px-1.5 py-0.5 rounded">
-                                    {pRow.partnerId}
+                              <div className="space-y-1.5 lg:w-1/3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {/* PROMINENT Partner Code Badge */}
+                                  <span className="font-black text-xs text-amber-950 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded shadow-xs tracking-wider uppercase">
+                                    {pRow.partnerCode}
                                   </span>
-                                  <span className="text-sm font-bold text-stone-900">{pRow.partnerName}</span>
+                                  
+                                  {/* Tier Rank Indicator */}
+                                  {pRow.tierLabel && (
+                                    <span className="text-[10px] font-extrabold text-stone-800 bg-stone-100 border border-stone-200 px-2 py-0.5 rounded">
+                                      {pRow.tierLabel}
+                                    </span>
+                                  )}
+
                                   <button
                                     onClick={() => handleOpenPartnerRecord(pRow.partnerId)}
                                     className="text-stone-400 hover:text-stone-800 transition p-0.5"
@@ -889,6 +1037,16 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
                                   >
                                     <ExternalLink size={12} />
                                   </button>
+                                </div>
+
+                                {/* PROMINENT Partner Title & Subtle UUID */}
+                                <div>
+                                  <div className="text-sm font-black text-stone-900 tracking-tight leading-snug">
+                                    {pRow.partnerName}
+                                  </div>
+                                  <div className="text-[10px] font-mono text-stone-400 pt-0.5" title={pRow.partnerId}>
+                                    ID: {pRow.partnerId}
+                                  </div>
                                 </div>
 
                                 {/* Contact Info & Requisite Method Check */}
@@ -1269,7 +1427,7 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
                   onChange={(e) => {
                     const pid = e.target.value;
                     setSelectedPartnerForRelease(pid);
-                    const pObj = PARTNERS.find(p => p.id === pid);
+                    const pObj = allSelectablePartners.find(p => p.id === pid);
                     if (pObj) {
                       setReleaseEmail(pObj.email || '');
                       setReleasePhone(pObj.phone || '');
@@ -1278,8 +1436,8 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
                   className="w-full p-2.5 border border-stone-300 rounded-lg text-xs font-medium focus:outline-none focus:border-stone-900"
                 >
                   <option value="">-- Select Partner Candidate --</option>
-                  {PARTNERS.map(p => (
-                    <option key={p.id} value={p.id}>{p.id} - {p.nameEn} ({p.locationEn || 'Serbia'})</option>
+                  {allSelectablePartners.map(p => (
+                    <option key={p.id} value={p.id}>[{p.code}] {p.nameEn}</option>
                   ))}
                 </select>
               </div>
@@ -1361,8 +1519,8 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
                   className="w-full p-2.5 border border-stone-300 rounded-lg text-xs font-medium focus:outline-none focus:border-stone-900"
                 >
                   <option value="">-- Select Replacement Partner --</option>
-                  {PARTNERS.filter(p => p.id !== replaceOldPartnerId).map(p => (
-                    <option key={p.id} value={p.id}>{p.id} - {p.nameEn} ({p.locationEn || 'Serbia'})</option>
+                  {allSelectablePartners.filter(p => p.id !== replaceOldPartnerId).map(p => (
+                    <option key={p.id} value={p.id}>[{p.code}] {p.nameEn}</option>
                   ))}
                 </select>
               </div>

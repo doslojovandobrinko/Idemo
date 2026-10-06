@@ -127,12 +127,41 @@ export function IdemoStudio({
                 console.warn('Failed to persist Studio session on auth state change:', e);
               }
             } else {
+              // Only clear session if not logged in with the master operator credential
+              const stored = safeStorage.getItem(STUDIO_SESSION_KEY);
+              let isMasterSession = false;
+              if (stored) {
+                try {
+                  const parsed = JSON.parse(stored);
+                  if (parsed?.email?.toLowerCase() === 'office@idemo.group') {
+                    isMasterSession = true;
+                  }
+                } catch {
+                  // ignore
+                }
+              }
+              if (!isMasterSession) {
+                setSession(null);
+                safeStorage.removeItem(STUDIO_SESSION_KEY);
+              }
+            }
+          } else {
+            const stored = safeStorage.getItem(STUDIO_SESSION_KEY);
+            let isMasterSession = false;
+            if (stored) {
+              try {
+                const parsed = JSON.parse(stored);
+                if (parsed?.email?.toLowerCase() === 'office@idemo.group') {
+                  isMasterSession = true;
+                }
+              } catch {
+                // ignore
+              }
+            }
+            if (!isMasterSession) {
               setSession(null);
               safeStorage.removeItem(STUDIO_SESSION_KEY);
             }
-          } else {
-            setSession(null);
-            safeStorage.removeItem(STUDIO_SESSION_KEY);
           }
         });
         authListener = listener;
