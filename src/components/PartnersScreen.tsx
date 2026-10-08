@@ -64,6 +64,7 @@ import {
   getPartnerSeenMessageCount, 
   markPartnerMessagesAsSeen 
 } from '../lib/partnerBadgeStorage';
+import { loadRecommendations } from '../lib/recommendationsLoader';
 
 // Static Lookup for IDEMO Recommendations
 const RECOMMENDATIONS_LOOKUP = [
@@ -974,7 +975,14 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   const [profContactSaving, setProfContactSaving] = useState<boolean>(false);
   const [profContactMsg, setProfContactMsg] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
 
-  // Partner Recommendation & Package Proposal states (Option A & Option B for Agent 007)
+  // Applied Expertise for Existing Recommendations
+  const [appliedRecs, setAppliedRecs] = useState<string[]>([]);
+  const [appliedRecsNote, setAppliedRecsNote] = useState<string>('');
+  const [recSearchQuery, setRecSearchQuery] = useState<string>('');
+  const [recDropdownOpen, setRecDropdownOpen] = useState<boolean>(false);
+  const [dynamicCatalogRecs, setDynamicCatalogRecs] = useState<Array<{ id: string; title: string; titleSr?: string; category: string; location?: string }>>([]);
+
+  // Partner Recommendation & Package Proposal states (Option A & Option B for IDEMO Office)
   const [proposalSectionExpanded, setProposalSectionExpanded] = useState<boolean>(false);
   const [proposalType, setProposalType] = useState<ProposalType>('RECOMMENDATION');
   const [propTitle, setPropTitle] = useState<string>('');
@@ -1016,6 +1024,41 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
   const [partnerActionFeedback, setPartnerActionFeedback] = useState<{ type: 'success' | 'info' | 'error'; message: string } | null>(null);
   const [withdrawConfirmId, setWithdrawConfirmId] = useState<string | null>(null);
+
+  // Dynamic SSOT catalog loader
+  useEffect(() => {
+    let active = true;
+    loadRecommendations().then((res) => {
+      if (!active) return;
+      if (res && res.data && res.data.length > 0) {
+        const mapped = res.data.map(r => ({
+          id: r.id,
+          title: r.title,
+          titleSr: (r as any).titleSr || (r as any).title_sr || r.title,
+          category: typeof r.category === 'string' ? r.category : (r.category as any)?.name || 'General',
+          location: r.location || ''
+        }));
+        setDynamicCatalogRecs(mapped);
+      } else {
+        setDynamicCatalogRecs(RECOMMENDATIONS_LOOKUP);
+      }
+    }).catch(() => {
+      if (active) setDynamicCatalogRecs(RECOMMENDATIONS_LOOKUP);
+    });
+    return () => { active = false; };
+  }, []);
+
+  const filteredCatalogRecs = useMemo(() => {
+    const query = recSearchQuery.trim().toLowerCase();
+    const list = dynamicCatalogRecs.length > 0 ? dynamicCatalogRecs : RECOMMENDATIONS_LOOKUP;
+    if (!query) return list;
+    return list.filter(r => {
+      const titleMatch = r.title.toLowerCase().includes(query) || (r.titleSr && r.titleSr.toLowerCase().includes(query));
+      const catMatch = r.category && r.category.toLowerCase().includes(query);
+      const locMatch = r.location && r.location.toLowerCase().includes(query);
+      return titleMatch || catMatch || locMatch;
+    });
+  }, [dynamicCatalogRecs, recSearchQuery]);
 
   const refreshOpportunities = async () => {
     const session = partnerSessionStorage.getPartnerSession();
@@ -1276,6 +1319,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       setPassportMsg(null);
       setProfContactSaving(false);
       setProfContactMsg(null);
+      setAppliedRecs([]);
+      setAppliedRecsNote('');
     }
 
     const loadStoredOrCanonical = () => {
@@ -1307,6 +1352,16 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           if (parsed.draft_contact_email || parsed.published_contact_email || parsed.contact_email) {
             setProfContactEmail(parsed.draft_contact_email || parsed.published_contact_email || parsed.contact_email || '');
           }
+          if (Array.isArray(parsed.applied_recs)) {
+            setAppliedRecs(parsed.applied_recs);
+          } else {
+            setAppliedRecs([]);
+          }
+          if (parsed.applied_recs_note) {
+            setAppliedRecsNote(parsed.applied_recs_note);
+          } else {
+            setAppliedRecsNote('');
+          }
           return;
         } catch (e) {
           console.warn('Failed parsing stored partner passport:', e);
@@ -1319,6 +1374,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
         setPassportPhotoPreview('/assets/images/partners/uno_portrait.svg');
         setPassportPhotoConsent(true);
         setPassportReviewStatus('approved');
+        setAppliedRecs(['1', '2', '3']);
       }
 
       if (currentPartnerId) {
@@ -4299,6 +4355,158 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                       </div>
                     </div>
 
+                    {/* APPLIED EXPERTISE FOR EXISTING RECOMMENDATIONS */}
+                    <div className="p-3.5 bg-white border border-[#2D3025]/10 rounded-xl space-y-3">
+                      <div className="flex items-center justify-between border-b border-[#2D3025]/5 pb-2">
+                        <div className="flex items-center gap-1.5">
+                          <Sparkles size={14} className="text-[#8A1F1F]" />
+                          <span className="text-[10px] font-mono uppercase font-bold text-brand-charcoal">
+                            {isSr ? 'Prijavljena ekspertiza za postojeće preporuke' : 'Applied Expertise for Existing Recommendations'}
+                          </span>
+                        </div>
+                        <span className="text-[9px] font-mono font-bold text-[#8A1F1F] bg-[#8A1F1F]/10 px-2 py-0.5 rounded-full">
+                          {appliedRecs.length} {isSr ? 'odabrano' : 'selected'}
+                        </span>
+                      </div>
+
+                      <p className="text-[10.5px] text-brand-charcoal/70 leading-relaxed">
+                        {isSr
+                          ? 'Izaberite postojeće IDEMO preporuke za koje posedujete licencu ili proverenu lokalnu ekspertizu. IDEMO Kancelarija i urednici verifikuju vaš zahtev pre aktivacije direktnog usmeravanja upita.'
+                          : 'Select existing curated IDEMO recommendations where you possess licensing or verified local expertise. IDEMO Office and Curators will review and activate your direct routing priority upon verification.'}
+                      </p>
+
+                      {/* Searchable Multi-Select Component */}
+                      <div className="space-y-2 relative">
+                        <div className="relative">
+                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-charcoal/40" />
+                          <input
+                            type="text"
+                            placeholder={isSr ? 'Pretraži preporuke po nazivu, kategoriji ili regiji...' : 'Search recommendations by title, category, or region...'}
+                            value={recSearchQuery}
+                            onChange={(e) => {
+                              setRecSearchQuery(e.target.value);
+                              if (!recDropdownOpen) setRecDropdownOpen(true);
+                            }}
+                            onFocus={() => setRecDropdownOpen(true)}
+                            className="w-full pl-8 pr-8 py-2 bg-[#FAF9F5] border border-[#2D3025]/15 focus:border-[#8A1F1F] rounded-xl text-xs font-sans text-brand-charcoal outline-none transition-colors"
+                          />
+                          {recSearchQuery && (
+                            <button
+                              type="button"
+                              onClick={() => setRecSearchQuery('')}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-charcoal/40 hover:text-brand-charcoal cursor-pointer"
+                            >
+                              <X size={13} />
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Dropdown Options */}
+                        {recDropdownOpen && (
+                          <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-white border border-[#2D3025]/15 rounded-xl shadow-lg max-h-52 overflow-y-auto divide-y divide-[#2D3025]/5">
+                            <div className="p-2 bg-[#FAF9F5] border-b border-[#2D3025]/5 flex items-center justify-between text-[10px] font-mono text-brand-charcoal/60">
+                              <span>{isSr ? 'Aktivni IDEMO katalog' : 'Active IDEMO Catalog'} ({filteredCatalogRecs.length})</span>
+                              <button
+                                type="button"
+                                onClick={() => setRecDropdownOpen(false)}
+                                className="text-[#8A1F1F] hover:underline cursor-pointer font-bold"
+                              >
+                                {isSr ? 'Zatvori' : 'Close'}
+                              </button>
+                            </div>
+                            {filteredCatalogRecs.length === 0 ? (
+                              <div className="p-4 text-center text-xs font-mono text-brand-charcoal/50">
+                                {isSr ? 'Nema pronađenih preporuka' : 'No matching recommendations found'}
+                              </div>
+                            ) : (
+                              filteredCatalogRecs.map((rec) => {
+                                const isSelected = appliedRecs.includes(rec.id);
+                                const isAlreadyAssigned = (currentSimulatedPartner?.assignedRecs || []).includes(rec.id);
+                                const displayTitle = isSr ? (rec.titleSr || rec.title) : rec.title;
+                                return (
+                                  <div
+                                    key={rec.id}
+                                    onClick={() => {
+                                      triggerHaptic(6);
+                                      setAppliedRecs(prev =>
+                                        prev.includes(rec.id) ? prev.filter(id => id !== rec.id) : [...prev, rec.id]
+                                      );
+                                    }}
+                                    className={`p-2.5 flex items-center justify-between gap-2 hover:bg-[#FAF9F5] cursor-pointer transition-colors ${
+                                      isSelected ? 'bg-[#8A1F1F]/5' : ''
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                                        isSelected ? 'bg-[#8A1F1F] border-[#8A1F1F] text-white' : 'border-[#2D3025]/30'
+                                      }`}>
+                                        {isSelected && <Check size={11} strokeWidth={3} />}
+                                      </div>
+                                      <div className="truncate">
+                                        <span className="text-xs font-serif font-bold text-brand-charcoal block truncate">
+                                          {displayTitle}
+                                        </span>
+                                        <span className="text-[10px] font-mono text-brand-charcoal/50 block truncate">
+                                          {rec.category} {rec.location ? `• ${rec.location}` : ''}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    {isAlreadyAssigned && (
+                                      <span className="text-[9px] font-mono font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded shrink-0">
+                                        {isSr ? 'Već aktivno' : 'Active'}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        )}
+
+                        {/* Selected Chips */}
+                        {appliedRecs.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {appliedRecs.map((recId) => {
+                              const matched = dynamicCatalogRecs.find(r => r.id === recId) || RECOMMENDATIONS_LOOKUP.find(r => r.id === recId);
+                              const title = matched ? (isSr ? (matched.titleSr || matched.title) : matched.title) : `Spot #${recId}`;
+                              return (
+                                <span
+                                  key={recId}
+                                  className="inline-flex items-center gap-1.5 bg-[#FAF9F5] border border-[#2D3025]/15 text-brand-charcoal px-2.5 py-1 rounded-lg text-xs font-serif"
+                                >
+                                  <span className="font-medium truncate max-w-[170px]">{title}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      triggerHaptic(6);
+                                      setAppliedRecs(prev => prev.filter(id => id !== recId));
+                                    }}
+                                    className="text-brand-charcoal/40 hover:text-[#8A1F1F] cursor-pointer"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Optional Expertise / Licensing Note */}
+                        <div>
+                          <label className="block text-[9px] font-mono uppercase font-bold text-brand-charcoal/60 mb-1">
+                            {isSr ? 'Napomena o ekspertizi ili licenci (Opciono)' : 'Expertise or Licensing Details (Optional)'}
+                          </label>
+                          <input
+                            type="text"
+                            placeholder={isSr ? 'npr. Licencirani planinski vodič, Uvac & Tara od 2018.' : 'e.g., Licensed mountain guide, Uvac & Tara since 2018'}
+                            value={appliedRecsNote}
+                            onChange={(e) => setAppliedRecsNote(e.target.value)}
+                            className="w-full px-3 py-1.5 bg-[#FAF9F5] border border-[#2D3025]/15 focus:border-[#8A1F1F] rounded-xl text-xs font-sans text-brand-charcoal outline-none transition-colors"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Actions */}
                     <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#2D3025]/5">
                       <button
@@ -4314,7 +4522,10 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             passportPhotoMime,
                             passportPhotoConsent,
                             profContactPhone || null,
-                            profContactEmail || null
+                            profContactEmail || null,
+                            undefined,
+                            appliedRecs,
+                            appliedRecsNote || null
                           );
                           if (activePartnerId !== targetId) {
                             setPassportSaving(false);
@@ -4339,6 +4550,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                 draft_contact_email: profContactEmail || null,
                                 contact_phone: profContactPhone || parsed.contact_phone || null,
                                 contact_email: profContactEmail || parsed.contact_email || null,
+                                applied_recs: appliedRecs,
+                                applied_recs_note: appliedRecsNote || null,
                                 updated_at: new Date().toISOString(),
                               }));
                             } catch (err) {
@@ -4376,7 +4589,10 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             passportPhotoMime,
                             passportPhotoConsent,
                             profContactPhone || null,
-                            profContactEmail || null
+                            profContactEmail || null,
+                            undefined,
+                            appliedRecs,
+                            appliedRecsNote || null
                           );
                           if (activePartnerId !== targetId) {
                             setPassportSaving(false);
@@ -4403,6 +4619,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                 published_photo_path: passportPhotoPath,
                                 photo_consent_given: passportPhotoConsent,
                                 review_status: 'pending_review',
+                                applied_recs: appliedRecs,
+                                applied_recs_note: appliedRecsNote || null,
                               }));
                             } catch (err) {
                               console.warn('Storage sync error:', err);
@@ -4440,7 +4658,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                         <Compass className="w-4 h-4 text-[#8A1F1F]" />
                         <div>
                           <h4 className="text-xs uppercase font-mono font-black tracking-wider text-brand-charcoal">
-                            {isSr ? 'Predloži novu IDEMO ponudu (Agent 007)' : 'Propose New IDEMO Offer (Agent 007)'}
+                            {isSr ? 'Predloži novu IDEMO ponudu (IDEMO Kancelarija)' : 'Propose New IDEMO Offer (IDEMO Office)'}
                           </h4>
                           <p className="text-[10px] text-brand-charcoal/60 font-sans mt-0.5">
                             {isSr 
@@ -4499,8 +4717,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                         <p className="text-[11px] text-brand-charcoal/70 leading-relaxed">
                           {proposalType === 'RECOMMENDATION'
                             ? (isSr 
-                                ? 'Predložite skriveni biser, vinariju, kulturni spomenik ili prirodnu lokaciju u Srbiji koja nedostaje u IDEMO bazi. Agent 007 će evaluirati podatke, a urednik odobriti uključenje u bazu.'
-                                : 'Propose a missing authentic spot, winery, cultural landmark, or nature sanctuary in Serbia. Agent 007 evaluates suitability, and the Curator approves for catalog publication.')
+                                ? 'Predložite skriveni biser, vinariju, kulturni spomenik ili prirodnu lokaciju u Srbiji koja nedostaje u IDEMO bazi. IDEMO Kancelarija će evaluirati podatke, a urednik odobriti uključenje u bazu.'
+                                : 'Propose a missing authentic spot, winery, cultural landmark, or nature sanctuary in Serbia. IDEMO Office evaluates suitability, and the Curator approves for catalog publication.')
                             : (isSr
                                 ? 'Predložite vaš autentični paket tura ili organizovanu rutu (poludnevnu ili celodnevnu). Nakon odobrenja urednika, paket postaje vidljiv posetiocima, a upiti se automatski usmeravaju vama.'
                                 : 'Propose a curated experience or day package with itinerary stops and services. Upon Curator approval, the package is published with inquiries automatically routed directly to you.')
@@ -4676,7 +4894,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                           </div>
                         )}
 
-                        {/* HIGH QUALITY IMAGE ATTACHMENTS & AGENT 007 COLLAGE */}
+                        {/* HIGH QUALITY IMAGE ATTACHMENTS & IDEMO OFFICE COLLAGE */}
                         <div className="p-3.5 bg-white border border-[#2D3025]/10 rounded-xl space-y-3">
                           <div className="flex items-center justify-between border-b border-[#2D3025]/5 pb-2">
                             <div className="flex items-center gap-1.5">
@@ -4684,7 +4902,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                               <span className="text-[10px] font-mono uppercase font-bold text-brand-charcoal">
                                 {proposalType === 'RECOMMENDATION'
                                   ? (isSr ? 'Fotografija lokacije (Visoka rezolucija)' : 'Recommendation Photo (High Resolution)')
-                                  : (isSr ? 'Fotografije paketa (Do 5 slika za Agenta 007)' : 'Package Photos (Up to 5 images for Agent 007 Collage)')}
+                                  : (isSr ? 'Fotografije paketa (Do 5 slika za IDEMO Kancelariju)' : 'Package Photos (Up to 5 images for IDEMO Office Collage)')}
                               </span>
                             </div>
                             <span className="text-[9px] font-mono font-bold text-brand-charcoal/60 bg-neutral-100 px-2 py-0.5 rounded">
@@ -4698,8 +4916,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                   ? 'Priložite kvalitetnu fotografiju lokacije. Urednik ima konačnu reč pri odobravanju.'
                                   : 'Attach a high-resolution photo of the spot. The Curator has the final say upon approval.')
                               : (isSr
-                                  ? 'Priložite do 5 fotografija koje prikazuju stanice, pejzaže ili degustacije. Agent 007 ih sklapa u jedinstveni kolaž za urednički pregled.'
-                                  : 'Attach up to 5 photos showing stops, scenic views, or tastings. Agent 007 compiles them into a single composite collage for Curator review.')
+                                  ? 'Priložite do 5 fotografija koje prikazuju stanice, pejzaže ili degustacije. IDEMO Kancelarija ih sklapa u jedinstveni kolaž za urednički pregled.'
+                                  : 'Attach up to 5 photos showing stops, scenic views, or tastings. IDEMO Office compiles them into a single composite collage for Curator review.')
                             }
                           </p>
 
@@ -4820,13 +5038,13 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             </div>
                           )}
 
-                          {/* Option B: Agent 007 Synthesized Package Collage Preview */}
+                          {/* Option B: IDEMO Office Synthesized Package Collage Preview */}
                           {proposalType === 'PACKAGE' && propAttachedImages.length > 0 && (
                             <div className="p-3 bg-[#FAF9F5] border border-[#2D3025]/15 rounded-xl space-y-2">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-brand-charcoal">
                                   <Sparkles size={12} className="text-[#8A1F1F]" />
-                                  <span>{isSr ? 'Agent 007 Sintetisani kolaž paketa (Pregled)' : 'Agent 007 Synthesized Package Collage Preview'}</span>
+                                  <span>{isSr ? 'IDEMO Kancelarija Sintetisani kolaž paketa (Pregled)' : 'IDEMO Office Synthesized Package Collage Preview'}</span>
                                 </div>
                                 <span className="text-[8.5px] font-mono text-brand-charcoal/60">
                                   {propCompilingCollage 
@@ -4839,7 +5057,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                 {propCollagePreview ? (
                                   <img
                                     src={propCollagePreview}
-                                    alt="Agent 007 Package Collage Preview"
+                                    alt="IDEMO Office Package Collage Preview"
                                     className="w-full h-full object-cover"
                                   />
                                 ) : (
@@ -4936,8 +5154,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                 setProposalFeedbackMsg({
                                   type: 'success',
                                   text: isSr
-                                    ? `Predlog uspešno prosleđen! Agent 007 je dodelio ocenu podobnosti ${score}/100. Predlog i priložene fotografije su upućeni IDEMO urednicima na pregled.`
-                                    : `Proposal successfully submitted! Agent 007 evaluated suitability score at ${score}/100. Photos and details queued for IDEMO Curator review.`
+                                    ? `Predlog uspešno prosleđen! IDEMO Kancelarija je dodelila ocenu podobnosti ${score}/100. Predlog i priložene fotografije su upućeni IDEMO urednicima na pregled.`
+                                    : `Proposal successfully submitted! IDEMO Office evaluated suitability score at ${score}/100. Photos and details queued for IDEMO Curator review.`
                                 });
 
                                 // Clear inputs
@@ -4965,7 +5183,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             <span>
                               {proposalSubmitting 
                                 ? (isSr ? 'Slanje...' : 'Submitting...') 
-                                : (isSr ? 'Pošalji predlog Agentu 007 i urednicima' : 'Submit Proposal to Agent 007 & Curators')}
+                                : (isSr ? 'Pošalji predlog IDEMO Kancelariji i urednicima' : 'Submit Proposal to IDEMO Office & Curators')}
                             </span>
                           </button>
                         </div>
@@ -5004,7 +5222,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                     </p>
                                     {p.agent007Evaluation && (
                                       <div className="flex items-center justify-between text-[9px] font-mono text-brand-charcoal/50 pt-0.5 border-t border-neutral-100">
-                                        <span>Agent 007 Score: {p.agent007Evaluation.suitabilityScore}/100</span>
+                                        <span>IDEMO Office Score: {p.agent007Evaluation.suitabilityScore}/100</span>
                                         <span className="truncate max-w-[150px]">{p.agent007Evaluation.confidence} confidence</span>
                                       </div>
                                     )}
@@ -5018,8 +5236,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                     ) : (
                       <p className="text-[11px] text-brand-charcoal/60 leading-relaxed cursor-pointer" onClick={() => setProposalSectionExpanded(true)}>
                         {isSr
-                          ? 'Kliknite ovde da predložite novo mesto (Opcija A) ili vaš paket tura (Opcija B) za obradu Agentu 007 i odobrenje urednika.'
-                          : 'Click here to propose a new spot (Option A) or your curated package (Option B) for Agent 007 fact-checking and Curator approval.'}
+                          ? 'Kliknite ovde da predložite novo mesto (Opcija A) ili vaš paket tura (Opcija B) za obradu IDEMO Kancelariji i odobrenje urednika.'
+                          : 'Click here to propose a new spot (Option A) or your curated package (Option B) for IDEMO Office fact-checking and Curator approval.'}
                       </p>
                     )}
                   </div>

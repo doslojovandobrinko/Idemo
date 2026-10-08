@@ -95,6 +95,8 @@ export interface PartnerProfileContent {
   proposed_rec_category?: string | null;
   proposed_rec_location?: string | null;
   proposed_rec_rationale?: string | null;
+  applied_recs?: string[] | null;
+  applied_recs_note?: string | null;
   review_status: 'draft' | 'pending_review' | 'approved' | 'changes_requested' | 'withdrawn';
   photo_consent_given: boolean;
   photo_consent_at: string | null;
@@ -825,7 +827,9 @@ export async function savePartnerProfileDraft(
     category?: string | null;
     location?: string | null;
     rationale?: string | null;
-  }
+  },
+  appliedRecs?: string[] | null,
+  appliedRecsNote?: string | null
 ): Promise<PartnerActionResult> {
   const session = partnerSessionStorage.getPartnerSession();
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
@@ -858,6 +862,8 @@ export async function savePartnerProfileDraft(
         proposed_rec_category: proposal?.category || null,
         proposed_rec_location: proposal?.location || null,
         proposed_rec_rationale: proposal?.rationale || null,
+        applied_recs: appliedRecs || null,
+        applied_recs_note: appliedRecsNote || null,
       }),
     });
 
@@ -1098,6 +1104,8 @@ export interface PartnerProfileQueueItem {
   proposed_rec_category?: string | null;
   proposed_rec_location?: string | null;
   proposed_rec_rationale?: string | null;
+  applied_recs?: string[] | null;
+  applied_recs_note?: string | null;
   submitted_at: string | null;
   reviewed_at: string | null;
   reviewer_note: string | null;
@@ -1208,6 +1216,12 @@ export async function fetchPartnerProfileReviewQueue(
           if (!mergedProfiles[idx].draft_contact_email && data.draft_contact_email) {
             mergedProfiles[idx].draft_contact_email = data.draft_contact_email;
           }
+          if (!mergedProfiles[idx].applied_recs && data.applied_recs) {
+            mergedProfiles[idx].applied_recs = data.applied_recs;
+          }
+          if (!mergedProfiles[idx].applied_recs_note && data.applied_recs_note) {
+            mergedProfiles[idx].applied_recs_note = data.applied_recs_note;
+          }
         }
         continue;
       }
@@ -1235,6 +1249,8 @@ export async function fetchPartnerProfileReviewQueue(
         draft_contact_email: data.draft_contact_email || null,
         published_contact_phone: data.published_contact_phone || data.contact_phone || null,
         published_contact_email: data.published_contact_email || data.contact_email || null,
+        applied_recs: data.applied_recs || null,
+        applied_recs_note: data.applied_recs_note || null,
         submitted_at: data.submitted_at || data.updated_at || new Date().toISOString(),
         reviewed_at: data.reviewed_at || null,
         reviewer_note: data.review_note || null,

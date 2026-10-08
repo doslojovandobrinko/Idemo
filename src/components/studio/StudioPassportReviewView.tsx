@@ -33,6 +33,8 @@ import {
   PartnerRecommendationProposal 
 } from '../../lib/partnerProposalService';
 import { getSupabaseClient } from '../../lib/supabaseClient';
+import { safeStorage } from '../../lib/safeStorage';
+import { loadRecommendations } from '../../lib/recommendationsLoader';
 
 interface StudioPassportReviewViewProps {
   session?: StudioUserSession;
@@ -49,6 +51,8 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
   const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
   const [selectedImageOverride, setSelectedImageOverride] = useState<Record<string, string>>({});
+  const [availableRecs, setAvailableRecs] = useState<Array<{ id: string; title: string; category: string }>>([]);
+  const [recAssignFeedback, setRecAssignFeedback] = useState<string | null>(null);
   
   // Review Action Form State
   const [reviewNote, setReviewNote] = useState<string>('');
@@ -65,6 +69,15 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
 
   useEffect(() => {
     loadProposals();
+    loadRecommendations().then(res => {
+      if (res && res.data) {
+        setAvailableRecs(res.data.map(r => ({
+          id: r.id,
+          title: r.title,
+          category: typeof r.category === 'string' ? r.category : (r.category as any)?.name || 'General'
+        })));
+      }
+    }).catch(() => {});
   }, []);
 
   const getStudioAccessToken = async (): Promise<string | null> => {
@@ -129,6 +142,29 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
     setActionFeedback(null);
   }, [selectedPartnerId]);
 
+  const handleAssignAppliedRecs = (partnerId: string, partnerCode: string, recIds: string[]) => {
+    if (!recIds || recIds.length === 0) return;
+    try {
+      const portalPartnersRaw = safeStorage.getItem('idemo_portal_partners');
+      if (portalPartnersRaw) {
+        const list = JSON.parse(portalPartnersRaw);
+        const updated = list.map((p: any) => {
+          if (p.id === partnerId || (p.publicCode && p.publicCode.toUpperCase() === partnerCode.toUpperCase()) || (p.pin && p.pin === partnerCode)) {
+            const currentRecs = Array.isArray(p.assignedRecs) ? p.assignedRecs : [];
+            const combined = Array.from(new Set([...currentRecs, ...recIds]));
+            return { ...p, assignedRecs: combined };
+          }
+          return p;
+        });
+        safeStorage.setItem('idemo_portal_partners', JSON.stringify(updated));
+      }
+      setRecAssignFeedback(`Successfully assigned ${recIds.length} recommendation(s) to ${partnerCode}!`);
+      setTimeout(() => setRecAssignFeedback(null), 5000);
+    } catch (err: any) {
+      console.warn('Failed assigning recommendations in studio:', err);
+    }
+  };
+
   const handleReviewAction = async (action: 'approve' | 'request_changes') => {
     if (!selectedProfile) return;
 
@@ -170,6 +206,9 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
         message: res.message || res.error || `Failed to perform ${action} on partner profile.`
       });
     } else {
+      if (action === 'approve' && selectedProfile.applied_recs && selectedProfile.applied_recs.length > 0) {
+        handleAssignAppliedRecs(selectedProfile.partner_id, selectedProfile.partner_code, selectedProfile.applied_recs);
+      }
       setActionFeedback({
         type: 'success',
         message: `Partner Passport submission for ${selectedProfile.partner_name} (${selectedProfile.partner_code}) successfully ${action === 'approve' ? 'approved and published' : 'returned for changes'}.`
@@ -747,6 +786,65 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
                   </div>
                 )}
               </div>
+
+              {/* Applied Recommendations for Verified Expertise */}
+              {selectedProfile.applied_recs && selectedProfile.applied_recs.length > 0 && (
+                <div className="space-y-3 p-4 bg-[#FAF9F5] rounded-2xl border border-[#E5E3DB]">
+                  <div className="flex items-center justify-between border-b border-[#E5E3DB] pb-2">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={16} className="text-[#C5A059]" />
+                      <h4 className="font-serif text-sm font-bold text-[#1E2E20]">
+                        Applied Recommendations for Expertise Verification ({selectedProfile.applied_recs.length})
+                      </h4>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleAssignAppliedRecs(selectedProfile.partner_id, selectedProfile.partner_code, selectedProfile.applied_recs || [])}
+                      className="px-2.5 py-1 bg-[#1E2E20] hover:bg-[#2A3E2D] text-[#C5A059] font-mono text-[10px] font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+                    >
+                      <PlusCircle size={12} />
+                      <span>Approve & Assign Spots</span>
+                    </button>
+                  </div>
+
+                  {selectedProfile.applied_recs_note && (
+                    <div className="text-xs font-sans text-[#1E2E20] bg-white p-2.5 rounded-xl border border-[#E5E3DB]">
+                      <span className="font-mono text-[10px] uppercase font-bold text-[#8C8A7D] block mb-0.5">Partner Expertise Note:</span>
+                      <p className="italic">"{selectedProfile.applied_recs_note}"</p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {selectedProfile.applied_recs.map((recId) => {
+                      const matched = availableRecs.find(r => r.id === recId);
+                      const title = matched?.title || `Recommendation #${recId}`;
+                      const category = matched?.category || 'General';
+                      return (
+                        <div key={recId} className="p-2.5 bg-white border border-[#E5E3DB] rounded-xl flex items-center justify-between gap-2 shadow-xs">
+                          <div className="min-w-0">
+                            <span className="text-xs font-serif font-bold text-[#1E2E20] block truncate">
+                              {title}
+                            </span>
+                            <span className="text-[10px] font-mono text-[#8C8A7D] block">
+                              {category}
+                            </span>
+                          </div>
+                          <span className="text-[9px] font-mono font-bold bg-[#FAF9F5] border border-[#E5E3DB] text-[#1E2E20] px-1.5 py-0.5 rounded shrink-0">
+                            ID: {recId}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {recAssignFeedback && (
+                    <div className="p-2 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-mono rounded-lg flex items-center gap-1.5">
+                      <CheckCircle2 size={13} />
+                      <span>{recAssignFeedback}</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Previous Review Note if exists */}
               {selectedProfile.reviewer_note && (
