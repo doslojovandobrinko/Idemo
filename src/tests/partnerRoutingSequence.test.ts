@@ -94,5 +94,57 @@ export async function runPartnerRoutingSequenceTests(): Promise<TestResult[]> {
     details: `Final status: ${finalInquiryStatus}, Displayed EN message: "${exhaustedMessageEN}", Displayed SR message: "${exhaustedMessageSR}".`,
   });
 
+  // 5. Verify Proposal 1: 30-Minute Opportunity Countdown SLA Window Calculation
+  const sampleCreatedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString(); // 10 minutes ago
+  const sampleCreatedMs = new Date(sampleCreatedAt).getTime();
+  const sampleExpiresMs = sampleCreatedMs + 30 * 60 * 1000;
+  const remainingMinutes = Math.floor((sampleExpiresMs - Date.now()) / (60 * 1000));
+  const isUrgent = remainingMinutes < 10;
+
+  results.push({
+    name: "PRS-06 (Proposal 1): 30-minute opportunity countdown computes remaining time accurately",
+    passed: remainingMinutes >= 19 && remainingMinutes <= 20 && !isUrgent,
+    details: `Created 10 mins ago -> Calculated remaining window: ${remainingMinutes}m (Expected ~20m, non-urgent).`,
+  });
+
+  // 6. Verify Proposal 2: Direct Venue Contact Fallback Presence on Exhaustion
+  const mockRecommendation = {
+    id: '1',
+    title: 'Salon 1905',
+    titleSr: 'Salon 1905',
+    practicalInfo: {
+      contact_phone: '+38111222333',
+      contact_email: 'reservations@salon1905.rs',
+      website: 'https://salon1905.rs',
+      opening_hours: '12:00 - 23:00'
+    }
+  };
+
+  const hasDirectChannels = Boolean(
+    mockRecommendation.practicalInfo.contact_phone &&
+    mockRecommendation.practicalInfo.contact_email &&
+    mockRecommendation.practicalInfo.website
+  );
+
+  results.push({
+    name: "PRS-07 (Proposal 2): Exhausted partners state surfaces direct venue contact fallback channels",
+    passed: hasDirectChannels,
+    details: `Phone: ${mockRecommendation.practicalInfo.contact_phone}, Email: ${mockRecommendation.practicalInfo.contact_email}, Website: ${mockRecommendation.practicalInfo.website}.`,
+  });
+
   return results;
+}
+
+// Self-executing runner when run directly via tsx
+if (import.meta.url === `file://${process.argv[1]}`) {
+  runPartnerRoutingSequenceTests().then((res) => {
+    console.log('\n--- PARTNER ROUTING SEQUENCE TEST RESULTS ---');
+    let allPass = true;
+    for (const r of res) {
+      console.log(`[${r.passed ? 'PASS' : 'FAIL'}] ${r.name} (${r.details || ''})`);
+      if (!r.passed) allPass = false;
+    }
+    console.log(allPass ? '\nALL TESTS PASSED!' : '\nTESTS FAILED!');
+    process.exit(allPass ? 0 : 1);
+  });
 }

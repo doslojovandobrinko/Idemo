@@ -171,6 +171,8 @@ const ARRANGE_TR: Record<string, any> = {
     time_placeholder: "e.g., 14:00, Morning, Evening...",
     exhausted_partners: "All suitable partners are currently engaged. Please try again later.",
     try_again: "TRY AGAIN",
+    direct_contact_title: "DIRECT VENUE & VISIT INFO",
+    direct_contact_desc: "While partners are engaged, you may reach the venue or view visiting details directly:",
   },
   sr: {
     arrange_this: "ARRANGE",
@@ -186,6 +188,8 @@ const ARRANGE_TR: Record<string, any> = {
     time_placeholder: "npr. 14:00, prepodne, veče...",
     exhausted_partners: "Svi odgovarajući partneri su trenutno zauzeti. Molimo pokušajte ponovo kasnije.",
     try_again: "POKUŠAJ PONOVO",
+    direct_contact_title: "DIREKTNE INFORMACIJE I KONTAKT LOKACIJE",
+    direct_contact_desc: "Dok su partneri zauzeti, lokaciju možete kontaktirati ili posetiti direktno:",
   },
   es: {
     arrange_this: "ARRANGE",
@@ -201,6 +205,8 @@ const ARRANGE_TR: Record<string, any> = {
     time_placeholder: "Ej. 14:00, mañana, tarde...",
     exhausted_partners: "Todos los socios adecuados están ocupados actualmente. Por favor, inténtelo de nuevo más tarde.",
     try_again: "INTENTAR DE NUEVO",
+    direct_contact_title: "CONTACTO DIRECTO DEL LUGAR",
+    direct_contact_desc: "Mientras los socios están ocupados, puede contactar el lugar directamente:",
   },
   de: {
     arrange_this: "ARRANGE",
@@ -216,6 +222,8 @@ const ARRANGE_TR: Record<string, any> = {
     time_placeholder: "z.B. 14:00 Uhr, Vormittag, Abend...",
     exhausted_partners: "Alle passenden Partner sind derzeit ausgebucht. Bitte versuchen Sie es später erneut.",
     try_again: "ERNEUT VERSUCHEN",
+    direct_contact_title: "DIREKTER KONTAKT ZUM STANDORT",
+    direct_contact_desc: "Während unsere Partner ausgelastet sind, können Sie den Ort direkt kontaktieren:",
   },
   ru: {
     arrange_this: "ARRANGE",
@@ -231,6 +239,8 @@ const ARRANGE_TR: Record<string, any> = {
     time_placeholder: "например, 14:00, утро, вечер...",
     exhausted_partners: "Все подходящие партнеры в настоящее время заняты. Пожалуйста, попробуйте позже.",
     try_again: "ПОПРОБОВАТЬ СНОВА",
+    direct_contact_title: "ПРЯМОЙ КОНТАКТ С ЛОКАЦИЕЙ",
+    direct_contact_desc: "Пока партнеры заняты, вы можете связаться напрямую:",
   },
   zh: {
     arrange_this: "ARRANGE",
@@ -246,6 +256,8 @@ const ARRANGE_TR: Record<string, any> = {
     time_placeholder: "例如：14:00、上午、晚上...",
     exhausted_partners: "所有合适的合作伙伴目前均已忙碌。请稍后再试。",
     try_again: "重试",
+    direct_contact_title: "场地直接联络信息",
+    direct_contact_desc: "在合作伙伴忙碌期间，您可以直接联络场地：",
   }
 };
 
@@ -1574,10 +1586,110 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
               )}
 
               {(inquiry.status === 'needs_assistance' || inquiry.visitorStatusLabel === 'needs_assistance' || statusFeedback?.includes('engaged') || statusFeedback?.includes('zauzeti')) && (
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   <p className="text-[9px] font-medium text-amber-950 text-center bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20 leading-relaxed font-sans">
                     {ARRANGE_TR[language]?.exhausted_partners || ARRANGE_TR['en'].exhausted_partners}
                   </p>
+
+                  {/* Proposal 2: Direct Venue Contact & Practical Visit Info Fallback */}
+                  {(item.practicalInfo?.contact_phone || item.practicalInfo?.contact_email || item.practicalInfo?.website || item.practicalInfo?.opening_hours) && (
+                    <div className="p-3 bg-white rounded-xl border border-[#3E5037]/20 text-left space-y-2 shadow-2xs">
+                      <div className="flex items-center justify-between border-b border-[#3E5037]/10 pb-1.5">
+                        <span className="text-[8px] font-mono font-black uppercase tracking-wider text-[#3E5037]">
+                          {ARRANGE_TR[language]?.direct_contact_title || ARRANGE_TR['en'].direct_contact_title}
+                        </span>
+                        <span className="text-[7.5px] font-mono font-bold text-brand-charcoal/50 uppercase">
+                          {getLocalizedValue(item, 'title', language)}
+                        </span>
+                      </div>
+                      <p className="text-[9.5px] text-brand-charcoal/80 leading-relaxed font-sans">
+                        {ARRANGE_TR[language]?.direct_contact_desc || ARRANGE_TR['en'].direct_contact_desc}
+                      </p>
+
+                      {item.practicalInfo.opening_hours && (
+                        <div className="text-[8.5px] font-mono text-brand-charcoal/70 bg-[#FAF9F5] p-2 rounded-lg border border-[#E5E3DB] flex items-center gap-1.5">
+                          <Clock size={12} className="text-[#3E5037] shrink-0" />
+                          <span>{item.practicalInfo.opening_hours}</span>
+                        </div>
+                      )}
+
+                      <div className="flex flex-wrap gap-1.5 pt-0.5">
+                        {item.practicalInfo.contact_phone && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              routeOutboundAction({
+                                url: `tel:${item.practicalInfo?.contact_phone}`,
+                                type: 'EXTERNAL_INTENT',
+                                fallbackData: { copyText: item.practicalInfo?.contact_phone }
+                              });
+                            }}
+                            className="min-h-[44px] flex-1 px-3 py-2 bg-[#FAF9F5] hover:bg-[#E5E3DB] border border-[#3E5037]/25 text-[#1E2E20] rounded-xl flex items-center justify-center gap-1.5 font-mono text-[9px] font-bold transition-colors cursor-pointer"
+                          >
+                            <Phone size={12} className="text-[#3E5037]" />
+                            <span>{item.practicalInfo.contact_phone}</span>
+                          </button>
+                        )}
+
+                        {item.practicalInfo.contact_phone && sanitizePhoneForWhatsApp(item.practicalInfo.contact_phone).length >= 8 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const waUrl = `https://wa.me/${sanitizePhoneForWhatsApp(item.practicalInfo!.contact_phone!)}?text=${encodeURIComponent(
+                                language === 'sr'
+                                  ? `Zdravo, javljam se povodom posete ${getLocalizedValue(item, 'title', language)} preko IDEMO aplikacije.`
+                                  : `Hello, reaching out regarding a visit to ${getLocalizedValue(item, 'title', language)} via IDEMO.`
+                              )}`;
+                              routeOutboundAction({
+                                url: waUrl,
+                                type: 'EXTERNAL_INTENT',
+                                fallbackData: { copyText: item.practicalInfo?.contact_phone }
+                              });
+                            }}
+                            className="min-h-[44px] px-3 py-2 bg-[#25D366]/15 hover:bg-[#25D366]/25 border border-[#25D366]/40 text-[#075E54] rounded-xl flex items-center justify-center gap-1.5 font-mono text-[9px] font-bold transition-colors cursor-pointer"
+                          >
+                            <span>💬 WhatsApp</span>
+                          </button>
+                        )}
+
+                        {item.practicalInfo.contact_email && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const mailUrl = `mailto:${item.practicalInfo?.contact_email}?subject=${encodeURIComponent(`Inquiry - ${getLocalizedValue(item, 'title', language)} (via IDEMO)`)}`;
+                              routeOutboundAction({
+                                url: mailUrl,
+                                type: 'EXTERNAL_INTENT',
+                                fallbackData: { copyText: item.practicalInfo?.contact_email }
+                              });
+                            }}
+                            className="min-h-[44px] flex-1 px-3 py-2 bg-[#FAF9F5] hover:bg-[#E5E3DB] border border-[#3E5037]/25 text-[#1E2E20] rounded-xl flex items-center justify-center gap-1.5 font-mono text-[9px] font-bold transition-colors cursor-pointer truncate"
+                          >
+                            <Mail size={12} className="text-[#3E5037]" />
+                            <span className="truncate">{item.practicalInfo.contact_email}</span>
+                          </button>
+                        )}
+
+                        {item.practicalInfo.website && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              routeOutboundAction({
+                                url: item.practicalInfo!.website!,
+                                type: 'EXTERNAL_INTENT',
+                                fallbackData: { copyText: item.practicalInfo?.website }
+                              });
+                            }}
+                            className="min-h-[44px] flex-1 px-3 py-2 bg-[#FAF9F5] hover:bg-[#E5E3DB] border border-[#3E5037]/25 text-[#1E2E20] rounded-xl flex items-center justify-center gap-1.5 font-mono text-[9px] font-bold transition-colors cursor-pointer"
+                          >
+                            <ExternalLink size={12} className="text-[#3E5037]" />
+                            <span>{language === 'sr' ? 'Zvanični sajt' : 'Official Site'}</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     onClick={handleTryAgain}

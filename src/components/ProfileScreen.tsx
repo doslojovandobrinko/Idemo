@@ -13,12 +13,18 @@ import {
   QrCode, 
   Heart, 
   ChevronDown, 
-  ChevronUp,
-  Sparkles,
-  AlertTriangle,
-  Move,
-  Maximize2,
-  RotateCw
+  ChevronUp, 
+  Sparkles, 
+  AlertTriangle, 
+  Move, 
+  Maximize2, 
+  RotateCw,
+  Share2,
+  Send,
+  Download,
+  Smartphone,
+  Info,
+  X
 } from 'lucide-react';
 import { Category, Recommendation } from '../types';
 import { TRANSLATIONS } from '../constants';
@@ -556,6 +562,10 @@ export default function ProfileScreen({
   // Accordion states under "Trust & Privacy"
   const [trustOpen, setTrustOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [copiedAppShare, setCopiedAppShare] = useState(false);
+  const [activeTooltip, setActiveTooltip] = useState<'share' | 'pass' | null>(null);
+  const [passExplainerOpen, setPassExplainerOpen] = useState(false);
 
   const [confirmStep, setConfirmStep] = useState(0);
 
@@ -727,6 +737,92 @@ export default function ProfileScreen({
         setTimeout(() => setLinkCopied(false), 2000);
       });
     }
+  };
+
+  // Dedicated app-level share metadata and direct social channels
+  const getAppSharePayload = () => {
+    const appUrl = `${window.location.origin}${window.location.pathname}`;
+    const shareTitle = isSr 
+      ? 'IDEMO — Kurirani vodič i konsjerž za Srbiju' 
+      : isZh 
+      ? 'IDEMO 塞尔维亚专属尊享旅行管家' 
+      : 'IDEMO — Curated Serbia Concierge & Planner';
+    
+    const shareText = isSr
+      ? 'Istraži autentičnu Srbiju kroz IDEMO — odabrana mesta, skrivene lokacije, lokalni partneri i lični putni planer.'
+      : isZh
+      ? '探索塞尔维亚的隐秘瑰宝与地道风情：IDEMO 专属旅行管家与本地精选指南。'
+      : 'Explore authentic Serbia with IDEMO — curated highlights, hidden gems, verified local partners, and offline-first travel pass.';
+
+    return { appUrl, shareTitle, shareText };
+  };
+
+  const handleNativeShareApp = async () => {
+    const { appUrl, shareTitle, shareText } = getAppSharePayload();
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          text: `${shareText}\n`,
+          url: appUrl
+        });
+        playHaptic(30);
+      } catch (e) {
+        console.log('Share dismissed or not completed', e);
+      }
+    } else {
+      handleCopyAppShare();
+    }
+  };
+
+  const handleCopyAppShare = () => {
+    const { appUrl, shareText } = getAppSharePayload();
+    const fullText = `${shareText}\n${appUrl}`;
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(fullText).then(() => {
+        setCopiedAppShare(true);
+        playHaptic(15);
+        setTimeout(() => setCopiedAppShare(false), 2500);
+      }).catch(() => {
+        fallbackCopyAppText(fullText);
+      });
+    } else {
+      fallbackCopyAppText(fullText);
+    }
+  };
+
+  const fallbackCopyAppText = (text: string) => {
+    const el = document.createElement('textarea');
+    el.value = text;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    setCopiedAppShare(true);
+    playHaptic(15);
+    setTimeout(() => setCopiedAppShare(false), 2500);
+  };
+
+  const handleShareWhatsApp = () => {
+    const { appUrl, shareText } = getAppSharePayload();
+    const message = encodeURIComponent(`${shareText}\n${appUrl}`);
+    window.open(`https://api.whatsapp.com/send?text=${message}`, '_blank', 'noopener,noreferrer');
+    playHaptic(15);
+  };
+
+  const handleShareTelegram = () => {
+    const { appUrl, shareText } = getAppSharePayload();
+    const url = encodeURIComponent(appUrl);
+    const text = encodeURIComponent(shareText);
+    window.open(`https://t.me/share/url?url=${url}&text=${text}`, '_blank', 'noopener,noreferrer');
+    playHaptic(15);
+  };
+
+  const handleShareViber = () => {
+    const { appUrl, shareText } = getAppSharePayload();
+    const text = encodeURIComponent(`${shareText} ${appUrl}`);
+    window.open(`viber://forward?text=${text}`, '_blank', 'noopener,noreferrer');
+    playHaptic(15);
   };
 
   // Dynamically derive closest archetype for active applied settings
@@ -1291,37 +1387,247 @@ export default function ProfileScreen({
                       </button>
                     </div>
                   </div>
-
-                  {/* Travel Pass Integration */}
-                  <div className="bg-white/95 rounded-2xl border border-[#2D3025]/10 p-3.5 space-y-2">
-                    <div className="flex items-center gap-1.5">
-                      <QrCode className="text-[#800020] w-3.5 h-3.5" />
-                      <span className="text-[13px] uppercase tracking-wider text-brand-charcoal font-bold">
-                        {isSr ? 'VAŠA PUTNA PROPUSNICA' : isZh ? '专属旅行通行证' : 'SECURE TRAVEL PASS'}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleCopyLink}
-                      className={`w-full h-11 rounded-xl font-mono font-bold tracking-widest uppercase text-[14px] flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm active:scale-[0.98] ${
-                        linkCopied 
-                          ? 'bg-emerald-600 text-white border border-emerald-600' 
-                          : 'bg-[#800020] hover:bg-[#660019] text-white border border-[#660019]/40'
-                      }`}
-                    >
-                      {linkCopied ? <Check size={16} /> : <Copy size={16} />}
-                      <span>
-                        {linkCopied 
-                          ? (isSr ? 'LINK JE KOPIRAN!' : isZh ? '链接已成功复制！' : 'LINK COPIED!') 
-                          : (isSr ? 'KOPIRAJ PUTNU PROPUSNICU' : isZh ? '一键生成旅行通行证' : 'COPY TRAVEL PASS LINK')
-                        }
-                      </span>
-                    </button>
-                  </div>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
+        </div>
+      </section>
+
+      {/* 8. Dedicated App Sharing & Secure Travel Pass Section (Permanently Visible) */}
+      <section className="bg-brand-pearl rounded-[28px] border border-[#2D3025]/10 p-5 space-y-3.5 shadow-[0_2px_8px_rgba(35,37,30,0.02)]" id="share-travel-pass-section">
+        <div className="flex items-center justify-between border-b border-[#2D3025]/10 pb-2.5">
+          <div className="flex items-center gap-2">
+            <QrCode className="text-[#800020] w-4 h-4" />
+            <h2 className="text-[13px] uppercase tracking-[0.25em] font-black text-brand-charcoal">
+              {isSr ? 'DELJENJE & PUTNA PROPUSNICA' : isZh ? '应用分享与旅行通行证' : isEs ? 'COMPARTIR Y PASE DE VIAJE' : isDe ? 'TEILEN & REISEPASS' : isRu ? 'ПОДЕЛИТЬСЯ И ТРЕВЕЛ-ПАСС' : 'APP SHARING & TRAVEL PASS'}
+            </h2>
+          </div>
+          <span className="text-[10px] font-mono text-[#800020] bg-[#800020]/10 px-2 py-0.5 rounded font-black tracking-wider">
+            {isSr ? 'BEZ INSTALACIJE' : isZh ? '即点即用' : 'ZERO CLUTTER'}
+          </span>
+        </div>
+
+        <p className="text-[13.5px] text-brand-charcoal/80 leading-relaxed font-normal">
+          {isSr 
+            ? 'Preporučite IDEMO prijateljima, pošaljite im Vaš izbor ruta i omogućite im da sačuvaju aplikaciju direktno na svoj telefon jednim dodirom.'
+            : isZh
+            ? '将 IDEMO 推荐给好友，一键分享您的定制行程，或直接添加至手机桌面畅享地道塞尔维亚之旅。'
+            : 'Share IDEMO with friends, send your calibrated travel pass, and allow them to install the application instantly on their home screen.'}
+        </p>
+
+        <div className="bg-white rounded-2xl border border-[#2D3025]/10 p-3.5 space-y-3 shadow-2xs relative">
+          {/* Mobile backdrop to dismiss active tooltip */}
+          {activeTooltip && (
+            <div 
+              className="fixed inset-0 z-30" 
+              onClick={() => setActiveTooltip(null)} 
+            />
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 relative">
+            {/* Direct App Share & Install Modal Trigger */}
+            <div className="relative group">
+              <button
+                type="button"
+                onClick={() => {
+                  setShareModalOpen(true);
+                  playHaptic(15);
+                }}
+                className="w-full h-12 pr-9 pl-3 rounded-xl font-mono font-black tracking-wider uppercase text-[12.5px] flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm active:scale-[0.98] bg-[#800020] hover:bg-[#660019] text-white border border-[#660019]/40"
+              >
+                <Share2 size={16} className="shrink-0" />
+                <span className="truncate">
+                  {isSr ? 'PODELI & PREUZMI APLIKACIJU' : isZh ? '分享与安装应用' : 'SHARE & INSTALL APP'}
+                </span>
+              </button>
+
+              {/* Tooltip Info Trigger */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveTooltip(activeTooltip === 'share' ? null : 'share');
+                  playHaptic(10);
+                }}
+                aria-label="Info: Podeli aplikaciju"
+                title={isSr ? 'Saznaj kako radi deljenje' : 'Learn how sharing works'}
+                className="absolute top-2.5 right-2 w-7 h-7 rounded-lg bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors z-20 cursor-pointer"
+              >
+                <Info size={13} />
+              </button>
+
+              {/* Hover / Tap Tooltip */}
+              <div
+                className={`absolute bottom-full mb-2 left-0 right-0 sm:left-0 sm:right-auto sm:w-72 bg-[#2D3025] text-[#FAF9F5] p-3 rounded-xl shadow-2xl border border-white/15 z-40 text-left transition-all duration-150 ${
+                  activeTooltip === 'share' 
+                    ? 'block opacity-100 scale-100 pointer-events-auto' 
+                    : 'hidden group-hover:block opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100 pointer-events-none group-hover:pointer-events-auto'
+                }`}
+              >
+                <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-1.5">
+                  <span className="text-[10px] font-mono font-bold tracking-wider uppercase text-amber-300">
+                    {isSr ? 'KAKO RADI OVO DUGME?' : 'HOW DOES THIS WORK?'}
+                  </span>
+                  {activeTooltip === 'share' && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveTooltip(null);
+                      }}
+                      className="text-white/60 hover:text-white p-0.5"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11.5px] leading-relaxed text-white/90">
+                  {isSr
+                    ? 'Šalje link za celu IDEMO aplikaciju prijatelju (preko WhatsApp-a, Vibera, Telegrama ili SMS-a). Prijatelj je odmah otvara u pretraživaču bez skidanja sa prodavnice!'
+                    : 'Sends a link to the complete IDEMO app to friends (via WhatsApp, Viber, SMS). Friends open it immediately in their browser without downloading from an app store!'}
+                </p>
+                <div className="mt-2 pt-1.5 border-t border-white/10 flex items-center gap-1.5 text-[10px] text-amber-200/90 font-mono">
+                  <Smartphone size={11} className="shrink-0" />
+                  <span>{isSr ? 'Bez registracije • Radi odmah' : 'No store download • Instant access'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Copy Personal Travel Pass */}
+            <div className="relative group">
+              <button
+                type="button"
+                onClick={handleCopyLink}
+                className={`w-full h-12 pr-9 pl-3 rounded-xl font-mono font-bold tracking-wider uppercase text-[12px] flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm active:scale-[0.98] ${
+                  linkCopied 
+                    ? 'bg-emerald-600 text-white border border-emerald-600' 
+                    : 'bg-white hover:bg-[#FAF9F5] text-brand-charcoal border border-[#2D3025]/15'
+                }`}
+              >
+                {linkCopied ? <Check size={16} className="shrink-0" /> : <Copy size={16} className="shrink-0" />}
+                <span className="truncate">
+                  {linkCopied 
+                    ? (isSr ? 'PROPUSNICA KOPIRANA!' : isZh ? '通行证已复制！' : 'PASS COPIED!') 
+                    : (isSr ? 'KOPIRAJ MOJU PROPUSNICU' : isZh ? '复制我的通行证' : 'COPY MY TRAVEL PASS')
+                  }
+                </span>
+              </button>
+
+              {/* Tooltip Info Trigger */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveTooltip(activeTooltip === 'pass' ? null : 'pass');
+                  playHaptic(10);
+                }}
+                aria-label="Info: Putna propusnica"
+                title={isSr ? 'Saznaj šta je putna propusnica' : 'Learn what travel pass is'}
+                className="absolute top-2.5 right-2 w-7 h-7 rounded-lg bg-brand-charcoal/5 hover:bg-brand-charcoal/10 text-brand-charcoal flex items-center justify-center transition-colors z-20 cursor-pointer"
+              >
+                <Info size={13} />
+              </button>
+
+              {/* Hover / Tap Tooltip */}
+              <div
+                className={`absolute bottom-full mb-2 left-0 right-0 sm:left-auto sm:right-0 sm:w-72 bg-[#2D3025] text-[#FAF9F5] p-3 rounded-xl shadow-2xl border border-white/15 z-40 text-left transition-all duration-150 ${
+                  activeTooltip === 'pass' 
+                    ? 'block opacity-100 scale-100 pointer-events-auto' 
+                    : 'hidden group-hover:block opacity-0 group-hover:opacity-100 scale-95 group-hover:scale-100 pointer-events-none group-hover:pointer-events-auto'
+                }`}
+              >
+                <div className="flex items-center justify-between border-b border-white/10 pb-1.5 mb-1.5">
+                  <span className="text-[10px] font-mono font-bold tracking-wider uppercase text-amber-300">
+                    {isSr ? 'ŠTA JE PUTNA PROPUSNICA?' : 'WHAT IS TRAVEL PASS?'}
+                  </span>
+                  {activeTooltip === 'pass' && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveTooltip(null);
+                      }}
+                      className="text-white/60 hover:text-white p-0.5"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11.5px] leading-relaxed text-white/90">
+                  {isSr
+                    ? 'Kopira Vaš personalizovani link koji prenosi Vaša podešavanja (Mood Orbit raspoloženje, omiljene kategorije i rute). Prijatelj klikom odmah vidi Vaš profil bez ikakve instalacije!'
+                    : 'Copies your personal link containing your calibrated Mood Orbit, selected interests, and venues. Friends open it directly in their browser without downloading any app!'}
+                </p>
+                <div className="mt-2 pt-1.5 border-t border-white/10 flex items-center gap-1.5 text-[10px] text-amber-200/90 font-mono">
+                  <Sparkles size={11} className="shrink-0" />
+                  <span>{isSr ? 'Vaše preporuke • Lični profil' : 'Your preferences • Personal profile'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Elegant Collapsible Guide: How does this work? (No store download needed) */}
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                setPassExplainerOpen(!passExplainerOpen);
+                playHaptic(10);
+              }}
+              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-brand-pearl/70 hover:bg-brand-pearl border border-[#2D3025]/10 text-brand-charcoal transition-all text-left cursor-pointer group"
+            >
+              <div className="flex items-center gap-2">
+                <Info size={14} className="text-[#800020] shrink-0" />
+                <span className="text-[11px] font-mono font-black tracking-wider uppercase text-brand-charcoal group-hover:text-[#800020] transition-colors">
+                  {isSr ? 'Da li prijatelj mora da skida aplikaciju? (Saznaj kako radi)' : isZh ? '好友需要下载应用吗？（工作原理）' : 'DOES A FRIEND NEED TO DOWNLOAD THE APP? (HOW IT WORKS)'}
+                </span>
+              </div>
+              <ChevronDown size={14} className={`text-brand-charcoal/60 transition-transform duration-200 shrink-0 ${passExplainerOpen ? 'rotate-180 text-[#800020]' : ''}`} />
+            </button>
+
+            <AnimatePresence>
+              {passExplainerOpen && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
+                >
+                  <div className="mt-2 bg-[#FAF9F5] rounded-xl p-3.5 border border-[#2D3025]/10 space-y-2.5 text-[12px] leading-relaxed text-brand-charcoal/90">
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-[#800020]/10 text-[#800020] font-mono font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">1</span>
+                      <p>
+                        <strong className="text-brand-charcoal font-bold">{isSr ? 'Može potpuno bez skidanja sa prodavnice:' : 'No App Store download required:'}</strong>{' '}
+                        {isSr 
+                          ? 'Prijatelj ne mora da traži IDEMO na App Store-u ili Google Play-u. Kada klikne na Vaš link, aplikacija se istog trenutka otvara u Safariju, Chrome-u ili bilo kom telefonu.'
+                          : 'Your friend does not need to search App Store or Google Play. Clicking your link opens IDEMO instantly in Safari, Chrome, or any mobile browser.'}
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-[#800020]/10 text-[#800020] font-mono font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">2</span>
+                      <p>
+                        <strong className="text-brand-charcoal font-bold">{isSr ? 'Odmah vidi Vaš lični profil:' : 'Instantly sees your calibrated profile:'}</strong>{' '}
+                        {isSr 
+                          ? 'Kada pošaljete „Putnu propusnicu“, prijatelj odmah vidi Vaš izbor raspoloženja (Mood Orbit), odabrane kategorije i sačuvane rute — bez kreiranja naloga.'
+                          : 'Sending your Travel Pass allows them to instantly experience your Mood Orbit preferences, interests, and saved spots — zero registration required.'}
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-[#800020]/10 text-[#800020] font-mono font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">3</span>
+                      <p>
+                        <strong className="text-brand-charcoal font-bold">{isSr ? 'Opciono čuvanje na ekran telefona:' : 'Optional Home Screen shortcut:'}</strong>{' '}
+                        {isSr 
+                          ? 'Ako prijatelj želi stalnu ikonicu kao pravu aplikaciju, u meniju pretraživača bira „Dodaj na početni ekran“ (Add to Home Screen) i IDEMO radi offline brzo i pouzdano.'
+                          : 'For permanent offline access, they can simply tap "Add to Home Screen" in their browser menu to install the IDEMO emblem.'}
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </section>
 
@@ -1602,6 +1908,171 @@ export default function ProfileScreen({
          <p className="text-[6px] uppercase tracking-[0.2em] font-bold text-brand-charcoal">v1.2.0</p>
       </footer>
     </motion.div>
+
+    {/* Ultra-Luxury Share & Install / Download IDEMO Modal */}
+    <AnimatePresence>
+      {shareModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => {
+              setShareModalOpen(false);
+              playHaptic(6);
+            }}
+            className="absolute inset-0 bg-[#1A1C16]/65 backdrop-blur-md"
+          />
+
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+            transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+            className="relative w-full max-w-md bg-[#FAF9F5] border border-[#2D3025]/15 rounded-[28px] shadow-2xl overflow-hidden z-10 p-6 space-y-5"
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-[#2D3025]/10 pb-4">
+              <div className="space-y-1">
+                <span className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#800020] font-black block">
+                  {isSr ? 'PREPORUČI & INSTALIRAJ' : isZh ? '分享与一键安装' : 'SHARE & INSTALL'}
+                </span>
+                <h3 className="font-serif font-black text-xl text-brand-charcoal tracking-tight">
+                  {isSr ? 'Podelite IDEMO sa prijateljima' : isZh ? '将 IDEMO 分享给好友' : 'Share IDEMO with Friends'}
+                </h3>
+                <p className="text-[12px] text-brand-charcoal/70 leading-relaxed">
+                  {isSr 
+                    ? 'Omogućite drugima da istraže kurirana mesta ili odmah preuzmu IDEMO na svoj telefon.'
+                    : isZh
+                    ? '让朋友一键打开专属塞尔维亚指南，并支持直接添加安装至手机桌面。'
+                    : 'Invite friends to explore curated experiences and easily save IDEMO directly to their devices.'}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShareModalOpen(false);
+                  playHaptic(6);
+                }}
+                className="w-8 h-8 rounded-full bg-white border border-[#2D3025]/10 flex items-center justify-center text-brand-charcoal hover:bg-[#F0EEE6] cursor-pointer transition-colors shrink-0 -mt-1 -mr-1"
+                aria-label="Close"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            {/* Primary Action: Native OS Share Sheet */}
+            <button
+              type="button"
+              onClick={handleNativeShareApp}
+              className="w-full h-12 rounded-2xl bg-[#800020] hover:bg-[#660019] text-white font-mono font-black text-[13px] tracking-wider uppercase flex items-center justify-center gap-2.5 shadow-md active:scale-[0.98] transition-all cursor-pointer"
+            >
+              <Share2 size={16} />
+              <span>
+                {isSr ? 'PODELI PREKO TELEFONA (AIRDROP / SMS / MENI)' : isZh ? '系统快捷分享 (AirDrop / 微信 / 消息)' : 'SHARE VIA SYSTEM (AIRDROP / APPS)'}
+              </span>
+            </button>
+
+            {/* Direct Messaging Channels */}
+            <div className="space-y-2">
+              <span className="text-[10px] font-mono uppercase tracking-widest text-brand-charcoal/60 font-bold block">
+                {isSr ? 'BRZI KANALI ZA SLANJE' : isZh ? '直接发送渠道' : 'INSTANT MESSAGING'}
+              </span>
+
+              <div className="grid grid-cols-3 gap-2">
+                {/* WhatsApp */}
+                <button
+                  type="button"
+                  onClick={handleShareWhatsApp}
+                  className="h-11 rounded-xl bg-white hover:bg-emerald-50 border border-[#25D366]/40 text-[#075E54] font-bold text-[11.5px] flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-[0.97]"
+                >
+                  <Send size={13} className="text-[#25D366]" />
+                  <span>WhatsApp</span>
+                </button>
+
+                {/* Telegram */}
+                <button
+                  type="button"
+                  onClick={handleShareTelegram}
+                  className="h-11 rounded-xl bg-white hover:bg-sky-50 border border-[#0088cc]/30 text-[#0088cc] font-bold text-[11.5px] flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-[0.97]"
+                >
+                  <Send size={13} className="text-[#0088cc]" />
+                  <span>Telegram</span>
+                </button>
+
+                {/* Viber */}
+                <button
+                  type="button"
+                  onClick={handleShareViber}
+                  className="h-11 rounded-xl bg-white hover:bg-purple-50 border border-[#7360f2]/30 text-[#59267c] font-bold text-[11.5px] flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-[0.97]"
+                >
+                  <Send size={13} className="text-[#7360f2]" />
+                  <span>Viber</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Direct Link One-Tap Copy */}
+            <div className="bg-white rounded-2xl border border-[#2D3025]/10 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-brand-charcoal/70 font-bold">
+                  {isSr ? 'DIREKTAN WEB LINK' : isZh ? '直接网页链接' : 'DIRECT WEB LINK'}
+                </span>
+                <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold">
+                  {copiedAppShare ? (isSr ? 'KOPIRANO!' : isZh ? '已复制！' : 'COPIED!') : 'LIVE'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={`${window.location.origin}${window.location.pathname}`}
+                  className="flex-1 h-9 px-3 bg-[#FAF9F5] border border-[#2D3025]/10 rounded-lg text-[11px] font-mono text-brand-charcoal select-all outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleCopyAppShare}
+                  className={`h-9 px-3 rounded-lg text-[11px] font-mono font-bold tracking-wider uppercase flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                    copiedAppShare 
+                      ? 'bg-emerald-600 text-white' 
+                      : 'bg-brand-charcoal hover:bg-black text-white'
+                  }`}
+                >
+                  {copiedAppShare ? <Check size={12} /> : <Copy size={12} />}
+                  <span>{copiedAppShare ? (isSr ? 'KOPIRANO' : isZh ? '已复制' : 'COPIED') : (isSr ? 'KOPIRAJ' : isZh ? '复制' : 'COPY')}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* How Friends Can "Download" and Save to Home Screen */}
+            <div className="bg-[#800020]/5 rounded-2xl border border-[#800020]/15 p-3.5 space-y-1.5 text-left">
+              <div className="flex items-center gap-1.5 text-[#800020]">
+                <Download size={14} />
+                <span className="text-[11px] font-bold tracking-wider uppercase font-mono">
+                  {isSr ? 'KAKO PRIJATELJ PREUZIMA APLIKACIJU?' : isZh ? '好友如何免下载安装至手机？' : 'HOW TO INSTALL ON PHONE'}
+                </span>
+              </div>
+              <p className="text-[11.5px] text-brand-charcoal/80 leading-relaxed font-sans">
+                {isSr ? (
+                  <>
+                    Otvaranjem linka u Safariju (iOS) ili Chrome-u (Android), prijatelj bira opciju <strong>„Dodaj na početni ekran“ (Add to Home Screen)</strong>. IDEMO odmah radi kao izvorna aplikacija sa potpunim offline pristupom.
+                  </>
+                ) : isZh ? (
+                  <>
+                    在 Safari 或 Chrome 浏览器中打开链接，点击分享并选择<strong>“添加到主屏幕” (Add to Home Screen)</strong>，无需应用商店即可立享原生流畅与离线体验。
+                  </>
+                ) : (
+                  <>
+                    When opened in mobile Safari or Chrome, tap <strong>Share → "Add to Home Screen"</strong>. IDEMO immediately installs as a native, offline-capable luxury web application with zero storage clutter.
+                  </>
+                )}
+              </p>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
     </div>
   );
 }

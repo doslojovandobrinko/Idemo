@@ -130,28 +130,39 @@ Ako je potrebna manja dopuna ili prilagođavanje teksta editorial standardima, I
 
 ---
 
-### Korak 6: Prijem i realizacija putničkih upita
-Kada posetilac pošalje upit koji odgovara vašim preporukama ili paketu:
+### Korak 6: Prijem i realizacija putničkih upita (Kaskadni prozor od 30 minuta)
+Kada posetilac pošalje upit koji odgovara vašim preporukama ili paketu, aktivira se sekvencijalni mehanizam usmeravanja:
 
-1. **Tab "Prilike" (*Opportunities*):**  
-   Dobijate obaveštenje o novom upitu. Vidite željeni datum, okvirno vreme, jezik gosta i posebne želje. Kontakt podaci gosta su u ovoj fazi skriveni.
-2. **Vaš odgovor:**  
+1. **Strogi rok za odgovor — tačno 30 minuta:**
+   * **Primarni partner (1. u redu):** Dobija ekskluzivni prozor od **30 minuta** da reaguje na upit.
+   * **Sekundarni partner (2. u redu):** Ukoliko primarni partner ne odgovori u roku od 30 minuta ili odbije upit, upit automatski i diskretno prelazi na sekundarnog partnera na narednih **30 minuta**.
+   * **Tercijarni partner (3. u redu):** Ukoliko i sekundarni partner propusti svoj rok, upit prelazi tercijarnom partneru na **30 minuta**.
+   * **Iscrpljenost kapaciteta (*All Partners Engaged*):** Ukoliko nijedan od partnera ne odgovori u svom roku od 30 minuta (ili svi odbiju), posetilac na svom ekranu dobija diskretnu poruku:
+     > *"Svi naši partneri su trenutno zauzeti. Molimo Vas da pokušate ponovo kasnije."*  
+     > *(Engleski: "All suitable partners are currently engaged. Please try again later.")*  
+     uz dugme *"Pokušaj ponovo"* kada se oslobode novi termini.
+
+2. **Tab "Prilike" (*Opportunities*):**  
+   Dobijate obaveštenje o novom upitu. Vidite željeni datum, okvirno vreme, jezik gosta i posebne želje. Kontakt podaci gosta su u ovoj fazi zaštićeni radi obostrane diskrecije.
+
+3. **Vaš odgovor u roku od 30 minuta:**  
    Možete izabrati:
-   * **Prihvati upit** — ukoliko vam termin u potpunosti odgovara;
-   * **Predloži alternativu** — ukoliko ste zauzeti, možete ponuditi drugi termin istog ili narednog dana;
-   * **Odbij** — ukoliko niste u mogućnosti da preuzmete vođenje (upit se diskretno prosleđuje sledećem partneru).
-3. **Tab "Moje" & "Potvrđeno":**  
-   Čim gost prihvati vaš odgovor, upit dobija status **Potvrđeno**. U tom trenutku dobijate ime, telefon i email gosta za direktno povezivanje i dogovor oko polaska.
+   * **Prihvati upit** — ukoliko vam termin u potpunosti odgovara (odmah zaključava rezervaciju za vas);
+   * **Predloži alternativu** — ukoliko ste zauzeti u traženom satu, možete ponuditi drugi termin istog ili narednog dana;
+   * **Odbij** — ukoliko niste u mogućnosti da preuzmete vođenje (upit se odmah prosleđuje sledećem partneru u redu bez čekanja isteka punih 30 minuta).
+
+4. **Tab "Moje" & "Potvrđeno":**  
+   Čim gost potvrdi vaš odgovor, upit dobija status **Potvrđeno**. U tom trenutku dobijate ime, telefon i email gosta za direktno povezivanje i dogovor oko polaska.
 
 ---
 
 # DEO III: STANDARDI KVALITETA I PREPORUKE
 
-Da bi vaši predlozi bili brzo odobreni u IDEMO Studiju, pridržavajte se sledećih pravila:
+Da bi vaši predlozi bili brzo odobreni u IDEMO Studiju i profil ostao visoko rangiran, pridržavajte se sledećih pravila:
 
 1. **Fotografije:** Koristite isključivo autentične, oštre fotografije prirodnog osvetljenja, bez grafičkih natpisa, vodenih žigova ili veštačkih filtera.
 2. **Ton teksta:** Pišite informativno, mirno i sa poštovanjem prema baštini. Izbegavajte senzacionalističke naslove ("Najveća tajna", "Šokantna lepota").
-3. **Ažurnost:** Odgovarajte na pristigle prilike unutar 2 do 4 sata, kako bi posetilac dobio premijum concierge iskustvo bez čekanja.
+3. **Striktna ažurnost (30 minuta):** Odgovarajte na pristigle prilike unutar dodeljenih **30 minuta**. Partneri koji redovno propuštaju svoj prozor bez odgovora mogu privremeno izgubiti prioritet usmeravanja u korist aktivnijih vodiča.
 
 Za sva pitanja i podršku, tim **IDEMO Kancelarije** vam stoji na raspolaganju.
 

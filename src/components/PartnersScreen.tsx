@@ -241,6 +241,60 @@ const INITIAL_PORTAL_PARTNERS: PortalPartner[] = [
   { id: 'p-os-7', pin: '6007', name: 'Open Slot — Kids & Family Entertainment', category: 'Open Slot', status: 'Validated', capabilities: ['Multi-lingual Nanny Guides'], languages: ['English'], geography: 'TBD', channels: ['WhatsApp'], contactPhone: '', instagram: '', assignedRecs: [], contributions: 0, reliability: 100, eligibility: false }
 ];
 
+// Helper for 30-minute opportunity countdown SLA timer
+function OpportunitySlaCountdown({ createdAt, isSr }: { createdAt: string; isSr: boolean }) {
+  const [timeLeft, setTimeLeft] = useState<{ minutes: number; seconds: number; isExpired: boolean }>({
+    minutes: 30,
+    seconds: 0,
+    isExpired: false
+  });
+
+  useEffect(() => {
+    const calculateTime = () => {
+      const createdTime = new Date(createdAt).getTime();
+      const expiresTime = createdTime + 30 * 60 * 1000;
+      const diffMs = expiresTime - Date.now();
+
+      if (diffMs <= 0) {
+        setTimeLeft({ minutes: 0, seconds: 0, isExpired: true });
+      } else {
+        const totalSec = Math.floor(diffMs / 1000);
+        const m = Math.floor(totalSec / 60);
+        const s = totalSec % 60;
+        setTimeLeft({ minutes: m, seconds: s, isExpired: false });
+      }
+    };
+
+    calculateTime();
+    const interval = setInterval(calculateTime, 1000);
+    return () => clearInterval(interval);
+  }, [createdAt]);
+
+  if (timeLeft.isExpired) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[8px] font-mono font-bold bg-neutral-100 text-neutral-600 border border-neutral-300">
+        <span>⏱</span>
+        <span>{isSr ? 'Rok od 30 min istekao (Kaskadira se)' : '30m window elapsed (Cascaded)'}</span>
+      </span>
+    );
+  }
+
+  const isUrgent = timeLeft.minutes < 10;
+  const mm = String(timeLeft.minutes).padStart(2, '0');
+  const ss = String(timeLeft.seconds).padStart(2, '0');
+
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[8px] font-mono font-bold border ${
+      isUrgent
+        ? 'bg-red-50 text-red-800 border-red-300 animate-pulse'
+        : 'bg-amber-50 text-amber-900 border-amber-300'
+    }`}>
+      <span>⏱</span>
+      <span>{isSr ? `Preostalo vreme za odgovor: ${mm}:${ss}` : `Response Window: ${mm}:${ss}`}</span>
+    </span>
+  );
+}
+
 const INITIAL_INQUIRIES: Inquiry[] = [];
 
 const ROTATING_IMAGES = [
@@ -3370,7 +3424,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                 </div>
 
                 <div className="p-3 bg-amber-50 rounded-xl border border-amber-500/10 text-[9.5px] leading-relaxed text-amber-900 font-mono">
-                  <strong>SYSTEM LOG:</strong> Normal inquiry flows are auto-matched by Geography, Language, Budget, and Capability constraints. Standard routing rules execute instant Stage 1 alerts, with progressive fallback to Stage 2 after 15 minutes. The Concierge intervenes manually only for exception escalations or manual overrides.
+                  <strong>SYSTEM LOG:</strong> Normal inquiry flows are auto-matched by Geography, Language, Budget, and Capability constraints. Standard routing rules execute instant Stage 1 alerts (30 min response window), with progressive sequential fallback to Stage 2 (30 min) and Stage 3 (30 min). The Concierge intervenes manually only for exception escalations or when all partners are engaged.
                 </div>
               </div>
 
@@ -3698,7 +3752,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                     </div>
                     <div className="bg-white p-2.5 rounded-lg border border-[#0C302F]/5 space-y-1">
                       <span className="font-bold text-[#006666]">3. Dispatched Stage 2</span>
-                      <p className="text-brand-charcoal/60">Secondary/fallback qualified partners are notified after 15 minutes of silent queue.</p>
+                      <p className="text-brand-charcoal/60">Secondary/fallback qualified partners are notified sequentially after 30 minutes of silent queue per candidate.</p>
                     </div>
                     <div className="bg-white p-2.5 rounded-lg border border-[#0C302F]/5 space-y-1">
                       <span className="font-bold text-[#006666]">4. Locked / Accepted</span>
@@ -5511,6 +5565,25 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                         <div className="bg-white border border-[#2D3025]/10 rounded-xl p-3 text-[11.5px] text-brand-charcoal/90 leading-relaxed italic text-left shadow-2xs">
                           "{inq.query}"
                         </div>
+
+                        {/* Proposal 1: 30-Minute Cascading Response Countdown for Pending Opportunities */}
+                        {isPendingAction && !isArchived && inq.createdAt && (
+                          <div className="flex items-center justify-between p-2.5 bg-amber-500/10 border border-amber-500/25 rounded-xl text-left">
+                            <div className="space-y-0.5">
+                              <span className="text-[8px] font-mono font-bold uppercase tracking-wider text-amber-900 block">
+                                {isSr ? 'IDEMO KASKADNI ODGOVOR (SLA)' : 'IDEMO CASCADING SLA'}
+                              </span>
+                              <p className="text-[9.5px] text-amber-950/80 font-sans leading-snug">
+                                {isSr
+                                  ? 'Nakon 30 minuta bez odgovora, upit se automatski i diskretno prosleđuje sledećem rangiranom partneru.'
+                                  : 'If unanswered within 30 mins, inquiry automatically and discreetly cascades to next ranked partner.'}
+                              </p>
+                            </div>
+                            <div className="shrink-0 pl-2">
+                              <OpportunitySlaCountdown createdAt={inq.createdAt} isSr={isSr} />
+                            </div>
+                          </div>
+                        )}
 
                         {/* Visitor Counter Proposal Section if present */}
                         {(inq.matchStatus === 'counter_by_visitor' || inq.rawMatchStatus === 'counter_by_visitor' || (inq.counterProposal && (inq.counterProposal.proposedStartAt || inq.counterProposal.notes))) && (
