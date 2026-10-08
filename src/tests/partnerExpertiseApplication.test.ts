@@ -139,6 +139,23 @@ export async function runPartnerExpertiseApplicationTests(): Promise<TestResult[
       `Assigned recs after curator action: ${targetAfter?.assignedRecs?.join(', ')}`
     );
 
+    // --- TEST 5: Verify PartnersScreen contains outside-click dismissal & done controls ---
+    const fs = await import('fs');
+    const partnersScreenContent = fs.readFileSync('src/components/PartnersScreen.tsx', 'utf-8');
+    const hasDropdownRef = partnersScreenContent.includes('recDropdownRef') && partnersScreenContent.includes('useRef<HTMLDivElement>(null)');
+    const hasClickOutsideHandler = partnersScreenContent.includes('handleClickOutside') && partnersScreenContent.includes('recDropdownRef.current.contains');
+    const hasEscapeHandler = partnersScreenContent.includes("event.key === 'Escape'");
+    const hasDoneButton = partnersScreenContent.includes('Gotovo / Zatvori') || partnersScreenContent.includes('Done / Close');
+
+    const dismissalControlsVerified = hasDropdownRef && hasClickOutsideHandler && hasEscapeHandler && hasDoneButton;
+
+    addResult(
+      'PEA-05',
+      'PartnersScreen incorporates click-outside, Escape, and Done controls to prevent obstructing underlying boxes',
+      dismissalControlsVerified,
+      `Ref: ${hasDropdownRef}, OutsideClick: ${hasClickOutsideHandler}, Escape: ${hasEscapeHandler}, DoneBtn: ${hasDoneButton}`
+    );
+
     // Cleanup test artifacts
     safeStorage.removeItem(passportKey);
 

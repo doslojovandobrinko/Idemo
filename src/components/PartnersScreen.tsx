@@ -980,6 +980,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   const [appliedRecsNote, setAppliedRecsNote] = useState<string>('');
   const [recSearchQuery, setRecSearchQuery] = useState<string>('');
   const [recDropdownOpen, setRecDropdownOpen] = useState<boolean>(false);
+  const recDropdownRef = useRef<HTMLDivElement>(null);
   const [dynamicCatalogRecs, setDynamicCatalogRecs] = useState<Array<{ id: string; title: string; titleSr?: string; category: string; location?: string }>>([]);
 
   // Partner Recommendation & Package Proposal states (Option A & Option B for IDEMO Office)
@@ -1059,6 +1060,33 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       return titleMatch || catMatch || locMatch;
     });
   }, [dynamicCatalogRecs, recSearchQuery]);
+
+  // Handle click outside & escape key to dismiss recommendations dropdown
+  useEffect(() => {
+    if (!recDropdownOpen) return;
+
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (recDropdownRef.current && !recDropdownRef.current.contains(event.target as Node)) {
+        setRecDropdownOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setRecDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [recDropdownOpen]);
 
   const refreshOpportunities = async () => {
     const session = partnerSessionStorage.getPartnerSession();
@@ -4376,92 +4404,114 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                       </p>
 
                       {/* Searchable Multi-Select Component */}
-                      <div className="space-y-2 relative">
-                        <div className="relative">
-                          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-charcoal/40" />
-                          <input
-                            type="text"
-                            placeholder={isSr ? 'Pretraži preporuke po nazivu, kategoriji ili regiji...' : 'Search recommendations by title, category, or region...'}
-                            value={recSearchQuery}
-                            onChange={(e) => {
-                              setRecSearchQuery(e.target.value);
-                              if (!recDropdownOpen) setRecDropdownOpen(true);
-                            }}
-                            onFocus={() => setRecDropdownOpen(true)}
-                            className="w-full pl-8 pr-8 py-2 bg-[#FAF9F5] border border-[#2D3025]/15 focus:border-[#8A1F1F] rounded-xl text-xs font-sans text-brand-charcoal outline-none transition-colors"
-                          />
-                          {recSearchQuery && (
-                            <button
-                              type="button"
-                              onClick={() => setRecSearchQuery('')}
-                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-charcoal/40 hover:text-brand-charcoal cursor-pointer"
-                            >
-                              <X size={13} />
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Dropdown Options */}
-                        {recDropdownOpen && (
-                          <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-white border border-[#2D3025]/15 rounded-xl shadow-lg max-h-52 overflow-y-auto divide-y divide-[#2D3025]/5">
-                            <div className="p-2 bg-[#FAF9F5] border-b border-[#2D3025]/5 flex items-center justify-between text-[10px] font-mono text-brand-charcoal/60">
-                              <span>{isSr ? 'Aktivni IDEMO katalog' : 'Active IDEMO Catalog'} ({filteredCatalogRecs.length})</span>
+                      <div className="space-y-2">
+                        <div ref={recDropdownRef} className="relative">
+                          <div className="relative">
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-charcoal/40 pointer-events-none" />
+                            <input
+                              type="text"
+                              placeholder={isSr ? 'Pretraži preporuke po nazivu, kategoriji ili regiji...' : 'Search recommendations by title, category, or region...'}
+                              value={recSearchQuery}
+                              onChange={(e) => {
+                                setRecSearchQuery(e.target.value);
+                                if (!recDropdownOpen) setRecDropdownOpen(true);
+                              }}
+                              onFocus={() => setRecDropdownOpen(true)}
+                              className="w-full pl-8 pr-8 py-2 bg-[#FAF9F5] border border-[#2D3025]/15 focus:border-[#8A1F1F] rounded-xl text-xs font-sans text-brand-charcoal outline-none transition-colors"
+                            />
+                            {recSearchQuery && (
                               <button
                                 type="button"
-                                onClick={() => setRecDropdownOpen(false)}
-                                className="text-[#8A1F1F] hover:underline cursor-pointer font-bold"
+                                onClick={() => setRecSearchQuery('')}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-charcoal/40 hover:text-brand-charcoal cursor-pointer"
                               >
-                                {isSr ? 'Zatvori' : 'Close'}
+                                <X size={13} />
                               </button>
-                            </div>
-                            {filteredCatalogRecs.length === 0 ? (
-                              <div className="p-4 text-center text-xs font-mono text-brand-charcoal/50">
-                                {isSr ? 'Nema pronađenih preporuka' : 'No matching recommendations found'}
-                              </div>
-                            ) : (
-                              filteredCatalogRecs.map((rec) => {
-                                const isSelected = appliedRecs.includes(rec.id);
-                                const isAlreadyAssigned = (currentSimulatedPartner?.assignedRecs || []).includes(rec.id);
-                                const displayTitle = isSr ? (rec.titleSr || rec.title) : rec.title;
-                                return (
-                                  <div
-                                    key={rec.id}
-                                    onClick={() => {
-                                      triggerHaptic(6);
-                                      setAppliedRecs(prev =>
-                                        prev.includes(rec.id) ? prev.filter(id => id !== rec.id) : [...prev, rec.id]
-                                      );
-                                    }}
-                                    className={`p-2.5 flex items-center justify-between gap-2 hover:bg-[#FAF9F5] cursor-pointer transition-colors ${
-                                      isSelected ? 'bg-[#8A1F1F]/5' : ''
-                                    }`}
-                                  >
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                                        isSelected ? 'bg-[#8A1F1F] border-[#8A1F1F] text-white' : 'border-[#2D3025]/30'
-                                      }`}>
-                                        {isSelected && <Check size={11} strokeWidth={3} />}
-                                      </div>
-                                      <div className="truncate">
-                                        <span className="text-xs font-serif font-bold text-brand-charcoal block truncate">
-                                          {displayTitle}
-                                        </span>
-                                        <span className="text-[10px] font-mono text-brand-charcoal/50 block truncate">
-                                          {rec.category} {rec.location ? `• ${rec.location}` : ''}
-                                        </span>
-                                      </div>
-                                    </div>
-                                    {isAlreadyAssigned && (
-                                      <span className="text-[9px] font-mono font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded shrink-0">
-                                        {isSr ? 'Već aktivno' : 'Active'}
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              })
                             )}
                           </div>
+
+                          {/* Dropdown Options */}
+                          {recDropdownOpen && (
+                            <>
+                              <div
+                                className="fixed inset-0 z-20 bg-transparent"
+                                onClick={() => setRecDropdownOpen(false)}
+                                aria-hidden="true"
+                              />
+                              <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-white border border-[#2D3025]/15 rounded-xl shadow-lg max-h-56 overflow-y-auto divide-y divide-[#2D3025]/5">
+                              <div className="p-2 bg-[#FAF9F5] border-b border-[#2D3025]/5 flex items-center justify-between text-[10px] font-mono text-brand-charcoal/60 sticky top-0 z-10 backdrop-blur-sm">
+                                <span>{isSr ? 'Aktivni IDEMO katalog' : 'Active IDEMO Catalog'} ({filteredCatalogRecs.length})</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setRecDropdownOpen(false)}
+                                  className="text-[#8A1F1F] hover:underline cursor-pointer font-bold px-1"
+                                >
+                                  {isSr ? 'Zatvori' : 'Close'}
+                                </button>
+                              </div>
+                              {filteredCatalogRecs.length === 0 ? (
+                                <div className="p-4 text-center text-xs font-mono text-brand-charcoal/50">
+                                  {isSr ? 'Nema pronađenih preporuka' : 'No matching recommendations found'}
+                                </div>
+                              ) : (
+                                filteredCatalogRecs.map((rec) => {
+                                  const isSelected = appliedRecs.includes(rec.id);
+                                  const isAlreadyAssigned = (currentSimulatedPartner?.assignedRecs || []).includes(rec.id);
+                                  const displayTitle = isSr ? (rec.titleSr || rec.title) : rec.title;
+                                  return (
+                                    <div
+                                      key={rec.id}
+                                      onClick={() => {
+                                        triggerHaptic(6);
+                                        setAppliedRecs(prev =>
+                                          prev.includes(rec.id) ? prev.filter(id => id !== rec.id) : [...prev, rec.id]
+                                        );
+                                      }}
+                                      className={`p-2.5 flex items-center justify-between gap-2 hover:bg-[#FAF9F5] cursor-pointer transition-colors ${
+                                        isSelected ? 'bg-[#8A1F1F]/5' : ''
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                                          isSelected ? 'bg-[#8A1F1F] border-[#8A1F1F] text-white' : 'border-[#2D3025]/30'
+                                        }`}>
+                                          {isSelected && <Check size={11} strokeWidth={3} />}
+                                        </div>
+                                        <div className="truncate">
+                                          <span className="text-xs font-serif font-bold text-brand-charcoal block truncate">
+                                            {displayTitle}
+                                          </span>
+                                          <span className="text-[10px] font-mono text-brand-charcoal/50 block truncate">
+                                            {rec.category} {rec.location ? `• ${rec.location}` : ''}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      {isAlreadyAssigned && (
+                                        <span className="text-[9px] font-mono font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded shrink-0">
+                                          {isSr ? 'Već aktivno' : 'Active'}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })
+                              )}
+                              {/* Sticky footer with Done confirmation button */}
+                              <div className="p-2.5 bg-[#FAF9F5] border-t border-[#2D3025]/10 flex items-center justify-between gap-2 sticky bottom-0 z-10">
+                                <span className="text-[10px] font-mono text-brand-charcoal/70">
+                                  {appliedRecs.length} {isSr ? 'odabrano' : 'selected'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setRecDropdownOpen(false)}
+                                  className="px-3 py-1 bg-[#8A1F1F] text-white hover:bg-[#6D1818] rounded-lg text-xs font-serif font-bold transition-colors cursor-pointer shadow-sm"
+                                >
+                                  {isSr ? 'Gotovo / Zatvori' : 'Done / Close'}
+                                </button>
+                              </div>
+                            </div>
+                          </>
                         )}
+                      </div>
 
                         {/* Selected Chips */}
                         {appliedRecs.length > 0 && (
