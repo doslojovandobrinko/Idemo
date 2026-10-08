@@ -401,6 +401,9 @@ export function markProposalAsSeen(inquiryId: string, signature: string = 'seen'
     const store = getSeenProposals();
     store[inquiryId] = signature;
     safeStorage.setItem(SEEN_PROPOSALS_KEY, JSON.stringify(store));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('idemo_proposal_state_change'));
+    }
   } catch (err) {
     console.error('Failed to save seen proposal mark:', err);
   }
@@ -413,6 +416,9 @@ export function removeSeenProposal(inquiryId: string): void {
     if (store[inquiryId]) {
       delete store[inquiryId];
       safeStorage.setItem(SEEN_PROPOSALS_KEY, JSON.stringify(store));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('idemo_proposal_state_change'));
+      }
     }
   } catch (err) {
     console.error('Failed to remove seen proposal mark:', err);

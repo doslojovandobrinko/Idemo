@@ -161,7 +161,7 @@ export function curatorApproveProposal(proposalId: string): { success: boolean; 
     curatorNotes: `Proposed by Partner ${proposal.partnerCode} (${proposal.partnerName}). Approved by IDEMO Curator & Agent 007.`,
     status: 'APPROVED',
     completenessScore: 95
-  } as Recommendation;
+  } as unknown as Recommendation;
 
   // Persist into INITIAL_RECOMMENDATIONS memory pool and SafeStorage
   if (!INITIAL_RECOMMENDATIONS.some(r => r.id === newRec.id)) {

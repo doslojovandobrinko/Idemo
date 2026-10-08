@@ -246,6 +246,8 @@ import {
 } from './lib/inquiryStorage';
 import { fetchActiveProposal } from './lib/inquiryService';
 import { executeCoordinatedVisitorRequest } from './lib/visitorRateCoordinator';
+import { badgingService } from './lib/badgingService';
+import { checkAnyPartnerUnseenBadge } from './lib/partnerBadgeStorage';
 
 // Available travel durations steps
 export const ALLOWED_TIMES = [4, 8, 12, 24, 28, 48];
@@ -908,6 +910,7 @@ export default function App() {
   });
   const [onboardingKey, setOnboardingKey] = useState<number>(0);
   const [hasUnreadPartnerProposal, setHasUnreadPartnerProposal] = useState<boolean>(() => checkHasUnreadProposals());
+  const [hasPartnerUnseenBadge, setHasPartnerUnseenBadge] = useState<boolean>(() => checkAnyPartnerUnseenBadge());
 
   // Synchronous state refs for rock-solid history event handling
   const currentScreenRef = useRef<AppScreen>(currentScreen);
@@ -1613,6 +1616,27 @@ export default function App() {
       refreshActiveInquiryProposalsRef.current?.();
     }
   }, [currentScreen]);
+
+  // Synchronize OS App Icon Badge and in-app partner unread state
+  React.useEffect(() => {
+    const handlePartnerBadgeChange = () => {
+      setHasPartnerUnseenBadge(checkAnyPartnerUnseenBadge());
+    };
+
+    window.addEventListener('idemo_partner_badge_change', handlePartnerBadgeChange);
+    return () => {
+      window.removeEventListener('idemo_partner_badge_change', handlePartnerBadgeChange);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const totalCount = (hasUnreadPartnerProposal ? 1 : 0) + (hasPartnerUnseenBadge ? 1 : 0);
+    if (totalCount > 0) {
+      badgingService.setBadge(totalCount);
+    } else {
+      badgingService.clearBadge();
+    }
+  }, [hasUnreadPartnerProposal, hasPartnerUnseenBadge]);
 
   const [lowSignalMode, setLowSignalMode] = useState<boolean>(() => {
     try {
@@ -2780,6 +2804,7 @@ export default function App() {
               active={currentScreen === 'partners'} 
               onClick={() => { triggerHaptic(8); navigateToScreen('partners'); }} 
               isQuiet={currentScreen !== 'partners'}
+              showIndicator={hasPartnerUnseenBadge}
             />
           </div>
         </nav>

@@ -51,6 +51,12 @@ import {
   saveConfirmedArrangementV2
 } from '../lib/inquiryStorage';
 import { CachedProposalRecord, InquiryRecordV2, ConfirmedArrangementRecord } from '../types';
+import { 
+  checkPartnerHasUnseenInquiries, 
+  markPartnerInquiriesAsSeen, 
+  getPartnerSeenMessageCount, 
+  markPartnerMessagesAsSeen 
+} from '../lib/partnerBadgeStorage';
 
 // Static Lookup for IDEMO Recommendations
 const RECOMMENDATIONS_LOOKUP = [
@@ -3736,6 +3742,10 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
             const pastInquiries = assignedInquiries.filter(inq => !activeInquiries.includes(inq));
             const currentMessages = getMessagesForPartner(currentSimulatedPartner.id);
 
+            const activeInquiryIds = activeInquiries.map((inq: any) => inq.id || inq.inquiryId || inq.local_queue_id).filter(Boolean);
+            const hasUnseenInquiries = checkPartnerHasUnseenInquiries(activeInquiryIds);
+            const hasUnseenMessages = currentMessages.length > getPartnerSeenMessageCount(currentSimulatedPartner.id);
+
             return (
               <div className="space-y-6 animate-fade-in max-w-xl mx-auto pb-12">
                 {/* HEADER */}
@@ -3767,16 +3777,25 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                     id="tab-partner-opportunities"
                     onClick={() => {
                       setPartnerWorkspaceTab('opportunities');
+                      markPartnerInquiriesAsSeen(activeInquiryIds);
+                      if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new Event('idemo_partner_badge_change'));
+                      }
                       triggerHaptic(8);
                     }}
-                    className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer relative ${
                       partnerWorkspaceTab === 'opportunities'
                         ? 'bg-brand-charcoal text-white shadow-xs'
                         : 'text-brand-charcoal/70 hover:text-brand-charcoal hover:bg-black/5'
                     }`}
                   >
                     <Zap size={14} className={partnerWorkspaceTab === 'opportunities' ? 'text-amber-400' : 'text-brand-charcoal/50'} />
-                    <span>{isSr ? 'Prilike i upiti' : 'Opportunities'}</span>
+                    <span className="relative flex items-center gap-1">
+                      <span>{isSr ? 'Prilike i upiti' : 'Opportunities'}</span>
+                      {hasUnseenInquiries && (
+                        <span className="w-2 h-2 rounded-full bg-accent-red animate-pulse shrink-0 shadow-xs" title={isSr ? 'Novi upit' : 'Unseen guest inquiry'} />
+                      )}
+                    </span>
                     {activeInquiries.length > 0 && (
                       <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold ${
                         partnerWorkspaceTab === 'opportunities'
@@ -3810,16 +3829,25 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                     id="tab-partner-messages"
                     onClick={() => {
                       setPartnerWorkspaceTab('messages');
+                      markPartnerMessagesAsSeen(currentSimulatedPartner.id, currentMessages.length);
+                      if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new Event('idemo_partner_badge_change'));
+                      }
                       triggerHaptic(8);
                     }}
-                    className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer relative ${
                       partnerWorkspaceTab === 'messages'
                         ? 'bg-brand-charcoal text-white shadow-xs'
                         : 'text-brand-charcoal/70 hover:text-brand-charcoal hover:bg-black/5'
                     }`}
                   >
                     <MessageSquare size={14} className={partnerWorkspaceTab === 'messages' ? 'text-amber-400' : 'text-brand-charcoal/50'} />
-                    <span>{isSr ? 'Poruke' : 'Messages'}</span>
+                    <span className="relative flex items-center gap-1">
+                      <span>{isSr ? 'Poruke' : 'Messages'}</span>
+                      {hasUnseenMessages && (
+                        <span className="w-2 h-2 rounded-full bg-accent-red animate-pulse shrink-0 shadow-xs" title={isSr ? 'Nova poruka' : 'Unseen message'} />
+                      )}
+                    </span>
                     {currentMessages.length > 0 && (
                       <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold ${
                         partnerWorkspaceTab === 'messages'

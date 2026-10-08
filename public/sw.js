@@ -179,3 +179,42 @@ self.addEventListener('fetch', (event) => {
       })
   );
 });
+
+// 5. WEB APP BADGING API & NOTIFICATIONS SUPPORT
+self.addEventListener('message', (event) => {
+  if (!event.data) return;
+  if (event.data.type === 'SET_BADGE') {
+    const count = Number(event.data.count) || 0;
+    if ('setAppBadge' in self.navigator) {
+      if (count > 0) {
+        self.navigator.setAppBadge(count).catch(() => {});
+      } else {
+        self.navigator.clearAppBadge().catch(() => {});
+      }
+    }
+  } else if (event.data.type === 'CLEAR_BADGE') {
+    if ('clearAppBadge' in self.navigator) {
+      self.navigator.clearAppBadge().catch(() => {});
+    }
+  }
+});
+
+// Background Push Notification Payload Badge Handling
+self.addEventListener('push', (event) => {
+  try {
+    const payload = event.data ? event.data.json() : {};
+    const count = Number(payload.badge || payload.unseenCount || 1);
+    if ('setAppBadge' in self.navigator) {
+      if (count > 0) {
+        self.navigator.setAppBadge(count).catch(() => {});
+      } else {
+        self.navigator.clearAppBadge().catch(() => {});
+      }
+    }
+  } catch (err) {
+    if ('setAppBadge' in self.navigator) {
+      self.navigator.setAppBadge(1).catch(() => {});
+    }
+  }
+});
+
