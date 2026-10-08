@@ -229,7 +229,7 @@ export function deriveArchetype(
     const budgetDiff = Math.abs(budget - arch.targetBudget) / 400;
 
     // 3. Time available divergence (scaled to 0-1 range)
-    const timeDiff = Math.abs(time - arch.targetTime) / 48;
+    const timeDiff = Math.abs(time - arch.targetTime) / 72;
 
     // 4. Category overlap score (0 is complete overlap, 1 is no overlap)
     let catDivergence = 0;
@@ -881,7 +881,7 @@ export default function ProfileScreen({
   useEffect(() => {
     const weights = ARCHETYPES.map(arch => {
       const budgetDiff = Math.abs(budget - arch.targetBudget) / 200;
-      const timeDiff = Math.abs(time - arch.targetTime) / 48;
+      const timeDiff = Math.abs(time - arch.targetTime) / 72;
       const maxCats = arch.categories.length;
       let catMatchedCount = 0;
       for (const c of arch.categories) {
@@ -1272,7 +1272,7 @@ export default function ProfileScreen({
                     <input 
                       type="range" 
                       min="2" 
-                      max="48" 
+                      max="72" 
                       step="2"
                       value={pendingOrbit.time}
                       onChange={(e) => {
@@ -1285,8 +1285,8 @@ export default function ProfileScreen({
                     />
                     <div className="flex justify-between text-[13px] text-brand-charcoal font-mono font-medium">
                       <span>2h</span>
-                      <span>24h</span>
-                      <span>48h</span>
+                      <span>36h</span>
+                      <span>72h</span>
                     </div>
                   </div>
 

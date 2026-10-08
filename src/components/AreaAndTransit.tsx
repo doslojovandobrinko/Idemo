@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { MapPin, Navigation, Compass, AlertCircle, Copy, Check, Info } from 'lucide-react';
 import { Recommendation } from '../types';
@@ -11,6 +11,7 @@ import { triggerHaptic } from '../App';
 import { getLocalizedValue } from '../lib/utils';
 import { trackMapOpenSignal } from '../lib/preferenceEngine';
 import { routeOutboundAction } from '../lib/outboundRouter';
+import { locationService, LocationState, LocationHubId } from '../lib/locationService';
 
 export interface Hub {
   id: string;
@@ -201,52 +202,23 @@ export function LocalTransitCard({
   recommendation: Recommendation; 
   language: string; 
 }) {
-  const [selectedHubId, setSelectedHubId] = useState<string>('republic_square');
+  const [locState, setLocState] = useState<LocationState>(() => locationService.getState());
   const [copied, setCopied] = useState(false);
   const [addressCopied, setAddressCopied] = useState(false);
-  const [deviceCoords, setDeviceCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [isLocating, setIsLocating] = useState(false);
-  const [locError, setLocError] = useState<string | null>(null);
+
+  useEffect(() => {
+    return locationService.subscribe(setLocState);
+  }, []);
 
   const handleRequestDeviceLocation = () => {
-    if (!navigator.geolocation) {
-      setLocError(language === 'sr' ? 'Geolociranje nije podržano' : 'Geolocation not supported');
-      return;
-    }
-    setIsLocating(true);
-    setLocError(null);
     triggerHaptic(20);
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setDeviceCoords({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        });
-        setSelectedHubId('live_gps');
-        setIsLocating(false);
-      },
-      (error) => {
-        console.warn('Geolocation error:', error);
-        setLocError(language === 'sr' ? 'Pristup lokaciji je odbijen.' : 'GPS location access denied.');
-        setIsLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-    );
+    locationService.requestDeviceLocation();
   };
 
-  const isLiveActive = selectedHubId === 'live_gps' && deviceCoords;
-  const activeHubCoords = isLiveActive ? deviceCoords! : (BASE_HUBS.find(h => h.id === selectedHubId) || BASE_HUBS[0]).coordinates;
   const recCoords = recommendation.coordinates || { lat: 44.8154, lng: 20.4607 };
-  
-  const distance = calculateDistance(
-    activeHubCoords.lat, 
-    activeHubCoords.lng, 
-    recCoords.lat, 
-    recCoords.lng
-  );
-
-  const taxiEst = getTaxiEstimation(distance);
+  const transit = locationService.calculateTransitTo(recCoords);
+  const distance = transit.distanceKm;
+  const taxiEst = transit.taxi;
 
   const handleCopyCoords = () => {
     const coordString = `${recCoords.lat}, ${recCoords.lng}`;
@@ -456,12 +428,11 @@ export function LocalTransitCard({
             <button
               key={hub.id}
               onClick={() => {
-                setSelectedHubId(hub.id);
-                setLocError(null);
+                locationService.setSelectedHub(hub.id as LocationHubId);
                 triggerHaptic(10);
               }}
               className={`p-2 rounded-xl border text-center font-bold text-[11px] uppercase tracking-wider transition-all cursor-pointer min-h-[46px] flex items-center justify-center leading-none ${
-                selectedHubId === hub.id 
+                locState.selectedHubId === hub.id 
                   ? 'bg-brand-charcoal border-brand-charcoal text-white shadow-sm font-black scale-[1.02]' 
                   : 'bg-white border-[#E7E4DB] text-[#5C5A4D] hover:bg-brand-pearl hover:text-brand-charcoal'
               }`}
@@ -472,18 +443,28 @@ export function LocalTransitCard({
           <button
             onClick={handleRequestDeviceLocation}
             className={`p-2 rounded-xl border text-center font-bold text-[11px] uppercase tracking-wider transition-all cursor-pointer min-h-[46px] flex items-center justify-center gap-1 leading-none ${
-              selectedHubId === 'live_gps' && deviceCoords
+              locState.selectedHubId === 'live_gps' && locState.deviceCoords && !locState.isAbroad
                 ? 'bg-[#155e5b] border-[#155e5b] text-white shadow-sm font-black scale-[1.02]' 
                 : 'bg-white border-[#E7E4DB] text-[#155e5b] hover:bg-brand-pearl font-extrabold'
             }`}
           >
-            {isLocating ? '⏳...' : '🧭 GPS'}
+            {locState.isLocating ? '⏳...' : '🧭 GPS'}
           </button>
         </div>
-        {locError && (
+        {locState.isAbroad && (
+          <div className="text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-300/40 p-2.5 rounded-xl flex items-center gap-1.5 leading-tight mt-2 select-none">
+            <Info size={13} className="shrink-0 text-amber-700" />
+            <span>
+              {language === 'sr' 
+                ? `Nalazite se van regiona Beograda (~${Math.round(locState.distanceFromBelgradeKm || 0)} km). Proračuni su sa polazištem iz izabranog centra.`
+                : `Detected location is outside Belgrade region (~${Math.round(locState.distanceFromBelgradeKm || 0)} km). Routes are calculated from chosen hub.`}
+            </span>
+          </div>
+        )}
+        {locState.locError && (
           <div className="text-[11px] font-bold text-accent-red bg-red-50/50 border border-red-500/15 p-2.5 rounded-xl flex items-center gap-1.5 leading-none mt-2 select-none">
             <AlertCircle size={12} className="shrink-0" />
-            <span>{locError}</span>
+            <span>{locState.locError}</span>
           </div>
         )}
       </div>

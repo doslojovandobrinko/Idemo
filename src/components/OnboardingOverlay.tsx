@@ -707,7 +707,7 @@ export function OnboardingOverlay({
     return () => clearTimeout(nextStepTimer);
   }, [cardIndex, activeStepAnim, pauseAutoCycle, shouldReduceMotion]);
 
-  // Card 1 sub-step calibration updates for Coordinates, Archetype, Budget (€100 -> €500 -> €250) and Time (4h -> 8h -> 24h -> 48h -> 24h)
+  // Card 1 sub-step calibration updates for Coordinates, Archetype, Budget (€100 -> €500 -> €250) and Time (4h -> 8h -> 24h -> 72h -> 36h)
   useEffect(() => {
     if (cardIndex !== 0 || shouldReduceMotion) {
       setCard1X(0.5);
@@ -780,8 +780,8 @@ export function OnboardingOverlay({
 
       subTimers.push(setTimeout(() => setCard1Time(8), 900));
       subTimers.push(setTimeout(() => setCard1Time(24), 1900));
-      subTimers.push(setTimeout(() => setCard1Time(48), 2900));
-      subTimers.push(setTimeout(() => setCard1Time(24), 3900));
+      subTimers.push(setTimeout(() => setCard1Time(72), 2900));
+      subTimers.push(setTimeout(() => setCard1Time(36), 3900));
     }
 
     return () => {
@@ -844,7 +844,7 @@ export function OnboardingOverlay({
     })
   };
 
-  const SNAP_TIMES = [4, 8, 12, 24, 28, 48];
+  const SNAP_TIMES = [4, 8, 12, 24, 36, 72];
   const SNAP_ANGLES = [0, 60, 120, 180, 240, 300];
 
   const computeAngleFromTime = (time: number) => {
@@ -861,7 +861,7 @@ export function OnboardingOverlay({
 
   const orbDiameter = useMemo(() => {
     const ratio = (card1Budget - 100) / 400;
-    return 68 + ratio * 38; // 68px at €100, 87px at €250, 106px at €500
+    return 96 + ratio * 48; // Scaled proportionately for doubled Orb field: 96px at €100, 120px at €250, 144px at €500
   }, [card1Budget]);
 
   const outerBezelWidth = useMemo(() => {
@@ -940,7 +940,7 @@ export function OnboardingOverlay({
       </div>
 
       {/* Animated Card Body Container */}
-      <div className="relative z-10 flex-1 flex flex-col justify-between overflow-hidden min-h-0 my-1 max-w-md mx-auto w-full">
+      <div className="relative z-10 flex-1 flex flex-col justify-between overflow-y-auto scrollbar-none min-h-0 my-1 max-w-md mx-auto w-full">
         <AnimatePresence mode="wait" custom={direction}>
           <motion.div
             key={cardIndex}
@@ -969,11 +969,11 @@ export function OnboardingOverlay({
 
             {/* CARD 1 HERO VISUAL: Approved Horological Orb Instrument over Compass Axes */}
             {cardIndex === 0 && (
-              <div className="flex-1 min-h-0 w-full flex flex-col items-center justify-center my-1">
+              <div className="flex-1 min-h-0 w-full flex flex-col items-center justify-center my-0.5 py-1">
                 {/* Dynamic Live Profile-Name Label */}
                 <div 
                   id="intro-live-profile-label"
-                  className="w-full text-center px-4 h-[52px] flex items-center justify-center flex-shrink-0 mb-1"
+                  className="w-full text-center px-4 min-h-[40px] flex items-center justify-center flex-shrink-0 mb-1"
                 >
                   <span className="font-sans text-[17px] font-bold text-[#800020] text-center leading-snug break-words">
                     {liveArchetype.name[language] || liveArchetype.name.en}
@@ -981,17 +981,33 @@ export function OnboardingOverlay({
                 </div>
 
                 <div 
-                  className="w-full aspect-square max-w-[210px] xs:max-w-[230px] sm:max-w-[250px] max-h-[28vh] relative bg-white/80 backdrop-blur-md border border-[#E2DFC2]/80 rounded-[28px] overflow-hidden select-none shadow-sm mx-auto flex items-center justify-center p-2 cursor-pointer"
+                  className="w-full aspect-square max-w-[min(100%,min(420px,46vh))] max-h-[min(420px,46vh)] relative bg-white/85 backdrop-blur-md border border-[#E2DFC2]/90 rounded-[32px] overflow-hidden select-none shadow-md mx-auto flex items-center justify-center p-3 cursor-pointer"
                   onPointerDown={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect();
                     const x = Math.max(0.08, Math.min(0.92, (e.clientX - rect.left) / rect.width));
                     const y = Math.max(0.08, Math.min(0.92, (e.clientY - rect.top) / rect.height));
-                    setCard1X(x);
-                    setCard1Y(y);
-                    setPauseAutoCycle(true);
+                    if (activeStepAnim === 3) {
+                      const idx = SNAP_TIMES.indexOf(card1Time);
+                      const next = idx >= 0 && idx < SNAP_TIMES.length - 1 ? SNAP_TIMES[idx + 1] : SNAP_TIMES[0];
+                      setCard1Time(next);
+                      triggerHaptic(8);
+                      setPauseAutoCycle(true);
+                    } else if (activeStepAnim === 2) {
+                      const budgets = [100, 250, 500];
+                      const bIdx = budgets.indexOf(card1Budget);
+                      const nextB = bIdx >= 0 && bIdx < budgets.length - 1 ? budgets[bIdx + 1] : budgets[0];
+                      setCard1Budget(nextB);
+                      triggerHaptic(8);
+                      setPauseAutoCycle(true);
+                    } else {
+                      setCard1X(x);
+                      setCard1Y(y);
+                      triggerHaptic(6);
+                      setPauseAutoCycle(true);
+                    }
                   }}
                   onPointerMove={(e) => {
-                    if (e.buttons > 0) {
+                    if (e.buttons > 0 && activeStepAnim === 1) {
                       const rect = e.currentTarget.getBoundingClientRect();
                       const x = Math.max(0.08, Math.min(0.92, (e.clientX - rect.left) / rect.width));
                       const y = Math.max(0.08, Math.min(0.92, (e.clientY - rect.top) / rect.height));
@@ -1009,26 +1025,26 @@ export function OnboardingOverlay({
                   </div>
 
                   {/* Compass Axis 1: URBAN (Top) */}
-                  <div className="absolute top-2 left-1/2 -translate-x-1/2 flex flex-col items-center text-[9px] font-mono font-bold uppercase tracking-widest text-[#23251E] pointer-events-none z-10">
-                    <Building2 size={13} className="text-[#23251E] mb-0.5" />
+                  <div className="absolute top-2.5 left-1/2 -translate-x-1/2 flex flex-col items-center text-[10px] font-mono font-bold uppercase tracking-widest text-[#23251E] pointer-events-none z-10">
+                    <Building2 size={14} className="text-[#23251E] mb-0.5" />
                     <span>{current.axis_urban}</span>
                   </div>
 
                   {/* Compass Axis 2: NATURE (Bottom) */}
-                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex flex-col items-center text-[9px] font-mono font-bold uppercase tracking-widest text-[#23251E] pointer-events-none z-10">
-                    <TreePine size={13} className="text-[#23251E] mb-0.5" />
+                  <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex flex-col items-center text-[10px] font-mono font-bold uppercase tracking-widest text-[#23251E] pointer-events-none z-10">
+                    <TreePine size={14} className="text-[#23251E] mb-0.5" />
                     <span>{current.axis_nature}</span>
                   </div>
 
                   {/* Compass Axis 3: HEDONIST (Left) */}
-                  <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col items-center text-[9px] font-mono font-bold uppercase tracking-widest text-[#23251E] pointer-events-none z-10">
-                    <Wine size={13} className="text-[#23251E] mb-0.5" />
+                  <div className="absolute left-2.5 top-1/2 -translate-y-1/2 flex flex-col items-center text-[10px] font-mono font-bold uppercase tracking-widest text-[#23251E] pointer-events-none z-10">
+                    <Wine size={14} className="text-[#23251E] mb-0.5" />
                     <span>{current.axis_hedonist}</span>
                   </div>
 
                   {/* Compass Axis 4: ADVENTURER (Right) */}
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center text-[9px] font-mono font-bold uppercase tracking-widest text-[#23251E] pointer-events-none z-10">
-                    <Footprints size={13} className="text-[#23251E] mb-0.5" />
+                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex flex-col items-center text-[10px] font-mono font-bold uppercase tracking-widest text-[#23251E] pointer-events-none z-10">
+                    <Footprints size={14} className="text-[#23251E] mb-0.5" />
                     <span>{current.axis_adventurer}</span>
                   </div>
 

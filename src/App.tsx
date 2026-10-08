@@ -168,6 +168,7 @@ import { ConciergeSOSHub } from './components/ConciergeSOSHub';
 import { routeOutboundAction, copyToClipboardSafely } from './lib/outboundRouter';
 import { VibeSettings, DEFAULT_VIBE_SETTINGS, calculateVibeMatch, VibeCalibrationDashboard } from './components/VibeCalibration';
 import { REGIONS, LocalTransitCard, isLocationInRegion, calculateDistance, BASE_HUBS, getTaxiEstimation } from './components/AreaAndTransit';
+import { locationService, LocationState, LocationHubId } from './lib/locationService';
 import { SlangCrypt } from './components/SlangCrypt';
 import MoodOrbit from './components/MoodOrbit';
 import { 
@@ -250,7 +251,7 @@ import { badgingService } from './lib/badgingService';
 import { checkAnyPartnerUnseenBadge } from './lib/partnerBadgeStorage';
 
 // Available travel durations steps
-export const ALLOWED_TIMES = [4, 8, 12, 24, 28, 48];
+export const ALLOWED_TIMES = [4, 8, 12, 24, 36, 72];
 
 function NavButton({ icon, label, active, onClick, isQuiet, showIndicator }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void; isQuiet?: boolean; showIndicator?: boolean }) {
   return (
@@ -911,6 +912,11 @@ export default function App() {
   const [onboardingKey, setOnboardingKey] = useState<number>(0);
   const [hasUnreadPartnerProposal, setHasUnreadPartnerProposal] = useState<boolean>(() => checkHasUnreadProposals());
   const [hasPartnerUnseenBadge, setHasPartnerUnseenBadge] = useState<boolean>(() => checkAnyPartnerUnseenBadge());
+  const [, setLocationTicker] = useState<number>(0);
+
+  useEffect(() => {
+    return locationService.subscribe(() => setLocationTicker(prev => prev + 1));
+  }, []);
 
   // Synchronous state refs for rock-solid history event handling
   const currentScreenRef = useRef<AppScreen>(currentScreen);
@@ -2168,7 +2174,7 @@ export default function App() {
     const budgetFactor = Math.min(1, Math.max(0, (budget - 100) / 400)); // App budget [100, 500]
     ox = ox * 0.75 + (1 - budgetFactor) * 0.25;
 
-    const timeFactor = Math.min(1, Math.max(0, (time - 2) / 46)); // App time [2, 48]
+    const timeFactor = Math.min(1, Math.max(0, (time - 2) / 70)); // App time [2, 72]
     oy = oy * 0.75 + timeFactor * 0.25;
 
     ox = Math.min(0.92, Math.max(0.08, ox));
@@ -6296,55 +6302,113 @@ function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedu
         {(() => {
           const isCalibrated = recommendation.coordinates && typeof recommendation.coordinates.lat === 'number' && typeof recommendation.coordinates.lng === 'number' && recommendation.coordinates.lat !== 0 && recommendation.coordinates.lng !== 0 && !(recommendation.id && recommendation.id.toString().startsWith('draft-'));
           const recCoords = recommendation.coordinates || { lat: 44.8154, lng: 20.4607 };
-          const repSquare = BASE_HUBS?.find(h => h.id === 'republic_square') || { coordinates: { lat: 44.8154, lng: 20.4607 } };
-          const dist = calculateDistance(repSquare.coordinates.lat, repSquare.coordinates.lng, recCoords.lat, recCoords.lng);
+          const transit = locationService.calculateTransitTo(isCalibrated ? recCoords : null);
+          const dist = transit.distanceKm;
+
+          // Determine transport display: if live GPS is active, dynamically recommend walking vs driving
+          const dynamicTransportLabel = transit.isLiveGps
+            ? (transit.recommendedMode === 'walking'
+                ? (language === 'sr' ? `Peške (~${transit.walkingMins} min)` : language === 'zh' ? `步行 (~${transit.walkingMins}分)` : `Walk (~${transit.walkingMins}m)`)
+                : (language === 'sr' ? `Taksi (~${transit.drivingMins} min)` : language === 'zh' ? `出租车 (~${transit.drivingMins}分)` : `Taxi (~${transit.drivingMins}m)`))
+            : (getCompactTransportIndicator(recommendation.preferredTransport, language) || (language === 'sr' ? `Taksi (~${transit.drivingMins}m)` : `Taxi (~${transit.drivingMins}m)`));
+
           return (
-            <div className="grid grid-cols-4 gap-1 sm:gap-2 border-y border-border-main/50 py-5 mt-4 text-center px-0.5">
-              {/* 1. Journey Time */}
-              <div className="flex flex-col items-center justify-between min-h-[74px] leading-tight">
-                <Clock size={18} className="text-accent-red mb-2 shrink-0" />
-                <div className="flex flex-col items-center gap-1 w-full">
-                  <span className="text-[8.5px] uppercase tracking-[0.12em] text-[#5C5A4D] font-black leading-none">{t.journey_time}</span>
-                  <span className="text-[11px] sm:text-[12px] font-extrabold text-brand-charcoal break-words leading-tight px-0.5 max-w-full">
-                    {getLocalizedValue(recommendation, 'duration', language) || recommendation.duration}
+            <div className="space-y-2.5 mt-4">
+              {/* Origin indicator & quick GPS switch button */}
+              <div className="flex items-center justify-between px-1 text-[11px] font-mono text-brand-charcoal/70">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Navigation size={12} className="text-[#800020] shrink-0" />
+                  <span className="font-bold uppercase tracking-wider text-[10px] shrink-0">
+                    {language === 'sr' ? 'Polazna tačka:' : language === 'zh' ? '出发地:' : 'Origin:'}
+                  </span>
+                  <span className="text-brand-charcoal font-black truncate text-[10.5px]">
+                    {transit.isLiveGps 
+                      ? (language === 'sr' ? '🧭 Vaša GPS lokacija' : language === 'zh' ? '🧭 您的实时GPS' : '🧭 Live GPS') 
+                      : (language === 'sr' ? transit.originLabelSr : transit.originLabelEn)
+                    }
                   </span>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (locationService.getState().selectedHubId === 'live_gps') {
+                      locationService.setSelectedHub('republic_square');
+                    } else {
+                      locationService.requestDeviceLocation();
+                    }
+                    triggerHaptic(15);
+                  }}
+                  className="px-2 py-0.5 rounded-lg border text-[9.5px] font-bold uppercase tracking-wider transition-all cursor-pointer bg-white hover:bg-brand-pearl border-[#2D3025]/15 text-[#800020] active:scale-95 shrink-0"
+                >
+                  {transit.isLiveGps 
+                    ? (language === 'sr' ? 'Centar grada' : language === 'zh' ? '切换市中心' : 'City Center')
+                    : (language === 'sr' ? '🧭 Koristi GPS' : language === 'zh' ? '🧭 开启GPS' : '🧭 Use GPS')
+                  }
+                </button>
               </div>
 
-              {/* 2. Estimated Cost */}
-              <div className="flex flex-col items-center justify-between min-h-[74px] border-l border-border-main/30 leading-tight">
-                <span className="text-[17px] font-sans font-black text-accent-red mb-1.5 shrink-0 leading-none">€</span>
-                <div className="flex flex-col items-center gap-1 w-full">
-                  <span className="text-[8.5px] uppercase tracking-[0.12em] text-[#5C5A4D] font-black leading-none">{t.exp_investment}</span>
-                  <span className="text-[11px] sm:text-[12px] font-extrabold text-brand-charcoal break-words leading-tight px-0.5 max-w-full">
-                    {getLocalizedValue(recommendation, 'estimatedCost', language) || recommendation.estimatedCost}
+              {transit.isAbroad && (
+                <div className="text-[10.5px] font-bold text-amber-800 bg-amber-50/80 border border-amber-300/40 px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 select-none">
+                  <Info size={12} className="shrink-0 text-amber-700" />
+                  <span>
+                    {language === 'sr'
+                      ? `Nalazite se van regiona Beograda (~${Math.round(transit.distanceFromBelgradeKm || 0)} km). Prikazujemo razdaljinu od centra.`
+                      : `You are outside Belgrade region (~${Math.round(transit.distanceFromBelgradeKm || 0)} km). Routes calculated from Center.`
+                    }
                   </span>
                 </div>
-              </div>
+              )}
 
-              {/* 3. Distance */}
-              <div className="flex flex-col items-center justify-between min-h-[74px] border-l border-border-main/30 leading-tight">
-                <MapPin size={18} className="text-accent-teal mb-2 shrink-0" />
-                <div className="flex flex-col items-center gap-1 w-full">
-                  <span className="text-[8.5px] uppercase tracking-[0.12em] text-[#5C5A4D] font-black leading-none">
-                    {language === 'sr' ? 'Udaljenost' : language === 'zh' ? '距市中心' : 'Distance'}
-                  </span>
-                  <span className="text-[11px] sm:text-[12px] font-extrabold text-brand-charcoal leading-tight">
-                    {isCalibrated ? `${dist.toFixed(1)} km` : '—'}
-                  </span>
+              <div className="grid grid-cols-4 gap-1 sm:gap-2 border-y border-border-main/50 py-4 text-center px-0.5">
+                {/* 1. Journey Time */}
+                <div className="flex flex-col items-center justify-between min-h-[74px] leading-tight">
+                  <Clock size={18} className="text-accent-red mb-2 shrink-0" />
+                  <div className="flex flex-col items-center gap-1 w-full">
+                    <span className="text-[8.5px] uppercase tracking-[0.12em] text-[#5C5A4D] font-black leading-none">{t.journey_time}</span>
+                    <span className="text-[11px] sm:text-[12px] font-extrabold text-brand-charcoal break-words leading-tight px-0.5 max-w-full">
+                      {getLocalizedValue(recommendation, 'duration', language) || recommendation.duration}
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              {/* 4. Best Transport */}
-              <div className="flex flex-col items-center justify-between min-h-[74px] border-l border-border-main/30 leading-tight">
-                <Navigation size={18} className="text-accent-red mb-2 shrink-0" />
-                <div className="flex flex-col items-center gap-1 w-full">
-                  <span className="text-[8.5px] uppercase tracking-[0.12em] text-[#5C5A4D] font-black leading-none">
-                    {language === 'sr' ? 'Prevoz' : language === 'zh' ? '最佳交通' : 'Transport'}
-                  </span>
-                  <span className="text-[11px] sm:text-[12px] font-extrabold text-brand-charcoal break-words leading-tight px-0.5 max-w-full">
-                    {getCompactTransportIndicator(recommendation.preferredTransport, language)}
-                  </span>
+                {/* 2. Estimated Cost */}
+                <div className="flex flex-col items-center justify-between min-h-[74px] border-l border-border-main/30 leading-tight">
+                  <span className="text-[17px] font-sans font-black text-accent-red mb-1.5 shrink-0 leading-none">€</span>
+                  <div className="flex flex-col items-center gap-1 w-full">
+                    <span className="text-[8.5px] uppercase tracking-[0.12em] text-[#5C5A4D] font-black leading-none">{t.exp_investment}</span>
+                    <span className="text-[11px] sm:text-[12px] font-extrabold text-brand-charcoal break-words leading-tight px-0.5 max-w-full">
+                      {getLocalizedValue(recommendation, 'estimatedCost', language) || recommendation.estimatedCost}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. Distance */}
+                <div className="flex flex-col items-center justify-between min-h-[74px] border-l border-border-main/30 leading-tight">
+                  <MapPin size={18} className={`mb-2 shrink-0 ${transit.isLiveGps ? 'text-emerald-600' : 'text-accent-teal'}`} />
+                  <div className="flex flex-col items-center gap-1 w-full">
+                    <span className="text-[8.5px] uppercase tracking-[0.12em] text-[#5C5A4D] font-black leading-none">
+                      {transit.isLiveGps 
+                        ? (language === 'sr' ? 'Od Vas' : language === 'zh' ? '距您' : 'From You') 
+                        : (language === 'sr' ? 'Udaljenost' : language === 'zh' ? '距市中心' : 'Distance')
+                      }
+                    </span>
+                    <span className="text-[11px] sm:text-[12px] font-extrabold text-brand-charcoal leading-tight">
+                      {isCalibrated ? `${dist.toFixed(1)} km` : '—'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 4. Best Transport */}
+                <div className="flex flex-col items-center justify-between min-h-[74px] border-l border-border-main/30 leading-tight">
+                  <Navigation size={18} className="text-accent-red mb-2 shrink-0" />
+                  <div className="flex flex-col items-center gap-1 w-full">
+                    <span className="text-[8.5px] uppercase tracking-[0.12em] text-[#5C5A4D] font-black leading-none">
+                      {language === 'sr' ? 'Prevoz' : language === 'zh' ? '最佳交通' : 'Transport'}
+                    </span>
+                    <span className="text-[11px] sm:text-[12px] font-extrabold text-brand-charcoal break-words leading-tight px-0.5 max-w-full">
+                      {dynamicTransportLabel}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -6548,16 +6612,17 @@ function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedu
                 }
               }
               const recCoords = recommendation.coordinates || { lat: 44.8154, lng: 20.4607 };
-              const repSquare = BASE_HUBS?.find(h => h.id === 'republic_square') || { coordinates: { lat: 44.8154, lng: 20.4607 } };
-              const dist = calculateDistance(repSquare.coordinates.lat, repSquare.coordinates.lng, recCoords.lat, recCoords.lng);
-              const taxi = getTaxiEstimation(dist);
+              const transit = locationService.calculateTransitTo(recCoords);
+              const dist = transit.distanceKm;
+              const taxi = transit.taxi;
+              const fromLabel = transit.isLiveGps ? (language === 'sr' ? 'od Vas' : 'from you') : (language === 'sr' ? 'od centra' : 'from Center');
               
               if (language === 'sr') {
-                return `Taksi: ~${taxi.rsd} RSD (~${Math.round(dist * 2.5 + 4)} min). Udaljenost: ${dist.toFixed(1)} km.`;
+                return `Taksi: ~${taxi.rsd} (~${transit.drivingMins} min). Udaljenost: ${dist.toFixed(1)} km (${fromLabel}).`;
               } else if (language === 'zh') {
-                return `出租车: ~${taxi.rsd} RSD (~${Math.round(dist * 2.5 + 4)} 分钟)。距离老城: ${dist.toFixed(1)} 公里。`;
+                return `出租车: ~${taxi.rsd} (~${transit.drivingMins} 分钟)。距离: ${dist.toFixed(1)} 公里 (${fromLabel})。`;
               } else {
-                return `Taxi: ~${taxi.rsd} RSD (~${Math.round(dist * 2.5 + 4)} min). Distance: ${dist.toFixed(1)} km from Center.`;
+                return `Taxi: ~${taxi.rsd} (~${transit.drivingMins} min). Distance: ${dist.toFixed(1)} km (${fromLabel}).`;
               }
             })()}
             isOpen={activeAccordion === 'transit'}

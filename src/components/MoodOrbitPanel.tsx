@@ -146,9 +146,9 @@ export function MoodOrbitPanel({
     }
 
     // Map y to Time (0 is Urban/Short, 1 is Nature/Long)
-    // Top (y=0) -> 2 hr. Bottom (y=1) -> 48 hr.
-    const rawTime = 2 + y * 46;
-    const stepTime = Math.round(Math.min(48, Math.max(2, rawTime)));
+    // Top (y=0) -> 2 hr. Bottom (y=1) -> 72 hr.
+    const rawTime = 2 + y * 70;
+    const stepTime = Math.round(Math.min(72, Math.max(2, rawTime)));
     if (stepTime !== time) {
       setTime(stepTime);
       triggerHaptic(5);
@@ -242,7 +242,7 @@ export function MoodOrbitPanel({
 
   // Time is visualized inside: Black fraction represents available time
   const timePercentage = useMemo(() => {
-    return (time / 48) * 100;
+    return (time / 72) * 100;
   }, [time]);
 
   // Translations

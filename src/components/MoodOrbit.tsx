@@ -22,7 +22,7 @@ export interface MoodOrbitProps {
   budget?: number;
   /**
    * Current available time in hours.
-   * Range [4, 48].
+   * Range [4, 72].
    */
   time?: number;
   /**
@@ -56,7 +56,7 @@ export interface MoodOrbitProps {
 }
 
 // Fixed Travel Duration Snaps (Magnetic Detents)
-const SNAP_TIMES = [4, 8, 12, 24, 28, 48];
+const SNAP_TIMES = [4, 8, 12, 24, 36, 72];
 const SNAP_ANGLES = [0, 60, 120, 180, 240, 300];
 
 // Get snapped time interval helper
@@ -284,7 +284,7 @@ export default function MoodOrbit({
         flowItinerary: "Itinerary",
         guideBtn: "✨ Interactive Guide",
         guideTitle: "Calibration Tutorial",
-        guideStep0: "1. AVAILABLE TIME (Ring): Click and drag clockwise around the outermost bezel track to wind your travel hours (4 to 48 hours), auto-adjusting daily itineraries.",
+        guideStep0: "1. AVAILABLE TIME (Ring): Click and drag clockwise around the outermost bezel track to wind your travel hours (4 to 72 hours), auto-adjusting daily itineraries.",
         guideStep1: "2. BUDGET LIMIT (Bezel): Drag outward or inward on the inner dial area to scale your budget limit (€50 - €450). The luxury watch physically scales to match!",
         guideStep2: "3. TRAVEL VIBE (Center): Drag the watch core in any direction on the grid to change your mood quadrant (e.g. Nature/Urban, Adventure/Hedonist) and update recommendations instantly.",
         next: "Next",
@@ -321,7 +321,7 @@ export default function MoodOrbit({
         flowItinerary: "Plan puta",
         guideBtn: "✨ Interaktivni vodič",
         guideTitle: "Vodič za kalibraciju",
-        guideStep0: "1. VREME (Prsten): Prevlačite kružno oko najudaljenijeg prstena sata da podesite sate puta (4-48h). Ovo automatski prilagođava trajanje plana puta.",
+        guideStep0: "1. VREME (Prsten): Prevlačite kružno oko najudaljenijeg prstena sata da podesite sate puta (4-72h). Ovo automatski prilagođava trajanje plana puta.",
         guideStep1: "2. BUDŽET (Brojčanik): Prevucite ka spolja/unutra središnju zonu da podesite budžet (€50-€450). Brojčanik sata se fizički širi ili smanjuje!",
         guideStep2: "3. KOORDINATE (Središte): Prevucite krunicu sata u bilo kom smeru. Ovo kalibriše vaše raspoloženje (Priroda/Grad, Hedonizam/Avantura) i odmah ažurira sve preporuke.",
         next: "Sledeće",
@@ -358,7 +358,7 @@ export default function MoodOrbit({
         flowItinerary: "定制行程",
         guideBtn: "✨ 互动玩转指南",
         guideTitle: "互动式罗盘指南",
-        guideStep0: "1. 专属时间（外圈）：沿最外圈轨道顺时针旋转，即可调节行程可用小时数（4-48小时），动态计算与填充您的单日行程图谱。",
+        guideStep0: "1. 专属时间（外圈）：沿最外圈轨道顺时针旋转，即可调节行程可用小时数（4-72小时），动态计算与填充您的单日行程图谱。",
         guideStep1: "2. 预算极限（内圈）：在其中段区域向外拉伸或向内收缩，即可调节行旅预算上限（€50-€450）。表壳将随其档次优雅进行等比缩放！",
         guideStep2: "3. 探索偏好（中心）：在雷达图上拖拽表壳中心。这会即时调整您的旅行偏好（如自然/都市，探索/享乐）并实时刷新个性化定制推荐。",
         next: "下一步",
@@ -462,7 +462,7 @@ export default function MoodOrbit({
     MO_ARCHETYPES.forEach(arch => {
       // Scale differences between [0, 1] relative to domain limits
       const dBudget = Math.abs(localBudget - arch.budget) / 400;
-      const dTime = Math.abs(localTime - arch.time) / 44;
+      const dTime = Math.abs(localTime - arch.time) / 68;
       const dist = Math.hypot(dBudget, dTime);
       if (dist < minDistance) minDistance = dist;
     });
