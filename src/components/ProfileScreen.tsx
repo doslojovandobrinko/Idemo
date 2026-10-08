@@ -1303,10 +1303,10 @@ export default function ProfileScreen({
                     <button
                       type="button"
                       onClick={handleCopyLink}
-                      className={`w-full h-11 rounded-xl font-mono font-bold tracking-widest uppercase text-[14px] flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                      className={`w-full h-11 rounded-xl font-mono font-bold tracking-widest uppercase text-[14px] flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm active:scale-[0.98] ${
                         linkCopied 
                           ? 'bg-emerald-600 text-white border border-emerald-600' 
-                          : 'bg-[#2D3025] hover:bg-[#23251E] text-white border border-[#2D3025]'
+                          : 'bg-[#800020] hover:bg-[#660019] text-white border border-[#660019]/40'
                       }`}
                     >
                       {linkCopied ? <Check size={16} /> : <Copy size={16} />}

@@ -1450,7 +1450,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
             <button
               type="button"
               onClick={handleRequestArrangement}
-              className="h-10 rounded-xl bg-brand-charcoal hover:bg-brand-charcoal/90 text-white text-[10px] uppercase tracking-widest font-black cursor-pointer shadow-sm transition-all flex items-center justify-center gap-1.5"
+              className="h-10 rounded-xl bg-[#800020] hover:bg-[#660019] text-white border border-[#660019]/40 text-[10px] uppercase tracking-widest font-black cursor-pointer shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
             >
               <span>{ARRANGE_TR[language]?.request_arrangement || ARRANGE_TR['en'].request_arrangement}</span>
             </button>
@@ -2146,7 +2146,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
               triggerHaptic(10);
               setIsExpanded(true);
             }}
-            className="w-full h-11 bg-[#3E5037] hover:bg-[#3E5037]/90 text-white font-black uppercase text-[10px] tracking-widest rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+            className="w-full h-11 bg-[#800020] hover:bg-[#660019] text-white font-black uppercase text-[10px] tracking-widest rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md border border-[#660019]/40 active:scale-[0.98]"
           >
             <span>{ARRANGE_TR[language]?.arrange_this || ARRANGE_TR['en'].arrange_this}</span>
           </button>

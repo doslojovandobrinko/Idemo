@@ -9,8 +9,15 @@ import {
   KeyRound, CheckCircle2, Globe, Phone, MapPin, Sparkles, Lock, Unlock, X, 
   AlertCircle, Gift, Map as MapIcon, Search, Filter, CheckCircle, Award,
   ShieldCheck, Plus, Send, Check, Users, MessageCircle, Eye, ChevronRight, Briefcase, Loader2, Calendar, XCircle, Trash2, Camera,
-  FolderArchive, ChevronDown, Zap, UserCheck, MessageSquare
+  FolderArchive, ChevronDown, Zap, UserCheck, MessageSquare, Compass, Package, Layers, Image as ImageIcon
 } from 'lucide-react';
+import { compilePackageCollage } from '../lib/collageCompiler';
+import { 
+  getPartnerProposalsByPartnerId, 
+  savePartnerRecommendationProposal, 
+  PartnerRecommendationProposal,
+  ProposalType 
+} from '../lib/partnerProposalService';
 import { PARTNERS } from '../data/partners';
 import { Partner } from '../types';
 import { safeStorage } from '../lib/safeStorage';
@@ -967,6 +974,45 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   const [profContactSaving, setProfContactSaving] = useState<boolean>(false);
   const [profContactMsg, setProfContactMsg] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
 
+  // Partner Recommendation & Package Proposal states (Option A & Option B for Agent 007)
+  const [proposalSectionExpanded, setProposalSectionExpanded] = useState<boolean>(false);
+  const [proposalType, setProposalType] = useState<ProposalType>('RECOMMENDATION');
+  const [propTitle, setPropTitle] = useState<string>('');
+  const [propCategory, setPropCategory] = useState<string>('Nature');
+  const [propLocation, setPropLocation] = useState<string>('');
+  const [propReason, setPropReason] = useState<'EXPERTISE' | 'UNDERREPRESENTED_SERBIA' | 'NEW_SPOT' | 'PERCEIVED_VALUE'>('EXPERTISE');
+  const [propDescription, setPropDescription] = useState<string>('');
+  const [propHighlights, setPropHighlights] = useState<string>('');
+  const [propImageUrl, setPropImageUrl] = useState<string>('');
+  // Option B Specific Fields
+  const [propDurationBucket, setPropDurationBucket] = useState<'2-3 HOURS' | 'HALF-DAY' | 'FULL-DAY'>('HALF-DAY');
+  const [propRouteStops, setPropRouteStops] = useState<string>('');
+  const [propIncludedServices, setPropIncludedServices] = useState<string>('');
+  const [propTargetVibe, setPropTargetVibe] = useState<string>('');
+  const [propAttachedImages, setPropAttachedImages] = useState<string[]>([]);
+  const [propCollagePreview, setPropCollagePreview] = useState<string | null>(null);
+  const [propCompilingCollage, setPropCompilingCollage] = useState<boolean>(false);
+  const [proposalSubmitting, setProposalSubmitting] = useState<boolean>(false);
+  const [proposalFeedbackMsg, setProposalFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [partnerProposalsList, setPartnerProposalsList] = useState<PartnerRecommendationProposal[]>([]);
+
+  const handleUpdateAttachedImages = async (newImages: string[], currentType: ProposalType) => {
+    setPropAttachedImages(newImages);
+    if (currentType === 'PACKAGE' && newImages.length > 0) {
+      setPropCompilingCollage(true);
+      try {
+        const collage = await compilePackageCollage(newImages);
+        setPropCollagePreview(collage);
+      } catch (e) {
+        console.warn('Failed compiling collage preview:', e);
+      } finally {
+        setPropCompilingCollage(false);
+      }
+    } else {
+      setPropCollagePreview(null);
+    }
+  };
+
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
   const [partnerActionFeedback, setPartnerActionFeedback] = useState<{ type: 'success' | 'info' | 'error'; message: string } | null>(null);
   const [withdrawConfirmId, setWithdrawConfirmId] = useState<string | null>(null);
@@ -1273,6 +1319,10 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
         setPassportPhotoPreview('/assets/images/partners/uno_portrait.svg');
         setPassportPhotoConsent(true);
         setPassportReviewStatus('approved');
+      }
+
+      if (currentPartnerId) {
+        setPartnerProposalsList(getPartnerProposalsByPartnerId(currentPartnerId));
       }
     };
 
@@ -4375,6 +4425,603 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                         {isSr ? 'Podnesi na IDEMO pregled' : 'Submit For IDEMO Review'}
                       </button>
                     </div>
+                  </div>
+
+                  {/* PARTNER PROPOSAL DESK: OPTION A (RECOMMENDATION) & OPTION B (EXPERIENCE PACKAGE) */}
+                  <div className="border border-[#2D3025]/10 rounded-2xl p-4 bg-[#FAF9F5]/90 space-y-4">
+                    <div 
+                      onClick={() => {
+                        triggerHaptic(8);
+                        setProposalSectionExpanded(prev => !prev);
+                      }}
+                      className="flex items-center justify-between cursor-pointer select-none border-b border-[#2D3025]/5 pb-2.5"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Compass className="w-4 h-4 text-[#8A1F1F]" />
+                        <div>
+                          <h4 className="text-xs uppercase font-mono font-black tracking-wider text-brand-charcoal">
+                            {isSr ? 'Predloži novu IDEMO ponudu (Agent 007)' : 'Propose New IDEMO Offer (Agent 007)'}
+                          </h4>
+                          <p className="text-[10px] text-brand-charcoal/60 font-sans mt-0.5">
+                            {isSr 
+                              ? 'Opcija A (Preporuka) ili Opcija B (Paket tura) na bazi vaše lokalne ekspertize'
+                              : 'Option A (Spot / Recommendation) or Option B (Signature Package) based on your expertise'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-mono font-bold bg-[#8A1F1F]/10 text-[#8A1F1F] px-2 py-0.5 rounded-full">
+                          {partnerProposalsList.length} {isSr ? 'predloga' : 'proposals'}
+                        </span>
+                        <ChevronRight size={14} className={`text-brand-charcoal/40 transition-transform ${proposalSectionExpanded ? 'rotate-90' : ''}`} />
+                      </div>
+                    </div>
+
+                    {proposalSectionExpanded ? (
+                      <div className="space-y-4 pt-1 animate-fade-in">
+                        {/* Option Selector Tabs */}
+                        <div className="grid grid-cols-2 gap-2 p-1 bg-white border border-[#2D3025]/10 rounded-xl">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              triggerHaptic(6);
+                              setProposalType('RECOMMENDATION');
+                              setProposalFeedbackMsg(null);
+                            }}
+                            className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                              proposalType === 'RECOMMENDATION'
+                                ? 'bg-[#8A1F1F] text-white shadow-xs'
+                                : 'text-brand-charcoal/70 hover:text-brand-charcoal hover:bg-neutral-50'
+                            }`}
+                          >
+                            <Compass size={13} />
+                            <span>{isSr ? 'Opcija A: Nova preporuka' : 'Option A: New Spot'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              triggerHaptic(6);
+                              setProposalType('PACKAGE');
+                              setProposalFeedbackMsg(null);
+                            }}
+                            className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
+                              proposalType === 'PACKAGE'
+                                ? 'bg-[#8A1F1F] text-white shadow-xs'
+                                : 'text-brand-charcoal/70 hover:text-brand-charcoal hover:bg-neutral-50'
+                            }`}
+                          >
+                            <Package size={13} />
+                            <span>{isSr ? 'Opcija B: Paket tura' : 'Option B: Day Package'}</span>
+                          </button>
+                        </div>
+
+                        <p className="text-[11px] text-brand-charcoal/70 leading-relaxed">
+                          {proposalType === 'RECOMMENDATION'
+                            ? (isSr 
+                                ? 'Predložite skriveni biser, vinariju, kulturni spomenik ili prirodnu lokaciju u Srbiji koja nedostaje u IDEMO bazi. Agent 007 će evaluirati podatke, a urednik odobriti uključenje u bazu.'
+                                : 'Propose a missing authentic spot, winery, cultural landmark, or nature sanctuary in Serbia. Agent 007 evaluates suitability, and the Curator approves for catalog publication.')
+                            : (isSr
+                                ? 'Predložite vaš autentični paket tura ili organizovanu rutu (poludnevnu ili celodnevnu). Nakon odobrenja urednika, paket postaje vidljiv posetiocima, a upiti se automatski usmeravaju vama.'
+                                : 'Propose a curated experience or day package with itinerary stops and services. Upon Curator approval, the package is published with inquiries automatically routed directly to you.')
+                          }
+                        </p>
+
+                        {/* Common Field: Title */}
+                        <div>
+                          <label className="block text-[9px] font-mono uppercase font-bold text-brand-charcoal/60 mb-1">
+                            {proposalType === 'RECOMMENDATION' 
+                              ? (isSr ? 'Naziv lokacije / preporuke *' : 'Recommendation Title / Spot Name *')
+                              : (isSr ? 'Naziv paketa / ture *' : 'Package / Experience Title *')}
+                          </label>
+                          <input
+                            type="text"
+                            placeholder={proposalType === 'RECOMMENDATION' ? 'npr. Manastir Gornjak i Mlavska klisura' : 'npr. Vinska i manastirska tura Fruške Gore'}
+                            value={propTitle}
+                            onChange={(e) => setPropTitle(e.target.value)}
+                            className="w-full px-3 py-2 bg-white border border-[#2D3025]/15 rounded-xl text-xs text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none"
+                          />
+                        </div>
+
+                        {/* Row: Category & Region/Location */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[9px] font-mono uppercase font-bold text-brand-charcoal/60 mb-1">
+                              {isSr ? 'Kategorija *' : 'Category / Theme *'}
+                            </label>
+                            <select
+                              value={propCategory}
+                              onChange={(e) => setPropCategory(e.target.value)}
+                              className="w-full px-3 py-2 bg-white border border-[#2D3025]/15 rounded-xl text-xs text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none"
+                            >
+                              <option value="Nature">{isSr ? 'Priroda & Eko' : 'Nature & Wilderness'}</option>
+                              <option value="History">{isSr ? 'Istorija & Baština' : 'History & Heritage'}</option>
+                              <option value="Gastronomy">{isSr ? 'Gastronomija & Vina' : 'Gastronomy & Wine'}</option>
+                              <option value="Travel">{isSr ? 'Putovanje & Panorame' : 'Scenic Travel & Day Tours'}</option>
+                              <option value="Wellbeing">{isSr ? 'Banje & Opuštanje' : 'Wellbeing & Spas'}</option>
+                              <option value="Clubbing">{isSr ? 'Noćni život & Urbano' : 'Nightlife & Urban Culture'}</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-[9px] font-mono uppercase font-bold text-brand-charcoal/60 mb-1">
+                              {proposalType === 'RECOMMENDATION' 
+                                ? (isSr ? 'Lokacija / Regija u Srbiji *' : 'Location / Region in Serbia *')
+                                : (isSr ? 'Ruta / Početna tačka i pravac *' : 'Route / Starting Point & Region *')}
+                            </label>
+                            <input
+                              type="text"
+                              placeholder={proposalType === 'RECOMMENDATION' ? 'npr. Homoljske planine, Istočna Srbija' : 'npr. Beograd → Sremski Karlovci → Krušedol'}
+                              value={propLocation}
+                              onChange={(e) => setPropLocation(e.target.value)}
+                              className="w-full px-3 py-2 bg-white border border-[#2D3025]/15 rounded-xl text-xs text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Option B Specific Fields */}
+                        {proposalType === 'PACKAGE' && (
+                          <div className="space-y-3 p-3 bg-white border border-[#2D3025]/10 rounded-xl">
+                            <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-brand-charcoal border-b border-[#2D3025]/5 pb-1.5">
+                              <Layers size={13} className="text-[#8A1F1F]" />
+                              <span>{isSr ? 'Specifikacija paketa i ruta' : 'Package Specification & Route Details'}</span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-[9px] font-mono uppercase font-bold text-brand-charcoal/60 mb-1">
+                                  {isSr ? 'Trajanje ture *' : 'Duration Bucket *'}
+                                </label>
+                                <select
+                                  value={propDurationBucket}
+                                  onChange={(e) => setPropDurationBucket(e.target.value as any)}
+                                  className="w-full px-3 py-2 bg-[#FAF9F5] border border-[#2D3025]/15 rounded-lg text-xs text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none"
+                                >
+                                  <option value="2-3 HOURS">{isSr ? 'Kratka tura (2–3 sata)' : 'Short Excursion (2–3 Hours)'}</option>
+                                  <option value="HALF-DAY">{isSr ? 'Poludnevna tura (4–6 sati)' : 'Half-Day Experience (4–6 Hours)'}</option>
+                                  <option value="FULL-DAY">{isSr ? 'Celodnevna tura (8+ sati)' : 'Full-Day Expedition (8+ Hours)'}</option>
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-[9px] font-mono uppercase font-bold text-brand-charcoal/60 mb-1">
+                                  {isSr ? 'Ciljni senzibilitet / Vibe' : 'Target Traveler Vibe / Mood'}
+                                </label>
+                                <input
+                                  type="text"
+                                  placeholder="npr. Spokojna baština, degustacija vina, lagan ritam"
+                                  value={propTargetVibe}
+                                  onChange={(e) => setPropTargetVibe(e.target.value)}
+                                  className="w-full px-3 py-2 bg-[#FAF9F5] border border-[#2D3025]/15 rounded-lg text-xs text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none"
+                                />
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-[9px] font-mono uppercase font-bold text-brand-charcoal/60 mb-1">
+                                {isSr ? 'Stanice rute (odvojene zarezom) *' : 'Route Stops (comma separated) *'}
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="npr. Manastir Krušedol, Vinarija Deurić, Vidikovac Grgeteg, Tradicionalni ručak"
+                                value={propRouteStops}
+                                onChange={(e) => setPropRouteStops(e.target.value)}
+                                className="w-full px-3 py-2 bg-[#FAF9F5] border border-[#2D3025]/15 rounded-lg text-xs text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[9px] font-mono uppercase font-bold text-brand-charcoal/60 mb-1">
+                                {isSr ? 'Uključene usluge partnera (šta obezbeđujete)' : 'Included Partner Services (what you provide)'}
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="npr. Licencirani vodič na engleskom, Prevoz kombijem, Degustacija bermeta, Rezervacije"
+                                value={propIncludedServices}
+                                onChange={(e) => setPropIncludedServices(e.target.value)}
+                                className="w-full px-3 py-2 bg-[#FAF9F5] border border-[#2D3025]/15 rounded-lg text-xs text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Proposal Reason / Expertise */}
+                        <div>
+                          <label className="block text-[9px] font-mono uppercase font-bold text-brand-charcoal/60 mb-1">
+                            {isSr ? 'Osnova predloga / Stručnost *' : 'Basis of Proposal / Expertise *'}
+                          </label>
+                          <select
+                            value={propReason}
+                            onChange={(e) => setPropReason(e.target.value as any)}
+                            className="w-full px-3 py-2 bg-white border border-[#2D3025]/15 rounded-xl text-xs text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none"
+                          >
+                            <option value="EXPERTISE">{isSr ? 'Stručnost partnera (Duboko lokalno poznavanje terena)' : 'Partner Expertise (Deep local mastery of terrain)'}</option>
+                            <option value="UNDERREPRESENTED_SERBIA">{isSr ? 'Nedovoljno zastupljena regija Srbije (Nova destinacija)' : 'Underrepresented Region in Serbia (Expands coverage)'}</option>
+                            <option value="NEW_SPOT">{isSr ? 'Novo / nedavno verifikovano autentično mesto' : 'New / recently verified authentic spot'}</option>
+                            <option value="PERCEIVED_VALUE">{isSr ? 'Visoka dodata vrednost za inostrane posetioce' : 'High value experience for international visitors'}</option>
+                          </select>
+                        </div>
+
+                        {/* Description Textarea */}
+                        <div>
+                          <label className="block text-[9px] font-mono uppercase font-bold text-brand-charcoal/60 mb-1">
+                            {proposalType === 'RECOMMENDATION'
+                              ? (isSr ? 'Opis i karakteristike lokacije *' : 'Grounded Description & Local Character *')
+                              : (isSr ? 'Detaljan narativ i dinamika ture *' : 'Detailed Itinerary Narrative & Pacing *')}
+                          </label>
+                          <textarea
+                            rows={3}
+                            placeholder={proposalType === 'RECOMMENDATION' 
+                              ? 'Autentičan opis mesta, istorijat, prirodne odlike i preporuka posetiocima...'
+                              : 'Kako teče tura, šta posetioci doživljavaju na svakoj tački i zašto je ovo jedinstveno...'}
+                            value={propDescription}
+                            onChange={(e) => setPropDescription(e.target.value)}
+                            className="w-full p-3 bg-white border border-[#2D3025]/15 rounded-xl text-xs text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none"
+                          />
+                        </div>
+
+                        {/* Highlights (Option A) */}
+                        {proposalType === 'RECOMMENDATION' && (
+                          <div>
+                            <label className="block text-[9px] font-mono uppercase font-bold text-brand-charcoal/60 mb-1">
+                              {isSr ? 'Ključne tačke / Izdvajamo (odvojeno zarezom)' : 'Key Highlights / Inclusions (comma separated)'}
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="npr. Pećinska crkva, Izvorska voda, Panoramski pogled, Domaći sir"
+                              value={propHighlights}
+                              onChange={(e) => setPropHighlights(e.target.value)}
+                              className="w-full px-3 py-2 bg-white border border-[#2D3025]/15 rounded-xl text-xs text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none"
+                            />
+                          </div>
+                        )}
+
+                        {/* HIGH QUALITY IMAGE ATTACHMENTS & AGENT 007 COLLAGE */}
+                        <div className="p-3.5 bg-white border border-[#2D3025]/10 rounded-xl space-y-3">
+                          <div className="flex items-center justify-between border-b border-[#2D3025]/5 pb-2">
+                            <div className="flex items-center gap-1.5">
+                              <Camera size={14} className="text-[#8A1F1F]" />
+                              <span className="text-[10px] font-mono uppercase font-bold text-brand-charcoal">
+                                {proposalType === 'RECOMMENDATION'
+                                  ? (isSr ? 'Fotografija lokacije (Visoka rezolucija)' : 'Recommendation Photo (High Resolution)')
+                                  : (isSr ? 'Fotografije paketa (Do 5 slika za Agenta 007)' : 'Package Photos (Up to 5 images for Agent 007 Collage)')}
+                              </span>
+                            </div>
+                            <span className="text-[9px] font-mono font-bold text-brand-charcoal/60 bg-neutral-100 px-2 py-0.5 rounded">
+                              {propAttachedImages.length} / {proposalType === 'RECOMMENDATION' ? '1' : '5'} {isSr ? 'priloženo' : 'attached'}
+                            </span>
+                          </div>
+
+                          <p className="text-[10.5px] text-brand-charcoal/70 leading-relaxed">
+                            {proposalType === 'RECOMMENDATION'
+                              ? (isSr
+                                  ? 'Priložite kvalitetnu fotografiju lokacije. Urednik ima konačnu reč pri odobravanju.'
+                                  : 'Attach a high-resolution photo of the spot. The Curator has the final say upon approval.')
+                              : (isSr
+                                  ? 'Priložite do 5 fotografija koje prikazuju stanice, pejzaže ili degustacije. Agent 007 ih sklapa u jedinstveni kolaž za urednički pregled.'
+                                  : 'Attach up to 5 photos showing stops, scenic views, or tastings. Agent 007 compiles them into a single composite collage for Curator review.')
+                            }
+                          </p>
+
+                          {/* File Input and URL Row */}
+                          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp"
+                              multiple={proposalType === 'PACKAGE'}
+                              id="proposal-photo-input"
+                              className="hidden"
+                              onChange={(e) => {
+                                const files = Array.from(e.target.files || []);
+                                if (files.length === 0) return;
+                                const maxAllowed = proposalType === 'RECOMMENDATION' ? 1 : 5;
+                                const remainingSlots = maxAllowed - propAttachedImages.length;
+                                if (remainingSlots <= 0) return;
+
+                                const toProcess = files.slice(0, remainingSlots);
+                                const readers = toProcess.map(file => {
+                                  return new Promise<string>((resolve) => {
+                                    const reader = new FileReader();
+                                    reader.onload = () => resolve(reader.result as string);
+                                    reader.readAsDataURL(file);
+                                  });
+                                });
+
+                                Promise.all(readers).then(newUrls => {
+                                  const updated = proposalType === 'RECOMMENDATION' 
+                                    ? [newUrls[0]] 
+                                    : [...propAttachedImages, ...newUrls].slice(0, 5);
+                                  handleUpdateAttachedImages(updated, proposalType);
+                                });
+                              }}
+                            />
+
+                            <label
+                              htmlFor="proposal-photo-input"
+                              className={`px-3 py-2 bg-white border border-[#2D3025]/20 hover:bg-neutral-50 rounded-lg text-[10px] font-mono font-bold uppercase text-brand-charcoal flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transition-colors shrink-0 ${
+                                propAttachedImages.length >= (proposalType === 'RECOMMENDATION' ? 1 : 5) ? 'opacity-50 pointer-events-none' : ''
+                              }`}
+                            >
+                              <ImageIcon size={13} />
+                              <span>{isSr ? 'Izaberi fotografije' : 'Upload Photos'}</span>
+                            </label>
+
+                            {/* Or direct URL input */}
+                            <div className="flex-1 flex items-center gap-1">
+                              <input
+                                type="text"
+                                placeholder={isSr ? 'ili nalepite URL slike...' : 'or paste image URL...'}
+                                value={propImageUrl}
+                                onChange={(e) => setPropImageUrl(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && propImageUrl.trim()) {
+                                    e.preventDefault();
+                                    const maxAllowed = proposalType === 'RECOMMENDATION' ? 1 : 5;
+                                    if (propAttachedImages.length < maxAllowed) {
+                                      const updated = [...propAttachedImages, propImageUrl.trim()].slice(0, maxAllowed);
+                                      handleUpdateAttachedImages(updated, proposalType);
+                                      setPropImageUrl('');
+                                    }
+                                  }
+                                }}
+                                className="flex-1 px-3 py-1.5 bg-[#FAF9F5] border border-[#2D3025]/15 rounded-lg text-xs text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none"
+                              />
+                              {propImageUrl.trim() && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const maxAllowed = proposalType === 'RECOMMENDATION' ? 1 : 5;
+                                    if (propAttachedImages.length < maxAllowed) {
+                                      const updated = [...propAttachedImages, propImageUrl.trim()].slice(0, maxAllowed);
+                                      handleUpdateAttachedImages(updated, proposalType);
+                                      setPropImageUrl('');
+                                    }
+                                  }}
+                                  className="px-2.5 py-1.5 bg-[#2D3025] text-white rounded-lg text-[10px] font-mono font-bold uppercase hover:bg-black transition-colors cursor-pointer"
+                                >
+                                  {isSr ? 'Dodaj' : 'Add'}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Thumbnails Gallery */}
+                          {propAttachedImages.length > 0 && (
+                            <div className="space-y-2 pt-1 border-t border-[#2D3025]/5">
+                              <span className="text-[9px] font-mono uppercase font-bold text-brand-charcoal/60 block">
+                                {isSr ? 'Izabrane fotografije:' : 'Attached Photos Gallery:'}
+                              </span>
+                              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                                {propAttachedImages.map((imgSrc, idx) => (
+                                  <div key={idx} className="relative group rounded-lg overflow-hidden border border-[#2D3025]/15 aspect-4/3 bg-neutral-100">
+                                    <img
+                                      src={imgSrc}
+                                      alt={`Attachment ${idx + 1}`}
+                                      className="w-full h-full object-cover"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        triggerHaptic(6);
+                                        const nextList = propAttachedImages.filter((_, i) => i !== idx);
+                                        handleUpdateAttachedImages(nextList, proposalType);
+                                      }}
+                                      className="absolute top-1 right-1 p-1 bg-black/75 hover:bg-red-700 text-white rounded-full transition-colors cursor-pointer shadow-xs"
+                                      title={isSr ? 'Ukloni' : 'Remove'}
+                                    >
+                                      <X size={10} />
+                                    </button>
+                                    <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[8px] font-mono px-1 rounded">
+                                      #{idx + 1}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Option B: Agent 007 Synthesized Package Collage Preview */}
+                          {proposalType === 'PACKAGE' && propAttachedImages.length > 0 && (
+                            <div className="p-3 bg-[#FAF9F5] border border-[#2D3025]/15 rounded-xl space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-brand-charcoal">
+                                  <Sparkles size={12} className="text-[#8A1F1F]" />
+                                  <span>{isSr ? 'Agent 007 Sintetisani kolaž paketa (Pregled)' : 'Agent 007 Synthesized Package Collage Preview'}</span>
+                                </div>
+                                <span className="text-[8.5px] font-mono text-brand-charcoal/60">
+                                  {propCompilingCollage 
+                                    ? (isSr ? 'Sklapanje kolaža...' : 'Compiling collage...') 
+                                    : (isSr ? 'Kolaž spreman za urednika' : 'Collage ready for Curator review')}
+                                </span>
+                              </div>
+
+                              <div className="relative rounded-lg overflow-hidden border border-[#2D3025]/20 bg-neutral-900 aspect-3/2 max-h-56 mx-auto flex items-center justify-center">
+                                {propCollagePreview ? (
+                                  <img
+                                    src={propCollagePreview}
+                                    alt="Agent 007 Package Collage Preview"
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="text-center p-4 text-white/60 text-xs font-mono">
+                                    <Loader2 size={18} className="animate-spin mx-auto mb-1 text-[#C5A059]" />
+                                    <span>{isSr ? 'Generisanje reprezentativnog kolaža...' : 'Generating composite package collage...'}</span>
+                                  </div>
+                                )}
+                              </div>
+                              <p className="text-[9.5px] font-mono text-brand-charcoal/60 leading-tight">
+                                {isSr
+                                  ? 'Napomena: Urednik ima isključivo pravo da odobri, zameni ili prilagodi konačnu fotografiju pre objavljivanja (Ustav IDEMO, Princip 40).'
+                                  : 'Note: The Curator maintains exclusive authority to approve, modify, or select the final published imagery (IDEMO Constitution, Principle 40).'}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Feedback message */}
+                        {proposalFeedbackMsg && (
+                          <div className={`p-3 rounded-xl text-xs font-mono font-medium ${
+                            proposalFeedbackMsg.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'
+                          }`}>
+                            {proposalFeedbackMsg.text}
+                          </div>
+                        )}
+
+                        {/* Submit Button */}
+                        <div className="flex items-center justify-end pt-2 border-t border-[#2D3025]/5">
+                          <button
+                            type="button"
+                            disabled={proposalSubmitting || !propTitle.trim() || !propDescription.trim()}
+                            onClick={async () => {
+                              triggerHaptic(10);
+                              if (!propTitle.trim() || !propDescription.trim()) {
+                                setProposalFeedbackMsg({
+                                  type: 'error',
+                                  text: isSr ? 'Molimo popunite naziv i opis predloga.' : 'Please enter both title and description.'
+                                });
+                                return;
+                              }
+
+                              setProposalSubmitting(true);
+                              setProposalFeedbackMsg(null);
+
+                              const pName = currentSimulatedPartner?.name || authenticatedPartnerProfile?.legal_business_name || 'IDEMO Partner';
+                              const pCode = currentSimulatedPartner?.pin || authenticatedPartnerProfile?.public_code || activePartnerId || 'UNO';
+                              const pEmail = authenticatedPartnerProfile?.contact_email || currentSimulatedPartner?.contact || 'partner@idemo.internal';
+
+                              const parsedHighlights = propHighlights
+                                .split(',')
+                                .map(s => s.trim())
+                                .filter(Boolean);
+
+                              const parsedStops = propRouteStops
+                                .split(',')
+                                .map(s => s.trim())
+                                .filter(Boolean);
+
+                              const parsedServices = propIncludedServices
+                                .split(',')
+                                .map(s => s.trim())
+                                .filter(Boolean);
+
+                              try {
+                                const resolvedPrimaryImg = propCollagePreview || (propAttachedImages.length > 0 ? propAttachedImages[0] : propImageUrl.trim() || undefined);
+
+                                const created = savePartnerRecommendationProposal({
+                                  partnerId: activePartnerId || 'a0000000-0000-0000-0000-000000000091',
+                                  partnerCode: pCode,
+                                  partnerName: pName,
+                                  partnerEmail: pEmail,
+                                  proposalType,
+                                  title: propTitle.trim(),
+                                  category: propCategory,
+                                  location: propLocation.trim() || (isSr ? 'Srbija' : 'Serbia'),
+                                  proposalReason: propReason,
+                                  description: propDescription.trim(),
+                                  highlights: parsedHighlights.length > 0 ? parsedHighlights : undefined,
+                                  imageUrl: resolvedPrimaryImg,
+                                  images: propAttachedImages.length > 0 ? propAttachedImages : propImageUrl.trim() ? [propImageUrl.trim()] : undefined,
+                                  collageImageUrl: propCollagePreview || undefined,
+                                  durationBucket: proposalType === 'PACKAGE' ? propDurationBucket : undefined,
+                                  routeStops: proposalType === 'PACKAGE' && parsedStops.length > 0 ? parsedStops : undefined,
+                                  includedServices: proposalType === 'PACKAGE' && parsedServices.length > 0 ? parsedServices : undefined,
+                                  targetVibe: proposalType === 'PACKAGE' && propTargetVibe.trim() ? propTargetVibe.trim() : undefined
+                                });
+
+                                // Refresh partner's list
+                                const refreshedList = getPartnerProposalsByPartnerId(activePartnerId || pCode);
+                                setPartnerProposalsList(refreshedList);
+
+                                const score = created.agent007Evaluation?.suitabilityScore || 92;
+                                setProposalFeedbackMsg({
+                                  type: 'success',
+                                  text: isSr
+                                    ? `Predlog uspešno prosleđen! Agent 007 je dodelio ocenu podobnosti ${score}/100. Predlog i priložene fotografije su upućeni IDEMO urednicima na pregled.`
+                                    : `Proposal successfully submitted! Agent 007 evaluated suitability score at ${score}/100. Photos and details queued for IDEMO Curator review.`
+                                });
+
+                                // Clear inputs
+                                setPropTitle('');
+                                setPropDescription('');
+                                setPropHighlights('');
+                                setPropRouteStops('');
+                                setPropIncludedServices('');
+                                setPropTargetVibe('');
+                                setPropImageUrl('');
+                                setPropAttachedImages([]);
+                                setPropCollagePreview(null);
+                              } catch (err: any) {
+                                setProposalFeedbackMsg({
+                                  type: 'error',
+                                  text: err?.message || (isSr ? 'Greška pri slanju predloga.' : 'Failed to submit proposal.')
+                                });
+                              } finally {
+                                setProposalSubmitting(false);
+                              }
+                            }}
+                            className="px-4 py-2 bg-[#8A1F1F] text-white hover:bg-[#8A1F1F]/90 text-[10px] font-mono font-bold uppercase rounded-xl transition-colors disabled:opacity-50 cursor-pointer shadow-xs flex items-center gap-1.5"
+                          >
+                            <Sparkles size={12} />
+                            <span>
+                              {proposalSubmitting 
+                                ? (isSr ? 'Slanje...' : 'Submitting...') 
+                                : (isSr ? 'Pošalji predlog Agentu 007 i urednicima' : 'Submit Proposal to Agent 007 & Curators')}
+                            </span>
+                          </button>
+                        </div>
+
+                        {/* Recent Proposals List */}
+                        {partnerProposalsList.length > 0 && (
+                          <div className="pt-3 border-t border-[#2D3025]/10 space-y-2">
+                            <span className="text-[9px] font-mono uppercase font-bold text-brand-charcoal/60 block">
+                              {isSr ? 'Vaši dosadašnji predlozi:' : 'Your Submitted Proposals:'}
+                            </span>
+                            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                              {partnerProposalsList.map((p) => {
+                                const isApproved = p.status === 'CURATOR_APPROVED';
+                                const isPkg = p.proposalType === 'PACKAGE';
+                                return (
+                                  <div key={p.id} className="p-2.5 bg-white border border-[#2D3025]/10 rounded-xl space-y-1 text-xs">
+                                    <div className="flex items-center justify-between gap-1 flex-wrap">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className={`text-[8.5px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                                          isPkg ? 'bg-[#1E2E20] text-[#C5A059]' : 'bg-[#8A1F1F]/10 text-[#8A1F1F]'
+                                        }`}>
+                                          {isPkg ? 'Paket' : 'Preporuka'}
+                                        </span>
+                                        <span className="font-serif font-bold text-brand-charcoal truncate max-w-[180px]">
+                                          {p.title}
+                                        </span>
+                                      </div>
+                                      <span className={`text-[8px] font-mono font-bold uppercase px-2 py-0.5 rounded ${
+                                        isApproved ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
+                                      }`}>
+                                        {isApproved ? (isSr ? '✓ Odobreno & Povezano' : '✓ Approved & Live') : (isSr ? 'Urednički pregled' : 'Pending Curator')}
+                                      </span>
+                                    </div>
+                                    <p className="text-[10px] text-brand-charcoal/70 line-clamp-1">
+                                      {p.location} • {p.description}
+                                    </p>
+                                    {p.agent007Evaluation && (
+                                      <div className="flex items-center justify-between text-[9px] font-mono text-brand-charcoal/50 pt-0.5 border-t border-neutral-100">
+                                        <span>Agent 007 Score: {p.agent007Evaluation.suitabilityScore}/100</span>
+                                        <span className="truncate max-w-[150px]">{p.agent007Evaluation.confidence} confidence</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-brand-charcoal/60 leading-relaxed cursor-pointer" onClick={() => setProposalSectionExpanded(true)}>
+                        {isSr
+                          ? 'Kliknite ovde da predložite novo mesto (Opcija A) ili vaš paket tura (Opcija B) za obradu Agentu 007 i odobrenje urednika.'
+                          : 'Click here to propose a new spot (Option A) or your curated package (Option B) for Agent 007 fact-checking and Curator approval.'}
+                      </p>
+                    )}
                   </div>
 
                   {/* Five Collapsible Cards */}

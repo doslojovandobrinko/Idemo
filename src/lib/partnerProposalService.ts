@@ -12,12 +12,15 @@ import { safeStorage } from './safeStorage';
 import { INITIAL_RECOMMENDATIONS } from '../data/recommendations/serbia';
 import { Recommendation, Category } from '../types';
 
+export type ProposalType = 'RECOMMENDATION' | 'PACKAGE';
+
 export interface PartnerRecommendationProposal {
   id: string;
   partnerId: string;
   partnerCode: string;
   partnerName: string;
   partnerEmail: string;
+  proposalType?: ProposalType; // 'RECOMMENDATION' (Option A) | 'PACKAGE' (Option B)
   title: string;
   category: string;
   location: string;
@@ -25,7 +28,15 @@ export interface PartnerRecommendationProposal {
   description: string;
   highlights?: string[];
   imageUrl?: string;
+  images?: string[]; // Up to 5 high quality images
+  collageImageUrl?: string; // Agent 007 compiled composite collage
   contactNotes?: string;
+  // Option B (Package) Specific Fields
+  durationBucket?: '2-3 HOURS' | 'HALF-DAY' | 'FULL-DAY';
+  routeStops?: string[];
+  includedServices?: string[];
+  targetVibe?: string;
+  estimatedPriceNotes?: string;
   submittedAt: string;
   status: 'PENDING_007' | 'REVIEWED_007' | 'CURATOR_APPROVED' | 'CURATOR_REJECTED';
   agent007Evaluation?: {
@@ -101,6 +112,19 @@ export function getPartnerRecommendationProposals(): PartnerRecommendationPropos
   }
 }
 
+export function getPartnerProposalsByPartnerId(partnerIdOrCode: string): PartnerRecommendationProposal[] {
+  if (!partnerIdOrCode) return [];
+  const normalized = partnerIdOrCode.trim().toLowerCase();
+  const all = getPartnerRecommendationProposals();
+  return all.filter(p => 
+    (p.partnerId && p.partnerId.trim().toLowerCase() === normalized) ||
+    (p.partnerCode && p.partnerCode.trim().toLowerCase() === normalized) ||
+    (normalized.includes('uno1') && p.partnerCode?.toLowerCase().includes('uno1')) ||
+    (normalized.includes('uno2') && p.partnerCode?.toLowerCase().includes('uno2')) ||
+    (normalized.includes('uno3') && p.partnerCode?.toLowerCase().includes('uno3'))
+  );
+}
+
 export function savePartnerRecommendationProposal(
   proposalData: Omit<PartnerRecommendationProposal, 'id' | 'submittedAt' | 'status' | 'agent007Evaluation'>
 ): PartnerRecommendationProposal {
@@ -109,18 +133,34 @@ export function savePartnerRecommendationProposal(
   
   // Synthesize Agent 007 Evaluation automatically
   const suitabilityScore = Math.floor(Math.random() * 15) + 85; // 85-99
+  const isPackage = proposalData.proposalType === 'PACKAGE';
   const evalCategories = [Category.NATURE, Category.HISTORY, Category.GASTRONOMY, Category.TRAVEL, Category.WELLBEING];
-  const matchedCat = evalCategories.find(c => c.toLowerCase() === proposalData.category.toLowerCase()) || Category.NATURE;
+  const matchedCat = evalCategories.find(c => c.toLowerCase() === proposalData.category.toLowerCase()) || 
+    (isPackage ? Category.TRAVEL : Category.NATURE);
 
   const newProposal: PartnerRecommendationProposal = {
     ...proposalData,
+    imageUrl: proposalData.imageUrl || (proposalData.images && proposalData.images[0]) || undefined,
+    proposalType: proposalData.proposalType || 'RECOMMENDATION',
     id,
     submittedAt: new Date().toISOString(),
     status: 'REVIEWED_007',
     agent007Evaluation: {
       suitabilityScore,
-      regionalImpact: `Evaluated strong regional value for ${proposalData.location || 'Serbia'}. Expands authentic local choices for international visitors.`,
-      curatorRecommendation: `Agent 007 approves proposal "${proposalData.title}" submitted by ${proposalData.partnerCode} (${proposalData.partnerName}). Ready for Curator inclusion.`,
+      regionalImpact: isPackage
+        ? `Evaluated curated experience package for ${proposalData.location || 'Serbia'}. Multi-stop itinerary feasibility verified with authentic local partner stewardship.${
+            proposalData.images?.length ? ` ${proposalData.images.length} high-resolution package photos verified.` : ''
+          }`
+        : `Evaluated strong regional value for ${proposalData.location || 'Serbia'}. Expands authentic local choices for international visitors.${
+            proposalData.images?.length ? ` High-resolution candidate photo attached.` : ''
+          }`,
+      curatorRecommendation: isPackage
+        ? `Agent 007 approves curated package "${proposalData.title}" (${proposalData.durationBucket || 'Half-Day'}) submitted by ${proposalData.partnerCode} (${proposalData.partnerName}). ${
+            proposalData.images && proposalData.images.length > 1
+              ? `Synthesized ${proposalData.images.length} package photos into single unified collage.`
+              : 'Imagery attached.'
+          } Ready for Curator photo inspection, final approval & partner co-assignment.`
+        : `Agent 007 approves proposal "${proposalData.title}" submitted by ${proposalData.partnerCode} (${proposalData.partnerName}). Ready for Curator photo review & inclusion.`,
       suggestedCategory: matchedCat,
       confidence: 'HIGH'
     }
@@ -131,7 +171,10 @@ export function savePartnerRecommendationProposal(
   return newProposal;
 }
 
-export function curatorApproveProposal(proposalId: string): { success: boolean; recommendation?: Recommendation; message: string } {
+export function curatorApproveProposal(
+  proposalId: string,
+  approvedImageUrl?: string
+): { success: boolean; recommendation?: Recommendation; message: string } {
   const proposals = getPartnerRecommendationProposals();
   const targetIndex = proposals.findIndex(p => p.id === proposalId);
   if (targetIndex === -1) {
@@ -142,6 +185,22 @@ export function curatorApproveProposal(proposalId: string): { success: boolean; 
   proposal.status = 'CURATOR_APPROVED';
   proposals[targetIndex] = proposal;
   safeStorage.setItem(STORAGE_KEY, JSON.stringify(proposals));
+
+  const isPackage = proposal.proposalType === 'PACKAGE';
+  const formattedHighlights = proposal.highlights && proposal.highlights.length > 0
+    ? proposal.highlights
+    : isPackage && proposal.routeStops && proposal.routeStops.length > 0
+    ? proposal.routeStops
+    : ['Partner Verified Candidate', 'Authentic Serbian Experience'];
+
+  // Final Curator Image Authority: Approved image override > compiled collage > single image > first of multi-images > fallback
+  const resolvedImage = approvedImageUrl ||
+    proposal.collageImageUrl ||
+    proposal.imageUrl ||
+    (proposal.images && proposal.images.length > 0 ? proposal.images[0] : null) ||
+    (isPackage 
+      ? 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&q=80&w=1200'
+      : 'https://images.unsplash.com/photo-1542224566-6e85f2e6772f?auto=format&fit=crop&q=80&w=1200');
 
   // Synthesize a new official Recommendation and append to local recommendations pool
   const recId = `REC-${Date.now().toString().slice(-6)}`;
@@ -155,10 +214,13 @@ export function curatorApproveProposal(proposalId: string): { success: boolean; 
     locationEn: proposal.location,
     locationSr: proposal.location,
     shortDescription: proposal.description,
-    longDescription: proposal.description,
-    highlights: proposal.highlights || ['Partner Verified Candidate', 'Authentic Serbian Experience'],
-    imageUrl: proposal.imageUrl || 'https://images.unsplash.com/photo-1542224566-6e85f2e6772f?auto=format&fit=crop&q=80&w=1200',
-    curatorNotes: `Proposed by Partner ${proposal.partnerCode} (${proposal.partnerName}). Approved by IDEMO Curator & Agent 007.`,
+    longDescription: isPackage && proposal.routeStops && proposal.routeStops.length > 0
+      ? `${proposal.description}\n\nKey Stops: ${proposal.routeStops.join(' → ')}${proposal.includedServices?.length ? `\nIncluded: ${proposal.includedServices.join(', ')}` : ''}`
+      : proposal.description,
+    highlights: formattedHighlights,
+    imageUrl: resolvedImage,
+    image: resolvedImage,
+    curatorNotes: `Proposed by Partner ${proposal.partnerCode} (${proposal.partnerName})${isPackage ? ' [Curated Package]' : ''}. Approved by IDEMO Curator with final image authority (${proposal.images?.length || 1} submitted photos).`,
     status: 'APPROVED',
     completenessScore: 95
   } as unknown as Recommendation;
@@ -176,9 +238,55 @@ export function curatorApproveProposal(proposalId: string): { success: boolean; 
   customRecs.unshift(newRec);
   safeStorage.setItem('idemo_studio_custom_recommendations', JSON.stringify(customRecs));
 
+  // OPTION B: Automatically co-assign submitting partner to the approved recommendation
+  let partnerLinked = false;
+  try {
+    const rawPartners = safeStorage.getItem('idemo_portal_partners');
+    if (rawPartners) {
+      const partnersList = JSON.parse(rawPartners);
+      const pIdx = partnersList.findIndex((p: any) =>
+        (proposal.partnerId && p.id === proposal.partnerId) ||
+        (proposal.partnerCode && p.pin === proposal.partnerCode) ||
+        (proposal.partnerCode && p.id?.toUpperCase() === proposal.partnerCode.toUpperCase()) ||
+        (proposal.partnerName && p.name?.toLowerCase() === proposal.partnerName.toLowerCase())
+      );
+      if (pIdx !== -1) {
+        if (!Array.isArray(partnersList[pIdx].assignedRecs)) {
+          partnersList[pIdx].assignedRecs = [];
+        }
+        if (!partnersList[pIdx].assignedRecs.includes(recId)) {
+          partnersList[pIdx].assignedRecs.push(recId);
+          partnerLinked = true;
+        }
+        safeStorage.setItem('idemo_portal_partners', JSON.stringify(partnersList));
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('idemo_partners_updated'));
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[IDEMO Proposal Service] Failed to auto-link partner to approved recommendation:', err);
+  }
+
   return {
     success: true,
     recommendation: newRec,
-    message: `Proposal "${proposal.title}" approved! Brand new Recommendation created (${recId}) and published to IDEMO pool with ${proposal.partnerCode} linked.`
+    message: `Proposal "${proposal.title}" approved! Recommendation ${recId} published to IDEMO pool${
+      partnerLinked ? ` and automatically co-assigned to ${proposal.partnerCode} (${proposal.partnerName}) for traveler inquiries` : ''
+    }.`
+  };
+}
+
+export function curatorRejectProposal(proposalId: string): { success: boolean; message: string } {
+  const proposals = getPartnerRecommendationProposals();
+  const targetIndex = proposals.findIndex(p => p.id === proposalId);
+  if (targetIndex === -1) {
+    return { success: false, message: 'Proposal not found.' };
+  }
+  proposals[targetIndex].status = 'CURATOR_REJECTED';
+  safeStorage.setItem(STORAGE_KEY, JSON.stringify(proposals));
+  return {
+    success: true,
+    message: `Proposal "${proposals[targetIndex].title}" was archived by Curator.`
   };
 }

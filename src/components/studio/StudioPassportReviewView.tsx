@@ -29,6 +29,7 @@ import {
 import { 
   getPartnerRecommendationProposals, 
   curatorApproveProposal, 
+  curatorRejectProposal,
   PartnerRecommendationProposal 
 } from '../../lib/partnerProposalService';
 import { getSupabaseClient } from '../../lib/supabaseClient';
@@ -47,6 +48,7 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
   const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
+  const [selectedImageOverride, setSelectedImageOverride] = useState<Record<string, string>>({});
   
   // Review Action Form State
   const [reviewNote, setReviewNote] = useState<string>('');
@@ -250,16 +252,22 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {proposals.map((prop) => {
               const isApproved = prop.status === 'CURATOR_APPROVED';
+              const isPackage = prop.proposalType === 'PACKAGE';
               return (
                 <div key={prop.id} className="p-5 bg-white border border-[#E5E3DB] rounded-2xl shadow-xs space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 bg-[#FAF9F5] border border-[#E5E3DB] rounded text-[10px] font-mono font-bold text-[#C5A059]">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                          isPackage ? 'bg-[#1E2E20] text-[#C5A059]' : 'bg-[#FAF9F5] border border-[#E5E3DB] text-[#C5A059]'
+                        }`}>
+                          {isPackage ? 'Option B: Package' : 'Option A: Spot'}
+                        </span>
+                        <span className="px-2 py-0.5 bg-[#FAF9F5] border border-[#E5E3DB] rounded text-[10px] font-mono font-bold text-stone-700">
                           {prop.category}
                         </span>
                         <span className="text-[10px] font-mono text-[#8C8A7D]">
-                          Submitted by {prop.partnerCode} ({prop.partnerName})
+                          By {prop.partnerCode} ({prop.partnerName})
                         </span>
                       </div>
                       <h4 className="font-serif text-base font-bold text-[#1E2E20] mt-1">
@@ -270,7 +278,7 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
                       </p>
                     </div>
 
-                    <span className={`px-2.5 py-1 rounded-full text-[9.5px] font-mono font-bold uppercase ${
+                    <span className={`px-2.5 py-1 rounded-full text-[9.5px] font-mono font-bold uppercase shrink-0 ${
                       isApproved ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
                     }`}>
                       {isApproved ? '✓ Approved' : 'Pending Curator'}
@@ -280,6 +288,99 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
                   <p className="text-xs text-[#57534E] leading-relaxed">
                     {prop.description}
                   </p>
+
+                  {/* Option B Package Specific Details */}
+                  {isPackage && (
+                    <div className="p-2.5 bg-neutral-50 border border-neutral-200 rounded-xl space-y-1.5 text-[11px] font-mono">
+                      <div className="flex items-center justify-between text-neutral-800 font-bold">
+                        <span>⏱ Duration: {prop.durationBucket || 'Half-Day'}</span>
+                        {prop.targetVibe && <span className="text-neutral-500">Vibe: {prop.targetVibe}</span>}
+                      </div>
+                      {prop.routeStops && prop.routeStops.length > 0 && (
+                        <p className="text-neutral-700">
+                          <strong className="text-neutral-900">Route Stops:</strong> {prop.routeStops.join(' → ')}
+                        </p>
+                      )}
+                      {prop.includedServices && prop.includedServices.length > 0 && (
+                        <p className="text-neutral-700">
+                          <strong className="text-neutral-900">Included Services:</strong> {prop.includedServices.join(', ')}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* CURATOR PHOTO INSPECTION & FINAL APPROVAL AUTHORITY (PRINCIPLE 40) */}
+                  {(prop.collageImageUrl || (prop.images && prop.images.length > 0) || prop.imageUrl) && (() => {
+                    const candidateImages: { label: string; url: string; isCollage: boolean }[] = [];
+                    if (prop.collageImageUrl) {
+                      candidateImages.push({ label: 'Agent 007 Collage', url: prop.collageImageUrl, isCollage: true });
+                    }
+                    if (prop.images && prop.images.length > 0) {
+                      prop.images.forEach((img, idx) => {
+                        candidateImages.push({ label: `Photo #${idx + 1}`, url: img, isCollage: false });
+                      });
+                    } else if (prop.imageUrl && !candidateImages.some(c => c.url === prop.imageUrl)) {
+                      candidateImages.push({ label: 'Attached Photo', url: prop.imageUrl, isCollage: false });
+                    }
+
+                    const activeApprovedUrl = selectedImageOverride[prop.id] ||
+                      (candidateImages[0] ? candidateImages[0].url : (prop.collageImageUrl || prop.imageUrl || ''));
+
+                    return (
+                      <div className="p-3 bg-[#FAF9F5] border border-[#E5E3DB] rounded-xl space-y-2">
+                        <div className="flex items-center justify-between text-[10.5px] font-mono">
+                          <span className="font-bold text-[#1E2E20] flex items-center gap-1.5">
+                            <ImageIcon size={13} className="text-[#C5A059]" />
+                            <span>Curator Media Inspection & Approval Authority</span>
+                          </span>
+                          <span className="text-[#8C8A7D]">
+                            {candidateImages.length} image{candidateImages.length > 1 ? 's' : ''} available
+                          </span>
+                        </div>
+
+                        {/* Active Selected Image Preview */}
+                        <div className="relative rounded-lg overflow-hidden border border-[#E5E3DB] aspect-3/2 max-h-48 bg-neutral-900 flex items-center justify-center">
+                          <img
+                            src={activeApprovedUrl}
+                            alt={prop.title}
+                            className="w-full h-full object-cover"
+                          />
+                          <span className="absolute bottom-2 left-2 bg-black/75 text-[#C5A059] px-2 py-0.5 rounded text-[9px] font-mono font-bold">
+                            ✓ Curator Approved Selection
+                          </span>
+                        </div>
+
+                        {/* Thumbnail selector if > 1 candidate */}
+                        {candidateImages.length > 1 && (
+                          <div className="space-y-1">
+                            <span className="text-[9px] font-mono text-[#8C8A7D] uppercase font-bold block">
+                              Click to select canonical approved image:
+                            </span>
+                            <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
+                              {candidateImages.map((c, i) => {
+                                const isSelected = activeApprovedUrl === c.url;
+                                return (
+                                  <div
+                                    key={i}
+                                    onClick={() => setSelectedImageOverride(prev => ({ ...prev, [prop.id]: c.url }))}
+                                    className={`relative cursor-pointer rounded-md overflow-hidden aspect-4/3 border-2 transition-all ${
+                                      isSelected ? 'border-[#C5A059] ring-2 ring-[#C5A059]/40' : 'border-transparent opacity-70 hover:opacity-100'
+                                    }`}
+                                    title={c.label}
+                                  >
+                                    <img src={c.url} alt={c.label} className="w-full h-full object-cover" />
+                                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[7.5px] font-mono text-center truncate px-0.5">
+                                      {c.isCollage ? 'Collage' : `#${i}`}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Agent 007 Evaluation Card */}
                   {prop.agent007Evaluation && (
@@ -302,29 +403,46 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
                     </div>
                   )}
 
-                  <div className="pt-2 flex items-center justify-between">
+                  <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-[#E5E3DB]/50">
                     <span className="text-[10px] font-mono text-[#8C8A7D]">
-                      Reason: {prop.proposalReason.replace(/_/g, ' ')}
+                      Motivation: {prop.proposalReason.replace(/_/g, ' ')}
                     </span>
 
                     {!isApproved ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const res = curatorApproveProposal(prop.id);
-                          if (res.success) {
-                            setProposalFeedback({ id: prop.id, msg: res.message });
-                            loadProposals();
-                          }
-                        }}
-                        className="px-3.5 py-1.5 bg-[#1E2E20] text-[#C5A059] hover:bg-[#2A3E2D] font-mono text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
-                      >
-                        <PlusCircle size={14} />
-                        <span>Approve & Add to Pool</span>
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const res = curatorRejectProposal(prop.id);
+                            if (res.success) {
+                              setProposalFeedback({ id: prop.id, msg: res.message });
+                              loadProposals();
+                            }
+                          }}
+                          className="px-2.5 py-1 text-[11px] font-mono text-stone-500 hover:text-red-700 transition-colors cursor-pointer"
+                        >
+                          Archive
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const activeApprovedUrl = selectedImageOverride[prop.id] || prop.collageImageUrl || prop.imageUrl || (prop.images && prop.images[0]);
+                            const res = curatorApproveProposal(prop.id, activeApprovedUrl);
+                            if (res.success) {
+                              setProposalFeedback({ id: prop.id, msg: res.message });
+                              loadProposals();
+                            }
+                          }}
+                          className="px-3.5 py-1.5 bg-[#1E2E20] text-[#C5A059] hover:bg-[#2A3E2D] font-mono text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                          title="Approve candidate, create recommendation with approved media, and co-assign partner"
+                        >
+                          <PlusCircle size={14} />
+                          <span>Approve & Co-Assign Partner</span>
+                        </button>
+                      </div>
                     ) : (
                       <span className="text-xs font-mono font-bold text-emerald-700 flex items-center gap-1">
-                        <CheckCircle2 size={14} /> Added to IDEMO Pool
+                        <CheckCircle2 size={14} /> Published & Partner Co-Assigned
                       </span>
                     )}
                   </div>

@@ -537,9 +537,9 @@ export function ConciergeSOSHub({ language }: { language: string }) {
                   const smsNumber = ZONES.find(z => z.id === selectedZone)?.sms || '9111';
                   handleStartParking(smsNumber, plateNumber);
                 }}
-                className="w-full py-3 px-4 bg-[#2D3025] hover:bg-[#2D3025]/90 text-white rounded-xl font-sans text-[11px] font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer border-none outline-none focus:ring-2 focus:ring-accent-teal/50"
+                className="w-full py-3 px-4 bg-[#800020] hover:bg-[#660019] text-white rounded-xl font-sans text-[11px] font-extrabold uppercase tracking-wider transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer border border-[#660019]/40 outline-none focus:ring-2 focus:ring-[#800020]/30 active:scale-[0.98]"
               >
-                <MessageSquare size={12} className="text-accent-teal" />
+                <MessageSquare size={12} className="text-white" />
                 <span>{l.start_sms_payment}</span>
               </button>
 
@@ -579,7 +579,7 @@ export function ConciergeSOSHub({ language }: { language: string }) {
               <a 
                 href="tel:19803"
                 onClick={() => triggerHaptic(15)}
-                className="py-1.5 px-3 rounded-lg bg-brand-charcoal text-white text-[9px] font-black uppercase tracking-widest flex items-center gap-1 transition-all active:scale-95"
+                className="py-1.5 px-3 rounded-lg bg-[#800020] hover:bg-[#660019] text-white text-[9px] font-black uppercase tracking-widest flex items-center gap-1 transition-all active:scale-95 shadow-xs border border-[#660019]/30"
               >
                 <PhoneCall size={9} />
                 <span>{l.taxi_button}</span>
@@ -595,7 +595,7 @@ export function ConciergeSOSHub({ language }: { language: string }) {
               <a 
                 href="tel:+381116305555"
                 onClick={() => triggerHaptic(15)}
-                className="py-1.5 px-3 rounded-lg bg-brand-charcoal text-white text-[9px] font-black uppercase tracking-widest flex items-center gap-1 transition-all active:scale-95"
+                className="py-1.5 px-3 rounded-lg bg-[#800020] hover:bg-[#660019] text-white text-[9px] font-black uppercase tracking-widest flex items-center gap-1 transition-all active:scale-95 shadow-xs border border-[#660019]/30"
               >
                 <PhoneCall size={9} />
                 <span>{l.taxi_button}</span>

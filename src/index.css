@@ -4,6 +4,15 @@
   --font-serif: "Playfair Display", Georgia, serif;
   --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
+
+  --color-brand-charcoal: #2D3025;
+  --color-brand-pearl: #FAF9F5;
+  --color-brand-sage: #8C8A7D;
+  --color-brand-bg: #F5F4EE;
+  --color-brand-cream: #FAF9F5;
+  --color-accent-red: #800020;
+  --color-accent-teal: #006666;
+  --color-border-main: #E7E4DB;
 }
 
 @layer base {

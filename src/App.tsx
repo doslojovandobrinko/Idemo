@@ -7068,9 +7068,9 @@ function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedu
                             });
                           }, 100);
                         }}
-                        className="w-full h-14 rounded-2xl bg-brand-charcoal text-white font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+                        className="w-full h-14 rounded-2xl bg-[#800020] hover:bg-[#660019] text-white font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 active:scale-[0.98] transition-all shadow-md border border-[#660019]/40 cursor-pointer"
                       >
-                        <ShieldCheck size={16} className="text-accent-teal" />
+                        <ShieldCheck size={16} className="text-white" />
                         <span>{CONCIERGE_T[language]?.despatch || CONCIERGE_T['en'].despatch}</span>
                       </button>
                     </div>
@@ -7141,7 +7141,7 @@ function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedu
                       <div className="pt-2">
                         <button
                           onClick={() => setShowConcierge(false)}
-                          className="w-full py-3.5 bg-brand-charcoal hover:bg-brand-charcoal/90 text-white rounded-xl text-center font-bold text-[10px] uppercase tracking-widest font-mono cursor-pointer transition-all active:scale-[0.98] shadow-sm"
+                          className="w-full py-3.5 bg-[#800020] hover:bg-[#660019] text-white rounded-xl text-center font-bold text-[10px] uppercase tracking-widest font-mono cursor-pointer transition-all active:scale-[0.98] shadow-md border border-[#660019]/40"
                         >
                           {CONCIERGE_T[language]?.close || CONCIERGE_T['en'].close}
                         </button>
