@@ -337,6 +337,13 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
   const [introLoading, setIntroLoading] = React.useState(false);
   const [introData, setIntroData] = React.useState<PartnerIntroductionResult | null>(null);
 
+  // Resolve authentic partner photo URL directly from partner introduction or confirmed arrangement
+  const effectivePhotoUrl = React.useMemo(() => {
+    const raw = introData?.photo_url || confirmedArrangement?.photo_url;
+    if (!raw) return null;
+    return raw;
+  }, [introData?.photo_url, confirmedArrangement?.photo_url]);
+
   const loadIntroduction = React.useCallback(async (serverId: string) => {
     if (!serverId) return;
     try {
@@ -371,8 +378,10 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
   const handleToggleIntro = async () => {
     if (!introOpen) {
       setIntroOpen(true);
-      if ((!introData || !introData.introduction_available) && inquiry?.serverInquiryId && !introLoading) {
-        await loadIntroduction(inquiry.serverInquiryId);
+      const existing = getInquiryByRecommendationId(item.id, item.dbId);
+      const targetId = inquiry?.serverInquiryId || existing?.server_inquiry_id || existing?.local_queue_id;
+      if ((!introData || !introData.introduction_available) && targetId && !introLoading) {
+        await loadIntroduction(targetId);
       }
     } else {
       setIntroOpen(false);
@@ -676,7 +685,8 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
 
   // Auto-fetch partner passport & introduction when proposal is active or arrangement is confirmed
   React.useEffect(() => {
-    const serverId = inquiry?.serverInquiryId;
+    const existing = getInquiryByRecommendationId(item.id, item.dbId);
+    const serverId = inquiry?.serverInquiryId || existing?.server_inquiry_id || existing?.local_queue_id;
     if (!serverId) return;
 
     const attemptKey = `${serverId}_${activeProposal?.match_id || 'confirmed'}`;
@@ -686,7 +696,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
       lastIntroAttemptKeyRef.current = attemptKey;
       loadIntroduction(serverId);
     }
-  }, [inquiry?.serverInquiryId, activeProposal?.proposal_found, activeProposal?.match_id, !!confirmedArrangement, introData, introLoading, loadIntroduction]);
+  }, [inquiry?.serverInquiryId, item.id, item.dbId, activeProposal?.proposal_found, activeProposal?.match_id, !!confirmedArrangement, introData, introLoading, loadIntroduction]);
 
   const handleCheckStatus = async () => {
     const serverId = inquiry?.serverInquiryId;
@@ -1738,11 +1748,14 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                     >
                       <div className="flex items-center gap-2">
                         <div className="w-5 h-5 rounded-full overflow-hidden border border-[#C5A059] bg-[#3E5037]/10 flex items-center justify-center text-[8px] font-bold">
-                          {introData?.photo_url && !passportPhotoError ? (
+                          {effectivePhotoUrl && !passportPhotoError ? (
                             <img
-                              src={introData.photo_url}
+                              src={effectivePhotoUrl}
                               alt="Host"
                               referrerPolicy="no-referrer"
+                              onError={() => {
+                                setPassportPhotoError(true);
+                              }}
                               className="w-full h-full object-cover"
                             />
                           ) : (
@@ -1786,12 +1799,14 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
 
                             <div className="flex items-start gap-3">
                               <div className="w-14 h-14 rounded-full overflow-hidden flex-shrink-0 border-2 border-[#C5A059] bg-[#3E5037]/10 flex items-center justify-center shadow-sm">
-                                {introData.photo_url && !passportPhotoError ? (
+                                {effectivePhotoUrl && !passportPhotoError ? (
                                   <img
-                                    src={introData.photo_url || undefined}
+                                    src={effectivePhotoUrl || undefined}
                                     alt={introData.partner_name || 'Partner Profile'}
                                     referrerPolicy="no-referrer"
-                                    onError={() => setPassportPhotoError(true)}
+                                    onError={() => {
+                                      setPassportPhotoError(true);
+                                    }}
                                     className="w-full h-full object-cover"
                                   />
                                 ) : (
@@ -2073,12 +2088,14 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                   {/* Partner Identity Passport */}
                   <div className="flex items-center gap-3 bg-[#FAF9F5] p-2.5 rounded-xl border border-[#E5E3DB]">
                     <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 border-2 border-[#C5A059] bg-[#3E5037]/10 flex items-center justify-center shadow-sm">
-                      {(introData?.photo_url || confirmedArrangement.photo_url) && !passportPhotoError ? (
+                      {effectivePhotoUrl && !passportPhotoError ? (
                         <img
-                          src={introData?.photo_url || confirmedArrangement.photo_url || undefined}
+                          src={effectivePhotoUrl || undefined}
                           alt={confirmedArrangement.partner_name}
                           referrerPolicy="no-referrer"
-                          onError={() => setPassportPhotoError(true)}
+                          onError={() => {
+                            setPassportPhotoError(true);
+                          }}
                           className="w-full h-full object-cover"
                         />
                       ) : (

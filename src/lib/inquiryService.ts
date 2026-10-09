@@ -687,8 +687,7 @@ export async function fetchPartnerIntroduction(inquiryId: string): Promise<Partn
       if (response.ok) {
         const resData = await response.json();
         if (resData.introduction_available && resData.introduction) {
-          const isUno = (resData.partner_code || '').toUpperCase().startsWith('UNO');
-          const remotePhotoUrl = resData.photo_url || (resData.photo_available && isUno ? '/assets/images/partners/uno_portrait.svg' : null);
+          const remotePhotoUrl = resData.photo_url || null;
           return {
             success: true,
             introduction_available: true,
@@ -718,25 +717,35 @@ export async function fetchPartnerIntroduction(inquiryId: string): Promise<Partn
   // Resilient Fallback: Resolve canonical partner passport from local context
   const proposalMsg = targetInquiry?.cached_proposal?.message || '';
   const matchId = targetInquiry?.cached_proposal?.match_id || '';
+  const arrangementCode = (targetInquiry?.confirmed_arrangement?.partner_code || '').toUpperCase();
   
   let partnerCode = 'UNO1';
   let passport = CANONICAL_PARTNER_PASSPORTS.UNO1; // Default to official UNO Guide
 
-  if (proposalMsg.includes('UNO2') || matchId.includes('UNO2') || targetInquiry?.confirmed_arrangement?.partner_code === 'UNO2') {
+  if (proposalMsg.includes('UNO2') || matchId.includes('UNO2') || arrangementCode.includes('UNO2')) {
     partnerCode = 'UNO2';
     passport = CANONICAL_PARTNER_PASSPORTS.UNO2;
-  } else if (proposalMsg.includes('UNO1') || matchId.includes('UNO1') || targetInquiry?.confirmed_arrangement?.partner_code === 'UNO1') {
+  } else if (proposalMsg.includes('UNO1') || matchId.includes('UNO1') || arrangementCode.includes('UNO1')) {
     partnerCode = 'UNO1';
     passport = CANONICAL_PARTNER_PASSPORTS.UNO1;
+  } else if (targetInquiry?.confirmed_arrangement?.partner_code) {
+    partnerCode = targetInquiry.confirmed_arrangement.partner_code.toUpperCase();
+    passport = CANONICAL_PARTNER_PASSPORTS[partnerCode] || {
+      ...CANONICAL_PARTNER_PASSPORTS.DEFAULT,
+      name: targetInquiry.confirmed_arrangement.partner_name || 'Verified Partner',
+      code: partnerCode,
+      photo_url: targetInquiry.confirmed_arrangement.photo_url || CANONICAL_PARTNER_PASSPORTS.DEFAULT.photo_url,
+      category: targetInquiry.confirmed_arrangement.category || 'IDEMO Verified Partner',
+      bio: targetInquiry.confirmed_arrangement.introduction || CANONICAL_PARTNER_PASSPORTS.DEFAULT.bio,
+    };
   } else {
-    // If specific partner not identified in proposal signature, use UNO1 as canonical licensed guide
     partnerCode = 'UNO1';
     passport = CANONICAL_PARTNER_PASSPORTS.UNO1;
   }
 
   // Check for locally saved/updated passport or photo in safeStorage
   let dynamicBio = passport.bio;
-  let dynamicPhotoUrl = passport.photo_url || '/assets/images/partners/uno_portrait.svg';
+  let dynamicPhotoUrl = targetInquiry?.confirmed_arrangement?.photo_url || passport.photo_url || null;
 
   try {
     const rawStored = safeStorage.getItem(`idemo_partner_passport_${partnerCode}`) ||
@@ -747,7 +756,10 @@ export async function fetchPartnerIntroduction(inquiryId: string): Promise<Partn
         dynamicBio = parsed.intro_published || parsed.intro_draft || parsed.bio;
       }
       if (parsed.photo_url || parsed.published_photo_path || parsed.draft_photo_path) {
-        dynamicPhotoUrl = parsed.photo_url || parsed.published_photo_path || parsed.draft_photo_path;
+        const candidatePhoto = parsed.photo_url || parsed.published_photo_path || parsed.draft_photo_path;
+        if (candidatePhoto && (candidatePhoto.startsWith('/') || candidatePhoto.startsWith('http://') || candidatePhoto.startsWith('https://') || candidatePhoto.startsWith('data:'))) {
+          dynamicPhotoUrl = candidatePhoto;
+        }
       }
     }
   } catch (err) {

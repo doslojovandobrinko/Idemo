@@ -2611,6 +2611,7 @@ export default function App() {
             seasonalTips={SEASONAL_TIPS}
             landingImage={landingImage}
             triggerHaptic={triggerHaptic}
+            hasUnreadBadge={hasUnreadPartnerProposal || hasPartnerUnseenBadge}
           />
         )}
 
@@ -3799,7 +3800,7 @@ export default function App() {
 
 // --- SUB-COMPONENTS ---
 
-function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemTap, triggerHaptic: propHaptic }: any) {
+function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemTap, triggerHaptic: propHaptic, hasUnreadBadge }: any) {
   const safeHaptic = (pattern: number | number[] = 10) => {
     try {
       if (typeof propHaptic === 'function') propHaptic(pattern);
@@ -3881,8 +3882,9 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
       {/* 2. Middle Section (Tactile IDEMO Button + Language Selector - Seamless Background Blend) */}
       <div className="flex-1 flex flex-col justify-center items-center gap-y-2 my-auto w-full min-h-0 relative z-10">
         {/* IDEMO Hero Emblem (Prime Ultra-Resolution, Seamless Blend, Locked 1122:1402) */}
-        <div 
-          className={`relative flex justify-center items-center shrink min-h-0 ${
+        <div className="relative flex justify-center items-center">
+          <div 
+            className={`relative flex justify-center items-center shrink min-h-0 ${
             USE_CUSTOM_HERO_IMAGE 
               ? "w-full max-w-[290px] xs:max-w-[330px] sm:max-w-[370px] aspect-[1122/1402] max-h-[38vh] xs:max-h-[42vh] rounded-[22px] overflow-hidden" 
               : "w-[210px] h-[52px]"
@@ -4025,6 +4027,13 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
             )}
           </motion.div>
         </div>
+        {hasUnreadBadge && (
+          <span 
+            className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-accent-red border-2 border-[#FAF9F5] shadow-md animate-pulse z-30 pointer-events-none shrink-0" 
+            title={language === 'sr' ? 'Nova aktivnost (upit ili odgovor)' : 'New activity (inquiry or response)'}
+          />
+        )}
+      </div>
 
         {/* Language Selector (Exact match to IMG_8431.png reference) */}
         <div className="w-full max-w-[280px] px-1.5 z-50">

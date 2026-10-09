@@ -64,6 +64,25 @@ export function getAllInquiriesV2(): InquiryRecordV2[] {
       }
     }
 
+    // Clean any legacy references to synthetic webp files if present in stored records
+    let cleanedStored = false;
+    for (const inq of inquiriesV2) {
+      if (inq.confirmed_arrangement) {
+        const photo = inq.confirmed_arrangement.photo_url;
+        if (photo && (photo.includes('uno_guide_portrait.webp') || photo.includes('uno_regional_portrait.webp'))) {
+          inq.confirmed_arrangement.photo_url = '/assets/images/partners/uno_portrait.svg';
+          cleanedStored = true;
+        }
+      }
+    }
+    if (cleanedStored) {
+      try {
+        safeStorage.setItem(STORAGE_KEY_V2, JSON.stringify(inquiriesV2));
+      } catch {
+        // Ignore write error if storage is locked
+      }
+    }
+
     return inquiriesV2;
   } catch (err) {
     console.error('Failed to read inquiry storage V2:', err);
@@ -273,6 +292,9 @@ export function getConfirmedArrangementByServerId(
       typeof arrangement.partner_name === 'string' &&
       typeof arrangement.confirmed_terms === 'string'
     ) {
+      if (arrangement.photo_url && (arrangement.photo_url.includes('uno_guide_portrait.webp') || arrangement.photo_url.includes('uno_regional_portrait.webp'))) {
+        arrangement.photo_url = '/assets/images/partners/uno_portrait.svg';
+      }
       return arrangement;
     }
     return null;

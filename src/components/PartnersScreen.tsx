@@ -107,6 +107,7 @@ interface PortalPartner {
   isDemo?: boolean;
   publicCode?: string;
   introduction?: string;
+  photoUrl?: string;
 }
 
 interface Inquiry {
@@ -175,7 +176,8 @@ const INITIAL_PORTAL_PARTNERS: PortalPartner[] = [
     contributions: 50,
     reliability: 99,
     eligibility: true,
-    isDemo: true
+    isDemo: true,
+    photoUrl: '/assets/images/partners/uno_portrait.svg',
   },
   {
     id: 'UNO2',
@@ -200,7 +202,8 @@ const INITIAL_PORTAL_PARTNERS: PortalPartner[] = [
     contributions: 35,
     reliability: 98,
     eligibility: true,
-    isDemo: true
+    isDemo: true,
+    photoUrl: '/assets/images/partners/uno_portrait.svg',
   },
   // 10 Tourist Guides
   { id: 'p-tg-1', pin: '3001', name: 'Belgrade Undercover Walking', category: 'Tourist Guide', status: 'Trusted', capabilities: ['Private Tours', 'Historical Walk', 'Taste Tasting'], languages: ['English', 'Serbian', 'German'], geography: 'Belgrade & Zemun', channels: ['WhatsApp', 'Viber'], contactPhone: '+381631112001', instagram: '@belgrade_undercover', assignedRecs: ['7', '10'], contributions: 48, reliability: 99, eligibility: true },
@@ -1280,13 +1283,39 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
         authenticatedPartnerProfile?.draft_contact_email ||
         'concierge@idemo.travel';
 
+      // Resolve authentic photo from upload preview, storage snapshot, catalog, or canonical portrait
+      const targetPartnerCode = (authenticatedPartnerProfile?.public_code || currentSimulatedPartner?.publicCode || currentSimulatedPartner?.id || catalogPartner?.id || 'UNO1').toUpperCase();
+      let storedPassportPhoto: string | null = null;
+      try {
+        const storedPassportRaw = safeStorage.getItem(`idemo_partner_passport_${targetPartnerCode}`) ||
+                                   safeStorage.getItem(`idemo_partner_passport_${targetPartnerCode.toLowerCase()}`);
+        if (storedPassportRaw) {
+          const parsedStored = JSON.parse(storedPassportRaw);
+          const cand = parsedStored.photo_url || parsedStored.published_photo_path || parsedStored.draft_photo_path;
+          if (cand && (cand.startsWith('/') || cand.startsWith('http://') || cand.startsWith('https://') || cand.startsWith('data:'))) {
+            storedPassportPhoto = cand;
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to resolve stored partner photo for arrangement:', e);
+      }
+
+      const defaultCanonicalPortrait = '/assets/images/partners/uno_portrait.svg';
+
+      const resolvedPhotoUrl = 
+        passportPhotoPreview || 
+        activePhotoUrl || 
+        storedPassportPhoto ||
+        catalogPartner?.photoUrl || 
+        defaultCanonicalPortrait;
+
       const arrangementRecord: ConfirmedArrangementRecord = {
         match_id: matchId,
         partner_name: partnerName,
         partner_code: authenticatedPartnerProfile?.public_code || currentSimulatedPartner?.publicCode || catalogPartner?.publicCode || 'UNO1',
         category: authenticatedPartnerProfile?.category || currentSimulatedPartner?.category || catalogPartner?.category || 'Tourist Guide',
         verification_status: 'IDEMO Verified Host',
-        photo_url: authenticatedPartnerProfile?.photo_url || currentSimulatedPartner?.photoUrl || '/assets/images/partners/uno_portrait.svg',
+        photo_url: resolvedPhotoUrl,
         contact_phone: contactPhone,
         contact_email: contactEmail,
         introduction: authenticatedPartnerProfile?.bio || currentSimulatedPartner?.introduction || catalogPartner?.introduction || null,
@@ -2596,10 +2625,10 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       }
     }
     const currIdLower = (currentSimulatedPartner?.id || activePartnerId || '')?.trim().toLowerCase();
-    if (currIdLower.includes('uno1') || currIdLower.includes('uno2')) {
+    if (currIdLower.includes('uno')) {
       return '/assets/images/partners/uno_portrait.svg';
     }
-    return null;
+    return currentSimulatedPartner?.photoUrl || '/assets/images/partners/uno_portrait.svg';
   }, [passportPhotoPreview, passportPhotoPath, currentSimulatedPartner, activePartnerId]);
 
   // Filtered inquiries for partner active views
