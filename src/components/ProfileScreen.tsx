@@ -1134,7 +1134,27 @@ export default function ProfileScreen({
           })}
         </div>
 
-        {/* 4. Compact CURRENT SELECTION Box */}
+        {/* 4. Full-width Oxblood APPLY Button (Positioned above current selection boxes) */}
+        <button
+          id="mood-orbit-apply-btn"
+          onClick={handleApplyMoodOrbit}
+          className="w-full py-3.5 px-4 rounded-xl font-mono text-[16px] uppercase tracking-[0.2em] font-black transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer select-none active:scale-[0.98] bg-[#800020] hover:bg-[#660019] text-white border border-[#660019]/40"
+        >
+          {appliedToast ? (
+            <>
+              <Check className="w-4 h-4 text-emerald-300 animate-bounce" />
+              <span>
+                {isSr ? 'MOOD ORBITA PRIMENJENA ✓' : isZh ? '已应用 ✓' : isEs ? 'APLICADO ✓' : isDe ? 'ANGEWENDET ✓' : isRu ? 'ПРИМЕНЕНО ✓' : 'MOOD ORBIT APPLIED ✓'}
+              </span>
+            </>
+          ) : (
+            <span>
+              {isSr ? 'PRIMENI' : isZh ? '应用' : isEs ? 'APLICAR' : isDe ? 'ANWENDEN' : isRu ? 'ПРИМЕНИТЬ' : 'APPLY'}
+            </span>
+          )}
+        </button>
+
+        {/* 5. Compact CURRENT SELECTION Box */}
         <div 
           id="current-selection-box"
           className="bg-white/95 border border-[#2D3025]/15 rounded-2xl p-3.5 shadow-2xs text-left"
@@ -1175,28 +1195,8 @@ export default function ProfileScreen({
           </div>
         </div>
 
-        {/* 5. Full-width Oxblood APPLY Button */}
-        <button
-          id="mood-orbit-apply-btn"
-          onClick={handleApplyMoodOrbit}
-          className="w-full py-3.5 px-4 rounded-xl font-mono text-[16px] uppercase tracking-[0.2em] font-black transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer select-none active:scale-[0.98] bg-[#800020] hover:bg-[#660019] text-white border border-[#660019]/40"
-        >
-          {appliedToast ? (
-            <>
-              <Check className="w-4 h-4 text-emerald-300 animate-bounce" />
-              <span>
-                {isSr ? 'MOOD ORBITA PRIMENJENA ✓' : isZh ? '已应用 ✓' : isEs ? 'APLICADO ✓' : isDe ? 'ANGEWENDET ✓' : isRu ? 'ПРИМЕНЕНО ✓' : 'MOOD ORBIT APPLIED ✓'}
-              </span>
-            </>
-          ) : (
-            <span>
-              {isSr ? 'PRIMENI' : isZh ? '应用' : isEs ? 'APLICAR' : isDe ? 'ANWENDEN' : isRu ? 'ПРИМЕНИТЬ' : 'APPLY'}
-            </span>
-          )}
-        </button>
-
-        {/* Fine-Tuning Secondary Control */}
-        <div className="pt-0.5" id="fine-tuning-section">
+        {/* Fine-Tuning Secondary Control - Hidden from user visibility per directive (redundant with 2D Orb field; preserved for structure stability) */}
+        <div className="hidden" id="fine-tuning-section" aria-hidden="true" style={{ display: 'none' }}>
           <button
             type="button"
             onClick={() => {
@@ -1628,51 +1628,6 @@ export default function ProfileScreen({
               )}
             </AnimatePresence>
           </div>
-        </div>
-      </section>
-
-      {/* 8. Existing Interests Controls */}
-      <section className="bg-brand-pearl rounded-[28px] border border-[#2D3025]/10 p-5 space-y-3.5 shadow-[0_2px_8px_rgba(35,37,30,0.02)]" id="interests-section">
-        <div className="flex items-center justify-between border-b border-[#2D3025]/10 pb-2.5">
-          <div className="flex items-center gap-2">
-            <Sparkles className="text-[#800020] w-3.5 h-3.5" />
-            <h2 className="text-[13px] uppercase tracking-[0.25em] font-black text-brand-charcoal">
-              {isSr ? 'GLAVNA INTERESOVANJA' : isZh ? '重点关注领域' : isEs ? 'INTERESES PRINCIPALES' : isDe ? 'HAUPTINTERESSEN' : isRu ? 'ОСНОВНЫЕ ИНТЕРЕСЫ' : 'PRIMARY INTERESTS'}
-            </h2>
-          </div>
-          <span className="text-[12px] font-mono text-brand-charcoal uppercase font-bold">
-            {isSr ? 'VIŠESTRUKI IZBOR' : isZh ? '多选' : 'MULTI-SELECT'}
-          </span>
-        </div>
-
-        <div className="flex flex-wrap gap-2 pt-1">
-          {[
-            { id: Category.WELLBEING, labelSr: 'Velnes', labelZh: '健康理疗', labelEs: 'Bienestar', labelDe: 'Wellness', labelRu: 'Велнес', labelEn: 'Wellbeing' },
-            { id: Category.MEDICAL, labelSr: 'Medicina', labelZh: '医疗健康', labelEs: 'Medicina', labelDe: 'Medizin', labelRu: 'Медицина', labelEn: 'Medical' },
-            { id: Category.NATURE, labelSr: 'Priroda', labelZh: '自然探索', labelEs: 'Naturaleza', labelDe: 'Natur', labelRu: 'Природа', labelEn: 'Nature' },
-            { id: Category.HISTORY, labelSr: 'Istorija', labelZh: '历史文化', labelEs: 'Historia', labelDe: 'Geschichte', labelRu: 'История', labelEn: 'History' },
-            { id: Category.GASTRONOMY, labelSr: 'Gastronomija', labelZh: '美食品鉴', labelEs: 'Gastronomía', labelDe: 'Gastronomie', labelRu: 'Гастрономия', labelEn: 'Gastronomy' },
-            { id: Category.TRAVEL, labelSr: 'Putovanja', labelZh: '旅行观光', labelEs: 'Viajes', labelDe: 'Reisen', labelRu: 'Путешествия', labelEn: 'Travel' },
-            { id: Category.CLUBBING, labelSr: 'Noćni život', labelZh: '俱乐部夜生活', labelEs: 'Vida Nocturna', labelDe: 'Nachtleben', labelRu: 'Клубы', labelEn: 'Clubbing' },
-          ].map((catObj) => {
-            const active = selectedCats.includes(catObj.id);
-            const label = isSr ? catObj.labelSr : isZh ? catObj.labelZh : isEs ? catObj.labelEs : isDe ? catObj.labelDe : isRu ? catObj.labelRu : catObj.labelEn;
-            return (
-              <button
-                key={catObj.id}
-                type="button"
-                onClick={() => toggleCat(catObj.id)}
-                className={`px-4 py-2.5 rounded-full text-[15px] font-sans font-bold uppercase tracking-wide transition-all border cursor-pointer flex items-center gap-1.5 active:translate-y-[1px] shadow-2xs ${
-                  active 
-                    ? 'bg-[#800020] text-white border-[#800020]' 
-                    : 'bg-white border-[#2D3025]/20 text-brand-charcoal hover:bg-[#FAF9F5]'
-                }`}
-              >
-                <span>{label}</span>
-                {active && <span className="text-[10px]">●</span>}
-              </button>
-            );
-          })}
         </div>
       </section>
 

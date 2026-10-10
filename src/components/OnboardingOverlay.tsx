@@ -981,7 +981,9 @@ export function OnboardingOverlay({
                 </div>
 
                 <div 
-                  className="w-full aspect-square max-w-[min(100%,min(420px,46vh))] max-h-[min(420px,46vh)] relative bg-white/85 backdrop-blur-md border border-[#E2DFC2]/90 rounded-[32px] overflow-hidden select-none shadow-md mx-auto flex items-center justify-center p-3 cursor-pointer"
+                  id="intro-card-1-2d-field"
+                  style={{ aspectRatio: '1 / 1' }}
+                  className="w-full aspect-square max-w-[380px] xs:max-w-[400px] sm:max-w-[420px] relative bg-white/85 backdrop-blur-md border border-[#E2DFC2]/90 rounded-[32px] overflow-hidden select-none shadow-md mx-auto flex items-center justify-center p-3 cursor-pointer shrink-0"
                   onPointerDown={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect();
                     const x = Math.max(0.08, Math.min(0.92, (e.clientX - rect.left) / rect.width));

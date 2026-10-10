@@ -3886,7 +3886,7 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
           <div 
             className={`relative flex justify-center items-center shrink min-h-0 ${
             USE_CUSTOM_HERO_IMAGE 
-              ? "w-full max-w-[290px] xs:max-w-[330px] sm:max-w-[370px] aspect-[1122/1402] max-h-[38vh] xs:max-h-[42vh] rounded-[22px] overflow-hidden" 
+              ? "w-full max-w-[360px] xs:max-w-[380px] sm:max-w-[420px] aspect-[1122/1402] max-h-[48vh] xs:max-h-[52vh] rounded-[22px] overflow-hidden" 
               : "w-[210px] h-[52px]"
           }`} 
           style={{ perspective: "1000px" }}
@@ -7517,7 +7517,7 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
       .replace(/\r?\n/g, '\\n');
   };
 
-  const handleSyncCalendar = () => {
+  const handleSyncCalendar = async () => {
     triggerHaptic(5);
     
     const calendarEmptyMsgs: Record<string, string> = {
@@ -7597,7 +7597,7 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
           'IDEMO Curated Travel — Private & Offline-Ready'
         ].filter(Boolean);
 
-        const fullDescription = descriptionParts.join('\\n\\n');
+        const fullDescription = descriptionParts.join('\n\n');
 
         icsContent.push('BEGIN:VEVENT');
         icsContent.push(`UID:idemo-rec-${item.id}-${startDateStr}@idemo.app`);
@@ -7622,21 +7622,47 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
 
       icsContent.push('END:VCALENDAR');
 
-      const blob = new Blob([icsContent.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', 'idemo-travel-plan.ics');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      const icsString = icsContent.join('\r\n');
+      const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent || '');
+      let sharedViaSheet = false;
+
+      // On iOS / modern mobile browsers, sharing the .ics file opens the native Apple Calendar import prompt directly!
+      if (typeof navigator !== 'undefined' && typeof navigator.canShare === 'function') {
+        try {
+          const file = new File([icsString], 'idemo-travel-plan.ics', { type: 'text/calendar;charset=utf-8' });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              title: 'IDEMO Travel Plan',
+              files: [file]
+            });
+            sharedViaSheet = true;
+          }
+        } catch (shareErr: any) {
+          if (shareErr.name === 'AbortError') return;
+        }
+      }
+
+      if (!sharedViaSheet) {
+        const blob = new Blob([icsString], { type: 'text/calendar;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', 'idemo-travel-plan.ics');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+
+      const iosHint = isSr 
+        ? 'Kalendar pripremljen! Na iOS-u, otvorite preuzeti .ics fajl (iz Safari preuzimanja ↓ ili Files aplikacije) da ga dodate u Apple Kalendar.'
+        : 'Calendar ready! On iOS, open the downloaded .ics file (from Safari Downloads ↓ or Files app) to add/update in Apple Calendar.';
 
       setCalendarToast({
         type: 'success',
-        message: calendarSuccessMsgs[language] || calendarSuccessMsgs['en']
+        message: isIOS && !sharedViaSheet ? iosHint : (calendarSuccessMsgs[language] || calendarSuccessMsgs['en'])
       });
-      setTimeout(() => setCalendarToast(null), 4000);
+      setTimeout(() => setCalendarToast(null), 8000);
     } catch (err) {
       console.error('Calendar generation/sync failed', err);
       setCalendarToast({

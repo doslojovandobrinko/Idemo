@@ -1022,6 +1022,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   const [passportPhotoMime, setPassportPhotoMime] = useState<string | null>(null);
   const [passportPhotoConsent, setPassportPhotoConsent] = useState<boolean>(false);
   const [passportReviewStatus, setPassportReviewStatus] = useState<string>('draft');
+  const [passportModified, setPassportModified] = useState<boolean>(false);
   const [passportReviewNote, setPassportReviewNote] = useState<string | null>(null);
   const [passportSaving, setPassportSaving] = useState<boolean>(false);
   const [passportMsg, setPassportMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
@@ -1425,6 +1426,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       setPassportPhotoMime(null);
       setPassportPhotoConsent(false);
       setPassportReviewStatus('draft');
+      setPassportModified(false);
       setPassportReviewNote(null);
       setPassportSaving(false);
       setPassportMsg(null);
@@ -1473,6 +1475,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           } else {
             setAppliedRecsNote('');
           }
+          setPassportModified(false);
           return;
         } catch (e) {
           console.warn('Failed parsing stored partner passport:', e);
@@ -1487,6 +1490,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
         setPassportReviewStatus('approved');
         setAppliedRecs(['1', '2', '3']);
       }
+      setPassportModified(false);
 
       if (currentPartnerId) {
         setPartnerProposalsList(getPartnerProposalsByPartnerId(currentPartnerId));
@@ -1547,6 +1551,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           if (res.content.draft_contact_email || res.content.published_contact_email) {
             setProfContactEmail(res.content.draft_contact_email || res.content.published_contact_email || '');
           }
+          setPassportModified(false);
         } else {
           loadStoredOrCanonical();
         }
@@ -3963,6 +3968,9 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
             const hasUnseenInquiries = checkPartnerHasUnseenInquiries(activeInquiryIds);
             const hasUnseenMessages = currentMessages.length > getPartnerSeenMessageCount(currentSimulatedPartner.id);
 
+            const isPassportSubmitted = passportReviewStatus === 'pending_review';
+            const showSubmittedGreen = isPassportSubmitted && !passportModified;
+
             return (
               <div className="space-y-6 animate-fade-in max-w-xl mx-auto pb-12">
                 {/* HEADER */}
@@ -4149,7 +4157,10 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                         rows={4}
                         placeholder="e.g. Licensed professional guide with over 10 years of experience in Serbia's cultural heritage, natural meanders, and bespoke gastronomy tours across Belgrade..."
                         value={passportIntroDraft}
-                        onChange={(e) => setPassportIntroDraft(e.target.value)}
+                        onChange={(e) => {
+                          setPassportIntroDraft(e.target.value);
+                          setPassportModified(true);
+                        }}
                         className="w-full p-3 bg-white border border-[#2D3025]/15 rounded-xl text-xs text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none"
                       />
                     </div>
@@ -4242,6 +4253,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                   if (uploadRes.success) {
                                     setPassportPhotoPath(authRes.path);
                                     setPassportPhotoMime(authRes.mime_type || file.type);
+                                    setPassportModified(true);
                                     setPassportMsg({ type: 'success', text: isSr ? 'Fotografija uspešno otpremljena.' : 'Photo uploaded successfully to partner storage.' });
                                     // Cache locally as well
                                     if (targetId) {
@@ -4270,6 +4282,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                     setPassportPhotoPath(dataUrl);
                                     setPassportPhotoMime(file.type);
                                     setPassportPhotoPreview(dataUrl);
+                                    setPassportModified(true);
                                     setPassportMsg({
                                       type: 'success',
                                       text: isSr ? 'Fotografija uspešno ažurirana (lokalni pregled).' : 'Photo updated successfully (local preview).'
@@ -4309,6 +4322,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                   setPassportPhotoPath(null);
                                   setPassportPhotoPreview(null);
                                   setPhotoLoadError(false);
+                                  setPassportModified(true);
                                   setPassportMsg({
                                     type: 'info',
                                     text: isSr ? 'Fotografija uklonjena iz pasoša.' : 'Photo removed from passport.'
@@ -4343,7 +4357,10 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                         <input
                           type="checkbox"
                           checked={passportPhotoConsent}
-                          onChange={(e) => setPassportPhotoConsent(e.target.checked)}
+                          onChange={(e) => {
+                            setPassportPhotoConsent(e.target.checked);
+                            setPassportModified(true);
+                          }}
                           className="mt-0.5 rounded border-[#2D3025]/20 text-[#8A1F1F] focus:ring-[#8A1F1F]"
                         />
                         <span className="text-[10px] leading-snug">
@@ -4389,7 +4406,10 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             type="text"
                             placeholder="e.g. +381 64 1234567"
                             value={profContactPhone}
-                            onChange={(e) => setProfContactPhone(e.target.value)}
+                            onChange={(e) => {
+                              setProfContactPhone(e.target.value);
+                              setPassportModified(true);
+                            }}
                             className="w-full px-3 py-1.5 bg-white border border-[#2D3025]/15 rounded-lg text-xs text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none"
                           />
                         </div>
@@ -4401,7 +4421,10 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             type="email"
                             placeholder="e.g. contact@serbiaguide.rs"
                             value={profContactEmail}
-                            onChange={(e) => setProfContactEmail(e.target.value)}
+                            onChange={(e) => {
+                              setProfContactEmail(e.target.value);
+                              setPassportModified(true);
+                            }}
                             className="w-full px-3 py-1.5 bg-white border border-[#2D3025]/15 rounded-lg text-xs text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none"
                           />
                         </div>
@@ -4546,6 +4569,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                       key={rec.id}
                                       onClick={() => {
                                         triggerHaptic(6);
+                                        setPassportModified(true);
                                         setAppliedRecs(prev =>
                                           prev.includes(rec.id) ? prev.filter(id => id !== rec.id) : [...prev, rec.id]
                                         );
@@ -4612,6 +4636,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                     type="button"
                                     onClick={() => {
                                       triggerHaptic(6);
+                                      setPassportModified(true);
                                       setAppliedRecs(prev => prev.filter(id => id !== recId));
                                     }}
                                     className="text-brand-charcoal/40 hover:text-[#8A1F1F] cursor-pointer"
@@ -4633,7 +4658,10 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             type="text"
                             placeholder={isSr ? 'npr. Licencirani planinski vodič, Uvac & Tara od 2018.' : 'e.g., Licensed mountain guide, Uvac & Tara since 2018'}
                             value={appliedRecsNote}
-                            onChange={(e) => setAppliedRecsNote(e.target.value)}
+                            onChange={(e) => {
+                              setAppliedRecsNote(e.target.value);
+                              setPassportModified(true);
+                            }}
                             className="w-full px-3 py-1.5 bg-[#FAF9F5] border border-[#2D3025]/15 focus:border-[#8A1F1F] rounded-xl text-xs font-sans text-brand-charcoal outline-none transition-colors"
                           />
                         </div>
@@ -4763,17 +4791,32 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                           setPassportSaving(false);
                           if (subRes.success) {
                             setPassportReviewStatus('pending_review');
-                            setPassportMsg({ type: 'success', text: isSr ? 'Podneto na IDEMO urednički pregled.' : 'Submitted for IDEMO Editorial Review.' });
+                            setPassportModified(false);
+                            setPassportMsg(null);
                           } else if (subRes.error && subRes.error.includes('BACKEND_UNAVAILABLE')) {
                             setPassportReviewStatus('pending_review');
-                            setPassportMsg({ type: 'success', text: isSr ? 'Podneto na IDEMO pregled (Demo režim).' : 'Submitted for IDEMO Review (Demo mode).' });
+                            setPassportModified(false);
+                            setPassportMsg(null);
                           } else {
                             setPassportMsg({ type: 'error', text: subRes.error || (isSr ? 'Greška pri podnošenju.' : 'Failed to submit.') });
                           }
                         }}
-                        className="px-3.5 py-2 bg-[#8A1F1F] text-white hover:bg-[#8A1F1F]/90 text-[10px] font-mono font-bold uppercase rounded-xl transition-colors cursor-pointer"
+                        className={`px-3.5 py-2 text-[10px] font-mono font-bold uppercase rounded-xl transition-all cursor-pointer shadow-xs ${
+                          showSubmittedGreen
+                            ? 'bg-emerald-700 hover:bg-emerald-800 text-white border border-emerald-600/40'
+                            : 'bg-[#8A1F1F] hover:bg-[#8A1F1F]/90 text-white'
+                        }`}
                       >
-                        {isSr ? 'Podnesi na IDEMO pregled' : 'Submit For IDEMO Review'}
+                        {passportSaving ? (
+                          <span>{isSr ? 'Podnošenje na pregled...' : 'Submitting for review...'}</span>
+                        ) : showSubmittedGreen ? (
+                          <span className="flex items-center gap-1.5">
+                            <span>✓</span>
+                            <span>{isSr ? 'PODNETO na IDEMO pregled' : 'SUBMITTED For IDEMO Review'}</span>
+                          </span>
+                        ) : (
+                          <span>{isSr ? 'Podnesi na IDEMO pregled' : 'Submit For IDEMO Review'}</span>
+                        )}
                       </button>
                     </div>
                   </div>

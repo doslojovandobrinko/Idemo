@@ -1078,6 +1078,75 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
     setShowCalendar(false);
   };
 
+  const handleExportSingleEvent = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    triggerHaptic(8);
+    const startDate = item.scheduledDate ? new Date(item.scheduledDate) : new Date();
+    const startYear = startDate.getFullYear();
+    const startMonth = String(startDate.getMonth() + 1).padStart(2, '0');
+    const startDay = String(startDate.getDate()).padStart(2, '0');
+    const startDateStr = `${startYear}${startMonth}${startDay}`;
+
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + 1);
+    const endYear = endDate.getFullYear();
+    const endMonth = String(endDate.getMonth() + 1).padStart(2, '0');
+    const endDay = String(endDate.getDate()).padStart(2, '0');
+    const endDateStr = `${endYear}${endMonth}${endDay}`;
+
+    const itemTitle = item.title || 'IDEMO Experience';
+    const itemLocation = item.location || 'Serbia';
+    const itemDesc = item.shortDescription || item.longDescription || '';
+
+    const icsLines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//IDEMO//Travel Concierge//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'X-WR-CALNAME:IDEMO Travel Plan',
+      'BEGIN:VEVENT',
+      `UID:idemo-rec-${item.id}-${startDateStr}@idemo.app`,
+      `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z`,
+      `DTSTART;VALUE=DATE:${startDateStr}`,
+      `DTEND;VALUE=DATE:${endDateStr}`,
+      `SUMMARY:${itemTitle}`,
+      itemDesc ? `DESCRIPTION:${itemDesc}` : null,
+      `LOCATION:${itemLocation}`,
+      'STATUS:CONFIRMED',
+      'TRANSP:TRANSPARENT',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].filter(Boolean);
+
+    const icsContent = icsLines.join('\r\n');
+
+    if (typeof navigator !== 'undefined' && typeof navigator.canShare === 'function') {
+      try {
+        const file = new File([icsContent], `${item.id}-event.ics`, { type: 'text/calendar;charset=utf-8' });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: itemTitle,
+            files: [file]
+          });
+          return;
+        }
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+      }
+    }
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${item.id}-event.ics`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const getDisplayDate = (dateStr: string | undefined) => {
     if (!dateStr) return '';
     const parts = dateStr.split('T')[0].split('-');
@@ -1201,6 +1270,17 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
         </div>
         
         <div className="flex items-center gap-2">
+          {item.scheduledDate && (
+            <button 
+              type="button"
+              onClick={handleExportSingleEvent}
+              title={(PLAN_CARD_TR[language] || PLAN_CARD_TR['en']).add_to_calendar}
+              className="text-[11px] font-mono font-bold text-[#3E5037] hover:text-[#1E2E20] border border-[#3E5037]/30 hover:border-[#3E5037] px-2.5 py-1 rounded-full cursor-pointer transition-colors active:scale-95 flex items-center gap-1 bg-white/60"
+            >
+              <Calendar size={12} className="text-[#3E5037]" />
+              <span>{(PLAN_CARD_TR[language] || PLAN_CARD_TR['en']).add_to_calendar}</span>
+            </button>
+          )}
           <button 
             type="button"
             onClick={handleRescheduleClick}
@@ -1821,160 +1901,6 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                                 </p>
                               </div>
                             </div>
-
-                            {/* Spoken Languages */}
-                            {introData.languages && introData.languages.length > 0 && (
-                              <div className="space-y-1">
-                                <span className="text-[8px] font-bold uppercase tracking-wider text-[#3E5037] block">
-                                  {language === 'sr' ? 'Jezici sporazumevanja' : 'Spoken Languages'}
-                                </span>
-                                <div className="flex flex-wrap gap-1">
-                                  {introData.languages.map((lang, idx) => (
-                                    <span key={idx} className="text-[8px] px-2 py-0.5 rounded-md bg-[#FAF9F5] border border-[#C5A059]/30 text-[#1E2E20] font-medium flex items-center gap-1">
-                                      <span>🌐</span>
-                                      <span>{lang}</span>
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Operating Service Areas */}
-                            {introData.service_areas && introData.service_areas.length > 0 && (
-                              <div className="space-y-1">
-                                <span className="text-[8px] font-bold uppercase tracking-wider text-[#3E5037] block">
-                                  {language === 'sr' ? 'Područja delovanja' : 'Operating Areas'}
-                                </span>
-                                <div className="flex flex-wrap gap-1">
-                                  {introData.service_areas.map((area, idx) => (
-                                    <span key={idx} className="text-[8px] px-2 py-0.5 rounded-md bg-[#FAF9F5] border border-[#3E5037]/20 text-[#1E2E20] font-medium flex items-center gap-1">
-                                      <span>📍</span>
-                                      <span>{area}</span>
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Verified Capabilities */}
-                            {introData.capabilities && introData.capabilities.length > 0 && (
-                              <div className="space-y-1">
-                                <span className="text-[8px] font-bold uppercase tracking-wider text-[#3E5037] block">
-                                  {language === 'sr' ? 'Verifikovane kompetencije' : 'Verified Capabilities & Standards'}
-                                </span>
-                                <div className="flex flex-wrap gap-1">
-                                  {introData.capabilities.map((cap, idx) => (
-                                    <span key={idx} className="text-[8px] px-2 py-0.5 rounded-md bg-[#3E5037]/5 border border-[#3E5037]/20 text-[#3E5037] font-medium flex items-center gap-1">
-                                      <span>✓</span>
-                                      <span>{cap}</span>
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Curated Portfolio / Experiences */}
-                            {introData.portfolio_items && introData.portfolio_items.length > 0 && (
-                              <div className="space-y-1.5 pt-1.5 border-t border-[#3E5037]/10">
-                                <span className="text-[8px] font-bold uppercase tracking-wider text-[#3E5037] block">
-                                  {language === 'sr' ? 'Karakteristična iskustva i ture' : 'Curated Host Experiences'}
-                                </span>
-                                <div className="space-y-1.5">
-                                  {introData.portfolio_items.map((item, idx) => (
-                                    <div key={idx} className="p-2 bg-[#FAF9F5] rounded-lg border border-[#E5E3DB] text-left">
-                                      <div className="text-[9px] font-bold text-[#1E2E20] flex items-center gap-1">
-                                        <span>⭐</span>
-                                        <span>{item.title}</span>
-                                      </div>
-                                      {item.description && (
-                                        <div className="text-[8px] text-[#555348] mt-0.5 leading-snug pl-4">
-                                          {item.description}
-                                        </div>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Direct contact channels once unlocked, or privacy safeguard note */}
-                            {introData.contact_phone || introData.contact_email ? (
-                              <div className="p-2.5 bg-emerald-50 rounded-lg border border-emerald-200 text-left space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[8.5px] font-bold uppercase tracking-wider text-emerald-900 flex items-center gap-1">
-                                    <span>🔓</span>
-                                    <span>{language === 'sr' ? 'Direktan kontakt otključan' : 'Direct Contact Unlocked'}</span>
-                                  </span>
-                                  <span className="text-[7.5px] font-mono text-emerald-700 bg-emerald-100/80 px-1.5 py-0.5 rounded">
-                                    {language === 'sr' ? '1 na 1 kanal' : '1 on 1 channel'}
-                                  </span>
-                                </div>
-                                <div className="flex flex-wrap gap-1.5 pt-0.5">
-                                  {introData.contact_phone && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const waUrl = `https://wa.me/${sanitizePhoneForWhatsApp(introData.contact_phone)}?text=${encodeURIComponent(
-                                          language === 'sr'
-                                            ? `Zdravo ${introData.partner_name}, javljam se povodom IDEMO aranžmana.`
-                                            : `Hello ${introData.partner_name}, reaching out regarding IDEMO arrangement.`
-                                        )}`;
-                                        routeOutboundAction({
-                                          url: waUrl,
-                                          type: 'EXTERNAL_INTENT',
-                                          fallbackData: { copyText: introData.contact_phone }
-                                        });
-                                      }}
-                                      className="px-2 py-1 bg-[#25D366]/20 hover:bg-[#25D366]/30 border border-[#25D366]/40 text-[#075E54] rounded-md text-[8.5px] font-bold flex items-center gap-1 cursor-pointer"
-                                    >
-                                      <span>💬 WhatsApp:</span>
-                                      <span className="font-mono">{introData.contact_phone}</span>
-                                    </button>
-                                  )}
-                                  {introData.contact_phone && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        routeOutboundAction({
-                                          url: `tel:${introData.contact_phone}`,
-                                          type: 'EXTERNAL_INTENT',
-                                          fallbackData: { copyText: introData.contact_phone }
-                                        });
-                                      }}
-                                      className="px-2 py-1 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-md text-[8.5px] font-bold flex items-center gap-1 font-mono cursor-pointer"
-                                    >
-                                      <span>📞</span>
-                                      <span>{introData.contact_phone}</span>
-                                    </button>
-                                  )}
-                                  {introData.contact_email && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        routeOutboundAction({
-                                          url: `mailto:${introData.contact_email}`,
-                                          type: 'EXTERNAL_INTENT',
-                                          fallbackData: { copyText: introData.contact_email }
-                                        });
-                                      }}
-                                      className="px-2 py-1 bg-white hover:bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-md text-[8.5px] font-bold flex items-center gap-1 font-mono truncate cursor-pointer"
-                                    >
-                                      <span>✉️</span>
-                                      <span className="truncate">{introData.contact_email}</span>
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="p-2 bg-[#FAF9F5] rounded-lg border border-[#E5E3DB] flex items-start gap-1.5 text-[8px] text-[#555348] font-sans">
-                                <span className="text-xs">🔒</span>
-                                <span>
-                                  {language === 'sr'
-                                    ? 'Direktni kontakt podaci (WhatsApp, telefon, email) biće vam otključani čim partner prihvati upit.'
-                                    : 'Direct contact channels (WhatsApp, phone, email) unlock immediately once partner accepts the inquiry.'}
-                                </span>
-                              </div>
-                            )}
                           </div>
                         ) : (
                           <p className="text-[9px] font-sans text-[#8C8A7D] italic">
@@ -2117,28 +2043,6 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                         <p className="text-[9px] text-[#555348] line-clamp-2 italic mt-0.5 font-sans">
                           "{confirmedArrangement.introduction || introData?.introduction}"
                         </p>
-                      )}
-                      {/* Partner verified portfolio meta */}
-                      {((confirmedArrangement.languages && confirmedArrangement.languages.length > 0) ||
-                        (confirmedArrangement.service_areas && confirmedArrangement.service_areas.length > 0) ||
-                        (confirmedArrangement.capabilities && confirmedArrangement.capabilities.length > 0)) && (
-                        <div className="flex flex-wrap gap-1 pt-1 mt-1 border-t border-[#3E5037]/10">
-                          {confirmedArrangement.languages?.map((lang, idx) => (
-                            <span key={`lang-${idx}`} className="text-[7.5px] px-1.5 py-0.5 rounded bg-[#FAF9F5] border border-[#C5A059]/30 text-[#1E2E20] font-medium">
-                              🌐 {lang}
-                            </span>
-                          ))}
-                          {confirmedArrangement.service_areas?.map((area, idx) => (
-                            <span key={`area-${idx}`} className="text-[7.5px] px-1.5 py-0.5 rounded bg-[#FAF9F5] border border-[#3E5037]/20 text-[#1E2E20] font-medium">
-                              📍 {area}
-                            </span>
-                          ))}
-                          {confirmedArrangement.capabilities?.map((cap, idx) => (
-                            <span key={`cap-${idx}`} className="text-[7.5px] px-1.5 py-0.5 rounded bg-[#3E5037]/5 border border-[#3E5037]/20 text-[#3E5037] font-medium">
-                              ✓ {cap}
-                            </span>
-                          ))}
-                        </div>
                       )}
                     </div>
                   </div>

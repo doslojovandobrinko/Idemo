@@ -12,6 +12,8 @@
  * 5. Post-confirmation unlocks direct channels and persists passport photo
  */
 
+import fs from 'fs';
+import path from 'path';
 import { PartnerIntroductionResult } from '../lib/inquiryService';
 import { ConfirmedArrangementRecord } from '../types';
 
@@ -185,6 +187,36 @@ export function runPartnerIntroductionDisclosureTests(): TestResult[] {
       name: 'Full portfolio data validation: Languages, service areas, capabilities, and portfolio items',
       expected: 'languages>=2, service_areas>=1, capabilities>=2, portfolio_items>=1',
       actual: `languages=${richIntro.languages?.length}, service_areas=${richIntro.service_areas?.length}, capabilities=${richIntro.capabilities?.length}, portfolio_items=${richIntro.portfolio_items?.length}`,
+      passed,
+    });
+  }
+
+  // TEST 6: Visitor Passport Decluttering Invariant
+  // User-facing presentation displays strictly photo and intro textual part; operational data is reserved for IDEMO Studio review
+  {
+    const planCardSource = fs.readFileSync(path.resolve(process.cwd(), 'src/components/PlanCard.tsx'), 'utf8');
+
+    // Confirm PlanCard renders effectivePhotoUrl and introData.introduction
+    const rendersPhoto = planCardSource.includes('effectivePhotoUrl && !passportPhotoError') && planCardSource.includes('introData.partner_name');
+    const rendersIntroText = planCardSource.includes('"{introData.introduction}"');
+    
+    // Confirm PlanCard does NOT render languages/service_areas/capabilities/portfolio in the visitor Meet Your Host accordion
+    const accordionBlockMatch = planCardSource.match(/\{introOpen && \([\s\S]*?\)\}/);
+    const accordionBlock = accordionBlockMatch ? accordionBlockMatch[0] : '';
+    const hasDeclutteredAccordion = 
+      !accordionBlock.includes('introData.languages') &&
+      !accordionBlock.includes('introData.service_areas') &&
+      !accordionBlock.includes('introData.capabilities') &&
+      !accordionBlock.includes('introData.portfolio_items') &&
+      !accordionBlock.includes('sanitizePhoneForWhatsApp(introData.contact_phone)');
+
+    const passed = rendersPhoto && rendersIntroText && hasDeclutteredAccordion;
+
+    results.push({
+      testNumber: 6,
+      name: 'Visitor Passport Decluttering Invariant: Visitor view displays strictly photo and intro textual part',
+      expected: 'photo and intro text rendered; operational metadata reserved for IDEMO Studio',
+      actual: `rendersPhoto: ${rendersPhoto}, rendersIntroText: ${rendersIntroText}, declutteredAccordion: ${hasDeclutteredAccordion}`,
       passed,
     });
   }
