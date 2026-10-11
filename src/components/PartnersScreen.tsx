@@ -8,9 +8,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   KeyRound, CheckCircle2, Globe, Phone, MapPin, Sparkles, Lock, Unlock, X, 
   AlertCircle, Gift, Map as MapIcon, Search, Filter, CheckCircle, Award,
-  ShieldCheck, Plus, Send, Check, Users, MessageCircle, Eye, ChevronRight, Briefcase, Loader2, Calendar, XCircle, Trash2, Camera,
+  ShieldCheck, Plus, Send, Check, Users, MessageCircle, Eye, ChevronRight, ChevronLeft, Briefcase, Loader2, Calendar, XCircle, Trash2, Camera,
   FolderArchive, ChevronDown, Zap, UserCheck, MessageSquare, Compass, Package, Layers, Image as ImageIcon
 } from 'lucide-react';
+import { 
+  getPartnerCarouselSlides, 
+  getActiveSlotIndex, 
+  PartnerCarouselSlide, 
+  EVENT_PARTNER_CAROUSEL_UPDATED 
+} from '../lib/partnerCarouselStorage';
 import { compilePackageCollage } from '../lib/collageCompiler';
 import { 
   getPartnerProposalsByPartnerId, 
@@ -340,45 +346,134 @@ function PremiumRotatingImage() {
   );
 }
 
-const LEVEL1_HERO_IMAGES = [
-  "/src/assets/images/idemo_kablar_viewpoint.webpsrc/assets/images/via_ferrata_kablar_climb_1778848271890.png", // fallback in case of single string combine typo
-  "/src/assets/images/idemo_kablar_viewpoint.webp",
-  "/src/assets/images/uvac_meanders_1778841048759.png",
-  "/src/assets/images/banjska_stena_outlook_1778841232535.png",
-  "/src/assets/images/golubac_fortress_danube_1778842880053.png",
-  "/src/assets/images/mokra_gora_sargan_eight_1778842930420.png",
-  "/src/assets/images/belgrade_waterfront_rooftop_1778846450339.png",
-  "/src/assets/images/tara_national_park_forest_1778843961956.png"
-].filter(path => !path.includes("webpsrc")); // clean up any typo
+function PartnerCardTopCarousel({ isSr }: { isSr: boolean }) {
+  const [slides, setSlides] = useState<PartnerCarouselSlide[]>(() => getPartnerCarouselSlides());
+  const [currentIndex, setCurrentIndex] = useState<number>(() => getActiveSlotIndex(getPartnerCarouselSlides()));
 
-function Level1RotatingHeroImage() {
-  const [index, setIndex] = useState(() => Math.floor(Math.random() * LEVEL1_HERO_IMAGES.length));
-
+  // Sync with IDEMO Studio live updates
   useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    if (mediaQuery.matches) {
-      return;
-    }
-    const interval = setInterval(() => {
-      setIndex(prev => (prev + 1) % LEVEL1_HERO_IMAGES.length);
-    }, 25000); // gentler rotation every 25 seconds
-    return () => clearInterval(interval);
+    const handleUpdate = () => {
+      const updated = getPartnerCarouselSlides();
+      setSlides(updated);
+      setCurrentIndex(getActiveSlotIndex(updated));
+    };
+    window.addEventListener(EVENT_PARTNER_CAROUSEL_UPDATED, handleUpdate);
+    return () => window.removeEventListener(EVENT_PARTNER_CAROUSEL_UPDATED, handleUpdate);
   }, []);
 
+  // Periodic check (every 60s) for twice-daily rotation trigger (06:00 AM / 18:00 PM)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const activeIdx = getActiveSlotIndex(slides);
+      setCurrentIndex(activeIdx);
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [slides]);
+
+  const slide = slides[currentIndex] || slides[0];
+  const activeSystemIndex = getActiveSlotIndex(slides);
+
+  const handlePrev = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setCurrentIndex(prev => (prev - 1 + slides.length) % slides.length);
+  };
+
+  const handleNext = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setCurrentIndex(prev => (prev + 1) % slides.length);
+  };
+
+  const handleSelectIndex = (idx: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setCurrentIndex(idx);
+  };
+
   return (
-    <div className="relative w-full aspect-[16/10] bg-brand-charcoal/5 rounded-t-[28px] overflow-hidden border-b border-[#2D3025]/10">
+    <div className="relative w-full h-48 sm:h-52 overflow-hidden bg-[#23251E] group select-none">
+      {/* Background Image with smooth transition */}
       <AnimatePresence mode="wait">
         <motion.img
-          key={index}
-          src={LEVEL1_HERO_IMAGES[index]}
-          alt="IDEMO Partner Experience"
+          key={slide.id || currentIndex}
+          src={slide.imageUrl}
+          alt={isSr ? slide.titleSr : slide.titleEn}
+          loading="lazy"
+          className="absolute inset-0 w-full h-full object-cover object-center"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 1.2, ease: "easeInOut" }}
-          className="absolute inset-0 w-full h-full object-cover"
+          transition={{ duration: 0.5, ease: "easeInOut" }}
         />
       </AnimatePresence>
+
+      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/20 pointer-events-none" />
+
+      {/* Top Badges */}
+      <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10 pointer-events-none">
+        <span className="px-3 py-1 rounded-full bg-black/40 backdrop-blur-md border border-white/20 text-[9px] font-mono font-bold tracking-[0.25em] text-[#C5A059] uppercase">
+          {isSr ? (slide.tagSr || 'PARTNERSKI PORTFOLIO') : (slide.tagEn || 'PARTNER PORTFOLIO')}
+        </span>
+        <div className="flex items-center gap-1.5">
+          {currentIndex === activeSystemIndex && (
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Active slot right now" />
+          )}
+          <span className="text-[9px] font-mono text-white/70 uppercase tracking-widest font-semibold">
+            SERBIA CONCIERGE
+          </span>
+        </div>
+      </div>
+
+      {/* Left/Right Navigation Arrows */}
+      <button
+        onClick={handlePrev}
+        aria-label="Previous slide"
+        className="absolute left-2.5 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-black/35 hover:bg-black/60 text-white/80 hover:text-white backdrop-blur-sm border border-white/10 flex items-center justify-center transition-all opacity-70 hover:opacity-100 cursor-pointer active:scale-95"
+      >
+        <ChevronLeft size={16} />
+      </button>
+
+      <button
+        onClick={handleNext}
+        aria-label="Next slide"
+        className="absolute right-2.5 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-black/35 hover:bg-black/60 text-white/80 hover:text-white backdrop-blur-sm border border-white/10 flex items-center justify-center transition-all opacity-70 hover:opacity-100 cursor-pointer active:scale-95"
+      >
+        <ChevronRight size={16} />
+      </button>
+
+      {/* Bottom Content: Title, Location & Timing */}
+      <div className="absolute bottom-3.5 left-5 right-5 z-10 pointer-events-none">
+        <h2 className="text-xl sm:text-2xl font-serif font-black text-white tracking-tight leading-tight drop-shadow-sm">
+          {isSr ? slide.titleSr : slide.titleEn}
+        </h2>
+        <div className="flex items-center justify-between mt-0.5">
+          <p className="text-[10px] font-mono text-[#C5A059] uppercase tracking-widest font-bold drop-shadow-sm">
+            📍 {isSr ? slide.locationSr : slide.locationEn}
+          </p>
+          <span className="text-[8.5px] font-mono text-white/80 bg-black/40 px-2 py-0.5 rounded-full border border-white/15 uppercase tracking-wider backdrop-blur-xs">
+            {isSr ? slide.slotLabelSr : slide.slotLabelEn}
+          </span>
+        </div>
+
+        {/* Carousel Micro Indicators (clickable) */}
+        <div className="flex items-center gap-1 mt-2 pointer-events-auto">
+          {slides.map((s, idx) => (
+            <button
+              key={s.id || idx}
+              onClick={(e) => handleSelectIndex(idx, e)}
+              className={`h-1 rounded-full transition-all cursor-pointer ${
+                idx === currentIndex
+                  ? 'w-5 bg-[#C5A059]'
+                  : idx === activeSystemIndex
+                  ? 'w-2 bg-emerald-400/80 hover:bg-emerald-300'
+                  : 'w-1.5 bg-white/40 hover:bg-white/70'
+              }`}
+              title={isSr ? s.slotLabelSr : s.slotLabelEn}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -2988,32 +3083,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
               {!networkUnlocked ? (
                 /* LEVEL 1: PRIVATE PARTNER NETWORK ACCESS */
                 <div className="bg-white border border-[#E5E3DB] rounded-[32px] shadow-[0_12px_40px_rgba(35,37,30,0.06)] overflow-hidden text-left flex flex-col animate-fade-in max-w-md mx-auto">
-                  {/* TOP SECTION (~45%): Full-width Panoramic Hero Image Strip */}
-                  <div className="relative w-full h-48 sm:h-52 overflow-hidden bg-[#23251E]">
-                    <img 
-                      src="/src/assets/images/golubac_fortress_danube_1778842880053.webp" 
-                      alt="Serbia Destination Landscape" 
-                      loading="lazy"
-                      className="w-full h-full object-cover object-center"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/20" />
-                    <div className="absolute top-4 left-4 right-4 flex items-center justify-between">
-                      <span className="px-3 py-1 rounded-full bg-black/40 backdrop-blur-md border border-white/20 text-[9px] font-mono font-bold tracking-[0.25em] text-[#C5A059] uppercase">
-                        PARTNER PORTFOLIO
-                      </span>
-                      <span className="text-[9px] font-mono text-white/70 uppercase tracking-widest font-semibold">
-                        SERBIA CONCIERGE
-                      </span>
-                    </div>
-                    <div className="absolute bottom-4 left-6 right-6">
-                      <h2 className="text-xl sm:text-2xl font-serif font-black text-white tracking-tight leading-tight">
-                        {tL0('gatewayTitle')}
-                      </h2>
-                      <p className="text-[10px] font-mono text-[#C5A059] uppercase tracking-widest mt-0.5 font-bold">
-                        {tL0('gatewayTag')}
-                      </p>
-                    </div>
-                  </div>
+                  {/* TOP SECTION (~45%): Full-width Panoramic Hero Image Strip with 14-Slot Twice-Daily Carousel */}
+                  <PartnerCardTopCarousel isSr={isSr} />
 
                   {/* BOTTOM SECTION (~55%): Informational & Auth Controls */}
                   <div className="p-6 sm:p-8 space-y-5 bg-[#FAF9F5]">

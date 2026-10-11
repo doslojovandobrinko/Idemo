@@ -28,17 +28,18 @@ import { calculatePartnerReadiness } from './utils/scoring';
 import { getAllPartners, getPartnerLifecycleState } from '../../lib/partnerLifecycleService';
 import { StudioUserSession } from './types';
 import { StudioPassportReviewView } from './StudioPassportReviewView';
+import { StudioPartnerCarousel } from './StudioPartnerCarousel';
 
 interface StudioPartnersProps {
   targetPartnerId?: string;
   session?: StudioUserSession;
-  initialSubTab?: 'directory' | 'passport-review';
+  initialSubTab?: 'directory' | 'passport-review' | 'gateway-carousel';
 }
 
 export function StudioPartners({ targetPartnerId, session, initialSubTab = 'directory' }: StudioPartnersProps) {
   const [partnerList, setPartnerList] = useState<Partner[]>(() => getAllPartners());
   const [selectedPartnerId, setSelectedPartnerId] = useState<string>('P-001');
-  const [activeSubTab, setActiveSubTab] = useState<'directory' | 'passport-review'>(initialSubTab);
+  const [activeSubTab, setActiveSubTab] = useState<'directory' | 'passport-review' | 'gateway-carousel'>(initialSubTab);
 
   useEffect(() => {
     if (targetPartnerId) {
@@ -165,9 +166,23 @@ export function StudioPartners({ targetPartnerId, session, initialSubTab = 'dire
           <FileCheck size={14} className={activeSubTab === 'passport-review' ? 'text-[#C5A059]' : ''} />
           <span>Passport Review</span>
         </button>
+
+        <button
+          onClick={() => setActiveSubTab('gateway-carousel')}
+          className={`px-4 py-2 rounded-xl font-mono text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+            activeSubTab === 'gateway-carousel'
+              ? 'bg-[#23251E] text-white shadow-xs'
+              : 'bg-white text-[#8C8A7D] hover:text-[#1E2E20] border border-[#E5E3DB]'
+          }`}
+        >
+          <Compass size={14} className={activeSubTab === 'gateway-carousel' ? 'text-[#C5A059]' : ''} />
+          <span>Gateway Carousel</span>
+        </button>
       </div>
 
-      {activeSubTab === 'passport-review' ? (
+      {activeSubTab === 'gateway-carousel' ? (
+        <StudioPartnerCarousel />
+      ) : activeSubTab === 'passport-review' ? (
         <StudioPassportReviewView session={session} />
       ) : (
         <>
