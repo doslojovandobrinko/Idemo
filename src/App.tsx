@@ -177,7 +177,8 @@ import {
   CustomExploreIcon, 
   CustomPlannerIcon, 
   CustomPartnersIcon, 
-  CustomProfileIcon 
+  CustomProfileIcon,
+  CustomGlobeIcon
 } from './components/IdemoCustomNavIcons';
 import {
   EditorialSummitVapourIcon,
@@ -259,7 +260,7 @@ function NavButton({ icon, label, active, onClick, isQuiet, showIndicator }: { i
     <button
       onClick={onClick}
       aria-label={label + (showIndicator ? ' (New partner response)' : '')}
-      className={`flex flex-col items-center justify-center gap-1 transition-all cursor-pointer relative ${
+      className={`flex flex-col items-center justify-center gap-1 transition-all cursor-pointer relative min-w-[42px] max-w-[62px] ${
         active ? 'text-brand-charcoal font-bold scale-105' : isQuiet ? 'text-brand-charcoal/30 hover:text-brand-charcoal/60' : 'text-brand-charcoal/40 hover:text-brand-charcoal/70'
       }`}
     >
@@ -269,7 +270,7 @@ function NavButton({ icon, label, active, onClick, isQuiet, showIndicator }: { i
           <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-accent-red border-2 border-white animate-pulse shrink-0" />
         )}
       </div>
-      <span className="text-[10px] uppercase font-mono tracking-wider">{label}</span>
+      <span className="text-[9px] uppercase font-mono tracking-wider truncate max-w-[56px] text-center">{label}</span>
       {showIndicator && <span className="sr-only">New partner response</span>}
     </button>
   );
@@ -2801,16 +2802,17 @@ export default function App() {
 
       {/* Bottom Navigation */}
       {currentScreen !== 'landing' && (
-        <nav className="fixed bottom-0 left-0 right-0 max-w-[420px] mx-auto bg-white/90 backdrop-blur-xl border-t border-border-main px-4 pt-4 pb-10 flex justify-between items-center z-[110] rounded-t-[40px] shadow-[0_-8px_40px_rgba(0,0,0,0.08)]">
-          <div className="flex justify-between items-center flex-1 pr-6">
-            <NavButton icon={<CustomHomeIcon size={25} />} label={t.home} active={currentScreen === 'home'} onClick={() => { triggerHaptic(8); navigateToScreen('home'); }} />
-            <NavButton icon={<CustomExploreIcon size={25} />} label={t.explore} active={currentScreen === 'explore'} onClick={() => { triggerHaptic(8); navigateToScreen('explore'); }} />
-            <NavButton icon={<CustomPlannerIcon size={25} />} label={t.plan} active={currentScreen === 'plan'} onClick={() => { triggerHaptic(8); navigateToScreen('plan'); }} showIndicator={hasUnreadPartnerProposal} />
-            <NavButton icon={<CustomProfileIcon size={25} />} label={t.profile} active={currentScreen === 'profile'} onClick={() => { triggerHaptic(8); navigateToScreen('profile'); }} />
+        <nav className="fixed bottom-0 left-0 right-0 max-w-[420px] mx-auto bg-white/90 backdrop-blur-xl border-t border-border-main px-3 xs:px-4 pt-3.5 pb-9 flex justify-between items-center z-[110] rounded-t-[40px] shadow-[0_-8px_40px_rgba(0,0,0,0.08)]">
+          <div className="flex justify-between items-center flex-1 pr-3 xs:pr-5">
+            <NavButton icon={<CustomGlobeIcon size={24} />} label={t.language || 'Language'} active={currentScreen === 'landing'} onClick={() => { triggerHaptic(8); navigateToScreen('landing'); }} />
+            <NavButton icon={<CustomHomeIcon size={24} />} label={t.home} active={currentScreen === 'home'} onClick={() => { triggerHaptic(8); navigateToScreen('home'); }} />
+            <NavButton icon={<CustomExploreIcon size={24} />} label={t.explore} active={currentScreen === 'explore'} onClick={() => { triggerHaptic(8); navigateToScreen('explore'); }} />
+            <NavButton icon={<CustomPlannerIcon size={24} />} label={t.plan} active={currentScreen === 'plan'} onClick={() => { triggerHaptic(8); navigateToScreen('plan'); }} showIndicator={hasUnreadPartnerProposal} />
+            <NavButton icon={<CustomProfileIcon size={24} />} label={t.profile} active={currentScreen === 'profile'} onClick={() => { triggerHaptic(8); navigateToScreen('profile'); }} />
           </div>
-          <div className="pl-6 border-l border-transparent shrink-0 flex items-center justify-center">
+          <div className="pl-3 xs:pl-5 border-l border-border-main/20 shrink-0 flex items-center justify-center">
             <NavButton 
-              icon={<CustomPartnersIcon size={25} />} 
+              icon={<CustomPartnersIcon size={24} />} 
               label={t.partners || 'Partners'} 
               active={currentScreen === 'partners'} 
               onClick={() => { triggerHaptic(8); navigateToScreen('partners'); }} 

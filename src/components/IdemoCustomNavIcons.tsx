@@ -114,3 +114,27 @@ export function CustomProfileIcon({ size = 25, className = "" }: { size?: number
     </svg>
   );
 }
+
+export function CustomGlobeIcon({ size = 25, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg 
+      width={size} 
+      height={size} 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2.6" 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+      className={className}
+    >
+      {/* Outer world sphere */}
+      <circle cx="12" cy="12" r="8.8" />
+      {/* Equatorial latitude line */}
+      <path d="M 3.2 12 H 20.8" />
+      {/* West-East longitude meridian arcs */}
+      <path d="M 12 3.2 C 7.8 6.5, 7.8 17.5, 12 20.8" />
+      <path d="M 12 3.2 C 16.2 6.5, 16.2 17.5, 12 20.8" />
+    </svg>
+  );
+}

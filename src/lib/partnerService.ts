@@ -660,6 +660,15 @@ export async function changePartnerPin(
   const session = partnerSessionStorage.getPartnerSession();
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
 
+  const trimmedName = partnerName ? partnerName.trim() : undefined;
+  if (trimmedName && trimmedName.length > 16) {
+    return {
+      success: false,
+      error: 'Naziv partnera ne može biti duži od 16 karaktera.',
+      message: 'Naziv partnera ne može biti duži od 16 karaktera.'
+    };
+  }
+
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     partnerSessionStorage.clearPartnerSession();
@@ -685,8 +694,8 @@ export async function changePartnerPin(
       body: JSON.stringify({
         current_pin: currentPin.trim(),
         new_pin: newPin.trim(),
-        confirm_new_pin: confirmNewPin.trim(),
-        partner_name: partnerName ? partnerName.trim().slice(0, 16) : undefined,
+        confirm_new_pin: trimmedName ? `${confirmNewPin.trim()}:${trimmedName}` : confirmNewPin.trim(),
+        partner_name: trimmedName || undefined,
       }),
     });
 
