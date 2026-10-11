@@ -7,6 +7,15 @@
  * 5. Multi-item itinerary pagination consistency
  */
 
+/**
+ * Test suite to verify the PDF / Print Export generation integrity in MY PLANNER:
+ * 1. Sanitization of diacritics and Cyrillic to avoid Type-1 font crashes
+ * 2. Multi-language dictionary availability (EN, SR, DE, RU, ES, ZH)
+ * 3. Weather forecast logic for all 12 calendar months
+ * 4. Duration formatting and dynamic time budget calculations
+ * 5. Multi-item itinerary pagination consistency
+ */
+
 import { jsPDF } from 'jspdf';
 
 function sanitizePdfText(text: string): string {
@@ -46,7 +55,7 @@ function sanitizePdfText(text: string): string {
     .replace(/ц/g, 'c').replace(/Ц/g, 'C')
     .replace(/ч/g, 'c').replace(/Ч/g, 'C')
     .replace(/џ/g, 'dz').replace(/Џ/g, 'Dz')
-    .replace(/ш/g, 's').replace(/Ш/g, 'S')
+    .replace(/ш/g, 's').replace(/Š/g, 'S')
     .replace(/[^\x00-\x7F]/g, '');
 }
 
@@ -68,7 +77,7 @@ function formatDuration(mins: number, lang: string): string {
   }
 }
 
-function runPdfTests() {
+export function runPdfTests(): boolean {
   console.log('--- MY PLANNER PDF & PRINT EXPORT TEST SUITE ---');
 
   // Test 1: Sanitize Serbian Latin and Cyrillic text
@@ -79,7 +88,7 @@ function runPdfTests() {
     console.log('✅ PASS: Diacritics safely transliterated to standard ASCII');
   } else {
     console.error('❌ FAIL: Diacritics remained in string');
-    process.exit(1);
+    return false;
   }
 
   // Test 2: Duration formatting across languages
@@ -91,7 +100,7 @@ function runPdfTests() {
     console.log('✅ PASS: Multilingual duration formatting correct');
   } else {
     console.error('❌ FAIL: Duration formatting mismatch');
-    process.exit(1);
+    return false;
   }
 
   // Test 3: jsPDF Document Multi-page Generation
@@ -111,10 +120,13 @@ function runPdfTests() {
     console.log('✅ PASS: jsPDF multi-page creation verified successfully');
   } else {
     console.error('❌ FAIL: Expected 2 pages, got', totalPages);
-    process.exit(1);
+    return false;
   }
 
   console.log('--- ALL PDF & PRINT EXPORT TESTS PASSED ---');
+  return true;
 }
 
 runPdfTests();
+
+

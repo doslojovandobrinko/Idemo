@@ -58,6 +58,7 @@ import {
   saveConfirmedArrangementV2
 } from '../lib/inquiryStorage';
 import { CachedProposalRecord, InquiryRecordV2, ConfirmedArrangementRecord } from '../types';
+import { ensureEnglishSync, ensureEnglishPartnerResponse } from '../lib/inquiryTranslation';
 import { 
   checkPartnerHasUnseenInquiries, 
   markPartnerInquiriesAsSeen, 
@@ -1256,8 +1257,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
         response_id: responseId,
         response_type: alternativeOffer ? 'propose_alternative' : 'accept_as_requested',
         message: alternativeOffer 
-          ? (alternativeOffer.note ? `${alternativeOffer.note} (${alternativeOffer.date} ${alternativeOffer.time})` : (isSr ? `Predložen zamenski termin: ${alternativeOffer.date} ${alternativeOffer.time}` : `Alternative proposed: ${alternativeOffer.date} ${alternativeOffer.time}`))
-          : message,
+          ? (alternativeOffer.note ? `${ensureEnglishSync(alternativeOffer.note)} (${alternativeOffer.date} ${alternativeOffer.time})` : `Alternative proposed: ${alternativeOffer.date} ${alternativeOffer.time}`)
+          : ensureEnglishSync(message),
         proposed_start_at: proposedStartAt,
         proposed_end_at: proposedEndAt,
         cached_at: Date.now(),
@@ -1368,7 +1369,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       triggerHaptic(12);
       const targetInq = inquiries.find(inq => inq.matchId === matchId || inq.id === matchId);
       const partnerName = authenticatedPartnerProfile?.name || currentSimulatedPartner?.name || 'Partner';
-      bridgePartnerAcceptanceToVisitor(targetInq || { matchId }, partnerName, isSr ? 'Prihvaćen predlog putnika' : 'Counter offer accepted');
+      bridgePartnerAcceptanceToVisitor(targetInq || { matchId }, partnerName, 'Counter offer accepted');
       setInquiries(prev => prev.map(inq => (inq.matchId === matchId || inq.id === matchId) ? { ...inq, status: 'Locked / Accepted', matchStatus: 'responded' } : inq));
       setPartnerActionFeedback({
         type: 'success',
@@ -2272,8 +2273,15 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     setActionLoading(prev => ({ ...prev, [inqKey]: true }));
 
     const typedText = (customMessage !== undefined ? customMessage : activeAnswerText[inqId])?.trim();
-    const defaultMsg = isSr ? 'Upit prihvaćen. Radujem se saradnji.' : 'Accepted via Partner Portal';
-    const messageToPersist = typedText || defaultMsg;
+    const defaultMsg = 'Inquiry accepted. Looking forward to hosting you.';
+    let messageToPersist = defaultMsg;
+    if (typedText) {
+      try {
+        messageToPersist = await ensureEnglishPartnerResponse(typedText);
+      } catch {
+        messageToPersist = ensureEnglishSync(typedText);
+      }
+    }
 
     try {
       if (partnerSessionStorage.hasActiveSession()) {
@@ -2397,7 +2405,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
     const partner = partnersList.find(p => p.id === partnerId);
     const partnerName = partner?.name || currentSimulatedPartner?.name || authenticatedPartnerProfile?.name || 'Partner';
-    bridgePartnerAcceptanceToVisitor(targetInquiry || { id: inqId }, partnerName, trimmed);
+    bridgePartnerAcceptanceToVisitor(targetInquiry || { id: inqId }, partnerName, ensureEnglishSync(trimmed));
     setPartnerActionFeedback({
       type: 'success',
       message: isSr
@@ -2435,11 +2443,12 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     });
     syncPortalState(partnersList, updated);
 
+    const englishNote = note ? ensureEnglishSync(note) : '';
     bridgePartnerAcceptanceToVisitor(
       targetInq || { id: inqId },
       partnerName,
-      note || `Alternative: ${date} ${time}`,
-      { date, time, note }
+      englishNote || `Alternative proposed: ${date} ${time}`,
+      { date, time, note: englishNote }
     );
     setPartnerActionFeedback({
       type: 'success',

@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Compass, Search, Filter, Edit, Eye, CheckCircle2, AlertCircle, Sparkles, Tag, Plus, ShieldCheck, AlertTriangle, X } from 'lucide-react';
+import { Compass, Search, Filter, Edit, Eye, CheckCircle2, AlertCircle, Sparkles, Tag, Plus, ShieldCheck, AlertTriangle, X, Award } from 'lucide-react';
+import PremiumBadge from '../PremiumBadge';
 import { Recommendation, Category } from '../../types';
 import { INITIAL_RECOMMENDATIONS } from '../../constants';
 import { draftExpansionPool } from '../../data/recommendations/serbia/draft_expansion';
@@ -210,6 +211,17 @@ export function StudioRecommendations({
       const next = { ...editorialStatuses, [recId]: newStatus };
       onUpdateEditorialStatuses(next);
     }
+  };
+
+  const handleBadgeChange = (recId: string, badgeTier?: 'silver' | 'gold' | 'platinum') => {
+    const target = allRecs.find(r => r.id === recId);
+    if (!target) return;
+    const currentSt = editorialStatuses[recId] || (INITIAL_RECOMMENDATIONS.some(i => i.id === recId && (i.publicationStatus === 'CANONICAL' || i.publicationStatus === 'PUBLISHED')) ? 'APPROVED' : 'CANDIDATE');
+    const updated: Recommendation = {
+      ...target,
+      badge: badgeTier
+    };
+    handleSaveFromEditor(updated, currentSt as any);
   };
 
   const handleCreateNew = () => {
@@ -481,6 +493,9 @@ export function StudioRecommendations({
                       <span className="px-2 py-0.5 rounded-md bg-[#FAF9F5] border border-[#E5E3DB] text-[9px] font-mono uppercase font-bold text-[#8A1F1F]">
                         {rec.category}
                       </span>
+                      {rec.badge && (
+                        <PremiumBadge type={rec.badge} compact />
+                      )}
                     </div>
                     <h4 className="font-serif font-bold text-sm text-[#1E2E20] truncate">
                       {rec.title}
@@ -535,9 +550,16 @@ export function StudioRecommendations({
                     {activeRec.category}
                   </span>
                 </div>
-                <h3 className="font-serif text-xl font-bold text-[#1E2E20]">
-                  {activeRec.title}
-                </h3>
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="font-serif text-xl font-bold text-[#1E2E20]">
+                    {activeRec.title}
+                  </h3>
+                  {activeRec.badge && (
+                    <div className="shrink-0 mt-0.5">
+                      <PremiumBadge type={activeRec.badge} compact />
+                    </div>
+                  )}
+                </div>
                 <p className="text-xs text-[#8C8A7D] font-mono">
                   {activeRec.location}
                 </p>
@@ -623,6 +645,64 @@ export function StudioRecommendations({
                   <span>Preview in Traveler App</span>
                 </button>
               )}
+
+              {/* Quick Curator Distinction Badge Affixing */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block font-mono text-[9.5px] uppercase font-bold text-[#8C8A7D]">
+                    Curator Distinction Badge
+                  </label>
+                  <span className="font-mono text-[9px] text-[#8C8A7D] font-bold">
+                    {activeRec.badge ? activeRec.badge.toUpperCase() : 'STANDARD (NONE)'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-1.5 font-mono text-[10px]">
+                  <button
+                    type="button"
+                    onClick={() => handleBadgeChange(activeRec.id, undefined)}
+                    className={`py-2 px-1 rounded-xl border text-center font-bold uppercase transition-all cursor-pointer ${
+                      !activeRec.badge
+                        ? 'bg-[#23251E] text-white border-[#23251E]'
+                        : 'bg-[#FAF9F5] text-[#1E2E20] border-[#E5E3DB] hover:border-[#23251E]/30'
+                    }`}
+                  >
+                    None
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBadgeChange(activeRec.id, 'silver')}
+                    className={`py-1.5 px-1 rounded-xl border text-center font-bold uppercase transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                      activeRec.badge === 'silver'
+                        ? 'bg-[#CAD2C5]/30 border-[#94A3B8] ring-2 ring-[#94A3B8]'
+                        : 'bg-[#FAF9F5] text-[#475569] border-[#E5E3DB] hover:border-[#94A3B8]'
+                    }`}
+                  >
+                    <PremiumBadge type="silver" compact />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBadgeChange(activeRec.id, 'gold')}
+                    className={`py-1.5 px-1 rounded-xl border text-center font-bold uppercase transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                      activeRec.badge === 'gold'
+                        ? 'bg-[#FDE68A]/30 border-[#D97706] ring-2 ring-[#D97706]'
+                        : 'bg-[#FAF9F5] text-[#92400E] border-[#E5E3DB] hover:border-[#D97706]'
+                    }`}
+                  >
+                    <PremiumBadge type="gold" compact />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBadgeChange(activeRec.id, 'platinum')}
+                    className={`py-1.5 px-1 rounded-xl border text-center font-bold uppercase transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                      activeRec.badge === 'platinum'
+                        ? 'bg-[#E0E7FF]/40 border-[#4338CA] ring-2 ring-[#4338CA]'
+                        : 'bg-[#FAF9F5] text-[#3730A3] border-[#E5E3DB] hover:border-[#4338CA]'
+                    }`}
+                  >
+                    <PremiumBadge type="platinum" compact />
+                  </button>
+                </div>
+              </div>
 
             {/* Quick Status Setter */}
             <div>

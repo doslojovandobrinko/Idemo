@@ -68,6 +68,7 @@ import PremiumBadge from './components/PremiumBadge';
 import PlanCard from './components/PlanCard';
 import QRScanner from './components/QRScanner';
 import { LazyImage } from './components/LazyImage';
+import CulturalQuiz from './components/CulturalQuiz';
 import uvacHeroImg from './assets/images/uvac_meanders_1778841048759.webp';
 import golubacHeroImg from './assets/images/golubac_fortress_danube_1778842880053.webp';
 import manasijaHeroImg from './assets/images/manasija_monastery_1778841065960.webp';
@@ -2621,6 +2622,7 @@ export default function App() {
             likedIds={likedIds}
             language={language}
             recommendations={rankedRecommendations}
+            allRecommendations={allRecommendations}
             onNavigateToProfile={() => navigateToScreen('profile')}
             seasonalTips={SEASONAL_TIPS}
             onSelectRec={handleSelectRec}
@@ -2630,6 +2632,8 @@ export default function App() {
             onToggleLowSignal={toggleLowSignalMode}
             onEmblemTap={handleStudioEmblemTap}
             triggerHaptic={triggerHaptic}
+            budget={budget}
+            time={time}
           />
         )}
 
@@ -4131,29 +4135,35 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
   );
 }
 
-function PulsatingProfileButton({ onClick, language, size = 48, iconSize = 20 }: any) {
+function PulsatingProfileButton({ 
+  onClick, 
+  language, 
+  size = 48, 
+  iconSize = 20,
+  budget = 250,
+  time = 4
+}: any) {
   const [isPressed, setIsPressed] = useState(false);
-  const [time, setTime] = useState(() => new Date());
 
-  useEffect(() => {
-    let frameId: number;
-    const tick = () => {
-      setTime(new Date());
-      frameId = requestAnimationFrame(tick);
-    };
-    frameId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frameId);
-  }, []);
+  const text = "TO START CLICK HERE";
 
-  const secondsVal = time.getSeconds() + time.getMilliseconds() / 1000;
-  const minutesVal = time.getMinutes() + secondsVal / 60;
-  const hoursVal = (time.getHours() % 12) + minutesVal / 60;
+  // Match Intro Card 1 magnetic visual dial calculation
+  const SNAP_TIMES = [4, 8, 12, 24, 36, 72];
+  const SNAP_ANGLES = [0, 60, 120, 180, 240, 300];
 
-  const hourAngle = hoursVal * 30;
-  const minuteAngle = minutesVal * 6;
-  const secondAngle = secondsVal * 6;
-  
-  const text = "IT ALL STARTS HERE : IDEMO • IT ALL STARTS HERE : IDEMO • ";
+  const computeAngle = (tVal: number) => {
+    for (let i = 0; i < SNAP_TIMES.length - 1; i++) {
+      if (tVal >= SNAP_TIMES[i] && tVal <= SNAP_TIMES[i + 1]) {
+        const r = (tVal - SNAP_TIMES[i]) / (SNAP_TIMES[i + 1] - SNAP_TIMES[i]);
+        return SNAP_ANGLES[i] + r * (SNAP_ANGLES[i + 1] - SNAP_ANGLES[i]);
+      }
+    }
+    return 0;
+  };
+
+  const visualAngle = computeAngle(time || 4);
+  const ratio = Math.max(0, Math.min(1, ((budget || 250) - 100) / 400));
+  const outerBezelWidth = 8 + ratio * 4;
   
   // Custom micro-jitter haptic values for premium tactile physical feel on press
   const jitterX = isPressed ? [0, -1.2, 1.2, -0.8, 0.8, -0.4, 0.4, 0] : 0;
@@ -4170,21 +4180,35 @@ function PulsatingProfileButton({ onClick, language, size = 48, iconSize = 20 }:
       className="relative flex items-center justify-center cursor-pointer select-none outline-none group active:outline-none"
       style={{ width: size, height: size }}
     >
-      {/* Pulsating Ambient Outer Teal Glow */}
+      {/* Prominent Radiating Oxblood Ripple Pulse (Draws Visitor Attention) */}
       <motion.div 
         animate={{ 
-          scale: isPressed ? 0.95 : [1, 1.15, 1],
-          opacity: isPressed ? 0.1 : [0.2, 0.4, 0.2] 
+          scale: [1, 1.38, 1.62],
+          opacity: [0.65, 0.22, 0] 
         }}
         transition={{ 
-          duration: 3, 
+          duration: 2.4, 
+          repeat: Infinity, 
+          ease: "easeOut" 
+        }}
+        className="absolute inset-[-4px] rounded-full border-2 border-[#800020]/70 pointer-events-none"
+      />
+
+      {/* Prominent Breathing Oxblood Ambient Core Glow */}
+      <motion.div 
+        animate={{ 
+          scale: isPressed ? 0.95 : [1, 1.26, 1],
+          opacity: isPressed ? 0.2 : [0.55, 0.95, 0.55] 
+        }}
+        transition={{ 
+          duration: 2.4, 
           repeat: isPressed ? 0 : Infinity, 
           ease: "easeInOut" 
         }}
-        className="absolute inset-0 rounded-full bg-accent-teal/15 blur-md pointer-events-none"
+        className="absolute inset-[-8px] rounded-full bg-[#800020]/45 blur-lg pointer-events-none"
       />
       
-      {/* Circular Rotating Text: "IT ALL STARTS HERE : IDEMO" */}
+      {/* Circular Rotating Text: "TO START CLICK HERE" */}
       <motion.div
         animate={{ rotate: 360 }}
         transition={{ 
@@ -4203,7 +4227,10 @@ function PulsatingProfileButton({ onClick, language, size = 48, iconSize = 20 }:
             {/* Circular text path centered at (50, 50) with radius 36.5 */}
             <path id="buttonCirclePath" d="M 50, 50 m -36.5, 0 a 36.5,36.5 0 1,1 73,0 a 36.5,36.5 0 1,1 -73,0" />
           </defs>
-          <text className="text-[12px] uppercase font-mono font-black tracking-[0.16em] fill-brand-charcoal/45 group-hover:fill-accent-teal transition-colors duration-300">
+          <text 
+            className="text-[14.4px] uppercase font-mono font-black tracking-[0.16em] fill-brand-charcoal/45 group-hover:fill-[#800020] transition-colors duration-300"
+            style={{ fontSize: '14.4px' }}
+          >
             <textPath xlinkHref="#buttonCirclePath" startOffset="0%">
               {text}
             </textPath>
@@ -4211,15 +4238,15 @@ function PulsatingProfileButton({ onClick, language, size = 48, iconSize = 20 }:
         </svg>
       </motion.div>
 
-      {/* The 3D Tactile Mood ORB */}
+      {/* The 3D Tactile Mood ORB - Visually consistent with Intro Card 1 */}
       <motion.div
         animate={{
           scale: isPressed ? 0.92 : 1,
           x: jitterX,
           y: isPressed ? [3, 2.2, 3.8, 2.4, 3.6, 2.7, 3.3, 3] : 0, // Sinks 3px down + high-frequency vibration
           boxShadow: isPressed 
-            ? "0 2px 4px rgba(15, 23, 42, 0.15), inset 0 2px 4px rgba(0,0,0,0.15)"
-            : "0 8px 16px rgba(15, 23, 42, 0.12), 0 3px 5px rgba(15, 23, 42, 0.08), inset 0 1.5px 0.5px rgba(255,255,255,0.65)"
+            ? "0 2px 4px rgba(128, 0, 32, 0.2), inset 0 2px 4px rgba(0,0,0,0.15)"
+            : "0 6px 16px rgba(128, 0, 32, 0.16), 0 2px 6px rgba(15, 23, 42, 0.08), inset 0 1.5px 0.5px rgba(255,255,255,0.65)"
         }}
         transition={isPressed ? {
           x: { repeat: Infinity, duration: 0.15, ease: "linear" },
@@ -4235,7 +4262,7 @@ function PulsatingProfileButton({ onClick, language, size = 48, iconSize = 20 }:
       >
         <svg viewBox="-100 -100 200 200" className="w-full h-full select-none pointer-events-none overflow-hidden rounded-full">
           <defs>
-            {/* Metallic Titanium Outer Ring Bezel */}
+            {/* Metallic Titanium Outer Ring Bezel matching Intro Card 1 */}
             <linearGradient id="orbButtonBezel" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0%" stopColor="#FFFFFF" />
               <stop offset="20%" stopColor="#F4F4F5" />
@@ -4247,306 +4274,116 @@ function PulsatingProfileButton({ onClick, language, size = 48, iconSize = 20 }:
               <stop offset="100%" stopColor="#18181B" />
             </linearGradient>
 
-            {/* Slate Navy Time Segment (Bottom-Left) */}
+            {/* Slate Navy Time Segment matching Intro Card 1 */}
             <linearGradient id="orbButtonTime" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#1E293B" />
               <stop offset="100%" stopColor="#0F172A" />
             </linearGradient>
 
-            {/* Rose Gold Budget Segment (Top-Right) */}
+            {/* IDEMO Oxblood Red Budget Segment matching Intro Card 1 */}
             <linearGradient id="orbButtonBudget" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#FB7185" />
-              <stop offset="100%" stopColor="#E11D48" />
+              <stop offset="0%" stopColor={(budget || 250) >= 300 ? "#9E2A2A" : "#800020"} />
+              <stop offset="100%" stopColor={(budget || 250) >= 300 ? "#6B001B" : "#500014"} />
             </linearGradient>
 
-            {/* Glass Convex Reflection Layer Highlight */}
+            {/* Glass Convex Reflection matching Intro Card 1 */}
             <radialGradient id="orbButtonReflection" cx="30%" cy="30%" r="70%">
               <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.45" />
               <stop offset="50%" stopColor="#FFFFFF" stopOpacity="0.08" />
               <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
             </radialGradient>
 
-            {/* Sapphire glass AR Coating Sheen */}
+            {/* Sapphire glass AR Sheen matching Intro Card 1 */}
             <linearGradient id="orbButtonSapphire" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0%" stopColor="#38BDF8" stopOpacity="0.12" />
               <stop offset="30%" stopColor="#818CF8" stopOpacity="0.04" />
               <stop offset="70%" stopColor="#C084FC" stopOpacity="0" />
               <stop offset="100%" stopColor="#38BDF8" stopOpacity="0.06" />
             </linearGradient>
-
-            {/* Chromalight Glow Filter for Luxury Watch Luminescence */}
-            <filter id="orbButtonChroma" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur in="SourceGraphic" stdDeviation="1.2" result="blur1" />
-              <feGaussianBlur in="SourceGraphic" stdDeviation="3.0" result="blur2" />
-              <feMerge>
-                <feMergeNode in="blur2" />
-                <feMergeNode in="blur1" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-
-            {/* Luminous paint gradient mimicking Rolex Chromalight */}
-            <linearGradient id="orbButtonLume" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#E0F2FE" />
-              <stop offset="60%" stopColor="#00F0FF" />
-              <stop offset="100%" stopColor="#0284C7" />
-            </linearGradient>
-
-            {/* Embedded luxury watch motion style for sweeping seconds */}
-            <style>{`
-              @keyframes watchSecondHandSweep {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-              }
-              .watch-second-hand-sweep {
-                transform-origin: 0px 0px;
-                animation: watchSecondHandSweep 60s linear infinite;
-              }
-            `}</style>
           </defs>
 
           {/* Time Segment base layer */}
           <circle r="98" fill="url(#orbButtonTime)" stroke="#334155" strokeWidth="1" />
 
-          {/* Upper Budget segment overlaid & divided dynamically by organic wavy liquid line */}
+          {/* Budget segment overlaid */}
           <path 
             d="M -90,0 C -45,12 45,-12 90,0 A 90,90 0 0,0 -90,0 Z" 
             fill="url(#orbButtonBudget)" 
-            transform="rotate(-22)"
+            transform={`rotate(${visualAngle})`}
           />
 
-          {/* Polished Metallic Beveled Divider on Dial Seam to split segments elegantly */}
+          {/* Beveled Seam Divider */}
+          <path 
+            d="M -90,0 C -45,12 45,-12 90,0" 
+            fill="none" 
+            stroke="#0F172A" 
+            strokeWidth="2" 
+            className="opacity-45 pointer-events-none"
+            transform={`rotate(${visualAngle})`}
+          />
           <path 
             d="M -90,0 C -45,12 45,-12 90,0" 
             fill="none" 
             stroke="#E2E8F0" 
-            strokeWidth="0.8" 
+            strokeWidth="0.75" 
             className="opacity-90 pointer-events-none"
-            transform="rotate(-22)"
+            transform={`rotate(${visualAngle})`}
           />
 
-          {/* Rolex Explorer Fine 60-Minute Dial Track & Hourly Grade */}
-          {Array.from({ length: 60 }).map((_, i) => {
-            const angle = i * 6;
-            const isHourMarker = i % 5 === 0;
-            
-            // Skip drawing standard ticks on positions with big Arabic numerals or the triangle index
-            if (isHourMarker) {
-              const hour = i / 5;
-              if (hour === 0 || hour === 3 || hour === 6 || hour === 9) {
-                return null;
-              }
-            }
-            
-            const r1 = isHourMarker ? 80 : 83;
-            const r2 = 85;
-            const rad = (angle * Math.PI) / 180;
-            const x1 = r1 * Math.cos(rad);
-            const y1 = r1 * Math.sin(rad);
-            const x2 = r2 * Math.cos(rad);
-            const y2 = r2 * Math.sin(rad);
-            
-            return (
-              <line 
-                key={i} 
-                x1={x1} 
-                y1={y1} 
-                x2={x2} 
-                y2={y2} 
-                stroke="#FFFFFF" 
-                className={isHourMarker ? 'opacity-40' : 'opacity-15'}
-                strokeWidth={isHourMarker ? 0.75 : 0.4} 
-              />
-            );
-          })}
-
-          {/* Rolex Explorer 12 O'Clock Inverted Triangle (Chromalight) */}
-          <polygon 
-            points="-5.5,-83 5.5,-83 0,-71" 
-            fill="url(#orbButtonLume)" 
-            stroke="#E4E4E7" 
-            strokeWidth="0.5" 
-            filter="url(#orbButtonChroma)" 
-            className="pointer-events-none"
-          />
-
-          {/* Rolex Explorer High-Contrast 3, 6, 9 Numerals (Chromalight) */}
-          <text
-            x="73"
-            y="0"
-            textAnchor="middle"
-            dominantBaseline="central"
-            fill="url(#orbButtonLume)"
-            stroke="#E4E4E7"
-            strokeWidth="0.5"
-            filter="url(#orbButtonChroma)"
-            className="font-sans font-black select-none pointer-events-none"
-            style={{ fontSize: '11px', letterSpacing: '-0.05em' }}
+          {/* Time text indicator in dial */}
+          <text 
+            x="0" 
+            y="-32" 
+            textAnchor="middle" 
+            fill="#FFFFFF" 
+            fontSize="18" 
+            fontWeight="bold" 
+            fontFamily="sans-serif"
+            className="select-none pointer-events-none"
           >
-            3
+            {time || 4}h
           </text>
 
-          <text
-            x="0"
-            y="73"
-            textAnchor="middle"
-            dominantBaseline="central"
-            fill="url(#orbButtonLume)"
-            stroke="#E4E4E7"
-            strokeWidth="0.5"
-            filter="url(#orbButtonChroma)"
-            className="font-sans font-black select-none pointer-events-none"
-            style={{ fontSize: '11px', letterSpacing: '-0.05em' }}
+          {/* Budget text indicator in dial */}
+          <text 
+            x="0" 
+            y="42" 
+            textAnchor="middle" 
+            fill="#FFFFFF" 
+            fontSize="18" 
+            fontWeight="bold" 
+            fontFamily="sans-serif"
+            className="select-none pointer-events-none"
           >
-            6
+            €{Math.round(budget || 250)}
           </text>
 
-          <text
-            x="-73"
-            y="0"
-            textAnchor="middle"
-            dominantBaseline="central"
-            fill="url(#orbButtonLume)"
-            stroke="#E4E4E7"
-            strokeWidth="0.5"
-            filter="url(#orbButtonChroma)"
-            className="font-sans font-black select-none pointer-events-none"
-            style={{ fontSize: '11px', letterSpacing: '-0.05em' }}
-          >
-            9
-          </text>
-
-          {/* Rolex Explorer Baton Hour Indices (Chromalight) */}
-          {[1, 2, 4, 5, 7, 8, 10, 11].map(h => {
-            const angle = h * 30;
-            return (
-              <g key={h} transform={`rotate(${angle})`}>
-                <rect 
-                  x="-1.8" 
-                  y="-83" 
-                  width="3.6" 
-                  height="9" 
-                  rx="0.5"
-                  fill="url(#orbButtonLume)" 
-                  stroke="#E4E4E7" 
-                  strokeWidth="0.5" 
-                  filter="url(#orbButtonChroma)" 
-                  className="pointer-events-none"
-                />
-              </g>
-            );
-          })}
-
-          {/* Thick Bezel Ring Frame */}
-          <circle r="93" fill="none" stroke="url(#orbButtonBezel)" strokeWidth="10" className="opacity-95 pointer-events-none" />
-          
-          {/* Watch Bezel Hand-Polished Chamfer Ring */}
-          <circle r="97.5" fill="none" stroke="#FFFFFF" strokeWidth="0.75" className="opacity-60 pointer-events-none" />
-
-          {/* Inner dark bezel shadow step/rim separating bezel and dial face */}
-          <circle r="88" fill="none" stroke="#090d16" strokeWidth="1.25" className="opacity-35 pointer-events-none" />
-
-          {/* Mechanical Watch Crown Rotatable Indicator Pointer */}
-          <g transform="rotate(110) translate(92, 0)">
-            {/* Precision casing */}
-            <rect x="-6.5" y="-13" width="13" height="26" rx="2.5" fill="url(#orbButtonBezel)" stroke="#1F2937" strokeWidth="0.75" />
-            {/* Elegant circular inset with emerald/teal gemstone centerpiece */}
-            <circle r="2.5" fill="#14B8A6" stroke="#0D9488" strokeWidth="0.5" cx="0" cy="0" />
-            {/* Micro-machined physical grip ridges */}
-            <line x1="-4.5" y1="-9" x2="4.5" y2="-9" stroke="#374151" strokeWidth="0.75" />
-            <line x1="-4.5" y1="-6" x2="4.5" y2="-6" stroke="#374151" strokeWidth="0.75" />
-            <line x1="-4.5" y1="-3" x2="4.5" y2="-3" stroke="#374151" strokeWidth="0.75" />
-            <line x1="-4.5" y1="3" x2="4.5" y2="3" stroke="#374151" strokeWidth="0.75" />
-            <line x1="-4.5" y1="6" x2="4.5" y2="6" stroke="#374151" strokeWidth="0.75" />
-            <line x1="-4.5" y1="9" x2="4.5" y2="9" stroke="#374151" strokeWidth="0.75" />
-          </g>
-
-          {/* Rolex Explorer Mercedes Hour Hand */}
-          <g transform={`rotate(${hourAngle})`} className="pointer-events-none">
-            <path 
-              d="M 0,0 L -1.5,-6 L -1.5,-23 A 4.5,4.5 0 0,1 -4,-26.5 A 4.5,4.5 0 0,1 -1.5,-30.5 L -1.5,-38 L 0,-41 L 1.5,-38 L 1.5,-30.5 A 4.5,4.5 0 0,1 4,-26.5 A 4.5,4.5 0 0,1 1.5,-23 L 1.5,-6 Z" 
-              fill="#3F3F46" 
-              className="opacity-40" 
-              transform="translate(0, 0.5)"
-            />
-            <path 
-              d="M 0,0 L -1.2,-6 L -1.2,-23 A 4.2,4.2 0 0,1 -3.5,-26.5 A 4.2,4.2 0 0,1 -1.2,-30 L -1.2,-37 L 0,-40 L 1.2,-37 L 1.2,-30 A 4.2,4.2 0 0,1 3.5,-26.5 A 4.2,4.2 0 0,1 1.2,-23 L 1.2,-6 Z" 
-              fill="url(#orbButtonLume)" 
-              stroke="#E4E4E7" 
-              strokeWidth="0.75" 
-              filter="url(#orbButtonChroma)"
-            />
-            <circle cx="0" cy="-26.5" r="3.2" fill="none" stroke="#52525B" strokeWidth="0.5" />
-            <line x1="0" y1="-26.5" x2="0" y2="-29.7" stroke="#52525B" strokeWidth="0.55" />
-            <line x1="0" y1="-26.5" x2="-2.77" y2="-24.9" stroke="#52525B" strokeWidth="0.55" />
-            <line x1="0" y1="-26.5" x2="2.77" y2="-24.9" stroke="#52525B" strokeWidth="0.55" />
-          </g>
-
-          {/* Rolex Explorer Tapered Minute Hand */}
-          <g transform={`rotate(${minuteAngle})`} className="pointer-events-none">
-            <path 
-              d="M 0,0 L -1.5,-8 L -1.5,-55 L 0,-59 L 1.5,-55 L 1.5,-8 Z" 
-              fill="#3F3F46" 
-              className="opacity-40" 
-              transform="translate(0, 0.5)"
-            />
-            <path 
-              d="M 0,0 L -1.1,-8 L -1.1,-54 L 0,-58 L 1.1,-54 L 1.1,-8 Z" 
-              fill="url(#orbButtonLume)" 
-              stroke="#E4E4E7" 
-              strokeWidth="0.75" 
-              filter="url(#orbButtonChroma)"
-            />
-            <line x1="0" y1="-8" x2="0" y2="-53" stroke="#52525B" strokeWidth="0.5" className="opacity-40" />
-          </g>
-
-          {/* Rolex Explorer Lollipop Second Hand (Mesmerizing Continuous Sweep) */}
-          <g transform={`rotate(${secondAngle})`} className="pointer-events-none">
-            <line x1="0" y1="15" x2="0" y2="-66" stroke="#E2E8F0" strokeWidth="0.5" />
-            <circle cx="0" cy="-48" r="3.2" fill="url(#orbButtonLume)" stroke="#E4E4E7" strokeWidth="0.5" filter="url(#orbButtonChroma)" />
-            <circle cx="0" cy="12" r="1.5" fill="#E2E8F0" />
-          </g>
-
-          {/* Watch crown Position Anchor Core Center Button (Chronograph Style) */}
+          {/* Center Compass Needle matching Intro Card 1 */}
           <g className="pointer-events-none">
-            <circle r="15" fill="url(#orbButtonBezel)" stroke="#4B5563" strokeWidth="0.5" />
-            {Array.from({ length: 12 }).map((_, i) => {
-              const angle = i * 30;
-              const rad = (angle * Math.PI) / 180;
-              const x1 = 12 * Math.cos(rad);
-              const y1 = 12 * Math.sin(rad);
-              const x2 = 14.5 * Math.cos(rad);
-              const y2 = 14.5 * Math.sin(rad);
-              return (
-                <line 
-                  key={i} 
-                  x1={x1} 
-                  y1={y1} 
-                  x2={x2} 
-                  y2={y2} 
-                  stroke="#374151" 
-                  strokeWidth="0.75" 
-                  className="opacity-70 pointer-events-none" 
-                />
-              );
-            })}
-            <circle r="11" fill="#111827" stroke="#9CA3AF" strokeWidth="0.5" className="opacity-90" />
-            <circle r="8.5" fill="url(#orbButtonBezel)" stroke="#111827" strokeWidth="0.5" />
-            <circle r="5" fill="none" stroke="#374151" strokeWidth="0.5" className="opacity-40" />
-            <circle r="2.5" fill="#14B8A6" className="opacity-90" />
-            <circle r="4" fill="#FFFFFF" className="opacity-30" cx="-1.5" cy="-1.5" />
+            <polygon points="0,-22 5,0 0,6 -5,0" fill="#FFFFFF" />
+            <polygon points="0,22 5,0 0,6 -5,0" fill="#94A3B8" />
+            <circle r="3" fill="#800020" />
           </g>
 
-          {/* Sapphire glass and convex reflection overlays */}
-          <circle r="88" fill="url(#orbButtonReflection)" className="pointer-events-none mix-blend-overlay" />
-          <circle r="88" fill="url(#orbButtonSapphire)" className="pointer-events-none mix-blend-screen" />
+          {/* Bezel Ring matching Intro Card 1 */}
+          <circle 
+            r={98 - outerBezelWidth / 2} 
+            fill="none" 
+            stroke="url(#orbButtonBezel)" 
+            strokeWidth={outerBezelWidth} 
+            className="opacity-85 pointer-events-none" 
+          />
+
+          {/* Sapphire glass and reflection matching Intro Card 1 */}
+          <circle r="96" fill="url(#orbButtonReflection)" className="pointer-events-none mix-blend-overlay" />
+          <circle r="96" fill="url(#orbButtonSapphire)" className="pointer-events-none mix-blend-screen" />
         </svg>
       </motion.div>
     </button>
   );
 }
 
-function HomeScreen({ likedIds, onSelectRec, language, recommendations, onNavigateToProfile, seasonalTips, vibeSettings, ratings, lowSignalMode, onToggleLowSignal, onEmblemTap, triggerHaptic: propHaptic }: any) {
+function HomeScreen({ likedIds, onSelectRec, language, recommendations, allRecommendations, onNavigateToProfile, seasonalTips, vibeSettings, ratings, lowSignalMode, onToggleLowSignal, onEmblemTap, triggerHaptic: propHaptic, budget, time }: any) {
   const triggerHaptic = (pattern: number | number[] = 10) => {
     try {
       if (typeof propHaptic === 'function') propHaptic(pattern);
@@ -4560,7 +4397,7 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, onNaviga
   const [envelopeRevealed, setEnvelopeRevealed] = useState(false);
   const [selectedTip, setSelectedTip] = useState<any | null>(null);
   const [selectedFact, setSelectedFact] = useState<any | null>(null);
-  const [activeBriefingTab, setActiveBriefingTab] = useState<'stories' | 'wisdom' | 'slang'>('stories');
+  const [activeBriefingTab, setActiveBriefingTab] = useState<'stories' | 'wisdom' | 'slang' | 'quiz'>('stories');
   const [showDiscoveryBanner, setShowDiscoveryBanner] = useState<boolean>(() => {
     try {
       return safeStorage.getItem('idemo_discovery_dismissed_v1') !== 'true';
@@ -4613,6 +4450,8 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, onNaviga
             language={language}
             size={52}
             iconSize={22}
+            budget={budget}
+            time={time}
           />
         </div>
       </header>
@@ -5170,7 +5009,8 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, onNaviga
           {[
             { id: 'stories', label: language === 'sr' ? 'Priče i običaji' : language === 'zh' ? '故事与习俗' : 'Stories & Customs', icon: <EditorialStoriesCustomsIcon size={18} /> },
             { id: 'wisdom', label: language === 'sr' ? 'Lokalna mudrost' : language === 'zh' ? '地方智慧' : 'Local Wisdom', icon: <EditorialLocalWisdomIcon size={18} /> },
-            { id: 'slang', label: language === 'sr' ? 'Sleng i bonton' : language === 'zh' ? '社交礼仪与方言' : 'Social Codes & Slang', icon: '💬' }
+            { id: 'slang', label: language === 'sr' ? 'Sleng i bonton' : language === 'zh' ? '社交礼仪与方言' : 'Social Codes & Slang', icon: '💬' },
+            { id: 'quiz', label: language === 'sr' ? 'Kulturni kviz' : language === 'zh' ? '文化问答' : 'Cultural Quiz', icon: '✨' }
           ].map(tab => (
             <button
               key={tab.id}
@@ -5364,6 +5204,24 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, onNaviga
               className="pt-1"
             >
               <SlangCrypt language={language} />
+            </motion.div>
+          )}
+
+          {activeBriefingTab === 'quiz' && (
+            <motion.div 
+              key="briefing-quiz"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+              className="pt-1"
+            >
+              <CulturalQuiz
+                language={language}
+                allRecommendations={allRecommendations || recommendations || INITIAL_RECOMMENDATIONS}
+                onSelectRec={onSelectRec}
+                triggerHaptic={triggerHaptic}
+              />
             </motion.div>
           )}
         </AnimatePresence>
@@ -8104,33 +7962,52 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
 
   const drawCompassFallback = (pdfDoc: any, x: number, y: number, w: number, h: number) => {
     const cx = x + w / 2;
-    const cy = y + h / 2;
+    const cy = y + h / 2 - 2;
     
-    pdfDoc.setDrawColor(215, 212, 203);
-    pdfDoc.setLineWidth(0.3);
-    pdfDoc.ellipse(cx, cy, 12, 12);
-    pdfDoc.ellipse(cx, cy, 11, 11);
+    // Outer delicate ring
+    pdfDoc.setDrawColor(220, 218, 208);
+    pdfDoc.setLineWidth(0.35);
+    pdfDoc.ellipse(cx, cy, 14, 14);
     
-    pdfDoc.line(cx, cy - 9, cx, cy + 9);
-    pdfDoc.line(cx - 9, cy, cx + 9, cy);
+    // Inner gold hairline ring
+    pdfDoc.setDrawColor(197, 160, 89);
+    pdfDoc.setLineWidth(0.2);
+    pdfDoc.ellipse(cx, cy, 12.5, 12.5);
     
-    pdfDoc.setFillColor(220, 38, 38);
-    pdfDoc.triangle(cx, cy, cx - 1.5, cy, cx, cy - 8, 'F');
+    // Crosshair ticks
+    pdfDoc.setDrawColor(200, 198, 188);
+    pdfDoc.setLineWidth(0.25);
+    pdfDoc.line(cx, cy - 11, cx, cy + 11);
+    pdfDoc.line(cx - 11, cy, cx + 11, cy);
     
+    // North needle (Oxblood luxury)
+    pdfDoc.setFillColor(138, 31, 31);
+    pdfDoc.triangle(cx, cy, cx - 1.8, cy, cx, cy - 9.5, 'F');
+    
+    // South needle (Deep forest green)
     pdfDoc.setFillColor(30, 46, 32);
-    pdfDoc.triangle(cx, cy, cx + 1.5, cy, cx, cy + 8, 'F');
+    pdfDoc.triangle(cx, cy, cx + 1.8, cy, cx, cy + 9.5, 'F');
     
+    // Center gold pin
+    pdfDoc.setFillColor(197, 160, 89);
+    pdfDoc.circle(cx, cy, 1, 'F');
+    
+    // Cardinal labels
     pdfDoc.setFont('helvetica', 'bold');
     pdfDoc.setFontSize(5);
-    pdfDoc.setTextColor(220, 38, 38);
-    pdfDoc.text('N', cx - 1.2, cy - 9.5);
+    pdfDoc.setTextColor(138, 31, 31);
+    pdfDoc.text('N', cx - 1.2, cy - 11.5);
     pdfDoc.setTextColor(30, 46, 32);
-    pdfDoc.text('S', cx - 1.2, cy + 11.5);
+    pdfDoc.text('S', cx - 1.2, cy + 13.5);
     
     pdfDoc.setFont('times', 'bold');
-    pdfDoc.setFontSize(15);
+    pdfDoc.setFontSize(13);
     pdfDoc.setTextColor(140, 138, 125);
-    pdfDoc.text('IDEMO', cx - pdfDoc.getTextWidth('IDEMO') / 2, cy + 18);
+    pdfDoc.text('IDEMO', cx - pdfDoc.getTextWidth('IDEMO') / 2, cy + 20);
+    pdfDoc.setFont('helvetica', 'normal');
+    pdfDoc.setFontSize(5.5);
+    pdfDoc.setTextColor(160, 158, 146);
+    pdfDoc.text('SERBIA CURATION', cx - pdfDoc.getTextWidth('SERBIA CURATION') / 2, cy + 23.5);
   };
 
   const drawCalendar = (pdfDoc: any, x: number, y: number, width: number, height: number, year: number, month: number, highlightedDay: number, lang: string) => {
@@ -8348,191 +8225,161 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
     const pdfLang = (language === 'zh' || language === 'ru') ? 'en' : language;
     const activeT = TRANSLATIONS[pdfLang] || TRANSLATIONS['en'];
 
-    const pdfLabels: Record<string, {
-      title: string;
-      subtitle: string;
-      planItem: string;
-      journeySnapshot: string;
-      suggestedVisitFlow: string;
-      whySelected: string;
-      moodOrbContext: string;
-      knowBeforeYouGo: string;
-      culturalContext: string;
-      typicalConditions: string;
-      travelEssentials: string;
-      practicalNotes: string;
-      emergencyAssistance: string;
-      moneyPayment: string;
-      usefulPhrases: string;
-      gettingThere: string;
-      parking: string;
-      taxiTransport: string;
-      timeBudget: string;
-      gettingThereLabel: string;
-      enjoyingVisitLabel: string;
-      gettingBackLabel: string;
-      totalTimeLabel: string;
-      approx: string;
-      allowApprox: string;
-      notSpecified: string;
-      experienceFocusLabel: string;
-      afterYourVisitTitle: string;
-      afterYourVisitCopy: string;
-    }> = {
+    const pdfLabels: Record<string, Record<string, string>> = {
       en: {
-        title: "IDEMO — MY EVENT PLANNER",
-        subtitle: "Your curated visit brief",
+        title: "IDEMO — BESPOKE TRAVEL BRIEF",
+        mastheadEyebrow: "IDEMO BESPOKE TRAVEL BRIEF • PRIVATE CONCIERGE DOSSIER",
+        subtitle: "Curated Single-Destination Itinerary",
         planItem: "Plan item",
-        journeySnapshot: "JOURNEY SNAPSHOT",
-        suggestedVisitFlow: "SUGGESTED VISIT FLOW",
-        whySelected: "WHY IDEMO SELECTED THIS",
-        moodOrbContext: "MOOD ORB CONTEXT",
-        knowBeforeYouGo: "KNOW BEFORE YOU GO",
-        culturalContext: "CULTURAL CONTEXT",
-        typicalConditions: "Typical conditions for this month",
-        travelEssentials: "IDEMO — Travel Essentials",
-        practicalNotes: "Practical notes for this plan",
-        emergencyAssistance: "EMERGENCY & ASSISTANCE",
-        moneyPayment: "MONEY & PAYMENT",
-        usefulPhrases: "USEFUL SERBIAN PHRASES",
-        gettingThere: "GETTING THERE & BACK",
-        parking: "PARKING",
-        taxiTransport: "TAXI & LOCAL TRANSPORT",
-        timeBudget: "TIME BUDGET",
+        curatorBrief: "CURATOR'S STORY & AMBIANCE",
+        insiderTipTitle: "INSIDER CONCIERGE TIP",
+        bestTimeToVisitTitle: "OPTIMAL TIMING",
+        nearbyTitle: "NEARBY CONSIDERATION • COMPANION STOP",
+        nearbySubtitle: "Recommended complimentary visit within reach",
+        noNearbyText: "Allow generous time to fully absorb this signature destination before onward travel.",
+        timeBudget: "TIME BUDGET & VISIT FLOW",
         gettingThereLabel: "Getting there",
-        enjoyingVisitLabel: "Enjoying the visit",
+        enjoyingVisitLabel: "On-site exploration",
         gettingBackLabel: "Getting back",
-        totalTimeLabel: "Total time to plan",
+        totalTimeLabel: "Total time envelope",
         approx: "Approx.",
         allowApprox: "Allow approx.",
-        notSpecified: "Not specified",
-        experienceFocusLabel: "Experience focus",
+        notSpecified: "Flexible",
+        moodOrbContext: "MOOD ORB PERSONALIZATION",
+        knowBeforeYouGo: "KNOW BEFORE YOU GO",
+        culturalContext: "CLIMATE & CULTURAL CONTEXT",
+        typicalConditions: "Typical conditions for this month",
+        travelEssentials: "IDEMO CONCIERGE ESSENTIALS",
+        emergencyAssistance: "EMERGENCY",
+        moneyPayment: "CURRENCY & PAYMENT",
+        usefulPhrases: "USEFUL SERBIAN",
+        gettingThere: "TRANSIT & ACCESS",
         afterYourVisitTitle: "AFTER YOUR VISIT",
-        afterYourVisitCopy: "Help IDEMO keep this recommendation accurate. After visiting, update the Mood Orb if your pace or preferred atmosphere changed, then leave a short note about what was accurate, what changed, or what future visitors should know."
+        afterYourVisitCopy: "Update your Mood Orb if your preferred pace or ambiance evolved during your visit."
       },
       sr: {
-        title: "IDEMO — MOJ PLANER DOGADAJA",
+        title: "IDEMO — KUSTOSKI PLAN PUTA",
+        mastheadEyebrow: "IDEMO PRIVATNI IZVESTAJ O PUTOVANJU • KUSTOSKI DOSIJE",
         subtitle: "Vas kustoski izvestaj o poseti",
         planItem: "Stavka plana",
-        journeySnapshot: "PREGLED PUTOVANJA",
-        suggestedVisitFlow: "PREDLOZENI TOK POSETE",
-        whySelected: "ZASTO JE IDEMO IZABRAO OVO",
-        moodOrbContext: "MOOD ORB KONTEKST",
-        knowBeforeYouGo: "SRECAN PUT: VAZNE INFORMACIJE",
-        culturalContext: "KULTURNI KONTEKST",
-        typicalConditions: "Tipicni uslovi za ovaj mesec",
-        travelEssentials: "IDEMO — Travel Essentials",
-        practicalNotes: "Practical notes for this plan",
-        emergencyAssistance: "HITNE SLUZBE I POMOC",
-        moneyPayment: "NOVAC I PLACANJE",
-        usefulPhrases: "KORISNE FRAZE NA SRPSKOM",
-        gettingThere: "DOLAZAK I POVRATAK",
-        parking: "PARKING",
-        taxiTransport: "TAKSI I LOKALNI PREVOZ",
-        timeBudget: "VREMENSKI BUDZET",
+        curatorBrief: "KUSTOSKA PRICA I AMBIJENT",
+        insiderTipTitle: "SAVET LOKALNOG KUSTOSA",
+        bestTimeToVisitTitle: "OPTIMALNO VREME",
+        nearbyTitle: "OBLIZNJA PREPORUKA • DOPUNSKA POSETA",
+        nearbySubtitle: "Preporucena dopunska poseta u blizini",
+        noNearbyText: "Uzivajte u potpunosti u ovom izabranom odredistu pre nastavka rute.",
+        timeBudget: "VREMENSKI BUDZET I TOK POSETE",
         gettingThereLabel: "Dolazak",
-        enjoyingVisitLabel: "Uzivanje u poseti",
+        enjoyingVisitLabel: "Boravak na lokaciji",
         gettingBackLabel: "Povratak",
         totalTimeLabel: "Ukupno vreme za plan",
         approx: "Oko",
         allowApprox: "Planirajte oko",
-        notSpecified: "Nije navedeno",
-        experienceFocusLabel: "Fokus iskustva",
+        notSpecified: "Fleksibilno",
+        moodOrbContext: "MOOD ORB KALIBRACIJA",
+        knowBeforeYouGo: "SRECAN PUT: VAZNE INFORMACIJE",
+        culturalContext: "KLIMA I KULTURNI KONTEKST",
+        typicalConditions: "Tipicni uslovi za ovaj mesec",
+        travelEssentials: "KUSTOSKE INFORMACIJE ZA PUT",
+        emergencyAssistance: "HITNE SLUZBE",
+        moneyPayment: "NOVAC I PLACANJE",
+        usefulPhrases: "KORISNE FRAZE",
+        gettingThere: "PREVOZ I NAVIGACIJA",
         afterYourVisitTitle: "NAKON VASE POSETE",
-        afterYourVisitCopy: "Pomozite IDEMO-u da ova preporuka ostane tacna. Nakon posete, azurirajte Mood Orb ako su se vas tempo ili zeljena atmosfera promenili, a zatim ostavite kratku belesku o tome sta je bilo tacno, sta se promenilo ili sta bi buduci posetioci trebali da znaju."
+        afterYourVisitCopy: "Azurirajte Mood Orb ako su se vas tempo ili zeljena atmosfera promenili tokom posete."
       },
       de: {
-        title: "IDEMO — MEIN EVENT-PLANER",
+        title: "IDEMO — REISEBRIEFING",
+        mastheadEyebrow: "IDEMO PRIVATES REISEBRIEFING • CONCIERGE-DOSSIER",
         subtitle: "Ihr kuratiertes Besuchs-Briefing",
         planItem: "Planpunkt",
-        journeySnapshot: "REISE-SCHNAPPSCHUSS",
-        suggestedVisitFlow: "EMPFOHLENER BESUCHSABLAUF",
-        whySelected: "WARUM IDEMO DIES GEWAEHLT HAT",
-        moodOrbContext: "MOOD ORB KONTEXT",
-        knowBeforeYouGo: "WISSENSWERTES VORAB",
-        culturalContext: "KULTURELLER KONTEXT",
-        typicalConditions: "Typische Bedingungen fuer diesen Monat",
-        travelEssentials: "IDEMO — Travel Essentials",
-        practicalNotes: "Practical notes for this plan",
-        emergencyAssistance: "NOTFALL & HILFE",
-        moneyPayment: "GELD & BEZAHLUNG",
-        usefulPhrases: "NUETZLICHE SERBISCHE PHRASEN",
-        gettingThere: "AN- & ABREISE",
-        parking: "PARKEN",
-        taxiTransport: "TAXI & LOKALER TRANSPORT",
-        timeBudget: "ZEITBUDGET",
+        curatorBrief: "KURATOREN-STORY & AMBIENTE",
+        insiderTipTitle: "INSIDER-CONCIERGE-TIPP",
+        bestTimeToVisitTitle: "OPTIMALE BESUCHSZEIT",
+        nearbyTitle: "NAHEGELEGENE EMPFEHLUNG • ERGAENZUNGSZIEL",
+        nearbySubtitle: "Empfohlener Ergaenzungsbesuch in der Naehe",
+        noNearbyText: "Geniessen Sie dieses Ziel in vollem Umfang vor der Weiterreise.",
+        timeBudget: "ZEITBUDGET & ABLAUF",
         gettingThereLabel: "Anreise",
-        enjoyingVisitLabel: "Aufenthaltszeit",
+        enjoyingVisitLabel: "Aufenthalt vor Ort",
         gettingBackLabel: "Rueckreise",
         totalTimeLabel: "Gesamtzeit fuer den Plan",
         approx: "Ca.",
         allowApprox: "Planen Sie ca.",
-        notSpecified: "Nicht angegeben",
-        experienceFocusLabel: "Erlebnisfokus",
+        notSpecified: "Flexibel",
+        moodOrbContext: "MOOD ORB PERSONALISIERUNG",
+        knowBeforeYouGo: "WISSENSWERTES VORAB",
+        culturalContext: "KLIMA & KULTURELLER KONTEXT",
+        typicalConditions: "Typische Bedingungen fuer diesen Monat",
+        travelEssentials: "CONCIERGE-GRUNDLAGEN",
+        emergencyAssistance: "NOTFALL & HILFE",
+        moneyPayment: "GELD & BEZAHLUNG",
+        usefulPhrases: "SERBISCHE PHRASEN",
+        gettingThere: "ANREISE & NAVIGATION",
         afterYourVisitTitle: "NACH IHREM BESUCH",
-        afterYourVisitCopy: "Helfen Sie IDEMO, diese Empfehlung aktuell zu halten. Aktualisieren Sie nach Ihrem Besuch das Mood Orb, falls sich Ihr Tempo oder Ihre bevorzugte Atmosphaere geandert haben, und hinterlassen Sie eine kurze Notiz darueber, was zutreffend war, was sich geaendert hat oder was zukuenftige Besucher wissen sollten."
+        afterYourVisitCopy: "Passen Sie das Mood Orb an, wenn sich Ihr Tempo oder bevorzugte Atmosphaere geandert hat."
       },
       ru: {
-        title: "IDEMO — MOJ PLANER DOGADAJA",
+        title: "IDEMO — PLAN POEZDKI",
+        mastheadEyebrow: "IDEMO PRIVATNYJ OBZOR POEZDKI • KONSIERZH-DOS`E",
         subtitle: "Vash kurirovannyj kratkij obzor",
         planItem: "Punkt plana",
-        journeySnapshot: "OBZOR POEZDKI",
-        suggestedVisitFlow: "REKOMENDUEMYJ PLAN POSEWENIYA",
-        whySelected: "POCHEMU IDEMO VYBRAL ETO",
-        moodOrbContext: "MOOD ORB KONTEKST",
-        knowBeforeYouGo: "CHTO NUZHNO ZNAT` PERED POEZDKOJ",
-        culturalContext: "KUL`TURNYJ KONTEKST",
-        typicalConditions: "Tipichnye usloviya dlya etogo mesyaca",
-        travelEssentials: "IDEMO — Travel Essentials",
-        practicalNotes: "Practical notes for this plan",
-        emergencyAssistance: "AVARIJNYE SLUZHBY I POMOW`",
-        moneyPayment: "DEN`GI I OPLATA",
-        usefulPhrases: "POLEZNYE SERBSKIE FRAZY",
-        gettingThere: "KAK DOBRAT`SYA I VERNUT`SYA",
-        parking: "PARKOVKA",
-        taxiTransport: "TAKSI I MESTNYJ TRANSPORT",
-        timeBudget: "VREMENSKIJ BYUDZHET",
+        curatorBrief: "ISTORIYA KURATORA I AMBIENT",
+        insiderTipTitle: "INSAYDERSKIJ SOVET KONSIERZHA",
+        bestTimeToVisitTitle: "OPTIMAL`NOE VREMYA",
+        nearbyTitle: "BLIZHAJSHAYA REKOMENDACIYA • DOPOLNITEL`NYJ VIZIT",
+        nearbySubtitle: "Rekomendovannoe dopolnitel`noe mesto poblizosti",
+        noNearbyText: "Nasladites` etim mestom pered prodolzheniem puteshestviya.",
+        timeBudget: "VREMENSKIJ BYUDZHET I MARSHRUT",
         gettingThereLabel: "Doroga tuda",
         enjoyingVisitLabel: "Vremya na meste",
         gettingBackLabel: "Obratnyj put`",
-        totalTimeLabel: "Obwee vremya na plan",
+        totalTimeLabel: "Obwee vremya",
         approx: "Pribl.",
         allowApprox: "Zaplanirujte pribl.",
-        notSpecified: "Ne ukazano",
-        experienceFocusLabel: "Fokus opyta",
+        notSpecified: "Gibko",
+        moodOrbContext: "PERSONALIZACIYA MOOD ORB",
+        knowBeforeYouGo: "CHTO NUZHNO ZNAT` PERED POEZDKOJ",
+        culturalContext: "KLIMAT I KUL`TURNYJ KONTEKST",
+        typicalConditions: "Tipichnye usloviya dlya etogo mesyaca",
+        travelEssentials: "OSNOVY KONSIERZHA",
+        emergencyAssistance: "AVARIJNYE SLUZHBY",
+        moneyPayment: "DEN`GI I OPLATA",
+        usefulPhrases: "SERBSKIE FRAZY",
+        gettingThere: "TRANSPORT I NAVIGACIYA",
         afterYourVisitTitle: "POSLE VASEJ POEZDKI",
-        afterYourVisitCopy: "Pomogite IDEMO sohranit` etu rekomendaciyu tochnoj. Posle poseweniya nastrojte Mood Orb, esli vash temp ili predpochitaemaya atmosfera izmenilis`, a zatem ostav'te korotkuyu zametku o tom, chto bylo tochno, chto izmenilos` ili chto sleduet znat` buduwim posetitelyam."
+        afterYourVisitCopy: "Skorrektirujte Mood Orb, esli vash zhelaemyj temp ili atmosfera izmenilis`."
       },
       es: {
-        title: "IDEMO — MI PLANIFICADOR",
+        title: "IDEMO — INFORME DE VIAJE",
+        mastheadEyebrow: "IDEMO INFORME PRIVADO DE VIAJE • DOSSIER CONCIERGE",
         subtitle: "Su informe de visita personalizado",
         planItem: "Elemento del plan",
-        journeySnapshot: "RESUMEN DEL VIAJE",
-        suggestedVisitFlow: "FLUJO DE VISITA RECOMENDADO",
-        whySelected: "POR QUE IDEMO SELECCIONO ESTO",
-        moodOrbContext: "CONTEXTO MOOD ORB",
-        knowBeforeYouGo: "INFORMACION CLAVE",
-        culturalContext: "CONTEXTO CULTURAL",
-        typicalConditions: "Condiciones tipicas para este mes",
-        travelEssentials: "IDEMO — Travel Essentials",
-        practicalNotes: "Practical notes for this plan",
-        emergencyAssistance: "EMERGENCIA Y ASISTENCIA",
-        moneyPayment: "DINERO Y PAGO",
-        usefulPhrases: "FRASES UTILES EN SERBIO",
-        gettingThere: "COMO LLEGAR Y VOLVER",
-        parking: "ESTACIONAMIENTO",
-        taxiTransport: "TAXI Y TRANSPORTE LOCAL",
-        timeBudget: "PRESUPUESTO DE TIEMPO",
+        curatorBrief: "HISTORIA DEL CURADOR Y AMBIENTE",
+        insiderTipTitle: "CONSEJO EXCLUSIVO DE CONCIERGE",
+        bestTimeToVisitTitle: "MOMENTO OPTIMO",
+        nearbyTitle: "CONSIDERACION CERCANA • VISITA COMPLEMENTARIA",
+        nearbySubtitle: "Visita complementaria recomendada en las cercanias",
+        noNearbyText: "Dedique tiempo completo a este destino exclusivo antes de continuar.",
+        timeBudget: "PRESUPUESTO DE TIEMPO Y FLUJO",
         gettingThereLabel: "Llegada",
-        enjoyingVisitLabel: "Disfrutando la visita",
+        enjoyingVisitLabel: "Tiempo en el lugar",
         gettingBackLabel: "Regreso",
-        totalTimeLabel: "Tiempo total del plan",
+        totalTimeLabel: "Tiempo total previsto",
         approx: "Aprox.",
         allowApprox: "Reserve aprox.",
-        notSpecified: "No especificado",
-        experienceFocusLabel: "Enfoque de experiencia",
+        notSpecified: "Flexible",
+        moodOrbContext: "PERSONALIZACION MOOD ORB",
+        knowBeforeYouGo: "INFORMACION CLAVE",
+        culturalContext: "CLIMA Y CONTEXTO CULTURAL",
+        typicalConditions: "Condiciones tipicas para este mes",
+        travelEssentials: "ESENCIALES DEL CONCIERGE",
+        emergencyAssistance: "EMERGENCIA",
+        moneyPayment: "DINERO Y PAGO",
+        usefulPhrases: "FRASES UTILES EN SERBIO",
+        gettingThere: "TRANSPORTE Y NAVEGACION",
         afterYourVisitTitle: "DESPUES DE SU VISITA",
-        afterYourVisitCopy: "Ayude a IDEMO a mantener esta recomendacion precisa. Despues de su visita, actualice el Mood Orb si su ritmo o la atmosfera de su preferencia cambiaron, luego deje una breve nota sobre lo que fue preciso, lo que cambio o lo que los futuros visitantes deberian saber."
+        afterYourVisitCopy: "Actualice el Mood Orb si su ritmo o la atmosfera de su preferencia evolucionaron."
       }
     };
 
@@ -8581,8 +8428,6 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
       return bulletsList;
     };
 
-    const activeMapping = { estimated_weather: 'Estimated weather' };
-
     const drawMoodField = (x: number, y: number, w: number, plotX: number, plotY: number, dotColor: number[], caption: string, lang: string, isUserMoodField: boolean = false) => {
       // 1. Draw outer border
       doc.setDrawColor(220, 218, 208); // light beige border
@@ -8601,52 +8446,42 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
       doc.setFontSize(4.5);
       doc.setTextColor(140, 138, 125);
 
-      // Translations for axis labels
       const labelCalm = lang === 'sr' ? "Mirno" : lang === 'de' ? "Ruhig" : lang === 'ru' ? "Spokoyno" : lang === 'es' ? "Calma" : "Calm";
       const labelEnergetic = lang === 'sr' ? "Aktivno" : lang === 'de' ? "Energisch" : lang === 'ru' ? "Aktivno" : lang === 'es' ? "Energia" : "Energetic";
       const labelUrban = lang === 'sr' ? "Urbano" : lang === 'de' ? "Urban" : lang === 'ru' ? "Urbano" : lang === 'es' ? "Urbano" : "Urban";
       const labelNature = lang === 'sr' ? "Priroda" : lang === 'de' ? "Natur" : lang === 'ru' ? "Priroda" : lang === 'es' ? "Naturaleza" : "Nature";
 
-      // Position label texts:
-      // Urban: centered above the box
       doc.text(sanitizePdfText(labelUrban), x + w / 2, y - 1, { align: 'center' });
-      // Nature: centered below the box
       doc.text(sanitizePdfText(labelNature), x + w / 2, y + w + 2.2, { align: 'center' });
-      // Calm: right-aligned left of the box
       doc.text(sanitizePdfText(labelCalm), x - 0.8, y + w / 2 + 0.6, { align: 'right' });
-      // Energetic: left-aligned right of the box
       doc.text(sanitizePdfText(labelEnergetic), x + w + 0.8, y + w / 2 + 0.6, { align: 'left' });
 
       // 4. Draw Caption above Urban label
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(5.0);
-      doc.setTextColor(30, 46, 32); // deep green
+      doc.setFontSize(4.8);
+      doc.setTextColor(30, 46, 32); // deep forest green
       const wrappedCaption = doc.splitTextToSize(sanitizePdfText(caption.toUpperCase()), w + 8);
-      const captionY = y - 4 - (wrappedCaption.length - 1) * 2;
+      const captionY = y - 3.5 - (wrappedCaption.length - 1) * 2;
       doc.text(wrappedCaption, x + w / 2, captionY, { align: 'center' });
 
       if (isUserMoodField) {
-        const r = 2.05; // radius of mini watch face in mm
-        const dialR = r - 0.22; // radius of dial in mm
+        const r = 2.05;
+        const dialR = r - 0.22;
 
-        // 5.1. Base white halo ring
         doc.setFillColor(255, 255, 255);
         doc.circle(plotX, plotY, r + 0.15, 'F');
 
-        // 5.2. Outer bezel ring (titanium/silver)
         doc.setDrawColor(140, 138, 125);
-        doc.setFillColor(15, 23, 30); // deep dark slate
+        doc.setFillColor(15, 23, 30);
         doc.setLineWidth(0.24);
         doc.circle(plotX, plotY, r, 'FD');
 
-        // 5.3. Dial split background (slate navy vs rose gold)
-        doc.setFillColor(15, 23, 42); // slate navy
+        doc.setFillColor(15, 23, 42);
         doc.circle(plotX, plotY, dialR, 'F');
 
-        // Semicircular wedge for top-right rose gold segment
         const numSegments = 16;
         const baseAngle = -22 * Math.PI / 180;
-        doc.setFillColor(225, 29, 72); // rose gold pink
+        doc.setFillColor(225, 29, 72);
         for (let i = 0; i < numSegments; i++) {
           const angle1 = baseAngle + (i * Math.PI / numSegments);
           const angle2 = baseAngle + ((i + 1) * Math.PI / numSegments);
@@ -8658,7 +8493,6 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
           );
         }
 
-        // 5.4. White/silver seam line
         doc.setDrawColor(241, 245, 249);
         doc.setLineWidth(0.06);
         doc.line(
@@ -8668,10 +8502,7 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
           plotY - dialR * Math.sin(baseAngle)
         );
 
-        // 5.5. Hour markings (luminous paint)
-        doc.setFillColor(0, 240, 255); // luminescent cyan
-        
-        // Triangle index at 12 o'clock pointing down
+        doc.setFillColor(0, 240, 255);
         const triApexY = plotY - dialR + 0.12;
         doc.triangle(
           plotX, triApexY,
@@ -8680,47 +8511,55 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
           'F'
         );
 
-        // Baton/dot markings at 3, 6, 9
         const markerDist = dialR - 0.32;
         doc.circle(plotX + markerDist, plotY, 0.12, 'F');
         doc.circle(plotX, plotY + markerDist, 0.12, 'F');
         doc.circle(plotX - markerDist, plotY, 0.12, 'F');
 
-        // 5.6. Clock hands (Hour, Minute, and Second sweeping hands)
-        // Hour Hand pointing to 10 o'clock (-140 degrees)
         const hrAngle = -140 * Math.PI / 180;
         doc.setDrawColor(244, 244, 245);
         doc.setLineWidth(0.18);
         doc.line(plotX, plotY, plotX + (dialR * 0.48) * Math.cos(hrAngle), plotY + (dialR * 0.48) * Math.sin(hrAngle));
-        // Mercedes circular emblem
         doc.setFillColor(244, 244, 245);
         doc.circle(plotX + (dialR * 0.32) * Math.cos(hrAngle), plotY + (dialR * 0.32) * Math.sin(hrAngle), 0.18, 'F');
 
-        // Minute Hand pointing to ~10 past (35 degrees)
         const minAngle = 35 * Math.PI / 180;
         doc.setLineWidth(0.12);
         doc.line(plotX, plotY, plotX + (dialR * 0.72) * Math.cos(minAngle), plotY + (dialR * 0.72) * Math.sin(minAngle));
 
-        // Sweep Second Hand pointing to 215 degrees
         const secAngle = 215 * Math.PI / 180;
         doc.setDrawColor(226, 232, 240);
         doc.setLineWidth(0.04);
         doc.line(plotX, plotY, plotX + (dialR * 0.8) * Math.cos(secAngle), plotY + (dialR * 0.8) * Math.sin(secAngle));
-        // Lollipop dot
         doc.setFillColor(0, 240, 255);
         doc.circle(plotX + (dialR * 0.58) * Math.cos(secAngle), plotY + (dialR * 0.58) * Math.sin(secAngle), 0.14, 'F');
 
-        // 5.7. Center pinion cap
         doc.setFillColor(255, 255, 255);
         doc.circle(plotX, plotY, 0.24, 'F');
       } else {
-        // 5. Draw plotted Dot with a white background halo ring for high definition print
         doc.setFillColor(255, 255, 255);
         doc.circle(plotX, plotY, 1.1, 'F');
 
-        // Solid colored dot
         doc.setFillColor(dotColor[0], dotColor[1], dotColor[2]);
         doc.circle(plotX, plotY, 0.75, 'F');
+      }
+    };
+
+    const formatDuration = (mins: number, lang: string): string => {
+      const hrs = Math.floor(mins / 60);
+      const m = mins % 60;
+      if (lang === 'sr') {
+        return hrs > 0 ? `${hrs}h ${m}m` : `${m}m`;
+      } else if (lang === 'de') {
+        return hrs > 0 ? `${hrs} Std. ${m} Min.` : `${m} Min.`;
+      } else if (lang === 'ru') {
+        return hrs > 0 ? `${hrs} ch. ${m} min.` : `${m} min.`;
+      } else if (lang === 'es') {
+        return hrs > 0 ? `${hrs}h ${m}min` : `${m}min`;
+      } else if (lang === 'zh') {
+        return hrs > 0 ? `${hrs}h ${m}m` : `${m}m`;
+      } else {
+        return hrs > 0 ? `${hrs}h ${m}m` : `${m}m`;
       }
     };
 
@@ -8736,545 +8575,651 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
       const month = testDate.getMonth();
       const day = testDate.getDate();
 
+      const monthsEN = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+      const monthsSR = ['JANUAR', 'FEBRUAR', 'MART', 'APRIL', 'MAJ', 'JUN', 'JUL', 'AVGUST', 'SEPTEMBAR', 'OKTOBAR', 'NOVEMBAR', 'DECEMBAR'];
+      const monthLabel = pdfLang === 'sr' ? monthsSR[month] : monthsEN[month];
+
       // 1. Draw elegant IDEMO background watermark
       drawIdemoWatermark(doc, pageWidth / 2, pageHeight / 2, 2.1);
 
-      // Header Banner block (stretching full-width across margins)
-      doc.setFillColor(30, 46, 32);
-      doc.rect(15, 12, 180, 20, 'F');
+      // --- 1. MASTHEAD & MAGAZINE HEADER (Y: 10 – 29 mm) ---
+      doc.setFillColor(30, 46, 32); // Deep emerald forest (#1E2E20)
+      doc.rect(15, 10, 180, 19, 'F');
+
+      // Gold top accent stripe (Warm Gold #C5A059)
+      doc.setFillColor(197, 160, 89);
+      doc.rect(15, 10, 180, 1.2, 'F');
       
+      // Eyebrow with decorative bullet
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(5.8);
+      doc.setTextColor(197, 160, 89);
+      doc.text(sanitizePdfText(pL.mastheadEyebrow || 'IDEMO BESPOKE TRAVEL BRIEF • PRIVATE CONCIERGE DOSSIER'), 20, 15);
+
+      // Main Masthead Title in Serif luxury
       doc.setFont('times', 'bold');
-      doc.setFontSize(12);
+      doc.setFontSize(12.5);
       doc.setTextColor(250, 249, 245);
-      doc.text(sanitizePdfText(pL.title), 20, 18);
+      doc.text(sanitizePdfText(pL.title), 20, 21.2);
       
+      // Subtitle
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6.5);
+      doc.setFontSize(6.2);
       doc.setTextColor(174, 187, 175);
-      doc.text(sanitizePdfText(pL.subtitle.toUpperCase()), 20, 23);
-      doc.text(sanitizePdfText(`Plan item ${idx + 1} of ${scheduledItems.length}`.toUpperCase()), 20, 27);
+      doc.text(sanitizePdfText(pL.subtitle.toUpperCase()), 20, 25.5);
+
+      // Right Side Header Metadata (Date & Item number with gold frame)
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.2);
+      doc.setTextColor(250, 249, 245);
+      doc.text(`${day} ${monthLabel} ${year}`, 190, 17.2, { align: 'right' });
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.2);
+      doc.setTextColor(197, 160, 89);
+      doc.text(`${pL.planItem.toUpperCase()} ${idx + 1} / ${scheduledItems.length}`, 190, 24, { align: 'right' });
+
+      // Oxblood Dividing Line under header
+      doc.setDrawColor(138, 31, 31); // Oxblood (#8A1F1F)
+      doc.setLineWidth(0.5);
+      doc.line(15, 29, 195, 29);
 
       let titleVal = sanitizePdfText(getLocalizedValue(item, 'title', pdfLang) || item.title || '');
       if (item.isAvailable === false) {
-        const unavailableTag = pdfLang === 'sr' ? '[Arhivirano / Nije dostupno]' : '[Archived / Unavailable]';
+        const unavailableTag = pdfLang === 'sr' ? '[Arhivirano]' : '[Archived]';
         titleVal = `${unavailableTag} ${titleVal}`;
       }
       const locationVal = sanitizePdfText(getLocalizedValue(item, 'location', pdfLang) || item.location || '');
       const categoryVal = sanitizePdfText(formatCategory(item.category, activeT) || item.category || '');
 
-      // --- ROW 1: GRID ROW AT y = 37 ---
+      // --- 2. HERO FEATURE ROW (Y: 31.5 – 83.5 mm, Height: 52mm) ---
+      // LEFT: Hero Photo of Recommendation (X: 15, Y: 31.5, W: 88, H: 52)
       doc.setFillColor(252, 251, 248);
       doc.setDrawColor(220, 218, 208);
-      doc.setLineWidth(0.25);
-      doc.rect(15, 37, 58, 42, 'FD');
+      doc.setLineWidth(0.3);
+      doc.rect(15, 31.5, 88, 52, 'FD');
 
       let imgBase64: string | null = null;
       if (item.image) {
-        imgBase64 = await urlToBase64Cover(item.image, 56, 40);
+        imgBase64 = await urlToBase64Cover(item.image, 87, 51);
       }
 
       if (imgBase64) {
         try {
-          doc.addImage(imgBase64, 'PNG', 16, 38, 56, 40);
+          doc.addImage(imgBase64, 'PNG', 15.5, 32, 87, 51);
         } catch {
-          drawCompassFallback(doc, 15, 37, 58, 42);
+          drawCompassFallback(doc, 15, 31.5, 88, 52);
         }
       } else {
-        drawCompassFallback(doc, 15, 37, 58, 42);
+        drawCompassFallback(doc, 15, 31.5, 88, 52);
       }
 
-      // Col 2: Info Card
-      doc.setFillColor(252, 251, 248);
-      doc.rect(77, 37, 66, 42, 'FD');
-      
-      doc.setFont('times', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(30, 46, 32);
-      const wrappedTitle = doc.splitTextToSize(titleVal, 62);
-      doc.text(wrappedTitle, 80, 43);
+      // Re-stroke double luxury border over photo
+      doc.setDrawColor(220, 218, 208);
+      doc.setLineWidth(0.35);
+      doc.rect(15, 31.5, 88, 52, 'D');
+      doc.setDrawColor(245, 243, 237);
+      doc.setLineWidth(0.15);
+      doc.rect(15.8, 32.3, 86.4, 50.4, 'D');
 
-      const titleHeightOffset = wrappedTitle.length > 1 ? 8 : 4;
-      
-      doc.setFont('helvetica', 'italic');
-      doc.setFontSize(7.5);
-      doc.setTextColor(220, 38, 38);
-      doc.text(categoryVal.toUpperCase(), 80, 43 + titleHeightOffset);
+      // Category Pill on Photo bottom-left
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(5.8);
+      const catW = doc.getTextWidth(categoryVal.toUpperCase()) + 6;
+      doc.setFillColor(30, 46, 32);
+      doc.rect(17, 76.5, catW, 5.2, 'F');
+      doc.setDrawColor(197, 160, 89);
+      doc.setLineWidth(0.2);
+      doc.rect(17, 76.5, catW, 5.2, 'D');
+      doc.setTextColor(250, 249, 245);
+      doc.text(categoryVal.toUpperCase(), 20, 80.2);
+
+      // Distinction Badge Pill on Photo top-right (Silver / Gold / Platinum reference)
+      if (item.badge) {
+        const badgeType = String(item.badge).toLowerCase();
+        let badgeLabel = 'SILVER CURATION';
+        let badgeFill = [241, 245, 249];
+        let badgeBorder = [148, 163, 184];
+        let badgeTextCol = [15, 23, 42];
+        if (badgeType === 'gold') {
+          badgeLabel = 'GOLD SELECTION';
+          badgeFill = [254, 243, 199];
+          badgeBorder = [217, 119, 6];
+          badgeTextCol = [120, 53, 15];
+        } else if (badgeType === 'platinum') {
+          badgeLabel = 'PLATINUM EXCLUSIVE';
+          badgeFill = [224, 231, 255];
+          badgeBorder = [67, 56, 202];
+          badgeTextCol = [30, 27, 75];
+        }
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(5.5);
+        const badgeW = doc.getTextWidth(badgeLabel) + 6;
+        doc.setFillColor(badgeFill[0], badgeFill[1], badgeFill[2]);
+        doc.setDrawColor(badgeBorder[0], badgeBorder[1], badgeBorder[2]);
+        doc.setLineWidth(0.35);
+        doc.roundedRect(101 - badgeW, 33.5, badgeW, 5.2, 0.8, 0.8, 'FD');
+        doc.setTextColor(badgeTextCol[0], badgeTextCol[1], badgeTextCol[2]);
+        doc.text(badgeLabel, 101 - badgeW + 3, 37.2);
+      }
+
+      // RIGHT: Destination Briefing Card (X: 107, Y: 31.5, W: 88, H: 52)
+      doc.setFillColor(252, 251, 248);
+      doc.setDrawColor(220, 218, 208);
+      doc.setLineWidth(0.3);
+      doc.rect(107, 31.5, 88, 52, 'FD');
+
+      // Left Gold accent bar
+      doc.setFillColor(197, 160, 89);
+      doc.rect(107, 31.5, 1.4, 52, 'F');
+
+      // Eyebrow
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(5.6);
+      doc.setTextColor(140, 138, 125);
+      doc.text('IDEMO CURATED DESTINATION', 111, 36.5);
+
+      // Title
+      doc.setFont('times', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(30, 46, 32);
+      const wrappedTitle = doc.splitTextToSize(titleVal, 80);
+      doc.text(wrappedTitle, 111, 42);
+
+      const titleHeightOffset = (wrappedTitle.length - 1) * 4.5;
+
+      // Location
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6.8);
+      doc.setTextColor(92, 94, 84);
+      doc.text(sanitizePdfText(`📍 ${locationVal}`), 111, 48 + titleHeightOffset);
+
+      // 4-item Key Metrics Grid (2 columns x 2 rows)
+      const metricsStartY = 54 + titleHeightOffset;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.2);
+      doc.setTextColor(30, 46, 32);
+      doc.text('Transit Mode:', 111, metricsStartY);
+      doc.text('Journey Time:', 153, metricsStartY);
 
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7);
       doc.setTextColor(92, 94, 84);
-      doc.text(sanitizePdfText(`Location: ${locationVal}`), 80, 51 + (titleHeightOffset > 4 ? 4 : 0));
-      doc.text(sanitizePdfText(`Journey Time: ${item.travelTime || 'Flexible'}`), 80, 56 + (titleHeightOffset > 4 ? 4 : 0));
-      doc.text(sanitizePdfText(`Transit Mode: ${item.preferredTransport || 'Car/Walk'}`), 80, 61 + (titleHeightOffset > 4 ? 4 : 0));
-      doc.text(sanitizePdfText(`Est. Investment: ${item.estimatedCost || 'Curated'}`), 80, 66 + (titleHeightOffset > 4 ? 4 : 0));
+      doc.text(sanitizePdfText(item.preferredTransport || 'Car / Regional Transit'), 111, metricsStartY + 4);
+      doc.text(sanitizePdfText(item.travelTime || 'Flexible'), 153, metricsStartY + 4);
 
-      if (item.coordinates) {
-        doc.setFont('helvetica', 'italic');
-        doc.setFontSize(6.5);
-        doc.setTextColor(140, 138, 125);
-        doc.text(`GPS: Lat ${item.coordinates.lat.toFixed(4)}, Lng ${item.coordinates.lng.toFixed(4)}`, 80, 71 + (titleHeightOffset > 4 ? 4 : 0));
-      }
-
-      // Col 3: Calendar Widget
-      drawCalendar(doc, 147, 37, 48, 42, year, month, day, pdfLang);
-
-      // --- ROW 2: SPLIT TWO-COLUMN DYNAMIC FLOW (y = 84 to 234) ---
-      doc.setDrawColor(229, 227, 219);
-      doc.setLineWidth(0.4);
-      doc.line(15, 83, 195, 83);
-
-      // LEFT COLUMN: x = 15, width = 85
-      let leftY = 85;
-
-      // 1. TIME BUDGET
-      doc.setFont('times', 'bold');
-      doc.setFontSize(9.5);
+      doc.setFont('helvetica', 'bold');
       doc.setTextColor(30, 46, 32);
-      doc.text(sanitizePdfText(pL.timeBudget), 15, leftY + 3);
-      doc.line(15, leftY + 5, 100, leftY + 5);
+      doc.text('Investment:', 111, metricsStartY + 9.5);
+      doc.text('GPS Location:', 153, metricsStartY + 9.5);
 
-      const formatDuration = (mins: number, lang: string): string => {
-        const hrs = Math.floor(mins / 60);
-        const m = mins % 60;
-        if (lang === 'sr') {
-          return hrs > 0 ? `${hrs}c ${m}m` : `${m}m`;
-        } else if (lang === 'de') {
-          return hrs > 0 ? `${hrs} Std. ${m} Min.` : `${m} Min.`;
-        } else if (lang === 'ru') {
-          return hrs > 0 ? `${hrs} ch. ${m} min.` : `${m} min.`;
-        } else if (lang === 'es') {
-          return hrs > 0 ? `${hrs}h ${m}min` : `${m}min`;
-        } else if (lang === 'zh') {
-          return hrs > 0 ? `${hrs} xiao shi ${m} fen` : `${m} fen`;
-        } else {
-          return hrs > 0 ? `${hrs}h ${m}m` : `${m}m`;
-        }
-      };
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(92, 94, 84);
+      doc.text(sanitizePdfText(item.estimatedCost || 'Curated Experience'), 111, metricsStartY + 13.5);
+      const gpsString = item.coordinates
+        ? `${item.coordinates.lat.toFixed(2)}°N, ${item.coordinates.lng.toFixed(2)}°E`
+        : 'Geolocated';
+      doc.text(gpsString, 153, metricsStartY + 13.5);
 
+      // Date Tag
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6);
+      doc.setTextColor(138, 31, 31);
+      doc.text(`📅 ${day} ${monthLabel} ${year} • Serbia Concierge`, 111, 81.5);
+
+      // --- EDITORIAL DIVIDING LINE (Y: 85.5 mm) ---
+      doc.setDrawColor(220, 218, 208);
+      doc.setLineWidth(0.3);
+      doc.line(15, 85.5, 195, 85.5);
+
+      // Retrieve Descriptions & Insider Tips
+      const descVal = sanitizePdfText(
+        getLocalizedValue(item, 'shortDescription', pdfLang) ||
+        getLocalizedValue(item, 'longDescription', pdfLang) ||
+        item.shortDescription ||
+        item.longDescription ||
+        ''
+      );
+
+      const insiderTipVal = sanitizePdfText(
+        (pdfLang === 'sr' ? (item.insiderTipSr || item.insiderTip) : (item.insiderTipEn || item.insiderTip)) ||
+        item.insiderTip ||
+        (item.translations?.[pdfLang]?.insiderTip) ||
+        (item.translations?.en?.insiderTip) ||
+        (item.category === 'Gastronomy'
+          ? (pdfLang === 'sr' ? 'Rezervisite sto unapred i trazite preporuku sefa za lokalna vina.' : 'Book in advance and ask the host for seasonal pairing selections.')
+          : (pdfLang === 'sr' ? 'Dodjite u prepodnevnim casovima za najprijatniju atmosferu i fotografisanje.' : 'Morning arrival offers optimal natural lighting and tranquil ambience.'))
+      );
+
+      const bestTimeVal = sanitizePdfText(
+        (pdfLang === 'sr' ? (item.bestTimeToVisitSr || item.bestTimeToVisit) : (item.bestTimeToVisitEn || item.bestTimeToVisit)) ||
+        item.bestTimeToVisit ||
+        (item.translations?.[pdfLang]?.bestTimeToVisit) ||
+        (item.translations?.en?.bestTimeToVisit) ||
+        (pdfLang === 'sr' ? 'Kasno popodne pred zalazak sunca' : 'Late afternoon before golden hour')
+      );
+
+      // Companion Recommendation (Nearby Consideration)
+      const companionData = findCompanionRecommendation(item);
+      const companionItem = companionData?.item;
+      const companionDistance = companionData?.distance;
+
+      // Durations
       const hasTravelTime = !!item.travelTime && item.travelTime.trim().length > 0;
       const travelTimeText = hasTravelTime ? item.travelTime : pL.notSpecified;
-
       const hasVisitDuration = (typeof item.recommendedVisitDuration === 'number' && item.recommendedVisitDuration > 0) || (!!item.duration && item.duration.trim().length > 0);
       const visitDurationText = (typeof item.recommendedVisitDuration === 'number' && item.recommendedVisitDuration > 0)
         ? formatDuration(item.recommendedVisitDuration, pdfLang)
-        : (item.duration || pL.notSpecified);
+        : (item.duration || '2-3 hours');
 
-      let budgetY = leftY + 10;
+      // --- 3. DUAL-COLUMN MAGAZINE SPREAD (Y: 87.5 – 226 mm) ---
 
-      // First line: Getting there
+      // LEFT COLUMN: X = 15, Width = 88mm
+      // 1. Curator's Story
+      doc.setFont('times', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(30, 46, 32);
+      doc.text(sanitizePdfText(pL.curatorBrief), 15, 91);
+      doc.setDrawColor(220, 218, 208);
+      doc.setLineWidth(0.2);
+      doc.line(15, 92.5, 103, 92.5);
+
+      doc.setFont('times', 'italic');
+      doc.setFontSize(7.2);
+      doc.setTextColor(60, 62, 54);
+      const wrappedDesc = doc.splitTextToSize(descVal, 87);
+      const slicedDesc = wrappedDesc.slice(0, 3);
+      doc.text(slicedDesc, 15, 96.5);
+
+      // 2. Useful Tips & Insider Guidance Card (Prominent Magazine Callout)
+      const tipCardY = 111;
+      const tipCardH = 34;
+      doc.setFillColor(250, 248, 242);
+      doc.setDrawColor(225, 220, 205);
+      doc.setLineWidth(0.25);
+      doc.rect(15, tipCardY, 88, tipCardH, 'FD');
+
+      // Gold left border accent
+      doc.setFillColor(197, 160, 89);
+      doc.rect(15, tipCardY, 1.4, tipCardH, 'F');
+
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.5);
+      doc.setFontSize(6.2);
+      doc.setTextColor(138, 31, 31); // Oxblood star & header
+      doc.text(sanitizePdfText(`★ ${pL.insiderTipTitle}`), 19, tipCardY + 5);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6.8);
+      doc.setTextColor(35, 37, 30);
+      const wrappedTip = doc.splitTextToSize(insiderTipVal, 81);
+      doc.text(wrappedTip.slice(0, 3), 19, tipCardY + 9.5);
+
+      // Divider inside tip card
+      doc.setDrawColor(230, 225, 215);
+      doc.setLineWidth(0.2);
+      doc.line(19, tipCardY + 23, 99, tipCardY + 23);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6);
       doc.setTextColor(92, 94, 84);
-      doc.text(sanitizePdfText(`${pL.gettingThereLabel}:`), 15, budgetY);
-      doc.setFont('helvetica', 'normal');
-      if (hasTravelTime) {
-        doc.text(sanitizePdfText(`${pL.approx} ${travelTimeText}`), 45, budgetY);
-      } else {
-        doc.text(sanitizePdfText(travelTimeText), 45, budgetY);
-      }
-      budgetY += 5.5;
+      doc.text(sanitizePdfText(`${pL.bestTimeToVisitTitle}: ${bestTimeVal}`), 19, tipCardY + 28);
 
-      // Second line: Enjoying the visit
+      // 3. Time Budget & Visit Flow
+      const budgetStartY = 149;
+      doc.setFont('times', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(30, 46, 32);
+      doc.text(sanitizePdfText(pL.timeBudget), 15, budgetStartY);
+      doc.setDrawColor(220, 218, 208);
+      doc.setLineWidth(0.2);
+      doc.line(15, budgetStartY + 1.5, 103, budgetStartY + 1.5);
+
       doc.setFont('helvetica', 'bold');
-      doc.text(sanitizePdfText(`${pL.enjoyingVisitLabel}:`), 15, budgetY);
+      doc.setFontSize(6.5);
+      doc.setTextColor(92, 94, 84);
+      doc.text(sanitizePdfText(`${pL.gettingThereLabel}:`), 15, budgetStartY + 6);
       doc.setFont('helvetica', 'normal');
-      if (hasVisitDuration) {
-        doc.text(sanitizePdfText(`${pL.approx} ${visitDurationText}`), 45, budgetY);
-      } else {
-        doc.text(sanitizePdfText(visitDurationText), 45, budgetY);
-      }
-      budgetY += 5.5;
+      doc.text(sanitizePdfText(`${pL.approx} ${travelTimeText}`), 45, budgetStartY + 6);
 
-      // Third line: Getting back
       doc.setFont('helvetica', 'bold');
-      doc.text(sanitizePdfText(`${pL.gettingBackLabel}:`), 15, budgetY);
+      doc.text(sanitizePdfText(`${pL.enjoyingVisitLabel}:`), 15, budgetStartY + 11);
       doc.setFont('helvetica', 'normal');
-      if (hasTravelTime) {
-        doc.text(sanitizePdfText(`${pL.allowApprox} ${travelTimeText}`), 45, budgetY);
-      } else {
-        doc.text(sanitizePdfText(travelTimeText), 45, budgetY);
-      }
-      budgetY += 5.5;
+      doc.text(sanitizePdfText(`${pL.approx} ${visitDurationText}`), 45, budgetStartY + 11);
 
-      // Fourth line: Total time (optional)
+      doc.setFont('helvetica', 'bold');
+      doc.text(sanitizePdfText(`${pL.gettingBackLabel}:`), 15, budgetStartY + 16);
+      doc.setFont('helvetica', 'normal');
+      doc.text(sanitizePdfText(`${pL.allowApprox} ${travelTimeText}`), 45, budgetStartY + 16);
+
       const hasNumericDurations = typeof item.travelTimeMinutes === 'number' && typeof item.recommendedVisitDuration === 'number' && item.travelTimeMinutes > 0 && item.recommendedVisitDuration > 0;
       if (hasNumericDurations) {
         const totalMins = item.travelTimeMinutes * 2 + item.recommendedVisitDuration;
         const totalDurationText = formatDuration(totalMins, pdfLang);
-
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(30, 46, 32); // deep green accent
-        doc.text(sanitizePdfText(`${pL.totalTimeLabel}:`), 15, budgetY);
-        doc.text(sanitizePdfText(`${pL.approx} ${totalDurationText}`), 45, budgetY);
-        doc.setTextColor(92, 94, 84); // restore standard color
-        budgetY += 5.5;
+        doc.setTextColor(30, 46, 32);
+        doc.text(sanitizePdfText(`${pL.totalTimeLabel}:`), 15, budgetStartY + 21);
+        doc.text(sanitizePdfText(`${pL.approx} ${totalDurationText}`), 45, budgetStartY + 21);
       }
 
-      // Fifth line: Experience focus (compact, directly below TIME BUDGET)
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(30, 46, 32); // deep green accent
-      doc.text(sanitizePdfText(`${pL.experienceFocusLabel}:`), 15, budgetY);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(92, 94, 84);
-      const focusText = `${categoryVal} — ${titleVal}`;
-      const wrappedFocusText = doc.splitTextToSize(sanitizePdfText(focusText), 54);
-      doc.text(wrappedFocusText, 45, budgetY);
-      budgetY += (wrappedFocusText.length * 4) + 1;
-
-      leftY = budgetY + 1;
-
-      // 2. Why IDEMO Selected This
+      // 4. Mood Orbit Context & Spatial Calibration
+      const moodSectionY = 176;
       doc.setFont('times', 'bold');
-      doc.setFontSize(9.5);
+      doc.setFontSize(8.5);
       doc.setTextColor(30, 46, 32);
-      doc.text(sanitizePdfText(pL.whySelected), 15, leftY + 3);
-      doc.line(15, leftY + 5, 100, leftY + 5);
+      doc.text(sanitizePdfText(pL.moodOrbContext), 15, moodSectionY);
+      doc.setDrawColor(220, 218, 208);
+      doc.setLineWidth(0.2);
+      doc.line(15, moodSectionY + 1.5, 103, moodSectionY + 1.5);
 
-      const whyText = pdfLang === 'sr'
-        ? "Izabrano iz vasih trenutnih IDEMO preporuka i sacuvanog planera dogadaja."
-        : pdfLang === 'de'
-        ? "Ausgewaehlt aus Ihren aktuellen IDEMO-Empfehlungen und Ihrem gespeicherten Event-Planer."
-        : pdfLang === 'ru'
-        ? "Vybrano iz vashih tekushih rekomendacij IDEMO i sohranennogo planera sobytij."
-        : pdfLang === 'es'
-        ? "Seleccionado de sus recomendaciones actuales de IDEMO y planificador de eventos guardado."
-        : "Selected from your current IDEMO recommendations and saved event planner.";
+      const hasRecCoords = 
+        typeof item.coordinateX === 'number' && 
+        typeof item.coordinateY === 'number' && 
+        !isNaN(item.coordinateX) && 
+        !isNaN(item.coordinateY) && 
+        isFinite(item.coordinateX) && 
+        isFinite(item.coordinateY);
 
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.5);
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(6.2);
       doc.setTextColor(92, 94, 84);
-      const wrappedWhy = doc.splitTextToSize(sanitizePdfText(whyText), 85);
-      doc.text(wrappedWhy, 15, leftY + 10);
+      const moodSummaryText = pdfLang === 'sr'
+        ? "Kalibrisano prema vasem profilu putovanja i koordinatama ambijenta."
+        : "Personalized spatial resonance matching your travel pace and ambiance.";
+      doc.text(sanitizePdfText(moodSummaryText), 15, moodSectionY + 6);
 
-      leftY += 10 + (wrappedWhy.length * 4) + 4;
+      const caption1 = pdfLang === 'sr' ? "Vas Mood Orb" : pdfLang === 'de' ? "Ihr Mood Orb" : pdfLang === 'ru' ? "Vash Mood Orb" : pdfLang === 'es' ? "Su Mood Orb" : "Your Mood Orb";
+      const caption2 = pdfLang === 'sr' ? "Odrediste" : pdfLang === 'de' ? "Reiseziel" : pdfLang === 'ru' ? "Cel`" : pdfLang === 'es' ? "Destino" : "Destination";
 
-      // 3. Mood Orb Context
-      const hasMoodData = pdfOrbitX !== undefined && pdfOrbitY !== undefined;
-      if (hasMoodData) {
+      // Dual 2D Mood fields
+      const plotX1 = 28 + pdfOrbitX * 14;
+      const plotY1 = moodSectionY + 13 + pdfOrbitY * 14;
+      drawMoodField(28, moodSectionY + 13, 14, plotX1, plotY1, [30, 46, 32], caption1, pdfLang, true);
+
+      if (hasRecCoords) {
+        const normX = (item.coordinateX + 5) / 10;
+        const normY = (5 - item.coordinateY) / 10;
+        const plotX2 = 68 + normX * 14;
+        const plotY2 = moodSectionY + 13 + normY * 14;
+        drawMoodField(68, moodSectionY + 13, 14, plotX2, plotY2, [138, 31, 31], caption2, pdfLang);
+      }
+
+      // RIGHT COLUMN: X = 107, Width = 88mm
+      // 1. Nearby Consideration & Companion Stop
+      const nearbyCardY = 88;
+      const nearbyCardH = 43;
+      doc.setFillColor(252, 251, 247);
+      doc.setDrawColor(220, 218, 208);
+      doc.setLineWidth(0.25);
+      doc.rect(107, nearbyCardY, 88, nearbyCardH, 'FD');
+
+      // Top Oxblood bar
+      doc.setFillColor(138, 31, 31);
+      doc.rect(107, nearbyCardY, 88, 0.8, 'F');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.2);
+      doc.setTextColor(138, 31, 31);
+      doc.text(sanitizePdfText(pL.nearbyTitle), 110, nearbyCardY + 4.8);
+
+      if (companionItem && typeof companionDistance === 'number') {
+        const compTitle = sanitizePdfText(getLocalizedValue(companionItem, 'title', pdfLang) || companionItem.title || '');
+        const compCat = sanitizePdfText(formatCategory(companionItem.category, activeT) || companionItem.category || '');
+        const compDesc = sanitizePdfText(getLocalizedValue(companionItem, 'shortDescription', pdfLang) || companionItem.shortDescription || '');
+
         doc.setFont('times', 'bold');
         doc.setFontSize(9.5);
         doc.setTextColor(30, 46, 32);
-        doc.text(sanitizePdfText(pL.moodOrbContext), 15, leftY + 3);
-        doc.line(15, leftY + 5, 100, leftY + 5);
+        doc.text(compTitle, 110, nearbyCardY + 10.5);
 
-        // Under Mood Orb Context, keep compact text:
-        const moodText = pdfLang === 'sr'
-          ? "Ovaj plan odrazava vasu trenutnu kalibraciju Mood Orb-a. Prilagodite Mood Orb kada se vasa energija, tempo ili zeljeni ambijent promene; IDEMO ce u skladu sa tim prilagoditi buduce preporuke."
-          : pdfLang === 'de'
-          ? "Dieser Plan spiegelt Ihre aktuelle Mood-Orb-Kalibrierung wider. Passen Sie das Mood Orb an, wenn sich Ihre Energie, Ihr Tempo oder Ihre bevorzugte Atmosphaere aendern; IDEMO wird zukuenftige Empfehlungen entsprechend anpassen."
-          : pdfLang === 'ru'
-          ? "Etot plan otrazhaet vashu tekushuyu kalibrovku Mood Orb. Nastrojte Mood Orb, esli vash uroven` energii, temp ili predpochitaemaya atmosfera izmenyatsya; IDEMO skorrektiruet buduwie rekomendacii."
-          : pdfLang === 'es'
-          ? "Este plan refleja su calibracion actual de Mood Orb. Ajuste el Mood Orb cuando su energia, ritmo o atmosfera de preferencia cambien; IDEMO adaptara las futuras recomendaciones en consecuencia."
-          : "This plan reflects your current Mood Orb calibration. Adjust the Mood Orb when your energy, pace, or preferred atmosphere changes; IDEMO will adapt future recommendations accordingly.";
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(6.2);
+        doc.setTextColor(197, 160, 89);
+        const compDistText = `${compCat.toUpperCase()} • ${companionDistance.toFixed(1)} KM ${pdfLang === 'sr' ? 'UDALJENO' : 'AWAY'} (~${Math.max(5, Math.round(companionDistance * 2))} MIN)`;
+        doc.text(compDistText, 110, nearbyCardY + 15);
 
-        const hasRecCoords = 
-          typeof item.coordinateX === 'number' && 
-          typeof item.coordinateY === 'number' && 
-          !isNaN(item.coordinateX) && 
-          !isNaN(item.coordinateY) && 
-          isFinite(item.coordinateX) && 
-          isFinite(item.coordinateY);
-        const textWidth = hasRecCoords ? 41 : 56;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(6.6);
+        doc.setTextColor(92, 94, 84);
+        const wrappedCompDesc = doc.splitTextToSize(compDesc, 82);
+        doc.text(wrappedCompDesc.slice(0, 3), 110, nearbyCardY + 19.5);
 
         doc.setFont('helvetica', 'italic');
-        doc.setFontSize(7.2);
+        doc.setFontSize(5.8);
+        doc.setTextColor(140, 138, 125);
+        const compTip = pdfLang === 'sr'
+          ? "Preporuceno za prosirenje rute ili opusteni predah u neposrednoj blizini."
+          : "Recommended pairing for an extended day journey or authentic regional break.";
+        doc.text(sanitizePdfText(compTip), 110, nearbyCardY + 38);
+      } else {
+        doc.setFont('times', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(30, 46, 32);
+        doc.text(pdfLang === 'sr' ? 'Regionalni ambijent i priroda' : 'Regional Surroundings & Ambiance', 110, nearbyCardY + 11);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(6.8);
         doc.setTextColor(92, 94, 84);
-        const wrappedMood = doc.splitTextToSize(sanitizePdfText(moodText), textWidth);
-        doc.text(wrappedMood, 15, leftY + 10);
-
-        const textBlockHeight = 10 + (wrappedMood.length * 3.8);
-        let visualsBlockHeight = 0;
-
-        if (hasRecCoords) {
-          visualsBlockHeight = 12 + 14 + 4.5; // ~30.5mm
-          
-          const caption1 = pdfLang === 'sr' ? "Trenutna kalibracija" : pdfLang === 'de' ? "Aktuelle Kalibrierung" : pdfLang === 'ru' ? "Tekushchaya kalibrovka" : pdfLang === 'es' ? "Calibracion actual" : "Your current calibration";
-          const caption2 = pdfLang === 'sr' ? "Pozicija preporuke" : pdfLang === 'de' ? "Position dieser Empfehlung" : pdfLang === 'ru' ? "Poziciya rekomendacii" : pdfLang === 'es' ? "Posicion de esta recomendacion" : "This recommendation's position";
-
-          // Panel 1: User Mood Orb at x = 58, y = leftY + 12
-          const plotX1 = 58 + pdfOrbitX * 14;
-          const plotY1 = leftY + 12 + pdfOrbitY * 14;
-          drawMoodField(58, leftY + 12, 14, plotX1, plotY1, [30, 46, 32], caption1, pdfLang, true);
-
-          // Panel 2: Recommendation Field at x = 83, y = leftY + 12
-          const normX = (item.coordinateX + 5) / 10;
-          const normY = (5 - item.coordinateY) / 10;
-          const plotX2 = 83 + normX * 14;
-          const plotY2 = leftY + 12 + normY * 14;
-          drawMoodField(83, leftY + 12, 14, plotX2, plotY2, [138, 31, 31], caption2, pdfLang);
-        } else {
-          visualsBlockHeight = 12 + 14 + 4.5; // ~30.5mm
-
-          const caption1 = pdfLang === 'sr' ? "Trenutna kalibracija" : pdfLang === 'de' ? "Aktuelle Kalibrierung" : pdfLang === 'ru' ? "Tekushchaya kalibrovka" : pdfLang === 'es' ? "Calibracion actual" : "Your current calibration";
-
-          // Panel 1: User Mood Orb only, positioned at x = 75, y = leftY + 12
-          const plotX1 = 75 + pdfOrbitX * 14;
-          const plotY1 = leftY + 12 + pdfOrbitY * 14;
-          drawMoodField(75, leftY + 12, 14, plotX1, plotY1, [30, 46, 32], caption1, pdfLang, true);
-        }
-
-        leftY += Math.max(textBlockHeight, visualsBlockHeight) + 4;
+        const wrappedNoNearby = doc.splitTextToSize(sanitizePdfText(pL.noNearbyText), 82);
+        doc.text(wrappedNoNearby, 110, nearbyCardY + 17);
       }
 
-      // 4. AFTER YOUR VISIT
+      // 2. Know Before You Go
+      const knowStartY = 135;
       doc.setFont('times', 'bold');
-      doc.setFontSize(9.5);
+      doc.setFontSize(8.5);
       doc.setTextColor(30, 46, 32);
-      doc.text(sanitizePdfText(pL.afterYourVisitTitle), 15, leftY + 3);
-      doc.line(15, leftY + 5, 100, leftY + 5);
-
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.2);
-      doc.setTextColor(92, 94, 84);
-      const wrappedAfterVisit = doc.splitTextToSize(sanitizePdfText(pL.afterYourVisitCopy), 85);
-      doc.text(wrappedAfterVisit, 15, leftY + 10);
-      leftY += 10 + (wrappedAfterVisit.length * 3.5) + 4;
-
-
-      // RIGHT COLUMN: x = 110, width = 85
-      let rightY = 85;
-
-      // 1. Know Before You Go
-      doc.setFont('times', 'bold');
-      doc.setFontSize(9.5);
-      doc.setTextColor(30, 46, 32);
-      doc.text(sanitizePdfText(pL.knowBeforeYouGo), 110, rightY + 3);
-      doc.line(110, rightY + 5, 195, rightY + 5);
+      doc.text(sanitizePdfText(pL.knowBeforeYouGo), 107, knowStartY);
+      doc.setDrawColor(220, 218, 208);
+      doc.setLineWidth(0.2);
+      doc.line(107, knowStartY + 1.5, 195, knowStartY + 1.5);
 
       const knowBullets = getKnowBeforeYouGoBullets(item, pdfLang);
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.5);
+      doc.setFontSize(6.8);
       doc.setTextColor(92, 94, 84);
-      let knowY = rightY + 10;
-      knowBullets.forEach(bullet => {
-        const wrappedBullet = doc.splitTextToSize(sanitizePdfText(`• ${bullet}`), 85);
-        doc.text(wrappedBullet, 110, knowY);
-        knowY += (wrappedBullet.length * 4) + 1.5;
+      let knowY = knowStartY + 6;
+      knowBullets.slice(0, 3).forEach(bullet => {
+        const wrappedBullet = doc.splitTextToSize(sanitizePdfText(`• ${bullet}`), 86);
+        doc.text(wrappedBullet, 107, knowY);
+        knowY += (wrappedBullet.length * 3.6) + 1.2;
       });
 
-      rightY = knowY + 3;
-
-      // 2. Cultural Context
+      // 3. Climate & Cultural Context
+      const climateStartY = 166;
       doc.setFont('times', 'bold');
-      doc.setFontSize(9.5);
+      doc.setFontSize(8.5);
       doc.setTextColor(30, 46, 32);
-      doc.text(sanitizePdfText(pL.culturalContext), 110, rightY + 3);
-      doc.line(110, rightY + 5, 195, rightY + 5);
-
-      const descVal = getLocalizedValue(item, 'shortDescription', pdfLang) || getLocalizedValue(item, 'longDescription', pdfLang) || item.shortDescription || item.longDescription || '';
-      doc.setFont('times', 'italic');
-      doc.setFontSize(8);
-      doc.setTextColor(92, 94, 84);
-      const wrappedDesc = doc.splitTextToSize(sanitizePdfText(descVal), 85);
-      const slicedDesc = wrappedDesc.slice(0, 5);
-      doc.text(slicedDesc, 110, rightY + 10);
-
-      rightY += 10 + (slicedDesc.length * 4) + 4;
-
-      // 3. Cultural Fact Box (Only if verified fact exists)
-      const hasVerifiedFact = !!(item.fact && typeof item.fact === 'string' && item.fact.trim() !== '' && !item.fact.includes('[fact]') && !item.fact.includes('[') && item.whyItMatters && typeof item.whyItMatters === 'string' && item.whyItMatters.trim() !== '' && !item.whyItMatters.includes('[whyItMatters]') && !item.whyItMatters.includes('['));
-
-      if (hasVerifiedFact) {
-        doc.setDrawColor(180, 195, 185);
-        doc.setFillColor(252, 251, 247);
-        doc.setLineWidth(0.25);
-        
-        let factText = sanitizePdfText(getLocalizedValue(item, 'fact', pdfLang) || item.fact || '');
-        let whyText = sanitizePdfText(getLocalizedValue(item, 'whyItMatters', pdfLang) || item.whyItMatters || '');
-        
-        const wrappedFact = doc.splitTextToSize(`Fact: ${factText}`, 80);
-        const wrappedWhy = doc.splitTextToSize(`Why: ${whyText}`, 80);
-        
-        const boxHeight = 8 + (wrappedFact.length * 3.5) + (wrappedWhy.length * 3.5);
-        doc.rect(110, rightY, 85, boxHeight, 'FD');
-        
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(6.5);
-        doc.setTextColor(120, 110, 80);
-        doc.text(sanitizePdfText(pL.culturalContext.toUpperCase()), 113, rightY + 4);
-        
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(7);
-        doc.setTextColor(92, 94, 84);
-        
-        doc.text(wrappedFact, 113, rightY + 8);
-        doc.text(wrappedWhy, 113, rightY + 8 + (wrappedFact.length * 3.5) + 1);
-        
-        rightY += boxHeight + 4;
-      }
-
-      // 4. Typical Conditions for This Month (weather renamed)
-      doc.setFont('times', 'bold');
-      doc.setFontSize(9.5);
-      doc.setTextColor(30, 46, 32);
-      doc.text(sanitizePdfText(pL.typicalConditions), 110, rightY + 3);
-      doc.line(110, rightY + 5, 195, rightY + 5);
+      doc.text(sanitizePdfText(pL.culturalContext), 107, climateStartY);
+      doc.setDrawColor(220, 218, 208);
+      doc.setLineWidth(0.2);
+      doc.line(107, climateStartY + 1.5, 195, climateStartY + 1.5);
 
       const wx = getWeatherForecast(month, pdfLang);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.5);
+      doc.setFontSize(6.8);
       doc.setTextColor(30, 46, 32);
-      doc.text(sanitizePdfText(`Average temp: ${wx.tempRange}`), 110, rightY + 10);
+      doc.text(sanitizePdfText(`Average monthly temperature: ${wx.tempRange}`), 107, climateStartY + 6);
 
       doc.setFont('helvetica', 'italic');
-      doc.setFontSize(7);
+      doc.setFontSize(6.5);
       doc.setTextColor(92, 94, 84);
-      const wrappedAdvise = doc.splitTextToSize(sanitizePdfText(wx.advise), 85);
-      doc.text(wrappedAdvise, 110, rightY + 15);
-      rightY += 15 + (wrappedAdvise.length * 4) + 4;
+      const wrappedAdvise = doc.splitTextToSize(sanitizePdfText(wx.advise), 86);
+      doc.text(wrappedAdvise.slice(0, 2), 107, climateStartY + 10.5);
 
-      // --- NEW ROW: COMPACT TRIP ESSENTIALS SECTION ---
-      const dynamicColumnEndY = Math.max(leftY, rightY);
-      let essentialsY = Math.max(dynamicColumnEndY + 4, 182);
-      // Cap essentialsY to make sure it doesn't push the legal line off the page
-      if (essentialsY > 228) {
-        essentialsY = 228;
+      // Verified Cultural Fact
+      const hasVerifiedFact = !!(item.fact && typeof item.fact === 'string' && item.fact.trim() !== '' && !item.fact.includes('[fact]') && !item.fact.includes('[') && item.whyItMatters && typeof item.whyItMatters === 'string' && item.whyItMatters.trim() !== '');
+      if (hasVerifiedFact) {
+        const factBoxY = climateStartY + 19;
+        doc.setDrawColor(220, 218, 208);
+        doc.setFillColor(252, 251, 247);
+        doc.setLineWidth(0.2);
+        doc.rect(107, factBoxY, 88, 19, 'FD');
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(5.8);
+        doc.setTextColor(138, 31, 31);
+        doc.text('HERITAGE INSIGHT', 109, factBoxY + 3.8);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(6.2);
+        doc.setTextColor(92, 94, 84);
+        let factText = sanitizePdfText(getLocalizedValue(item, 'fact', pdfLang) || item.fact || '');
+        const wrappedFact = doc.splitTextToSize(factText, 84);
+        doc.text(wrappedFact.slice(0, 3), 109, factBoxY + 7.5);
       }
 
-      // Title & line
+      // 4. After Your Visit
+      const afterVisitY = 210;
       doc.setFont('times', 'bold');
-      doc.setFontSize(9.5);
+      doc.setFontSize(7.5);
       doc.setTextColor(30, 46, 32);
-      doc.text("TRIP ESSENTIALS", 15, essentialsY + 3);
-      doc.line(15, essentialsY + 5, 195, essentialsY + 5);
+      doc.text(sanitizePdfText(pL.afterYourVisitTitle), 107, afterVisitY);
+      doc.setDrawColor(220, 218, 208);
+      doc.setLineWidth(0.2);
+      doc.line(107, afterVisitY + 1.5, 195, afterVisitY + 1.5);
 
-      const colY = essentialsY + 10;
-      const colHeight = 29;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6.5);
+      doc.setTextColor(92, 94, 84);
+      const wrappedAfterVisit = doc.splitTextToSize(sanitizePdfText(pL.afterYourVisitCopy), 86);
+      doc.text(wrappedAfterVisit.slice(0, 2), 107, afterVisitY + 5.5);
 
-      // Draw the 4 Column Background Cards
+      // --- 4. CONCIERGE ESSENTIALS TRAY (Y: 228 – 267 mm, Height: 39mm) ---
+      const essentialsY = 227;
+      doc.setFont('times', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(30, 46, 32);
+      doc.text(sanitizePdfText(pL.travelEssentials), 15, essentialsY);
+      doc.setDrawColor(220, 218, 208);
+      doc.setLineWidth(0.2);
+      doc.line(15, essentialsY + 1.5, 195, essentialsY + 1.5);
+
+      const colY = essentialsY + 5;
+      const colHeight = 31;
+      const cardWidth = 42.5;
+      const gap = 3.3;
+
+      // Draw 4 cards
       for (let c = 0; c < 4; c++) {
-        const colX = 15 + c * 46; // 15, 61, 107, 153
+        const colX = 15 + c * (cardWidth + gap);
         doc.setFillColor(252, 251, 248);
         doc.setDrawColor(220, 218, 208);
         doc.setLineWidth(0.25);
-        doc.rect(colX, colY, 41, colHeight, 'FD');
+        doc.rect(colX, colY, cardWidth, colHeight, 'FD');
       }
 
-      // Column 1: EMERGENCY
-      let colX1 = 15;
+      // Card 1: EMERGENCY
+      const colX1 = 15;
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6.5);
-      doc.setTextColor(220, 38, 38); // Emergency red
-      doc.text("EMERGENCY", colX1 + 3, colY + 5);
+      doc.setFontSize(6.2);
+      doc.setTextColor(138, 31, 31);
+      doc.text(sanitizePdfText(pL.emergencyAssistance), colX1 + 3, colY + 5);
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
-      doc.text("112", colX1 + 3, colY + 12);
+      doc.text('112', colX1 + 3, colY + 12);
 
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6);
+      doc.setFontSize(5.8);
       doc.setTextColor(92, 94, 84);
-      const emergencyDesc = pdfLang === 'sr'
-        ? "Univerzalni broj za hitne slucajeve"
-        : "Universal emergency number";
-      const wrappedEmergency = doc.splitTextToSize(sanitizePdfText(emergencyDesc), 35);
-      doc.text(wrappedEmergency, colX1 + 3, colY + 17);
+      const emDesc = pdfLang === 'sr' ? 'Univerzalni broj za hitne slucajeve u celoj Srbiji.' : 'Universal emergency dispatch throughout Serbia.';
+      doc.text(doc.splitTextToSize(sanitizePdfText(emDesc), 36.5), colX1 + 3, colY + 17);
 
-      // Column 2: MONEY
-      let colX2 = 61;
+      // Card 2: MONEY
+      const colX2 = 15 + (cardWidth + gap);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6.5);
+      doc.setFontSize(6.2);
       doc.setTextColor(30, 46, 32);
-      doc.text("MONEY", colX2 + 3, colY + 5);
+      doc.text(sanitizePdfText(pL.moneyPayment), colX2 + 3, colY + 5);
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(10);
-      doc.text("RSD", colX2 + 3, colY + 12);
+      doc.text('RSD', colX2 + 3, colY + 12);
 
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6);
+      doc.setFontSize(5.8);
       doc.setTextColor(92, 94, 84);
       const moneyDesc = pdfLang === 'sr'
-        ? "Srpski Dinar (RSD). Kurs varira; proverite pre menjanja."
-        : "Serbian Dinar (RSD). Exchange rates vary; check before exchanging money.";
-      const wrappedMoney = doc.splitTextToSize(moneyDesc, 35);
-      doc.text(wrappedMoney, colX2 + 3, colY + 17);
+        ? 'Srpski dinar. Kartice se prihvataju, ponesite kes za pijace.'
+        : 'Serbian Dinar. Cards widely accepted; carry cash for artisan markets.';
+      doc.text(doc.splitTextToSize(sanitizePdfText(moneyDesc), 36.5), colX2 + 3, colY + 17);
 
-      // Column 3: USEFUL SERBIAN
-      let colX3 = 107;
+      // Card 3: USEFUL SERBIAN
+      const colX3 = 15 + 2 * (cardWidth + gap);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6.5);
+      doc.setFontSize(6.2);
       doc.setTextColor(30, 46, 32);
-      doc.text("USEFUL SERBIAN", colX3 + 3, colY + 5);
+      doc.text(sanitizePdfText(pL.usefulPhrases), colX3 + 3, colY + 5);
 
-      // Dobar dan
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(5.8);
+      doc.text('Dobar dan', colX3 + 3, colY + 10);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(5.2);
+      doc.text('— Good day', colX3 + 3, colY + 12.5);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(5.8);
+      doc.text('Hvala', colX3 + 3, colY + 16.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(5.2);
+      doc.text('— Thank you', colX3 + 3, colY + 19);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(5.8);
+      doc.text('Racun, molim', colX3 + 3, colY + 23);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(5.2);
+      doc.text('— Bill, please', colX3 + 3, colY + 25.5);
+
+      // Card 4: TRANSIT & ACCESS
+      const colX4 = 15 + 3 * (cardWidth + gap);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(6.2);
-      doc.text("Dobar dan", colX3 + 3, colY + 10);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(5.5);
-      doc.text("— Good day", colX3 + 3, colY + 12.5);
-
-      // Hvala
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6.2);
-      doc.text("Hvala", colX3 + 3, colY + 17);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(5.5);
-      doc.text("— Thank you", colX3 + 3, colY + 19.5);
-
-      // Racun, molim
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6.2);
-      doc.text("Racun, molim", colX3 + 3, colY + 24);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(5.5);
-      doc.text("— The bill, please", colX3 + 3, colY + 26.5);
-
-      // Column 4: GETTING THERE & BACK
-      let colX4 = 153;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6.5);
       doc.setTextColor(30, 46, 32);
-      doc.text("GETTING THERE & BACK", colX4 + 3, colY + 5);
+      doc.text(sanitizePdfText(pL.gettingThere), colX4 + 3, colY + 5);
 
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6);
+      doc.setFontSize(5.8);
       doc.setTextColor(92, 94, 84);
-      doc.text("Transport:", colX4 + 3, colY + 10);
+      doc.text('Transport:', colX4 + 3, colY + 10);
       doc.setFont('helvetica', 'normal');
-      doc.text(sanitizePdfText(item.preferredTransport || pL.notSpecified), colX4 + 3, colY + 12.5);
+      doc.text(sanitizePdfText(item.preferredTransport || 'Car / Transit'), colX4 + 3, colY + 12.5);
 
       doc.setFont('helvetica', 'bold');
-      doc.text("Travel Time:", colX4 + 3, colY + 17);
+      doc.text('Travel Time:', colX4 + 3, colY + 16.5);
       doc.setFont('helvetica', 'normal');
-      doc.text(sanitizePdfText(item.travelTime || pL.notSpecified), colX4 + 3, colY + 19.5);
+      doc.text(sanitizePdfText(item.travelTime || 'Flexible'), colX4 + 3, colY + 19);
 
       doc.setFont('helvetica', 'bold');
-      doc.text("Location:", colX4 + 3, colY + 24);
+      doc.text('Coordinates:', colX4 + 3, colY + 23);
       doc.setFont('helvetica', 'normal');
-      const wrappedLoc = doc.splitTextToSize(sanitizePdfText(item.location || pL.notSpecified), 35);
-      doc.text(wrappedLoc, colX4 + 3, colY + 26.5);
+      doc.text(sanitizePdfText(gpsString), colX4 + 3, colY + 25.5);
 
-      const essentialsEndY = colY + colHeight;
-
-      // --- ROW 3: Legal & Disclaimer ---
-      const legalY = essentialsEndY + 4;
-      doc.setDrawColor(229, 227, 219);
-      doc.setLineWidth(0.3);
+      // --- 5. RUNNING FOOTER & LEGAL DISCLAIMER (Y: 269 – 285 mm) ---
+      const legalY = colY + colHeight + 3.5;
+      doc.setDrawColor(220, 218, 208);
+      doc.setLineWidth(0.25);
       doc.line(15, legalY, 195, legalY);
 
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6.2);
+      doc.setFontSize(5.2);
       doc.setTextColor(140, 138, 125);
-      
       const disclaimerText = `${activeT.legal_disclaimer}: ${activeT.disclaimer_1} ${activeT.disclaimer_2}`;
       const wrappedDisclaimer = doc.splitTextToSize(sanitizePdfText(disclaimerText), 180);
-      doc.text(wrappedDisclaimer, 15, legalY + 4);
+      doc.text(wrappedDisclaimer.slice(0, 2), 15, legalY + 3.5);
 
-      // A4 base line with Dynamic numbers
-      doc.setDrawColor(229, 227, 219);
-      doc.setLineWidth(0.4);
+      // Base hairline & running footer
+      doc.setDrawColor(220, 218, 208);
+      doc.setLineWidth(0.3);
       doc.line(15, pageHeight - 15, pageWidth - 15, pageHeight - 15);
 
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7);
+      doc.setFontSize(6.5);
       doc.setTextColor(140, 138, 125);
-      const footerText1 = sanitizePdfText('IDEMO — MY EVENT PLANNER');
-      const footerText2 = sanitizePdfText(`Plan item ${idx + 1} of ${scheduledItems.length}`);
-      doc.text(footerText1, 15, pageHeight - 10);
-      doc.text(footerText2, pageWidth - 15 - doc.getTextWidth(footerText2), pageHeight - 10);
+      const footerText1 = sanitizePdfText('IDEMO BESPOKE TRAVEL DOSSIER • SERBIA PRIVATE CONCIERGE');
+      const footerText2 = sanitizePdfText(`${pL.planItem.toUpperCase()} ${idx + 1} OF ${scheduledItems.length}`);
+      doc.text(footerText1, 15, pageHeight - 10.5);
+      doc.text(footerText2, pageWidth - 15 - doc.getTextWidth(footerText2), pageHeight - 10.5);
     }
 
     return doc;
@@ -10277,6 +10222,8 @@ function ExploreScreen({
             language={language}
             size={44}
             iconSize={18}
+            budget={budget}
+            time={time}
           />
         </div>
       </header>

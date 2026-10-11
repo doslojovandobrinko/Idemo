@@ -1050,28 +1050,33 @@ export default function ProfileScreen({
           onTouchStart={handleLogoPressStart}
           onTouchEnd={handleLogoPressEnd}
           onClick={handleLogoTap}
-          className="w-full text-center space-y-1.5 px-2 pt-1 flex-shrink-0 cursor-pointer select-none"
+          className="w-full text-center px-2 pt-1 flex-shrink-0 cursor-pointer select-none"
           id="admin-logo-trigger"
         >
           <h2 className="text-[25px] xs:text-[28px] sm:text-[31px] font-serif font-normal tracking-tight text-[#1A1A18] leading-[1.15]">
-            {introCard0.title}
+            <span className="block">
+              {isSr ? 'POSTAVITE SVOJE RASPOLOŽENJE I PREFERENCIJE.' : 'SET YOUR MOOD AND YOUR PREFERENCES.'}
+            </span>
+            <span className="block">
+              {isSr ? 'IDEMO RADI OSTALO.' : 'IDEMO DOES THE REST.'}
+            </span>
           </h2>
-          <p className="text-[15px] sm:text-[16px] font-sans text-brand-charcoal max-w-sm mx-auto leading-relaxed">
-            {pendingArchetype.desc[language] || pendingArchetype.desc.en}
-          </p>
         </div>
 
-        {/* Dynamic Live Profile-Name and 3 Characteristics */}
+        {/* Dynamic Live Profile-Name, 3 Characteristics, and Mood Description */}
         <div 
           id="profile-live-profile-label"
-          className="w-full text-center px-4 flex flex-col items-center justify-center flex-shrink-0 space-y-1 mb-1"
+          className="w-full text-center px-4 flex flex-col items-center justify-center flex-shrink-0 space-y-1.5 mb-1"
         >
-          <span className="font-sans text-[17px] font-bold text-[#800020] text-center leading-snug break-words">
+          <span className="font-sans text-[20.5px] sm:text-[21px] font-bold text-[#800020] text-center leading-snug break-words">
             {pendingArchetype.name[language] || pendingArchetype.name.en}
           </span>
           <span className="font-sans text-[17px] font-normal text-brand-charcoal text-center leading-snug break-words">
             {(pendingArchetype.tagline[language] || pendingArchetype.tagline.en).replace(/•/g, '·')}
           </span>
+          <p className="text-[15px] sm:text-[16px] font-sans text-brand-charcoal max-w-sm mx-auto leading-relaxed text-center pt-0.5">
+            {pendingArchetype.desc[language] || pendingArchetype.desc.en}
+          </p>
         </div>
 
         {/* Canonical Horological Orb Instrument */}

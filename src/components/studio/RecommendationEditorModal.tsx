@@ -33,8 +33,10 @@ import {
   RefreshCw,
   Trash2,
   Loader2,
-  FileImage
+  FileImage,
+  Award
 } from 'lucide-react';
+import PremiumBadge from '../PremiumBadge';
 import { Recommendation, Category } from '../../types';
 import { INITIAL_RECOMMENDATIONS } from '../../data/recommendations/serbia';
 import { draftExpansionPool } from '../../data/recommendations/serbia/draft_expansion';
@@ -238,6 +240,9 @@ export function buildInitialForm(initialRecommendation?: Recommendation | null, 
       seasonality: initialRecommendation.seasonality || 'all',
       familySuitability: initialRecommendation.familySuitability ?? true,
       accessibility: initialRecommendation.accessibility ?? true,
+      badge: (initialRecommendation.badge === 'silver' || initialRecommendation.badge === 'gold' || initialRecommendation.badge === 'platinum')
+        ? initialRecommendation.badge
+        : undefined,
       coordinates: (initialRecommendation.coordinates && typeof initialRecommendation.coordinates.lat === 'number' && typeof initialRecommendation.coordinates.lng === 'number')
         ? initialRecommendation.coordinates
         : ((typeof (initialRecommendation as any).latitude === 'number' && typeof (initialRecommendation as any).longitude === 'number')
@@ -317,6 +322,7 @@ export function buildInitialForm(initialRecommendation?: Recommendation | null, 
     seasonality: 'all',
     familySuitability: true,
     accessibility: true,
+    badge: undefined,
     premiumLevel: 'standard',
     budgetLevel: 'moderate',
     moods: ['Serene'],
@@ -2029,6 +2035,79 @@ export function RecommendationEditorModal({
                 </div>
               </div>
 
+              {/* Curator Editorial Distinction Badge (Silver / Gold / Platinum) */}
+              <div className="p-4 bg-[#FAF9F5] border border-[#E5E3DB] rounded-2xl space-y-3">
+                <div className="flex items-center justify-between border-b border-[#E5E3DB] pb-2">
+                  <div className="flex items-center gap-2">
+                    <Award size={16} className="text-[#C5A059]" />
+                    <h3 className="font-mono text-xs uppercase font-bold text-[#1E2E20]">
+                      Curator Distinction Badge
+                    </h3>
+                  </div>
+                  <span className="font-mono text-[10px] text-[#8C8A7D]">
+                    {form.badge ? `Affixed: ${form.badge.toUpperCase()}` : 'Standard (No Badge)'}
+                  </span>
+                </div>
+
+                <p className="text-xs text-[#57534E] font-sans leading-relaxed">
+                  Curators can affix a distinction badge to elevate this recommendation across IDEMO traveler guides (e.g. <em>Wines from the Sands</em> carries Platinum).
+                </p>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, badge: undefined })}
+                    className={`p-3 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1.5 min-h-[56px] ${
+                      !form.badge
+                        ? 'bg-[#23251E] text-white border-[#23251E] shadow-xs'
+                        : 'bg-white text-[#1E2E20] border-[#E5E3DB] hover:border-[#23251E]/30'
+                    }`}
+                  >
+                    <span className="font-mono text-[11px] font-bold uppercase">None</span>
+                    <span className="text-[10px] text-[#8C8A7D] font-mono">Standard Rec</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, badge: 'silver' })}
+                    className={`p-3 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1.5 min-h-[56px] ${
+                      form.badge === 'silver'
+                        ? 'bg-[#CAD2C5]/30 border-[#94A3B8] ring-2 ring-[#94A3B8] shadow-xs'
+                        : 'bg-white border-[#E5E3DB] hover:border-[#94A3B8]'
+                    }`}
+                  >
+                    <PremiumBadge type="silver" compact />
+                    <span className="text-[9px] text-[#475569] font-mono font-bold mt-0.5">Silver Curation</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, badge: 'gold' })}
+                    className={`p-3 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1.5 min-h-[56px] ${
+                      form.badge === 'gold'
+                        ? 'bg-[#FDE68A]/30 border-[#D97706] ring-2 ring-[#D97706] shadow-xs'
+                        : 'bg-white border-[#E5E3DB] hover:border-[#D97706]'
+                    }`}
+                  >
+                    <PremiumBadge type="gold" compact />
+                    <span className="text-[9px] text-[#92400E] font-mono font-bold mt-0.5">Gold Selection</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, badge: 'platinum' })}
+                    className={`p-3 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1.5 min-h-[56px] ${
+                      form.badge === 'platinum'
+                        ? 'bg-[#E0E7FF]/40 border-[#4338CA] ring-2 ring-[#4338CA] shadow-xs'
+                        : 'bg-white border-[#E5E3DB] hover:border-[#4338CA]'
+                    }`}
+                  >
+                    <PremiumBadge type="platinum" compact />
+                    <span className="text-[9px] text-[#3730A3] font-mono font-bold mt-0.5">Platinum Exclusive</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Expertise & Capability Taxonomy Identifiers */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Expertise IDs */}
@@ -3242,7 +3321,7 @@ export function RecommendationEditorModal({
                       </div>
                     ) : (resolvedDisplayUrl || fileLocalPreview || form.image) ? (
                       <img
-                        src={resolvedDisplayUrl || fileLocalPreview || getOptimizedImageUrl(form.image) || undefined}
+                        src={resolvedDisplayUrl || fileLocalPreview || getOptimizedImageUrl(form.image || '') || undefined}
                         alt={form.title || 'Preview'}
                         className="w-full h-full object-cover"
                       />
@@ -3254,6 +3333,11 @@ export function RecommendationEditorModal({
                     <div className="absolute top-2 left-2 px-2 py-0.5 bg-[#23251E] text-white font-mono text-[9px] font-bold rounded-md uppercase">
                       {form.category || 'Gastronomy'}
                     </div>
+                    {form.badge && (
+                      <div className="absolute top-2 right-2">
+                        <PremiumBadge type={form.badge} compact />
+                      </div>
+                    )}
                   </div>
 
 

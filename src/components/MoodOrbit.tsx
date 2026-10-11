@@ -379,21 +379,21 @@ export default function MoodOrbit({
     return Math.pow((b - 100) / 400, 1 / 1.5);
   };
 
-  // Orb Diameter based on budget size - doubled maximum rendered diameter on Profile
+  // Orb Diameter based on budget size - scaled proportionally with 20% reduction of 2D field
   const orbDiameter = useMemo(() => {
     const ratio = (localBudget - 100) / 400;
-    // Preserves 68px minimum at €100, reaching 212px at €500 (doubled from previous 106px maximum)
-    return Math.max(68, 68 + ratio * 144);
+    // Preserves ~54px minimum at €100, reaching ~170px at €500 (scaled by 0.8 with 20% 2D field reduction)
+    return Math.max(54, Math.round((68 + ratio * 144) * 0.8));
   }, [localBudget]);
 
   // Titanium outer bezel width matching Intro Card 1
   const outerBezelWidth = useMemo(() => {
     const ratio = (localBudget - 100) / 400;
-    return 8 + ratio * 4;
+    return Math.round((8 + ratio * 4) * 0.8);
   }, [localBudget]);
 
   // Measure field width for safe visual boundary clamping without mutating normalized mood coordinates
-  const [fieldWidth, setFieldWidth] = useState(340);
+  const [fieldWidth, setFieldWidth] = useState(272);
   useEffect(() => {
     if (!fieldRef.current) return;
     const updateWidth = () => {
@@ -834,7 +834,7 @@ export default function MoodOrbit({
             triggerHapticProxy(25);
           }
         }}
-        className={`w-full aspect-square max-w-[420px] relative bg-white/80 backdrop-blur-md border border-[#E2DFC2]/80 rounded-[28px] overflow-hidden select-none touch-none shadow-sm mx-auto flex items-center justify-center p-2 cursor-pointer z-10 transition-all duration-300 ${
+        className={`w-[80%] aspect-square max-w-[336px] relative bg-white/80 backdrop-blur-md border border-[#E2DFC2]/80 rounded-[28px] overflow-hidden select-none touch-none shadow-sm mx-auto flex items-center justify-center p-2 cursor-pointer z-10 transition-all duration-300 ${
           activeGesture === 'position' ? 'shadow-inner bg-[#FAF9F5]/40 border-[#800020]/35' : 'hover:border-[#BEBBB2]'
         }`}
       >

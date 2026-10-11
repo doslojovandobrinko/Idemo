@@ -17,6 +17,7 @@ import { submitInquiry, fetchActiveProposal, confirmProposal, declineProposal, c
 import { executeCoordinatedVisitorRequest } from '../lib/visitorRateCoordinator';
 import { isSupabaseConfigured } from '../lib/supabaseClient';
 import { routeOutboundAction } from '../lib/outboundRouter';
+import { ensureEnglishSync } from '../lib/inquiryTranslation';
 
 function getPartnerMonogram(name?: string): string {
   if (!name) return 'PTR';
@@ -158,7 +159,7 @@ const PLAN_CARD_TR: Record<string, {
 
 const ARRANGE_TR: Record<string, any> = {
   en: {
-    arrange_this: "ARRANGE",
+    arrange_this: "REQUEST A LOCAL GUIDE",
     request_arrangement: "Request Arrangement",
     preferred_time: "Preferred Time",
     personal_notes: "Personal Notes",
@@ -175,7 +176,7 @@ const ARRANGE_TR: Record<string, any> = {
     direct_contact_desc: "While partners are engaged, you may reach the venue or view visiting details directly:",
   },
   sr: {
-    arrange_this: "ARRANGE",
+    arrange_this: "REQUEST A LOCAL GUIDE",
     request_arrangement: "Zatraži ugovaranje",
     preferred_time: "Željeno vreme",
     personal_notes: "Lične zabeleške",
@@ -192,7 +193,7 @@ const ARRANGE_TR: Record<string, any> = {
     direct_contact_desc: "Dok su partneri zauzeti, lokaciju možete kontaktirati ili posetiti direktno:",
   },
   es: {
-    arrange_this: "ARRANGE",
+    arrange_this: "REQUEST A LOCAL GUIDE",
     request_arrangement: "Solicitar arreglo",
     preferred_time: "Hora preferida",
     personal_notes: "Notas personales",
@@ -209,7 +210,7 @@ const ARRANGE_TR: Record<string, any> = {
     direct_contact_desc: "Mientras los socios están ocupados, puede contactar el lugar directamente:",
   },
   de: {
-    arrange_this: "ARRANGE",
+    arrange_this: "REQUEST A LOCAL GUIDE",
     request_arrangement: "Termin anfragen",
     preferred_time: "Bevorzugte Uhrzeit",
     personal_notes: "Eigene Anmerkungen",
@@ -226,7 +227,7 @@ const ARRANGE_TR: Record<string, any> = {
     direct_contact_desc: "Während unsere Partner ausgelastet sind, können Sie den Ort direkt kontaktieren:",
   },
   ru: {
-    arrange_this: "ARRANGE",
+    arrange_this: "REQUEST A LOCAL GUIDE",
     request_arrangement: "Запросить организацию",
     preferred_time: "Удобное время",
     personal_notes: "Личные заметки",
@@ -243,7 +244,7 @@ const ARRANGE_TR: Record<string, any> = {
     direct_contact_desc: "Пока партнеры заняты, вы можете связаться напрямую:",
   },
   zh: {
-    arrange_this: "ARRANGE",
+    arrange_this: "REQUEST A LOCAL GUIDE",
     request_arrangement: "申请专属安排",
     preferred_time: "首选时间",
     personal_notes: "专属备注",
@@ -305,7 +306,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
             match_id: cached.match_id,
             response_id: cached.response_id,
             response_type: cached.response_type,
-            message: cached.message,
+            message: ensureEnglishSync(cached.message),
             proposed_start_at: cached.proposed_start_at,
             proposed_end_at: cached.proposed_end_at,
           };
@@ -486,7 +487,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                 match_id: proposalRes.match_id,
                 response_id: proposalRes.response_id,
                 response_type: proposalRes.response_type,
-                message: proposalRes.message,
+                message: ensureEnglishSync(proposalRes.message),
                 proposed_start_at: proposalRes.proposed_start_at || null,
                 proposed_end_at: proposalRes.proposed_end_at || null,
                 cached_at: Date.now(),
@@ -522,7 +523,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
               match_id: cached.match_id,
               response_id: cached.response_id,
               response_type: cached.response_type,
-              message: cached.message,
+              message: ensureEnglishSync(cached.message),
               proposed_start_at: cached.proposed_start_at,
               proposed_end_at: cached.proposed_end_at,
             });
@@ -602,7 +603,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                 match_id: cached.match_id,
                 response_id: cached.response_id,
                 response_type: cached.response_type,
-                message: cached.message,
+                message: ensureEnglishSync(cached.message),
                 proposed_start_at: cached.proposed_start_at,
                 proposed_end_at: cached.proposed_end_at,
               });
@@ -1808,7 +1809,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
 
                   {activeProposal.message && (
                     <p className="text-[9.5px] text-brand-charcoal leading-relaxed font-sans bg-brand-sage/5 p-2 rounded-lg border border-brand-sage/10">
-                      "{activeProposal.message}"
+                      "{ensureEnglishSync(activeProposal.message)}"
                     </p>
                   )}
 
@@ -2054,7 +2055,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                         {language === 'sr' ? 'Potvrđeni detalji ponude:' : 'Confirmed Terms:'}
                       </span>
                       <p className="text-[9.5px] text-brand-charcoal leading-relaxed font-sans font-medium">
-                        {confirmedArrangement.confirmed_terms}
+                        {ensureEnglishSync(confirmedArrangement.confirmed_terms)}
                       </p>
                       {(confirmedArrangement.proposed_start_at || confirmedArrangement.proposed_end_at) && (
                         <div className="text-[8.5px] text-brand-charcoal/80 font-mono pt-1">

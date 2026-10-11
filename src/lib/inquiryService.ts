@@ -8,6 +8,7 @@ import { saveInquiryRecordV2, saveVisitorCredential, getVisitorCredential, remov
 import { bootstrapTaxonomy, getTaxonomyCache } from './taxonomyStore';
 import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 import { safeStorage } from './safeStorage';
+import { ensureEnglishSync } from './inquiryTranslation';
 
 const metaEnv = (import.meta as unknown as { env?: Record<string, string> }).env || {};
 const getEnvVar = (key: string): string => {
@@ -334,7 +335,7 @@ export async function fetchActiveProposal(inquiryId: string): Promise<VisitorPro
       match_id: resData.match_id,
       response_id: resData.response_id,
       response_type: resData.response_type,
-      message: resData.message,
+      message: ensureEnglishSync(resData.message),
       proposed_start_at: resData.proposed_start_at,
       proposed_end_at: resData.proposed_end_at,
       created_at: resData.created_at,

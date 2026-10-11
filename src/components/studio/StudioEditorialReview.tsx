@@ -34,8 +34,10 @@ import {
   RefreshCw,
   User,
   CheckCircle,
-  AlertOctagon
+  AlertOctagon,
+  Award
 } from 'lucide-react';
+import PremiumBadge from '../PremiumBadge';
 import { Recommendation, Category, Partner } from '../../types';
 import { INITIAL_RECOMMENDATIONS } from '../../constants';
 import { draftExpansionPool } from '../../data/recommendations/serbia/draft_expansion';
@@ -618,9 +620,14 @@ export function StudioEditorialReview({
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-[9.5px] font-bold text-[#8C8A7D]">
-                      #{r.id}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-[9.5px] font-bold text-[#8C8A7D]">
+                        #{r.id}
+                      </span>
+                      {r.badge && (
+                        <PremiumBadge type={r.badge} compact />
+                      )}
+                    </div>
                     <span className={`text-[8.5px] font-mono px-2 py-0.5 rounded-md font-bold uppercase border ${
                       status === 'APPROVED' ? 'bg-[#E8F5E9] text-[#2E7D32] border-[#C8E6C9]' :
                       status === 'NEEDS RESEARCH' ? 'bg-[#FFEBEE] text-[#C62828] border-[#FFCDD2]' :
@@ -671,6 +678,9 @@ export function StudioEditorialReview({
                   <span className="px-2.5 py-0.5 rounded-md bg-[#23251E] text-white font-mono text-[10px] font-bold">
                     v1.4.2 Canonical
                   </span>
+                  {activeRec.badge && (
+                    <PremiumBadge type={activeRec.badge} compact />
+                  )}
                 </div>
                 <h2 className="font-serif text-2xl font-bold text-[#1E2E20]">
                   {activeRec.title}
@@ -680,19 +690,53 @@ export function StudioEditorialReview({
                 </p>
               </div>
 
-              {/* Status Change Selector */}
-              <div className="flex items-center gap-2 font-mono text-xs">
-                <span className="text-[#8C8A7D] text-[10px] uppercase font-bold">Status:</span>
-                <select
-                  value={currentStatus}
-                  onChange={(e) => handleStatusChange(e.target.value as any)}
-                  className="px-3 py-1.5 rounded-xl bg-[#FAF9F5] border border-[#E5E3DB] font-bold text-[#1E2E20] outline-none cursor-pointer"
-                >
-                  <option value="APPROVED">APPROVED</option>
-                  <option value="CANDIDATE">CANDIDATE</option>
-                  <option value="NEEDS RESEARCH">NEEDS RESEARCH</option>
-                  <option value="RETIRED">RETIRED</option>
-                </select>
+              {/* Status & Badge Selectors */}
+              <div className="flex flex-wrap items-center gap-3 font-mono text-xs">
+                {/* Curator Distinction Badge Selector */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[#8C8A7D] text-[10px] uppercase font-bold flex items-center gap-1">
+                    <Award size={12} className="text-[#C5A059]" /> Badge:
+                  </span>
+                  <select
+                    value={activeRec.badge || ''}
+                    onChange={(e) => {
+                      const val = e.target.value as 'silver' | 'gold' | 'platinum' | '';
+                      const nextBadge = val ? val : undefined;
+                      const updated: Recommendation = {
+                        ...activeRec,
+                        badge: nextBadge
+                      };
+                      if (editableRec) {
+                        setEditableRec({ ...editableRec, badge: nextBadge });
+                      }
+                      saveLocalStudioDraft(updated);
+                      if (onAddCustomRecommendation) {
+                        onAddCustomRecommendation(updated);
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-[#FAF9F5] border border-[#E5E3DB] font-bold text-[#1E2E20] outline-none cursor-pointer"
+                  >
+                    <option value="">None (Standard)</option>
+                    <option value="silver">Silver Curation</option>
+                    <option value="gold">Gold Selection</option>
+                    <option value="platinum">Platinum Exclusive</option>
+                  </select>
+                </div>
+
+                {/* Status Change Selector */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[#8C8A7D] text-[10px] uppercase font-bold">Status:</span>
+                  <select
+                    value={currentStatus}
+                    onChange={(e) => handleStatusChange(e.target.value as any)}
+                    className="px-3 py-1.5 rounded-xl bg-[#FAF9F5] border border-[#E5E3DB] font-bold text-[#1E2E20] outline-none cursor-pointer"
+                  >
+                    <option value="APPROVED">APPROVED</option>
+                    <option value="CANDIDATE">CANDIDATE</option>
+                    <option value="NEEDS RESEARCH">NEEDS RESEARCH</option>
+                    <option value="RETIRED">RETIRED</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -952,6 +996,98 @@ export function StudioEditorialReview({
                           onChange={(e) => editableRec && setEditableRec({ ...editableRec, duration: e.target.value })}
                           className="w-full p-2.5 bg-[#FAF9F5] border border-[#E5E3DB] rounded-xl font-mono text-xs text-[#1E2E20] outline-none"
                         />
+                      </div>
+                    </div>
+
+                    {/* Curator Editorial Distinction Badge Affixing */}
+                    <div className="p-4 bg-[#FAF9F5] border border-[#E5E3DB] rounded-2xl space-y-3 mt-4">
+                      <div className="flex items-center justify-between border-b border-[#E5E3DB] pb-2">
+                        <div className="flex items-center gap-2">
+                          <Award size={16} className="text-[#C5A059]" />
+                          <h4 className="font-mono text-xs uppercase font-bold text-[#1E2E20]">
+                            Curator Distinction Badge
+                          </h4>
+                        </div>
+                        <span className="font-mono text-[10px] text-[#8C8A7D] font-bold">
+                          {editableRec?.badge ? `AFFIXED: ${editableRec.badge.toUpperCase()}` : 'STANDARD (NO BADGE)'}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-[#57534E] font-sans leading-relaxed">
+                        Curators can affix a distinction badge to elevate this recommendation across IDEMO traveler guides (e.g. <em>Wines from the Sands</em> carries Platinum).
+                      </p>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => editableRec && setEditableRec({ ...editableRec, badge: undefined })}
+                          className={`p-3 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1 min-h-[52px] ${
+                            !editableRec?.badge
+                              ? 'bg-[#23251E] text-white border-[#23251E] shadow-xs'
+                              : 'bg-white text-[#1E2E20] border-[#E5E3DB] hover:border-[#23251E]/30'
+                          }`}
+                        >
+                          <span className="font-mono text-[11px] font-bold uppercase">None</span>
+                          <span className="text-[10px] text-[#8C8A7D] font-mono">Standard Rec</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => editableRec && setEditableRec({ ...editableRec, badge: 'silver' })}
+                          className={`p-3 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1 min-h-[52px] ${
+                            editableRec?.badge === 'silver'
+                              ? 'bg-[#CAD2C5]/30 border-[#94A3B8] ring-2 ring-[#94A3B8] shadow-xs'
+                              : 'bg-white border-[#E5E3DB] hover:border-[#94A3B8]'
+                          }`}
+                        >
+                          <PremiumBadge type="silver" compact />
+                          <span className="text-[9px] text-[#475569] font-mono font-bold mt-0.5">Silver Curation</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => editableRec && setEditableRec({ ...editableRec, badge: 'gold' })}
+                          className={`p-3 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1 min-h-[52px] ${
+                            editableRec?.badge === 'gold'
+                              ? 'bg-[#FDE68A]/30 border-[#D97706] ring-2 ring-[#D97706] shadow-xs'
+                              : 'bg-white border-[#E5E3DB] hover:border-[#D97706]'
+                          }`}
+                        >
+                          <PremiumBadge type="gold" compact />
+                          <span className="text-[9px] text-[#92400E] font-mono font-bold mt-0.5">Gold Selection</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => editableRec && setEditableRec({ ...editableRec, badge: 'platinum' })}
+                          className={`p-3 rounded-xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1 min-h-[52px] ${
+                            editableRec?.badge === 'platinum'
+                              ? 'bg-[#E0E7FF]/40 border-[#4338CA] ring-2 ring-[#4338CA] shadow-xs'
+                              : 'bg-white border-[#E5E3DB] hover:border-[#4338CA]'
+                          }`}
+                        >
+                          <PremiumBadge type="platinum" compact />
+                          <span className="text-[9px] text-[#3730A3] font-mono font-bold mt-0.5">Platinum Exclusive</span>
+                        </button>
+                      </div>
+
+                      {/* Save Button */}
+                      <div className="pt-2 flex items-center justify-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (editableRec) {
+                              saveLocalStudioDraft(editableRec);
+                              if (onAddCustomRecommendation) {
+                                onAddCustomRecommendation(editableRec);
+                              }
+                            }
+                          }}
+                          className="px-4 py-2 bg-[#23251E] hover:bg-[#32352B] text-white rounded-xl font-mono text-xs font-bold flex items-center gap-2 cursor-pointer shadow-xs active:scale-95"
+                        >
+                          <Check size={14} className="text-[#C5A059]" />
+                          <span>Save Editorial Content & Badge</span>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1647,6 +1783,11 @@ export function StudioEditorialReview({
                 <span className="absolute bottom-2 left-2 bg-[#23251E]/80 text-white font-mono text-[9px] px-2 py-0.5 rounded-md uppercase font-bold">
                   {activeRec.category}
                 </span>
+                {activeRec.badge && (
+                  <div className="absolute top-2 right-2">
+                    <PremiumBadge type={activeRec.badge} compact />
+                  </div>
+                )}
               </div>
 
               <div>

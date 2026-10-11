@@ -241,6 +241,7 @@ export interface CanonicalRecommendationPayload {
     best_time_to_visit?: string;
     insider_tip?: string;
   }>;
+  badge?: 'silver' | 'gold' | 'platinum';
 }
 
 /**
@@ -408,6 +409,7 @@ export function buildCanonicalRecommendationPayload(
     insider_tip_sr: rec.translations?.sr?.insiderTip || rec.insiderTipSr,
     moods: Array.isArray(rec.moods) ? rec.moods : [],
     image_url: rec.image || '',
+    badge: rec.badge ? rec.badge : undefined,
     expertise_ids: Array.isArray(rec.expertiseIds) ? rec.expertiseIds : [],
     capability_ids: Array.isArray(rec.capabilityIds) ? rec.capabilityIds : [],
     practical_info: practicalInfoObj,
@@ -1240,6 +1242,7 @@ export function mapDraftPayloadToRecommendation(pv: any): Partial<Recommendation
     travelTimeMinutes: typeof sanitizedPv.travel_time_minutes === 'number' ? sanitizedPv.travel_time_minutes : (typeof sanitizedPv.travelTimeMinutes === 'number' ? sanitizedPv.travelTimeMinutes : undefined),
     estimatedCost: sanitizedPv.estimated_cost || '',
     preferredTransport: sanitizedPv.preferred_transport || '',
+    badge: (sanitizedPv.badge === 'silver' || sanitizedPv.badge === 'gold' || sanitizedPv.badge === 'platinum') ? sanitizedPv.badge : undefined,
     image: getApprovedPrimaryMedia(sanitizedPv.id || sanitizedPv.source_id || pv.source_id || pv.id || '', sanitizedPv.image_url || sanitizedPv.image || ''),
     coordinates: (sanitizedPv.coordinates && typeof sanitizedPv.coordinates.lat === 'number' && typeof sanitizedPv.coordinates.lng === 'number')
       ? { lat: sanitizedPv.coordinates.lat, lng: sanitizedPv.coordinates.lng }
@@ -1347,6 +1350,7 @@ export function mapCanonicalDbRowToRecommendation(row: any): Partial<Recommendat
     travelTimeMinutes: typeof row.travel_time_minutes === 'number' ? row.travel_time_minutes : (typeof row.travelTimeMinutes === 'number' ? row.travelTimeMinutes : undefined),
     estimatedCost: row.estimated_cost || '',
     preferredTransport: row.preferred_transport || '',
+    badge: (row.badge === 'silver' || row.badge === 'gold' || row.badge === 'platinum') ? row.badge : undefined,
     image: getApprovedPrimaryMedia(row.source_id || row.id, row.image_url || ''),
     coordinates: (row.coordinates && typeof row.coordinates.lat === 'number' && typeof row.coordinates.lng === 'number')
       ? { lat: row.coordinates.lat, lng: row.coordinates.lng }

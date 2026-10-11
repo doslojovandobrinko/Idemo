@@ -324,6 +324,32 @@ async function startServer() {
     });
   });
 
+  // Partner Inquiry Response Translation Endpoint (Ensures partner responses are always delivered in English)
+  app.post('/api/translate-to-english', async (req: Request, res: Response) => {
+    try {
+      const { text } = req.body || {};
+      if (!text || typeof text !== 'string' || !text.trim()) {
+        return res.json({ success: true, translatedText: text || '' });
+      }
+
+      const ai = getGeminiClient();
+      if (!ai) {
+        return res.json({ success: true, translatedText: text });
+      }
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: `You are IDEMO's luxury concierge translator. Translate the following partner inquiry response message into natural, professional, and polite English. Return ONLY the translation, without quotes, explanations, or conversational preamble.\n\nText:\n${text.trim()}`,
+      });
+
+      const translatedText = response.text ? response.text.trim() : text;
+      return res.json({ success: true, translatedText });
+    } catch (err: any) {
+      console.warn('Translate to English endpoint error:', err);
+      return res.json({ success: false, translatedText: req.body?.text || '' });
+    }
+  });
+
   // GET Endpoint for Telemetry Verification
   app.get('/api/studio/recommendation-agent/telemetry', (_req: Request, res: Response) => {
     res.json({
