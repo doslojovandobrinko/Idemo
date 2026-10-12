@@ -80,12 +80,67 @@ export interface DailyHeroCard {
   dayIndex: number;
   dayNameEn: string;
   dayNameSr: string;
+  dayNameEs?: string;
+  dayNameDe?: string;
+  dayNameRu?: string;
+  dayNameZh?: string;
   titleEn: string;
   titleSr: string;
+  titleEs?: string;
+  titleDe?: string;
+  titleRu?: string;
+  titleZh?: string;
   locationEn: string;
   locationSr: string;
+  locationEs?: string;
+  locationDe?: string;
+  locationRu?: string;
+  locationZh?: string;
   src: string;
   isCustomHeroPng?: boolean;
+}
+
+export function getLocalizedHeroCard(card: DailyHeroCard, lang: string = 'en') {
+  if (lang === 'sr') {
+    return {
+      dayName: card.dayNameSr,
+      title: card.titleSr,
+      location: card.locationSr,
+    };
+  }
+  if (lang === 'es') {
+    return {
+      dayName: card.dayNameEs || card.dayNameEn,
+      title: card.titleEs || card.titleEn,
+      location: card.locationEs || card.locationEn,
+    };
+  }
+  if (lang === 'de') {
+    return {
+      dayName: card.dayNameDe || card.dayNameEn,
+      title: card.titleDe || card.titleEn,
+      location: card.locationDe || card.locationEn,
+    };
+  }
+  if (lang === 'ru') {
+    return {
+      dayName: card.dayNameRu || card.dayNameEn,
+      title: card.titleRu || card.titleEn,
+      location: card.locationRu || card.locationEn,
+    };
+  }
+  if (lang === 'zh') {
+    return {
+      dayName: card.dayNameZh || card.dayNameEn,
+      title: card.titleZh || card.titleEn,
+      location: card.locationZh || card.locationEn,
+    };
+  }
+  return {
+    dayName: card.dayNameEn,
+    title: card.titleEn,
+    location: card.locationEn,
+  };
 }
 
 export const HERO_DAILY_COLLECTION: DailyHeroCard[] = [
@@ -93,10 +148,22 @@ export const HERO_DAILY_COLLECTION: DailyHeroCard[] = [
     dayIndex: 0, // Sunday
     dayNameEn: "SUNDAY FEATURE",
     dayNameSr: "NEDELJA IZDVAJAMO",
+    dayNameEs: "DESTACADO DEL DOMINGO",
+    dayNameDe: "SONNTAGS-HIGHLIGHT",
+    dayNameRu: "ВОСКРЕСЕНЬЕ В ФОКУСЕ",
+    dayNameZh: "周日精选",
     titleEn: "Master Serbia Travel Pass Map",
     titleSr: "Glavna Karta Srbije i Putna Propusnica",
+    titleEs: "Mapa Maestro y Pase de Viaje de Serbia",
+    titleDe: "Master-Karte Serbien & Reisepass",
+    titleRu: "Главная Карта Сербии и Проездной",
+    titleZh: "塞尔维亚全景旅行通票地图",
     locationEn: "National Serbia Network",
     locationSr: "Nacionalna Mreža Srbije",
+    locationEs: "Red Nacional de Serbia",
+    locationDe: "Nationales Netzwerk Serbien",
+    locationRu: "Национальная Сеть Сербии",
+    locationZh: "塞尔维亚国家网络",
     src: "/idemo_hero_custom.png",
     isCustomHeroPng: true,
   },
@@ -104,60 +171,132 @@ export const HERO_DAILY_COLLECTION: DailyHeroCard[] = [
     dayIndex: 1, // Monday
     dayNameEn: "MONDAY HIGHLIGHT",
     dayNameSr: "PONEDELJAK IZDVAJAMO",
+    dayNameEs: "DESTACADO DEL LUNES",
+    dayNameDe: "MONTAGS-HIGHLIGHT",
+    dayNameRu: "ПОНЕДЕЛЬНИК В ФОКУСЕ",
+    dayNameZh: "周一亮点",
     titleEn: "Uvac River Canyon Meanders",
     titleSr: "Meandri Reke Uvac",
+    titleEs: "Meandros del Cañón del Río Uvac",
+    titleDe: "Uvac-Flusscanyon-Mäander",
+    titleRu: "Меандры Каньона Реки Увац",
+    titleZh: "乌瓦茨河峡谷回旋弯",
     locationEn: "Sjenica & Special Nature Reserve",
     locationSr: "Sjenica i Specijalni Rezervat Prirode",
+    locationEs: "Sjenica y Reserva Natural Especial",
+    locationDe: "Sjenica & Besonderes Naturschutzgebiet",
+    locationRu: "Сьеница и Особый Природный Заповедник",
+    locationZh: "谢尼察与特别自然保护区",
     src: uvacHeroImg,
   },
   {
     dayIndex: 2, // Tuesday
     dayNameEn: "TUESDAY HIGHLIGHT",
     dayNameSr: "UTORAK IZDVAJAMO",
+    dayNameEs: "DESTACADO DEL MARTES",
+    dayNameDe: "DIENSTAGS-HIGHLIGHT",
+    dayNameRu: "ВТОРНИК В ФОКУСЕ",
+    dayNameZh: "周二亮点",
     titleEn: "Golubac Danube Fortress",
     titleSr: "Golubačka Tvrđava na Dunavu",
+    titleEs: "Fortaleza de Golubac en el Danubio",
+    titleDe: "Donaufestung Golubac",
+    titleRu: "Голубацкая Крепость на Дунае",
+    titleZh: "多瑙河畔戈卢巴茨要塞",
     locationEn: "Djerdap Gorge & Iron Gates",
     locationSr: "Đerdapska Klisura",
+    locationEs: "Garganta de Djerdap y Puertas de Hierro",
+    locationDe: "Đerdap-Schlucht & Eisernes Tor",
+    locationRu: "Джердапское Ущелье и Железные Ворота",
+    locationZh: "杰尔达普峡谷与铁门",
     src: golubacHeroImg,
   },
   {
     dayIndex: 3, // Wednesday
     dayNameEn: "WEDNESDAY HIGHLIGHT",
     dayNameSr: "SREDA IZDVAJAMO",
+    dayNameEs: "DESTACADO DEL MIÉRCOLES",
+    dayNameDe: "MITTWOCHS-HIGHLIGHT",
+    dayNameRu: "СРЕДА В ФОКУСЕ",
+    dayNameZh: "周三亮点",
     titleEn: "Manasija Royal Monastery",
     titleSr: "Kraljevski Manastir Manasija",
+    titleEs: "Monasterio Real de Manasija",
+    titleDe: "Königliches Kloster Manasija",
+    titleRu: "Королевский Монастырь Манасия",
+    titleZh: "马纳西亚皇家修道院",
     locationEn: "Despotovac, Resava Valley",
     locationSr: "Despotovac, Resavska Dolina",
+    locationEs: "Despotovac, Valle de Resava",
+    locationDe: "Despotovac, Resava-Tal",
+    locationRu: "Деспотовац, Долина Ресавы",
+    locationZh: "德斯波托瓦茨，雷萨瓦山谷",
     src: manasijaHeroImg,
   },
   {
     dayIndex: 4, // Thursday
     dayNameEn: "THURSDAY HIGHLIGHT",
     dayNameSr: "ČETVRTAK IZDVAJAMO",
+    dayNameEs: "DESTACADO DEL JUEVES",
+    dayNameDe: "DONNERSTAGS-HIGHLIGHT",
+    dayNameRu: "ЧЕТВЕРГ В ФОКУСЕ",
+    dayNameZh: "周四亮点",
     titleEn: "Banjska Stena Tara Viewpoint",
     titleSr: "Vidikovac Banjska Stena",
+    titleEs: "Mirador Banjska Stena en Tara",
+    titleDe: "Aussichtspunkt Banjska Stena Tara",
+    titleRu: "Смотровая Площадка Баньска Стена",
+    titleZh: "塔拉国家公园班伊斯卡岩观景台",
     locationEn: "Tara National Park",
     locationSr: "Nacionalni Park Tara",
+    locationEs: "Parque Nacional Tara",
+    locationDe: "Nationalpark Tara",
+    locationRu: "Национальный Парк Тара",
+    locationZh: "塔拉国家公园",
     src: banjskaHeroImg,
   },
   {
     dayIndex: 5, // Friday
     dayNameEn: "FRIDAY HIGHLIGHT",
     dayNameSr: "PETAK IZDVAJAMO",
+    dayNameEs: "DESTACADO DEL VIERNES",
+    dayNameDe: "FREITAGS-HIGHLIGHT",
+    dayNameRu: "ПЯТНИЦА В ФОКУСЕ",
+    dayNameZh: "周五亮点",
     titleEn: "Belgrade River Splavovi & Nightlife",
     titleSr: "Beogradski Splavovi i Rečni Život",
+    titleEs: "Splavovi Flotantes y Vida Nocturna de Belgrado",
+    titleDe: "Belgrader Fluss-Splavovi & Nachtleben",
+    titleRu: "Белградские Сплавови и Ночная Жизнь",
+    titleZh: "贝尔格莱德水上酒吧与夜生活",
     locationEn: "Sava & Danube Confluence",
     locationSr: "Ušće Save i Dunava",
+    locationEs: "Confluencia del Sava y Danubio",
+    locationDe: "Zusammenfluss von Save und Donau",
+    locationRu: "Слияние Савы и Дуная",
+    locationZh: "萨瓦河与多瑙河汇流处",
     src: splavoviHeroImg,
   },
   {
     dayIndex: 6, // Saturday
     dayNameEn: "SATURDAY HIGHLIGHT",
     dayNameSr: "SUBOTA IZDVAJAMO",
+    dayNameEs: "DESTACADO DEL SÁBADO",
+    dayNameDe: "SAMSTAGS-HIGHLIGHT",
+    dayNameRu: "СУББОТА В ФОКУСЕ",
+    dayNameZh: "周六亮点",
     titleEn: "Sremski Karlovci Vineyards",
     titleSr: "Sremski Karlovci i Vinogradi",
+    titleEs: "Viñedos de Sremski Karlovci",
+    titleDe: "Weinberge von Sremski Karlovci",
+    titleRu: "Виноградники Сремски Карловци",
+    titleZh: "斯雷姆斯基卡尔洛夫齐葡萄园",
     locationEn: "Fruška Gora Wine District",
     locationSr: "Fruškogorsko Vinogorje",
+    locationEs: "Distrito Vinícola de Fruška Gora",
+    locationDe: "Weingebiet Fruška Gora",
+    locationRu: "Винный Район Фрушка Гора",
+    locationZh: "弗鲁什卡山葡萄酒产区",
     src: sremskiHeroImg,
   },
 ];
@@ -177,8 +316,7 @@ import {
   CustomExploreIcon, 
   CustomPlannerIcon, 
   CustomPartnersIcon, 
-  CustomProfileIcon,
-  CustomGlobeIcon
+  CustomProfileIcon
 } from './components/IdemoCustomNavIcons';
 import {
   EditorialSummitVapourIcon,
@@ -2625,6 +2763,10 @@ export default function App() {
             recommendations={rankedRecommendations}
             allRecommendations={allRecommendations}
             onNavigateToProfile={() => navigateToScreen('profile')}
+            onBackToLanding={() => {
+              triggerHaptic(8);
+              navigateToScreen('landing');
+            }}
             seasonalTips={SEASONAL_TIPS}
             onSelectRec={handleSelectRec}
             vibeSettings={currentArchetype.targetVibe}
@@ -2803,14 +2945,16 @@ export default function App() {
       {/* Bottom Navigation */}
       {currentScreen !== 'landing' && (
         <nav className="fixed bottom-0 left-0 right-0 max-w-[420px] mx-auto bg-white/90 backdrop-blur-xl border-t border-border-main px-3 xs:px-4 pt-3.5 pb-9 flex justify-between items-center z-[110] rounded-t-[40px] shadow-[0_-8px_40px_rgba(0,0,0,0.08)]">
-          <div className="flex justify-between items-center flex-1 pr-3 xs:pr-5">
-            <NavButton icon={<CustomGlobeIcon size={24} />} label={t.language || 'Language'} active={currentScreen === 'landing'} onClick={() => { triggerHaptic(8); navigateToScreen('landing'); }} />
+          {/* Consumer User Group: Home, My Profile, Explore, Planner grouped closer together on the left */}
+          <div className="flex items-center justify-start gap-1 xs:gap-2 sm:gap-2.5">
             <NavButton icon={<CustomHomeIcon size={24} />} label={t.home} active={currentScreen === 'home'} onClick={() => { triggerHaptic(8); navigateToScreen('home'); }} />
+            <NavButton icon={<CustomProfileIcon size={24} />} label={t.profile} active={currentScreen === 'profile'} onClick={() => { triggerHaptic(8); navigateToScreen('profile'); }} />
             <NavButton icon={<CustomExploreIcon size={24} />} label={t.explore} active={currentScreen === 'explore'} onClick={() => { triggerHaptic(8); navigateToScreen('explore'); }} />
             <NavButton icon={<CustomPlannerIcon size={24} />} label={t.plan} active={currentScreen === 'plan'} onClick={() => { triggerHaptic(8); navigateToScreen('plan'); }} showIndicator={hasUnreadPartnerProposal} />
-            <NavButton icon={<CustomProfileIcon size={24} />} label={t.profile} active={currentScreen === 'profile'} onClick={() => { triggerHaptic(8); navigateToScreen('profile'); }} />
           </div>
-          <div className="pl-3 xs:pl-5 border-l border-border-main/20 shrink-0 flex items-center justify-center">
+
+          {/* Partner User Group: Separated by distinct spatial gap and subtle divider to signify distinct user groups */}
+          <div className="pl-3 xs:pl-4 border-l border-border-main/20 shrink-0 flex items-center justify-center">
             <NavButton 
               icon={<CustomPartnersIcon size={24} />} 
               label={t.partners || 'Partners'} 
@@ -3953,13 +4097,13 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
                         />
                         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent px-3.5 pb-8 pt-8 flex flex-col justify-end text-left pointer-events-none z-20">
                           <span className="text-[9px] font-mono font-bold tracking-[0.12em] text-[#C5A059] uppercase block drop-shadow-xs">
-                            ✦ {language === 'sr' ? activeCard.dayNameSr : activeCard.dayNameEn}
+                            ✦ {getLocalizedHeroCard(activeCard, language).dayName}
                           </span>
                           <span className="font-serif text-xs font-bold text-white tracking-tight leading-tight block drop-shadow-xs mt-0.5">
-                            {language === 'sr' ? activeCard.titleSr : activeCard.titleEn}
+                            {getLocalizedHeroCard(activeCard, language).title}
                           </span>
                           <span className="text-[9.5px] font-mono text-white/90 tracking-wide block mt-0.5">
-                            📍 {language === 'sr' ? activeCard.locationSr : activeCard.locationEn}
+                            📍 {getLocalizedHeroCard(activeCard, language).location}
                           </span>
                         </div>
                       </div>
@@ -3970,7 +4114,9 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
                 {/* 7 Daily Rotating Carousel Controls */}
                 <div 
                   onClick={(e) => e.stopPropagation()}
-                  className="absolute bottom-1.5 z-30 flex items-center gap-1.5 px-2.5 py-0.5 bg-white/90 backdrop-blur-md rounded-full border border-[#E2DFD6] shadow-xs"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onTouchStart={(e) => e.stopPropagation()}
+                  className="absolute top-2.5 z-30 flex items-center gap-1.5 px-2.5 py-1 bg-white/95 backdrop-blur-md rounded-full border border-[#E2DFD6] shadow-sm select-none"
                 >
                   <button
                     type="button"
@@ -3979,7 +4125,9 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
                       safeHaptic(6);
                       setActiveHeroIndex((prev) => (prev === 0 ? 6 : prev - 1));
                     }}
-                    className="text-[11px] font-mono font-bold text-[#8C8A7D] hover:text-[#1E2E20] px-1 cursor-pointer select-none"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    className="text-[12px] font-mono font-bold text-[#8C8A7D] hover:text-[#1E2E20] px-1.5 py-1 -my-1 cursor-pointer select-none touch-manipulation flex items-center justify-center min-w-[20px] min-h-[24px]"
                     title="Previous Day"
                   >
                     ‹
@@ -3987,6 +4135,8 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
                   {HERO_DAILY_COLLECTION.map((card, idx) => {
                     const isActive = idx === activeHeroIndex;
                     const isToday = idx === defaultDayIndex;
+                    const localizedIndicatorCard = getLocalizedHeroCard(card, language);
+                    const todayLabel = language === 'sr' ? ' (Danas)' : language === 'es' ? ' (Hoy)' : language === 'de' ? ' (Heute)' : language === 'ru' ? ' (Сегодня)' : language === 'zh' ? ' (今天)' : ' (Today)';
                     return (
                       <button
                         key={card.dayIndex}
@@ -3996,16 +4146,22 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
                           safeHaptic(8);
                           setActiveHeroIndex(idx);
                         }}
-                        className={`h-2 rounded-full transition-all duration-300 cursor-pointer relative ${
-                          isActive
-                            ? 'w-4.5 bg-[#800020]'
-                            : 'w-2 bg-[#8C8A7D]/40 hover:bg-[#8C8A7D]/70'
-                        }`}
-                        title={`${card.dayNameEn}: ${card.titleEn}${isToday ? ' (Today)' : ''}`}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
+                        className="py-1.5 -my-1 px-0.5 flex items-center justify-center cursor-pointer select-none touch-manipulation"
+                        title={`${localizedIndicatorCard.dayName}: ${localizedIndicatorCard.title}${isToday ? todayLabel : ''}`}
                       >
-                        {isToday && !isActive && (
-                          <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#C5A059] rounded-full" />
-                        )}
+                        <span
+                          className={`h-2 rounded-full transition-all duration-300 block relative ${
+                            isActive
+                              ? 'w-4.5 bg-[#800020]'
+                              : 'w-2 bg-[#8C8A7D]/40 hover:bg-[#8C8A7D]/70'
+                          }`}
+                        >
+                          {isToday && !isActive && (
+                            <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#C5A059] rounded-full" />
+                          )}
+                        </span>
                       </button>
                     );
                   })}
@@ -4016,7 +4172,9 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
                       safeHaptic(6);
                       setActiveHeroIndex((prev) => (prev === 6 ? 0 : prev + 1));
                     }}
-                    className="text-[11px] font-mono font-bold text-[#8C8A7D] hover:text-[#1E2E20] px-1 cursor-pointer select-none"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    className="text-[12px] font-mono font-bold text-[#8C8A7D] hover:text-[#1E2E20] px-1.5 py-1 -my-1 cursor-pointer select-none touch-manipulation flex items-center justify-center min-w-[20px] min-h-[24px]"
                     title="Next Day"
                   >
                     ›
@@ -4385,7 +4543,7 @@ function PulsatingProfileButton({
   );
 }
 
-function HomeScreen({ likedIds, onSelectRec, language, recommendations, allRecommendations, onNavigateToProfile, seasonalTips, vibeSettings, ratings, lowSignalMode, onToggleLowSignal, onEmblemTap, triggerHaptic: propHaptic, budget, time }: any) {
+function HomeScreen({ likedIds, onSelectRec, language, recommendations, allRecommendations, onNavigateToProfile, seasonalTips, vibeSettings, ratings, lowSignalMode, onToggleLowSignal, onEmblemTap, triggerHaptic: propHaptic, budget, time, onBackToLanding }: any) {
   const triggerHaptic = (pattern: number | number[] = 10) => {
     try {
       if (typeof propHaptic === 'function') propHaptic(pattern);
@@ -4439,14 +4597,30 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, allRecom
       exit={{ opacity: 0, y: -20 }}
     >
       <header className="flex justify-between items-start">
-        <div className="space-y-1 cursor-pointer select-none" onClick={onEmblemTap}>
-          <h2 className="text-4xl font-serif text-brand-charcoal tracking-tighter">{t.welcome}</h2>
-          <p className="text-[13px] text-accent-red font-bold flex items-center gap-2 tracking-normal leading-tight">
-            <span className="w-1.5 h-1.5 bg-accent-red rounded-full animate-pulse flex-shrink-0" />
-            <span className="max-w-[220px] sm:max-w-md">{t.curated_for_you}</span>
-          </p>
+        <div className="flex flex-col">
+          {onBackToLanding && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                triggerHaptic(8);
+                onBackToLanding();
+              }}
+              aria-label={t.language || "Back to Language & Intro"}
+              className="w-11 h-11 -ml-2 -mt-2 mb-1 flex items-center justify-center text-brand-charcoal/70 hover:text-brand-charcoal active:scale-90 transition-all cursor-pointer group"
+              title={t.language || "Back"}
+            >
+              <ArrowLeft size={22} className="stroke-[1.8] group-hover:-translate-x-0.5 transition-transform" />
+            </button>
+          )}
+          <div className="space-y-1 cursor-pointer select-none" onClick={onEmblemTap}>
+            <h2 className="text-4xl font-serif text-brand-charcoal tracking-tighter">{t.welcome}</h2>
+            <p className="text-[13px] text-accent-red font-bold flex items-center gap-2 tracking-normal leading-tight">
+              <span className="w-1.5 h-1.5 bg-accent-red rounded-full animate-pulse flex-shrink-0" />
+              <span className="max-w-[220px] sm:max-w-md">{t.curated_for_you}</span>
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 pt-1">
           <PulsatingProfileButton 
             onClick={onNavigateToProfile}
             language={language}

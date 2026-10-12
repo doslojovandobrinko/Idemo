@@ -9,11 +9,27 @@ import { getPartnerLifecycleState, getAllPartners } from './partnerLifecycleServ
 
 export type PartnerSuitabilityTier = 'PRIMARY' | 'SECONDARY' | 'TERTIARY';
 
+export function tierToPriorityRank(tier: PartnerSuitabilityTier): number {
+  switch (tier) {
+    case 'PRIMARY': return 1;
+    case 'SECONDARY': return 2;
+    case 'TERTIARY': return 3;
+    default: return 100;
+  }
+}
+
+export function priorityRankToTier(rank: number): PartnerSuitabilityTier {
+  if (rank === 1) return 'PRIMARY';
+  if (rank === 2) return 'SECONDARY';
+  return 'TERTIARY';
+}
+
 export interface StagedPartner {
   partnerId: string;
   partnerName: string;
   tier: PartnerSuitabilityTier;
   origin: '007_PROPOSAL' | 'ADMIN_SELECTED';
+  priorityRank?: number; // 1 = 1st (0m Instant), 2 = 2nd (+30m), 3 = 3rd (+60m)
   suitabilityScore?: number;
   operationalRole?: string;
   category?: string;
@@ -32,6 +48,7 @@ export interface PartnerMatchScore {
   partnerId: string;
   partnerName: string;
   tier: PartnerSuitabilityTier;
+  priorityRank?: number;
   suitabilityScore: number; // 0 to 100
   categoryAffinityScore: number;
   expertiseScore: number;
@@ -237,18 +254,21 @@ export function evaluatePartnerSuitability(
     return 0;
   });
 
-  // Assign tiers: PRIMARY, SECONDARY, TERTIARY (Max 3 matches)
+  // Assign tiers: PRIMARY (1st), SECONDARY (2nd), TERTIARY (3rd) (Max 3 matches)
   const matches: PartnerMatchScore[] = [];
   if (scoredPartners.length > 0 && scoredPartners[0].suitabilityScore >= 55) {
     scoredPartners[0].tier = 'PRIMARY';
+    scoredPartners[0].priorityRank = 1;
     matches.push(scoredPartners[0]);
   }
   if (scoredPartners.length > 1 && scoredPartners[1].suitabilityScore >= 45) {
     scoredPartners[1].tier = 'SECONDARY';
+    scoredPartners[1].priorityRank = 2;
     matches.push(scoredPartners[1]);
   }
   if (scoredPartners.length > 2 && scoredPartners[2].suitabilityScore >= 35) {
     scoredPartners[2].tier = 'TERTIARY';
+    scoredPartners[2].priorityRank = 3;
     matches.push(scoredPartners[2]);
   }
 

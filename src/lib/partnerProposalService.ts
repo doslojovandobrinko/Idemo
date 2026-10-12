@@ -11,11 +11,13 @@
 import { safeStorage } from './safeStorage';
 import { INITIAL_RECOMMENDATIONS } from '../data/recommendations/serbia';
 import { Recommendation, Category } from '../types';
+import { saveLocalStudioDraft } from './recommendationWorkflowService';
 
 export type ProposalType = 'RECOMMENDATION' | 'PACKAGE';
 
 export interface PartnerRecommendationProposal {
   id: string;
+  recDraftId?: string;
   partnerId: string;
   partnerCode: string;
   partnerName: string;
@@ -138,11 +140,13 @@ export function savePartnerRecommendationProposal(
   const matchedCat = evalCategories.find(c => c.toLowerCase() === proposalData.category.toLowerCase()) || 
     (isPackage ? Category.TRAVEL : Category.NATURE);
 
+  const recDraftId = `rec-prop-${id}`;
   const newProposal: PartnerRecommendationProposal = {
     ...proposalData,
+    id,
+    recDraftId,
     imageUrl: proposalData.imageUrl || (proposalData.images && proposalData.images[0]) || undefined,
     proposalType: proposalData.proposalType || 'RECOMMENDATION',
-    id,
     submittedAt: new Date().toISOString(),
     status: 'REVIEWED_007',
     agent007Evaluation: {
@@ -168,6 +172,45 @@ export function savePartnerRecommendationProposal(
 
   const updated = [newProposal, ...existing];
   safeStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+
+  // Single Point of Approval: Register candidate recommendation immediately into Studio drafts
+  try {
+    const resolvedImg = newProposal.collageImageUrl || newProposal.imageUrl || (newProposal.images && newProposal.images[0]) || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&q=80&w=1200';
+    saveLocalStudioDraft({
+      id: recDraftId,
+      title: newProposal.title,
+      titleEn: newProposal.title,
+      titleSr: newProposal.title,
+      category: matchedCat,
+      location: newProposal.location || 'Serbia',
+      locationEn: newProposal.location || 'Serbia',
+      locationSr: newProposal.location || 'Serbia',
+      shortDescription: newProposal.description,
+      longDescription: isPackage && newProposal.routeStops?.length 
+        ? `${newProposal.description}\n\nKey Stops: ${newProposal.routeStops.join(' → ')}${newProposal.includedServices?.length ? `\nIncluded: ${newProposal.includedServices.join(', ')}` : ''}` 
+        : newProposal.description,
+      image: resolvedImg,
+      imageUrl: resolvedImg,
+      duration: newProposal.durationBucket || (isPackage ? 'Half-Day' : '1-2 hours'),
+      publicationStatus: 'RESEARCH_CANDIDATE',
+      headerVisualState: 'AMBER',
+      source: 'partner_proposal',
+      proposedByPartnerId: newProposal.partnerId,
+      proposedByPartnerCode: newProposal.partnerCode,
+      proposedByPartnerName: newProposal.partnerName,
+      proposalType: newProposal.proposalType,
+      curatorNotes: `Proposed by Partner ${newProposal.partnerCode} (${newProposal.partnerName})${isPackage ? ' [Curated Package]' : ''}. Enqueued directly into Recommendations Candidate desk for Curator review.`,
+      highlights: newProposal.highlights && newProposal.highlights.length > 0
+        ? newProposal.highlights
+        : isPackage && newProposal.routeStops && newProposal.routeStops.length > 0
+        ? newProposal.routeStops
+        : ['Partner Curated Experience', 'Authentic Serbian Journey'],
+      serviceAreaId: 'sa-serbia-belgrade'
+    });
+  } catch (err) {
+    console.warn('[PartnerProposalService] Failed to auto-enqueue candidate draft:', err);
+  }
+
   return newProposal;
 }
 

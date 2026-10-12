@@ -117,6 +117,11 @@ export interface Recommendation {
   publicationValidation?: any;
   curatorOverride?: any;
   finalPublicationDecision?: any;
+  source?: string;
+  proposedByPartnerId?: string;
+  proposedByPartnerCode?: string;
+  proposedByPartnerName?: string;
+  proposalType?: 'RECOMMENDATION' | 'PACKAGE';
 }
 
 export interface Partner {

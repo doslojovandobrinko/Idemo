@@ -2163,8 +2163,60 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       return;
     }
 
-    const res = await changePartnerPin(changePinCurrent, changePinNew, changePinConfirm, changePartnerName.trim() || undefined);
+    const chosenPartnerName = changePartnerName.trim() || undefined;
+    const res = await changePartnerPin(changePinCurrent, changePinNew, changePinConfirm, chosenPartnerName);
     if (res.success) {
+      // Update local portal partners registry with the freshly onboarded partner
+      if (chosenPartnerName) {
+        try {
+          const savedPartners = safeStorage.getItem('idemo_portal_partners');
+          const currentList: PortalPartner[] = savedPartners ? JSON.parse(savedPartners) : partnersList;
+          const assignedCode = chosenPartnerName.toUpperCase().replace(/\s+/g, '_');
+          const assignedId = activePartnerId || `partner-${Date.now()}`;
+          const existingIdx = currentList.findIndex(p => p.id === assignedId || p.name.toLowerCase() === chosenPartnerName.toLowerCase());
+          
+          if (existingIdx !== -1) {
+            currentList[existingIdx].name = chosenPartnerName;
+            currentList[existingIdx].pin = changePinNew;
+            currentList[existingIdx].publicCode = assignedCode;
+          } else {
+            currentList.push({
+              id: assignedId,
+              pin: changePinNew,
+              name: chosenPartnerName,
+              category: 'Tourist Guide',
+              status: 'Validated',
+              capabilities: ['Cultural Tours', 'Local Guiding'],
+              languages: ['Serbian', 'English'],
+              geography: 'Belgrade Metro & Serbia',
+              channels: ['WhatsApp'],
+              contactPhone: '',
+              instagram: `@${assignedCode.toLowerCase()}`,
+              assignedRecs: [],
+              contributions: 0,
+              reliability: 100,
+              eligibility: false,
+              publicCode: assignedCode
+            });
+          }
+          setPartnersList([...currentList]);
+          safeStorage.setItem('idemo_portal_partners', JSON.stringify(currentList));
+          
+          // Pre-populate passport snapshot so Studio immediately displays the chosen name
+          const passportKey = `idemo_partner_passport_${assignedId.toUpperCase()}`;
+          const existingSnap = safeStorage.getItem(passportKey);
+          const parsedSnap = existingSnap ? JSON.parse(existingSnap) : {};
+          safeStorage.setItem(passportKey, JSON.stringify({
+            ...parsedSnap,
+            partner_name: chosenPartnerName,
+            partner_code: assignedCode,
+            review_status: parsedSnap.review_status || 'draft'
+          }));
+        } catch (storageErr) {
+          console.warn('Failed updating portal partner directory on PIN change:', storageErr);
+        }
+      }
+
       setChangePinSuccess(isSr ? 'Podaci uspešno promenjeni. Molimo prijavite se ponovo sa novim PIN-om.' : 'Credentials successfully updated. Please log in again with your new PIN.');
       setMustChangePinMode(false);
       setPortalRole('guest');
@@ -4343,7 +4395,10 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                         const parsed = existing ? JSON.parse(existing) : {};
                                         safeStorage.setItem(key, JSON.stringify({
                                           ...parsed,
-                                          photo_url: authRes.path,
+                                          partner_name: authenticatedPartnerProfile?.name || parsed.partner_name,
+                                          partner_code: authenticatedPartnerProfile?.public_code || parsed.partner_code,
+                                          photo_url: passportPhotoPreview || authRes.path,
+                                          photo_preview_url: passportPhotoPreview || authRes.path,
                                           draft_photo_path: authRes.path,
                                           published_photo_path: authRes.path,
                                           photo_consent_given: true,
@@ -4374,7 +4429,10 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                         const parsed = existing ? JSON.parse(existing) : {};
                                         safeStorage.setItem(key, JSON.stringify({
                                           ...parsed,
+                                          partner_name: authenticatedPartnerProfile?.name || parsed.partner_name,
+                                          partner_code: authenticatedPartnerProfile?.public_code || parsed.partner_code,
                                           photo_url: dataUrl,
+                                          photo_preview_url: dataUrl,
                                           draft_photo_path: dataUrl,
                                           photo_consent_given: true,
                                         }));
@@ -4781,8 +4839,11 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                               const parsed = existing ? JSON.parse(existing) : {};
                               safeStorage.setItem(key, JSON.stringify({
                                 ...parsed,
+                                partner_name: authenticatedPartnerProfile?.name || parsed.partner_name,
+                                partner_code: authenticatedPartnerProfile?.public_code || parsed.partner_code,
                                 intro_draft: passportIntroDraft,
-                                photo_url: activePhotoUrl,
+                                photo_url: passportPhotoPreview || activePhotoUrl,
+                                photo_preview_url: passportPhotoPreview || activePhotoUrl,
                                 draft_photo_path: passportPhotoPath,
                                 published_photo_path: passportPhotoPath,
                                 photo_consent_given: passportPhotoConsent,
@@ -4854,8 +4915,11 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                               const parsed = existing ? JSON.parse(existing) : {};
                               safeStorage.setItem(key, JSON.stringify({
                                 ...parsed,
+                                partner_name: authenticatedPartnerProfile?.name || parsed.partner_name,
+                                partner_code: authenticatedPartnerProfile?.public_code || parsed.partner_code,
                                 intro_draft: passportIntroDraft,
-                                photo_url: activePhotoUrl,
+                                photo_url: passportPhotoPreview || activePhotoUrl,
+                                photo_preview_url: passportPhotoPreview || activePhotoUrl,
                                 draft_photo_path: passportPhotoPath,
                                 published_photo_path: passportPhotoPath,
                                 photo_consent_given: passportPhotoConsent,

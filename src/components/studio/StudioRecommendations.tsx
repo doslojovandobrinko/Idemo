@@ -249,6 +249,40 @@ export function StudioRecommendations({
       console.warn('[StudioRecommendations] Failed to save local draft:', err);
     }
 
+    // If candidate was proposed by a partner and Curator approves it, co-assign proposing partner
+    if (status === 'APPROVED') {
+      const pId = (savedRec as any).proposedByPartnerId;
+      const pCode = (savedRec as any).proposedByPartnerCode;
+      const pName = (savedRec as any).proposedByPartnerName;
+      if (pId || pCode || pName) {
+        try {
+          const rawPartners = safeStorage.getItem('idemo_portal_partners');
+          if (rawPartners) {
+            const partnersList = JSON.parse(rawPartners);
+            const pIdx = partnersList.findIndex((p: any) =>
+              (pId && p.id === pId) ||
+              (pCode && (p.pin === pCode || p.id?.toUpperCase() === pCode.toUpperCase())) ||
+              (pName && p.name?.toLowerCase() === pName.toLowerCase())
+            );
+            if (pIdx !== -1) {
+              if (!Array.isArray(partnersList[pIdx].assignedRecs)) {
+                partnersList[pIdx].assignedRecs = [];
+              }
+              if (!partnersList[pIdx].assignedRecs.includes(savedRec.id)) {
+                partnersList[pIdx].assignedRecs.push(savedRec.id);
+                safeStorage.setItem('idemo_portal_partners', JSON.stringify(partnersList));
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new Event('idemo_partners_updated'));
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[StudioRecommendations] Failed to co-assign proposing partner:', e);
+        }
+      }
+    }
+
     // Add to local custom recs state if not present
     setLocalCustomRecs(prev => {
       const idx = prev.findIndex(r => r.id === savedRec.id);
@@ -486,7 +520,7 @@ export function StudioRecommendations({
                   }`}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="font-mono text-[9px] font-bold uppercase text-[#8C8A7D]">
                         #{rec.id}
                       </span>
@@ -495,6 +529,17 @@ export function StudioRecommendations({
                       </span>
                       {rec.badge && (
                         <PremiumBadge type={rec.badge} compact />
+                      )}
+                      {(rec.proposedByPartnerName || rec.source === 'partner_proposal') && (
+                        <span className="px-1.5 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-[8.5px] font-mono font-bold text-amber-900 flex items-center gap-1">
+                          <span>Partner Proposal</span>
+                          {rec.proposedByPartnerName && (
+                            <span className="font-normal text-amber-800">· {rec.proposedByPartnerName}</span>
+                          )}
+                          {rec.proposalType === 'PACKAGE' && (
+                            <span className="bg-amber-200/80 px-1 rounded text-[7.5px] font-bold">PACKAGE</span>
+                          )}
+                        </span>
                       )}
                     </div>
                     <h4 className="font-serif font-bold text-sm text-[#1E2E20] truncate">
@@ -563,6 +608,25 @@ export function StudioRecommendations({
                 <p className="text-xs text-[#8C8A7D] font-mono">
                   {activeRec.location}
                 </p>
+
+                {(activeRec.proposedByPartnerName || activeRec.source === 'partner_proposal') && (
+                  <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[9px] uppercase font-bold text-amber-900">
+                        Origin: Partner Proposal {activeRec.proposalType === 'PACKAGE' ? '(Package Tour)' : '(New Spot)'}
+                      </span>
+                      <span className="font-mono text-[9px] font-bold text-amber-900 bg-amber-200/60 px-1.5 py-0.5 rounded">
+                        {activeRec.proposedByPartnerCode || 'IDM-PTR'}
+                      </span>
+                    </div>
+                    <p className="text-xs font-sans text-amber-950 font-medium">
+                      Proposed by: <span className="font-bold">{activeRec.proposedByPartnerName || 'Testing Partner'}</span>
+                    </p>
+                    <p className="text-[10px] text-amber-800/80 font-sans leading-tight">
+                      Reviewed by Curator in Recommendations desk. Approving will automatically co-assign this proposing partner.
+                    </p>
+                  </div>
+                )}
 
                 <button
                   onClick={handleEditActive}

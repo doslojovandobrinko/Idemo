@@ -861,12 +861,12 @@ export function OnboardingOverlay({
 
   const orbDiameter = useMemo(() => {
     const ratio = (card1Budget - 100) / 400;
-    return 96 + ratio * 48; // Scaled proportionately for doubled Orb field: 96px at €100, 120px at €250, 144px at €500
+    return Math.round(58 + ratio * 32); // Scaled proportionally for refined luxury 2D field: 58px at €100, 70px at €250, 90px at €500
   }, [card1Budget]);
 
   const outerBezelWidth = useMemo(() => {
     const ratio = (card1Budget - 100) / 400;
-    return 8 + ratio * 4;
+    return Math.round(5 + ratio * 3);
   }, [card1Budget]);
 
   return (
@@ -973,9 +973,9 @@ export function OnboardingOverlay({
                 {/* Dynamic Live Profile-Name Label */}
                 <div 
                   id="intro-live-profile-label"
-                  className="w-full text-center px-4 min-h-[40px] flex items-center justify-center flex-shrink-0 mb-1"
+                  className="w-full text-center px-4 min-h-[30px] flex items-center justify-center flex-shrink-0 mb-0.5"
                 >
-                  <span className="font-sans text-[17px] font-bold text-[#800020] text-center leading-snug break-words">
+                  <span className="font-sans text-[15px] xs:text-[16px] font-bold text-[#800020] text-center leading-snug break-words">
                     {liveArchetype.name[language] || liveArchetype.name.en}
                   </span>
                 </div>
@@ -983,7 +983,7 @@ export function OnboardingOverlay({
                 <div 
                   id="intro-card-1-2d-field"
                   style={{ aspectRatio: '1 / 1' }}
-                  className="w-full aspect-square max-w-[380px] xs:max-w-[400px] sm:max-w-[420px] relative bg-white/85 backdrop-blur-md border border-[#E2DFC2]/90 rounded-[32px] overflow-hidden select-none shadow-md mx-auto flex items-center justify-center p-3 cursor-pointer shrink-0"
+                  className="w-full max-w-[210px] xs:max-w-[230px] sm:max-w-[250px] max-h-[27vh] aspect-square relative bg-white/85 backdrop-blur-md border border-[#E2DFC2]/90 rounded-[24px] overflow-hidden select-none shadow-sm mx-auto flex items-center justify-center p-2.5 cursor-pointer shrink-0"
                   onPointerDown={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect();
                     const x = Math.max(0.08, Math.min(0.92, (e.clientX - rect.left) / rect.width));
@@ -1027,26 +1027,26 @@ export function OnboardingOverlay({
                   </div>
 
                   {/* Compass Axis 1: URBAN (Top) */}
-                  <div className="absolute top-2.5 left-1/2 -translate-x-1/2 flex flex-col items-center text-[10px] font-mono font-bold uppercase tracking-widest text-[#23251E] pointer-events-none z-10">
-                    <Building2 size={14} className="text-[#23251E] mb-0.5" />
+                  <div className="absolute top-2 left-1/2 -translate-x-1/2 flex flex-col items-center text-[9px] font-mono font-bold uppercase tracking-widest text-[#23251E] pointer-events-none z-10">
+                    <Building2 size={12} className="text-[#23251E] mb-0.5" />
                     <span>{current.axis_urban}</span>
                   </div>
 
                   {/* Compass Axis 2: NATURE (Bottom) */}
-                  <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex flex-col items-center text-[10px] font-mono font-bold uppercase tracking-widest text-[#23251E] pointer-events-none z-10">
-                    <TreePine size={14} className="text-[#23251E] mb-0.5" />
+                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex flex-col items-center text-[9px] font-mono font-bold uppercase tracking-widest text-[#23251E] pointer-events-none z-10">
+                    <TreePine size={12} className="text-[#23251E] mb-0.5" />
                     <span>{current.axis_nature}</span>
                   </div>
 
                   {/* Compass Axis 3: HEDONIST (Left) */}
-                  <div className="absolute left-2.5 top-1/2 -translate-y-1/2 flex flex-col items-center text-[10px] font-mono font-bold uppercase tracking-widest text-[#23251E] pointer-events-none z-10">
-                    <Wine size={14} className="text-[#23251E] mb-0.5" />
+                  <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col items-center text-[9px] font-mono font-bold uppercase tracking-widest text-[#23251E] pointer-events-none z-10">
+                    <Wine size={12} className="text-[#23251E] mb-0.5" />
                     <span>{current.axis_hedonist}</span>
                   </div>
 
                   {/* Compass Axis 4: ADVENTURER (Right) */}
-                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex flex-col items-center text-[10px] font-mono font-bold uppercase tracking-widest text-[#23251E] pointer-events-none z-10">
-                    <Footprints size={14} className="text-[#23251E] mb-0.5" />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-center text-[9px] font-mono font-bold uppercase tracking-widest text-[#23251E] pointer-events-none z-10">
+                    <Footprints size={12} className="text-[#23251E] mb-0.5" />
                     <span>{current.axis_adventurer}</span>
                   </div>
 
@@ -1168,10 +1168,10 @@ export function OnboardingOverlay({
                       {/* Time text indicator in dial */}
                       <text 
                         x="0" 
-                        y="-32" 
+                        y="-30" 
                         textAnchor="middle" 
                         fill="#FFFFFF" 
-                        fontSize="18" 
+                        fontSize="20" 
                         fontWeight="bold" 
                         fontFamily="sans-serif"
                         className="select-none pointer-events-none"
@@ -1182,10 +1182,10 @@ export function OnboardingOverlay({
                       {/* Budget text indicator in dial */}
                       <text 
                         x="0" 
-                        y="42" 
+                        y="44" 
                         textAnchor="middle" 
                         fill="#FFFFFF" 
-                        fontSize="18" 
+                        fontSize="20" 
                         fontWeight="bold" 
                         fontFamily="sans-serif"
                         className="select-none pointer-events-none"

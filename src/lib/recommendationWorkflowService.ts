@@ -82,6 +82,61 @@ export function getLocalStudioDrafts(): Partial<Recommendation>[] {
     console.warn('[IDEMO Storage] Error reading legacy studio recommendations:', e);
   }
 
+  // 4. Single Point of Review: Bridge partner submitted proposals (Spots and Packages) into CANDIDATES pool
+  try {
+    const rawProposals = safeStorage.getItem('idemo_partner_proposals');
+    if (rawProposals) {
+      const parsedProposals = JSON.parse(rawProposals);
+      if (Array.isArray(parsedProposals)) {
+        parsedProposals.forEach((p: any) => {
+          if (p && (p.title || p.id)) {
+            const draftId = p.recDraftId || (p.id?.startsWith('rec-') ? p.id : `rec-prop-${p.id || Date.now()}`);
+            if (!draftsMap.has(draftId) && !draftsMap.has(p.id)) {
+              const isPkg = p.proposalType === 'PACKAGE';
+              const resolvedImg = p.collageImageUrl || p.imageUrl || (p.images && p.images[0]) || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&q=80&w=1200';
+              const candidateItem: Partial<Recommendation> = {
+                id: draftId,
+                title: p.title,
+                titleEn: p.title,
+                titleSr: p.title,
+                category: (p.category as Category) || (isPkg ? Category.TRAVEL : Category.NATURE),
+                location: p.location || 'Serbia',
+                locationEn: p.location || 'Serbia',
+                locationSr: p.location || 'Serbia',
+                shortDescription: p.description || '',
+                longDescription: isPkg && p.routeStops?.length 
+                  ? `${p.description}\n\nKey Stops: ${p.routeStops.join(' → ')}${p.includedServices?.length ? `\nIncluded: ${p.includedServices.join(', ')}` : ''}` 
+                  : (p.description || ''),
+                image: resolvedImg,
+                imageUrl: resolvedImg,
+                duration: p.durationBucket || (isPkg ? 'Half-Day' : '1-2 hours'),
+                publicationStatus: p.status === 'CURATOR_APPROVED' ? 'CANONICAL' : 'RESEARCH_CANDIDATE',
+                headerVisualState: p.status === 'CURATOR_APPROVED' ? 'GREEN' : 'AMBER',
+                curatorNotes: `Proposed by Partner ${p.partnerCode || ''} (${p.partnerName || ''})${isPkg ? ' [Curated Package]' : ''}. Source: Partner Portal Proposal.`,
+                highlights: (p.highlights && p.highlights.length > 0) 
+                  ? p.highlights 
+                  : (p.routeStops && p.routeStops.length > 0)
+                  ? p.routeStops
+                  : ['Partner Curated Experience', 'Authentic Serbian Journey'],
+                source: 'partner_proposal',
+                proposedByPartnerId: p.partnerId,
+                proposedByPartnerCode: p.partnerCode,
+                proposedByPartnerName: p.partnerName,
+                proposalType: p.proposalType || (isPkg ? 'PACKAGE' : 'RECOMMENDATION'),
+                serviceAreaId: 'sa-serbia-belgrade',
+                createdAt: p.submittedAt || new Date().toISOString(),
+                updatedAt: p.submittedAt || new Date().toISOString()
+              };
+              draftsMap.set(draftId, candidateItem);
+            }
+          }
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('[IDEMO Storage] Error bridging partner proposals to recommendation candidates:', e);
+  }
+
   return Array.from(draftsMap.values());
 }
 

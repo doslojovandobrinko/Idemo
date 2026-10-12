@@ -24,7 +24,9 @@ import {
   fetchPartnerProfileReviewQueue, 
   adminReviewPartnerProfile, 
   PartnerProfileQueueItem, 
-  PartnerProfileReviewStatusFilter 
+  PartnerProfileReviewStatusFilter,
+  setPartnerCoveragePriorityRank,
+  getPartnerCoveragePriorityRank
 } from '../../lib/partnerService';
 import { 
   getPartnerRecommendationProposals, 
@@ -53,6 +55,9 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
   const [selectedImageOverride, setSelectedImageOverride] = useState<Record<string, string>>({});
   const [availableRecs, setAvailableRecs] = useState<Array<{ id: string; title: string; category: string }>>([]);
   const [recAssignFeedback, setRecAssignFeedback] = useState<string | null>(null);
+  const [selectedRecIds, setSelectedRecIds] = useState<Set<string>>(new Set());
+  const [coverageRanks, setCoverageRanks] = useState<Record<string, number>>({});
+  const [updatingRankRecId, setUpdatingRankRecId] = useState<string | null>(null);
   
   // Review Action Form State
   const [reviewNote, setReviewNote] = useState<string>('');
@@ -136,29 +141,87 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
     return queue.find((p) => p.partner_id === selectedPartnerId) || null;
   }, [queue, selectedPartnerId]);
 
-  // Reset review note when selected profile changes
+  // Reset review note and sync applied recs selection when selected profile changes
   useEffect(() => {
     setReviewNote('');
     setActionFeedback(null);
-  }, [selectedPartnerId]);
+    if (selectedProfile && Array.isArray(selectedProfile.applied_recs)) {
+      setSelectedRecIds(new Set(selectedProfile.applied_recs));
+      const initialRanks: Record<string, number> = {};
+      selectedProfile.applied_recs.forEach((recId) => {
+        const r = getPartnerCoveragePriorityRank(recId, selectedProfile.partner_id);
+        if (r !== null) initialRanks[recId] = r;
+      });
+      setCoverageRanks(initialRanks);
+    } else {
+      setSelectedRecIds(new Set());
+      setCoverageRanks({});
+    }
+  }, [selectedPartnerId, selectedProfile?.applied_recs]);
 
-  const handleAssignAppliedRecs = (partnerId: string, partnerCode: string, recIds: string[]) => {
+  // Handler: 1-Action change of inquiry priority rank (1st = 1, 2nd = 2, 3rd = 3)
+  const handleUpdateRank = async (recId: string, newRank: number, recTitle: string) => {
+    if (!selectedProfile) return;
+    setUpdatingRankRecId(recId);
+    try {
+      const res = await setPartnerCoveragePriorityRank(recId, selectedProfile.partner_id, newRank);
+      if (res.success) {
+        setCoverageRanks(prev => ({ ...prev, [recId]: newRank }));
+        const rankLabel = newRank === 1 ? '1st Place (0m Instant Concierge)' : newRank === 2 ? '2nd Place (+30m Escalation)' : '3rd Place (+60m Fallback)';
+        const swapNotice = res.swappedPartnerId ? ` (Swapped with partner ${res.swappedPartnerId})` : '';
+        setRecAssignFeedback(`Position set to ${rankLabel} for "${recTitle}"${swapNotice} — Persisted to Supabase!`);
+        setTimeout(() => setRecAssignFeedback(null), 5000);
+      } else {
+        setActionFeedback({
+          type: 'error',
+          message: res.message || res.error || 'Failed to update priority rank.'
+        });
+      }
+    } catch (err: any) {
+      console.warn('Priority rank update exception:', err);
+    } finally {
+      setUpdatingRankRecId(null);
+    }
+  };
+
+  const handleAssignAppliedRecs = (partnerId: string, partnerCode: string, recIds: string[], partnerName?: string) => {
     if (!recIds || recIds.length === 0) return;
     try {
       const portalPartnersRaw = safeStorage.getItem('idemo_portal_partners');
-      if (portalPartnersRaw) {
-        const list = JSON.parse(portalPartnersRaw);
-        const updated = list.map((p: any) => {
-          if (p.id === partnerId || (p.publicCode && p.publicCode.toUpperCase() === partnerCode.toUpperCase()) || (p.pin && p.pin === partnerCode)) {
-            const currentRecs = Array.isArray(p.assignedRecs) ? p.assignedRecs : [];
-            const combined = Array.from(new Set([...currentRecs, ...recIds]));
-            return { ...p, assignedRecs: combined };
-          }
-          return p;
+      const list = portalPartnersRaw ? JSON.parse(portalPartnersRaw) : [];
+      let found = false;
+      const updated = list.map((p: any) => {
+        if (p.id === partnerId || (p.publicCode && p.publicCode.toUpperCase() === partnerCode.toUpperCase()) || (p.pin && p.pin === partnerCode)) {
+          found = true;
+          const currentRecs = Array.isArray(p.assignedRecs) ? p.assignedRecs : [];
+          const combined = Array.from(new Set([...currentRecs, ...recIds]));
+          return { ...p, status: 'Active', eligibility: true, assignedRecs: combined };
+        }
+        return p;
+      });
+      if (!found) {
+        updated.push({
+          id: partnerId,
+          name: partnerName || partnerCode,
+          publicCode: partnerCode,
+          pin: '1611',
+          category: 'Tourist Guide',
+          status: 'Active',
+          capabilities: ['Local Guide', 'Cultural Tours'],
+          languages: ['Serbian', 'English'],
+          geography: 'Belgrade Metro & Serbia',
+          channels: ['WhatsApp'],
+          contactPhone: selectedProfile?.published_contact_phone || selectedProfile?.draft_contact_phone || '',
+          instagram: `@${partnerCode.toLowerCase()}`,
+          assignedRecs: recIds,
+          contributions: recIds.length,
+          reliability: 100,
+          eligibility: true
         });
-        safeStorage.setItem('idemo_portal_partners', JSON.stringify(updated));
       }
-      setRecAssignFeedback(`Successfully assigned ${recIds.length} recommendation(s) to ${partnerCode}!`);
+      safeStorage.setItem('idemo_portal_partners', JSON.stringify(updated));
+      const displayName = partnerName || partnerCode;
+      setRecAssignFeedback(`Successfully assigned ${recIds.length} recommendation(s) to ${displayName}!`);
       setTimeout(() => setRecAssignFeedback(null), 5000);
     } catch (err: any) {
       console.warn('Failed assigning recommendations in studio:', err);
@@ -206,8 +269,11 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
         message: res.message || res.error || `Failed to perform ${action} on partner profile.`
       });
     } else {
-      if (action === 'approve' && selectedProfile.applied_recs && selectedProfile.applied_recs.length > 0) {
-        handleAssignAppliedRecs(selectedProfile.partner_id, selectedProfile.partner_code, selectedProfile.applied_recs);
+      if (action === 'approve') {
+        const recsToAssign = selectedRecIds.size > 0 ? Array.from(selectedRecIds) : (selectedProfile.applied_recs || []);
+        if (recsToAssign.length > 0) {
+          handleAssignAppliedRecs(selectedProfile.partner_id, selectedProfile.partner_code, recsToAssign, selectedProfile.partner_name);
+        }
       }
       setActionFeedback({
         type: 'success',
@@ -790,21 +856,39 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
               {/* Applied Recommendations for Verified Expertise */}
               {selectedProfile.applied_recs && selectedProfile.applied_recs.length > 0 && (
                 <div className="space-y-3 p-4 bg-[#FAF9F5] rounded-2xl border border-[#E5E3DB]">
-                  <div className="flex items-center justify-between border-b border-[#E5E3DB] pb-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#E5E3DB] pb-2 gap-2">
                     <div className="flex items-center gap-2">
                       <Sparkles size={16} className="text-[#C5A059]" />
                       <h4 className="font-serif text-sm font-bold text-[#1E2E20]">
                         Applied Recommendations for Expertise Verification ({selectedProfile.applied_recs.length})
                       </h4>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleAssignAppliedRecs(selectedProfile.partner_id, selectedProfile.partner_code, selectedProfile.applied_recs || [])}
-                      className="px-2.5 py-1 bg-[#1E2E20] hover:bg-[#2A3E2D] text-[#C5A059] font-mono text-[10px] font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
-                    >
-                      <PlusCircle size={12} />
-                      <span>Approve & Assign Spots</span>
-                    </button>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (selectedRecIds.size === selectedProfile.applied_recs!.length) {
+                            setSelectedRecIds(new Set());
+                          } else {
+                            setSelectedRecIds(new Set(selectedProfile.applied_recs!));
+                          }
+                        }}
+                        className="px-2 py-1 text-[10px] font-mono font-bold text-[#8C8A7D] hover:text-[#1E2E20] border border-[#E5E3DB] rounded-lg transition-colors cursor-pointer bg-white"
+                      >
+                        {selectedRecIds.size === selectedProfile.applied_recs.length ? 'Deselect All' : 'Select All'}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={selectedRecIds.size === 0}
+                        onClick={() => handleAssignAppliedRecs(selectedProfile.partner_id, selectedProfile.partner_code, Array.from(selectedRecIds), selectedProfile.partner_name)}
+                        className="px-2.5 py-1 bg-[#1E2E20] hover:bg-[#2A3E2D] disabled:opacity-50 text-[#C5A059] font-mono text-[10px] font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+                      >
+                        <PlusCircle size={12} />
+                        <span>Approve & Assign ({selectedRecIds.size}/{selectedProfile.applied_recs.length})</span>
+                      </button>
+                    </div>
                   </div>
 
                   {selectedProfile.applied_recs_note && (
@@ -814,24 +898,89 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {selectedProfile.applied_recs.map((recId) => {
                       const matched = availableRecs.find(r => r.id === recId);
                       const title = matched?.title || `Recommendation #${recId}`;
                       const category = matched?.category || 'General';
+                      const isChecked = selectedRecIds.has(recId);
+                      const currentRank = coverageRanks[recId] || getPartnerCoveragePriorityRank(recId, selectedProfile.partner_id) || 1;
+                      const isUpdatingThis = updatingRankRecId === recId;
                       return (
-                        <div key={recId} className="p-2.5 bg-white border border-[#E5E3DB] rounded-xl flex items-center justify-between gap-2 shadow-xs">
-                          <div className="min-w-0">
-                            <span className="text-xs font-serif font-bold text-[#1E2E20] block truncate">
-                              {title}
-                            </span>
-                            <span className="text-[10px] font-mono text-[#8C8A7D] block">
-                              {category}
+                        <div
+                          key={recId}
+                          className={`p-3 bg-white border rounded-xl flex flex-col justify-between gap-2.5 shadow-xs transition-all ${
+                            isChecked ? 'border-[#23251E] bg-[#FAF9F5] ring-1 ring-[#23251E]/10' : 'border-[#E5E3DB] opacity-80 hover:opacity-100'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div 
+                              onClick={() => {
+                                setSelectedRecIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(recId)) next.delete(recId);
+                                  else next.add(recId);
+                                  return next;
+                                });
+                              }}
+                              className="flex items-start gap-2.5 min-w-0 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {}}
+                                className="accent-[#23251E] rounded cursor-pointer mt-0.5"
+                              />
+                              <div className="min-w-0">
+                                <span className="text-xs font-serif font-bold text-[#1E2E20] block truncate">
+                                  {title}
+                                </span>
+                                <span className="text-[10px] font-mono text-[#8C8A7D] block">
+                                  {category} • ID: {recId}
+                                </span>
+                              </div>
+                            </div>
+
+                            <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded-md border shrink-0 ${
+                              currentRank === 1
+                                ? 'bg-[#1E2E20] text-[#C5A059] border-[#C5A059]/40'
+                                : currentRank === 2
+                                ? 'bg-[#FAF9F5] text-[#1E2E20] border-[#E5E3DB]'
+                                : 'bg-white text-[#8C8A7D] border-[#E5E3DB]'
+                            }`}>
+                              {currentRank === 1 ? '1st (0m Instant)' : currentRank === 2 ? '2nd (+30m)' : '3rd (+60m)'}
                             </span>
                           </div>
-                          <span className="text-[9px] font-mono font-bold bg-[#FAF9F5] border border-[#E5E3DB] text-[#1E2E20] px-1.5 py-0.5 rounded shrink-0">
-                            ID: {recId}
-                          </span>
+
+                          {/* 1-Action Inquiry Queue Switcher */}
+                          <div className="pt-2 border-t border-[#E5E3DB] flex items-center justify-between gap-1.5">
+                            <span className="text-[9.5px] font-mono text-[#8C8A7D] uppercase font-semibold">Queue Position:</span>
+                            <div className="flex items-center gap-1">
+                              {([
+                                { rank: 1, label: '1st (0m)', title: '1st in line — Instant offer (0 min)' },
+                                { rank: 2, label: '2nd (+30m)', title: '2nd in line — Escalation offer after 30 min' },
+                                { rank: 3, label: '3rd (+60m)', title: '3rd in line — Fallback offer after 60 min' }
+                              ] as const).map((r) => (
+                                <button
+                                  key={r.rank}
+                                  type="button"
+                                  disabled={currentRank === r.rank || isUpdatingThis}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleUpdateRank(recId, r.rank, title);
+                                  }}
+                                  title={r.title}
+                                  className={`px-2 py-0.5 rounded font-mono text-[9px] font-bold uppercase transition-all ${
+                                    currentRank === r.rank
+                                      ? 'bg-[#1E2E20] text-[#C5A059] shadow-xs cursor-default'
+                                      : 'bg-white border border-[#E5E3DB] text-[#57534E] hover:bg-[#FAF9F5] hover:text-[#1E2E20] cursor-pointer'
+                                  }`}
+                                >
+                                  {r.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       );
                     })}

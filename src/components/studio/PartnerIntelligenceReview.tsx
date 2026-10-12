@@ -32,12 +32,14 @@ import {
   PartnerMatchScore, 
   PartnerSuitabilityTier,
   StagedPartner,
+  tierToPriorityRank,
+  priorityRankToTier,
   searchGovernedPartners,
   stageFromProposal,
   stageFromManualSelection
 } from '../../lib/partnerIntelligenceService';
 import { PARTNERS } from '../../data/partners';
-import { selectAndReleasePartnerCoverage } from '../../lib/partnerService';
+import { selectAndReleasePartnerCoverage, setPartnerCoveragePriorityRank } from '../../lib/partnerService';
 
 interface PartnerIntelligenceReviewProps {
   partnerIntelligence?: PartnerIntelligenceResult;
@@ -122,28 +124,44 @@ export const PartnerIntelligenceReview: React.FC<PartnerIntelligenceReviewProps>
     setReleaseFeedback(null);
   };
 
-  // Handler: Change tier of staged partner
+  // Handler: Change tier/position of staged partner (1st = PRIMARY, 2nd = SECONDARY, 3rd = TERTIARY)
   const handleChangeTier = (partnerId: string, newTier: PartnerSuitabilityTier) => {
     if (!onUpdateStagedPartners) return;
     
     const target = stagedPartners.find(p => p.partnerId === partnerId);
     if (!target) return;
 
+    const newRank = tierToPriorityRank(newTier);
     const filtered = stagedPartners.filter(p => p.partnerId !== partnerId);
     // If another partner has newTier, swap or replace
     const otherInNewTier = filtered.find(p => p.tier === newTier);
     
     let updated: StagedPartner[];
     if (otherInNewTier) {
-      // Swap tiers
-      const swapped = { ...otherInNewTier, tier: target.tier };
-      const modifiedTarget = { ...target, tier: newTier };
+      // Atomic swap tiers
+      const swapped = { ...otherInNewTier, tier: target.tier, priorityRank: tierToPriorityRank(target.tier) };
+      const modifiedTarget = { ...target, tier: newTier, priorityRank: newRank };
       updated = filtered.filter(p => p.partnerId !== otherInNewTier.partnerId).concat(swapped, modifiedTarget);
     } else {
-      updated = [...filtered, { ...target, tier: newTier }];
+      updated = [...filtered, { ...target, tier: newTier, priorityRank: newRank }];
     }
 
     onUpdateStagedPartners(updated);
+
+    // If recommendation has an ID, asynchronously sync priority rank to Supabase
+    if (recommendationId) {
+      setPartnerCoveragePriorityRank(recommendationId, partnerId, newRank).then(res => {
+        if (res.success) {
+          setReleaseFeedback({
+            type: 'success',
+            message: `Position updated to ${newTier} (Rank ${newRank}) in Supabase database.`
+          });
+          setTimeout(() => setReleaseFeedback(null), 4000);
+        }
+      }).catch(() => {
+        // local update remains intact
+      });
+    }
   };
 
   // Handler: Update direct contact details for staged partner
@@ -394,19 +412,24 @@ export const PartnerIntelligenceReview: React.FC<PartnerIntelligenceReviewProps>
                   {/* Actions: Re-rank, Release, Remove */}
                   <div className="pt-2 border-t border-[#E5E3DB] space-y-2">
                     <div className="flex items-center gap-1">
-                      {(['PRIMARY', 'SECONDARY', 'TERTIARY'] as PartnerSuitabilityTier[]).map(t => (
+                      {([
+                        { tier: 'PRIMARY', label: '1st (0m)', title: '1st Place — Instant inquiry offer (0 min)' },
+                        { tier: 'SECONDARY', label: '2nd (+30m)', title: '2nd Place — Escalation inquiry offer after 30 min' },
+                        { tier: 'TERTIARY', label: '3rd (+60m)', title: '3rd Place — Fallback inquiry offer after 60 min' },
+                      ] as const).map(t => (
                         <button
-                          key={t}
+                          key={t.tier}
                           type="button"
-                          disabled={staged.tier === t}
-                          onClick={() => handleChangeTier(staged.partnerId, t)}
-                          className={`flex-1 py-1 rounded font-mono text-[8.5px] font-bold uppercase transition-colors ${
-                            staged.tier === t
-                              ? 'bg-[#1E2E20] text-white cursor-default'
-                              : 'bg-[#FAF9F5] border border-[#E5E3DB] text-[#57534E] hover:bg-[#E5E3DB]/50 cursor-pointer'
+                          disabled={staged.tier === t.tier}
+                          onClick={() => handleChangeTier(staged.partnerId, t.tier)}
+                          title={t.title}
+                          className={`flex-1 py-1 rounded font-mono text-[8.5px] font-bold uppercase transition-all ${
+                            staged.tier === t.tier
+                              ? 'bg-[#1E2E20] text-[#C5A059] shadow-xs cursor-default'
+                              : 'bg-[#FAF9F5] border border-[#E5E3DB] text-[#57534E] hover:bg-[#E5E3DB]/60 hover:text-[#1E2E20] cursor-pointer'
                           }`}
                         >
-                          {t[0]}
+                          {t.label}
                         </button>
                       ))}
 
