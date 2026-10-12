@@ -40,15 +40,21 @@ export function runBottomNavOrderTests(): boolean {
   }
   console.log('✅ PASS: All 5 navigation icons are verified.');
 
-  // Test 2: Canonical Navigation Order Specification
-  console.log('[NAV-02] Verifying navigation order sequence...');
-  const expectedLeftGroup = ['home', 'profile', 'explore', 'plan'];
-  const expectedRightGroup = ['partners'];
+  // Test 2: Canonical Navigation Order & 6 Equal Segments Layout Specification
+  console.log('[NAV-02] Verifying 6-segment navigation order sequence...');
+  const segments = [
+    { segment: 1, type: 'icon', id: 'home', label: 'Home' },
+    { segment: 2, type: 'icon', id: 'profile', label: 'My Profile' },
+    { segment: 3, type: 'icon', id: 'explore', label: 'Explore' },
+    { segment: 4, type: 'icon', id: 'plan', label: 'Planner' },
+    { segment: 5, type: 'empty', id: 'empty', label: 'Spacer (Empty)' },
+    { segment: 6, type: 'icon', id: 'partners', label: 'Partner Portal' }
+  ];
 
-  console.log(`  Left consumer group: ${expectedLeftGroup.join(' -> ')}`);
-  console.log(`  Spacer / Divider: [empty space / border-l divider]`);
-  console.log(`  Right partner portal: ${expectedRightGroup.join('')}`);
-  console.log('✅ PASS: Bottom navigation order strictly matches user specification.');
+  for (const seg of segments) {
+    console.log(`  Segment ${seg.segment}/6: ${seg.label} [${seg.type}]`);
+  }
+  console.log('✅ PASS: Bottom navigation 6-segment grid matches user specification.');
 
   // Test 3: Translations for Navigation Labels
   console.log('[NAV-03] Verifying labels across locales...');

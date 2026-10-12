@@ -806,13 +806,28 @@ const formatCommunityEventDate = (timestampMs: number, langCode: string): string
 };
 
 export default function PartnersScreen({ language, triggerHaptic, onNavigateToProfile, onSelectRec, onNavigate }: any) {
-  const [portalLang, setPortalLang] = useState<string>('sr');
+  // Partner Portal default language: Serbian by default as the vast majority of partners are Serbian. English is secondary and manually selected.
+  const [portalLang, setPortalLang] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('idemo_partner_lang');
+      if (saved === 'en' || saved === 'sr') return saved;
+    } catch {}
+    return 'sr';
+  });
+
+  const handleSetPortalLang = (lang: string) => {
+    setPortalLang(lang);
+    try {
+      localStorage.setItem('idemo_partner_lang', lang);
+    } catch {}
+  };
+
   const isSr = portalLang === 'sr';
   const isZh = portalLang === 'zh';
 
-  // Level 0 Card Language Translations (Always strictly uses visitor's selected app language)
+  // Level 0 Card Language Translations (Always strictly uses partner portal language, defaulting to Serbian)
   const tL0 = (key: string) => {
-    const code = (language || 'en').toLowerCase();
+    const code = (portalLang || 'sr').toLowerCase();
     const dict: Record<string, Record<string, string>> = {
       gatewayTag: {
         sr: 'PRIVATNI PRISTUP',
@@ -928,7 +943,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
         en: 'Invalid Network PIN.'
       }
     };
-    const langKey = dict[key] ? (dict[key][code] ? code : 'en') : 'en';
+    const langKey = dict[key] ? (dict[key][code] ? code : (dict[key]['sr'] ? 'sr' : 'en')) : 'sr';
     return dict[key]?.[langKey] || key;
   };
 
@@ -1243,16 +1258,6 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [recDropdownOpen]);
-
-  // Auto-clear unread badge once partner enters or views the opportunities workspace
-  useEffect(() => {
-    if (portalRole === 'partner' && partnerWorkspaceTab === 'opportunities') {
-      const timer = setTimeout(() => {
-        markAllActivePartnerInquiriesSeen();
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [portalRole, partnerWorkspaceTab, inquiries.length]);
 
   const refreshOpportunities = async () => {
     const session = partnerSessionStorage.getPartnerSession();
@@ -1706,6 +1711,16 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
   // Partner Workspace navigation tab state (Zero-scroll design: defaults to opportunities)
   const [partnerWorkspaceTab, setPartnerWorkspaceTab] = useState<'opportunities' | 'profile' | 'messages'>('opportunities');
+
+  // Auto-clear unread badge once partner enters or views the opportunities workspace
+  useEffect(() => {
+    if (portalRole === 'partner' && partnerWorkspaceTab === 'opportunities') {
+      const timer = setTimeout(() => {
+        markAllActivePartnerInquiriesSeen();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [portalRole, partnerWorkspaceTab, inquiries.length]);
 
   // Answer submission states
   const [activeAnswerText, setActiveAnswerText] = useState<Record<string, string>>({});
@@ -2944,40 +2959,50 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     <div className="w-full min-h-screen bg-brand-bg pt-6 pb-28 px-4 font-sans select-none overflow-x-hidden text-brand-charcoal">
       {/* ================= PARTNER PORTAL VIEW (THREE ROLE CORES) ================= */}
       <div className="max-w-[480px] mx-auto space-y-6">
-        {networkUnlocked && (
-          <div className="flex justify-end pr-2">
-            <div className="flex items-center gap-1 bg-[#2D3025]/5 p-1 rounded-xl text-[10px] font-mono font-bold border border-[#2D3025]/5">
-              <button 
-                type="button"
-                onClick={() => { setPortalLang('sr'); triggerHaptic(5); }}
-                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${isSr ? 'bg-brand-charcoal text-white shadow-xs font-black' : 'text-brand-charcoal/60 hover:text-brand-charcoal'}`}
-              >
-                SR
-              </button>
-              <button 
-                type="button"
-                onClick={() => { setPortalLang('en'); triggerHaptic(5); }}
-                className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${!isSr ? 'bg-brand-charcoal text-white shadow-xs font-black' : 'text-brand-charcoal/60 hover:text-brand-charcoal'}`}
-              >
-                EN
-              </button>
+        {/* Top Language Toggle: Defaults to Serbian, English is secondary and manually selected */}
+        <div className="flex justify-end pr-2">
+          <div className="flex items-center gap-1 bg-[#2D3025]/5 p-1 rounded-xl text-[10px] font-mono font-bold border border-[#2D3025]/5">
+            <button 
+              type="button"
+              onClick={() => { handleSetPortalLang('sr'); triggerHaptic(5); }}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${isSr ? 'bg-brand-charcoal text-white shadow-xs font-black' : 'text-brand-charcoal/60 hover:text-brand-charcoal'}`}
+            >
+              SR
+            </button>
+            <button 
+              type="button"
+              onClick={() => { handleSetPortalLang('en'); triggerHaptic(5); }}
+              className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${!isSr ? 'bg-brand-charcoal text-white shadow-xs font-black' : 'text-brand-charcoal/60 hover:text-brand-charcoal'}`}
+            >
+              EN
+            </button>
+          </div>
+        </div>
+          
+        {/* MEDICAL SAFETY DISCLAIMER BOUNDARY (STRICT PROTOCOL) */}
+        {portalRole !== 'guest' && (
+          <div className="bg-amber-50 border border-amber-500/20 rounded-2xl p-3.5 space-y-1.5 text-left">
+            <div className="flex items-center gap-1.5 text-amber-800">
+              <AlertCircle size={13} className="shrink-0" />
+              <span className="text-[8.5px] uppercase tracking-widest font-black font-mono">
+                {isSr ? 'PROTOKOL ZA NE-HITNU ORIJENTACIJU' : 'NON-EMERGENCY ORIENTATION PROTOCOL'}
+              </span>
             </div>
+            <p className="text-[9.5px] leading-normal text-[#2D3025]/85 font-medium">
+              {isSr ? (
+                <>
+                  Ovaj sistem služi isključivo za rutiranje, orijentaciju putnika i koordinaciju odabranih velnes i zdravstvenih pružalaca usluga.{' '}
+                  <strong>Ne pruža medicinske dijagnoze, kliničko lečenje niti hitne intervencije u realnom vremenu.</strong> Za bilo koji hitan medicinski slučaj, molimo odmah pozovite <strong>194 (Hitna pomoć)</strong> ili <strong>112</strong>.
+                </>
+              ) : (
+                <>
+                  This system serves strictly for routing, traveler orientation, and coordination of handpicked wellness providers.{' '}
+                  <strong>It does not offer medical diagnoses, clinical treatment, or real-time clinical responses.</strong> For any immediate medical emergency, please dial <strong>194 (Ambulance)</strong> or <strong>112</strong> instantly.
+                </>
+              )}
+            </p>
           </div>
         )}
-          
-          {/* MEDICAL SAFETY DISCLAIMER BOUNDARY (STRICT PROTOCOL) */}
-          {portalRole !== 'guest' && (
-            <div className="bg-amber-50 border border-amber-500/20 rounded-2xl p-3.5 space-y-1.5 text-left">
-              <div className="flex items-center gap-1.5 text-amber-800">
-                <AlertCircle size={13} className="shrink-0" />
-                <span className="text-[8.5px] uppercase tracking-widest font-black font-mono">NON-EMERGENCY ORIENTATION PROTOCOL</span>
-              </div>
-              <p className="text-[9.5px] leading-normal text-[#2D3025]/85 font-medium">
-                This system serves strictly for routing, traveler orientation, and coordination of handpicked wellness providers. 
-                <strong> It does not offer medical diagnoses, clinical treatment, or real-time clinical responses.</strong> For any immediate medical emergency, please dial <strong>194 (Ambulance)</strong> or <strong>112</strong> instantly.
-              </p>
-            </div>
-          )}
 
           {/* Dev Bypass Shortcuts Bar */}
           {portalRole !== 'guest' && (import.meta as any).env.DEV && (
@@ -3035,20 +3060,26 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                   <Lock size={16} />
                 </span>
                 <div className="space-y-0.5">
-                  <span className="text-[8px] uppercase tracking-widest font-mono text-[#8A1F1F] font-bold block">OBAVEZNA SIGURNOSNA IZMENA</span>
-                  <h3 className="text-sm uppercase tracking-wide font-black text-brand-charcoal">Kreirajte svoj privatni partnerski PIN</h3>
+                  <span className="text-[8px] uppercase tracking-widest font-mono text-[#8A1F1F] font-bold block">
+                    {isSr ? 'OBAVEZNA SIGURNOSNA IZMENA' : 'MANDATORY SECURITY UPDATE'}
+                  </span>
+                  <h3 className="text-sm uppercase tracking-wide font-black text-brand-charcoal">
+                    {isSr ? 'Kreirajte svoj privatni partnerski PIN' : 'Create Your Private Partner PIN'}
+                  </h3>
                 </div>
               </div>
 
               <p className="text-[11px] leading-relaxed text-brand-charcoal/70 font-medium">
-                Prijavljeni ste pomoću privremenog PIN-a. Radi bezbednosti vašeg naloga i IDEMO mreže, obavezno zamenite privremeni PIN ličnim četvorocifrenim PIN-om pre nastavljanja rada.
+                {isSr 
+                  ? 'Prijavljeni ste pomoću privremenog PIN-a. Radi bezbednosti vašeg naloga i IDEMO mreže, obavezno zamenite privremeni PIN ličnim četvorocifrenim PIN-om pre nastavljanja rada.'
+                  : 'You are logged in with a temporary PIN. For the security of your account and the IDEMO network, please replace the temporary PIN with your private 4-digit PIN before proceeding.'}
               </p>
 
               <form onSubmit={handleChangePinSubmit} className="space-y-4 pt-1">
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="text-[9px] uppercase tracking-widest font-black text-brand-charcoal/50 block">
-                      Novi naziv partnera (opciono, max 16 karaktera)
+                      {isSr ? 'Novi naziv partnera (opciono, max 16 karaktera)' : 'New partner name (optional, max 16 chars)'}
                     </label>
                     <span className="text-[9px] font-mono font-bold text-brand-charcoal/40">
                       {changePartnerName.length} / 16
@@ -3057,7 +3088,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                   <input 
                     type="text" 
                     maxLength={16}
-                    placeholder="npr. IDEMO Partner"
+                    placeholder={isSr ? 'npr. IDEMO Partner' : 'e.g. IDEMO Partner'}
                     value={changePartnerName}
                     onChange={e => setChangePartnerName(e.target.value)}
                     className="w-full text-center text-sm font-sans font-bold h-11 bg-[#FAF9F5] border border-[#2D3025]/15 rounded-xl text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none px-3"
@@ -3066,7 +3097,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
                 <div className="space-y-1.5">
                   <label className="text-[9px] uppercase tracking-widest font-black text-brand-charcoal/50 block">
-                    Trenutni privremeni PIN
+                    {isSr ? 'Trenutni privremeni PIN' : 'Current Temporary PIN'}
                   </label>
                   <input 
                     type="password" 
@@ -3080,7 +3111,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
                 <div className="space-y-1.5">
                   <label className="text-[9px] uppercase tracking-widest font-black text-brand-charcoal/50 block">
-                    Novi lični PIN (4 cifre)
+                    {isSr ? 'Novi lični PIN (4 cifre)' : 'New Private PIN (4 digits)'}
                   </label>
                   <input 
                     type="password" 
@@ -3094,7 +3125,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
                 <div className="space-y-1.5">
                   <label className="text-[9px] uppercase tracking-widest font-black text-brand-charcoal/50 block">
-                    Potvrdite novi PIN
+                    {isSr ? 'Potvrdite novi PIN' : 'Confirm New PIN'}
                   </label>
                   <input 
                     type="password" 
@@ -3128,7 +3159,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                         : 'bg-[#2D3025]/5 text-brand-charcoal/25 cursor-not-allowed'
                     }`}
                   >
-                    <ShieldCheck size={14} /> Sačuvaj novi PIN
+                    <ShieldCheck size={14} /> {isSr ? 'Sačuvaj novi PIN' : 'Save New PIN'}
                   </button>
 
                   <button 
@@ -3136,7 +3167,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                     onClick={handlePartnerLogout}
                     className="w-full h-9 border border-[#2D3025]/15 text-brand-charcoal/60 rounded-xl text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 hover:bg-[#2D3025]/5 transition-all cursor-pointer"
                   >
-                    Odjavi se
+                    {isSr ? 'Odjavi se' : 'Log Out'}
                   </button>
                 </div>
               </form>
@@ -3159,7 +3190,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                       <IdemoLogo showBg={false} className="h-6 w-auto text-brand-charcoal" />
                       <div className="h-4 w-[1px] bg-[#2D3025]/15" />
                       <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#8A1F1F] font-bold">
-                        PRIVATE PARTNER ACCESS
+                        {isSr ? 'PRIVATNI PRISTUP ZA PARTNERE' : 'PRIVATE PARTNER ACCESS'}
                       </span>
                     </div>
 
@@ -3301,11 +3332,11 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                     ) : (
                       <div className="space-y-3.5 divide-y divide-[#2D3025]/5">
                         {dynamicEvents.map((evt, idx) => {
-                          const langKey = (portalLang || language || 'en').toLowerCase();
+                          const langKey = (portalLang || 'sr').toLowerCase();
                           const dateLabel = formatCommunityEventDate(evt.timestamp, langKey);
-                          const badgeText = evt.badge[langKey] || evt.badge.en || evt.badge.sr;
-                          const titleText = evt.title[langKey] || evt.title.en || evt.title.sr;
-                          const descText = evt.description[langKey] || evt.description.en || evt.description.sr;
+                          const badgeText = evt.badge[langKey] || evt.badge.sr || evt.badge.en;
+                          const titleText = evt.title[langKey] || evt.title.sr || evt.title.en;
+                          const descText = evt.description[langKey] || evt.description.sr || evt.description.en;
 
                           return (
                             <div key={evt.id || idx} className={`${idx > 0 ? 'pt-3.5' : ''} space-y-1.5`}>
@@ -3387,7 +3418,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                     <div className="space-y-3">
                       <div className="space-y-1.5">
                         <label className="text-[9px] uppercase tracking-widest font-black text-[#2D3025]/40 block">
-                          {isSr ? 'KOD PARTNERA' : 'KOD PARTNERA (PARTNER CODE)'}
+                          {isSr ? 'KOD PARTNERA' : 'PARTNER CODE'}
                         </label>
                         <input 
                           type="text" 
@@ -3400,7 +3431,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
                       <div className="space-y-1.5">
                         <label className="text-[9px] uppercase tracking-widest font-black text-[#2D3025]/40 block">
-                          {isSr ? 'TAJNI PIN PARTNERA' : 'PARTNERSKI PIN (SECRET PIN)'}
+                          {isSr ? 'TAJNI PIN PARTNERA' : 'SECRET PARTNER PIN'}
                         </label>
                         <input 
                           type="password" 
@@ -3461,7 +3492,9 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                   <span className="text-[8px] uppercase tracking-wider font-mono text-amber-400">ADMIN CONTROL CENTRE</span>
                   <h2 className="text-sm font-black uppercase tracking-wide">IDEMO Network Governance</h2>
                 </div>
-                <button onClick={() => { triggerHaptic(10); setPortalRole('guest'); }} className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg text-[9px] font-bold uppercase">Log Out</button>
+                <button onClick={() => { triggerHaptic(10); setPortalRole('guest'); }} className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg text-[9px] font-bold uppercase">
+                  {isSr ? 'Odjavi se' : 'Log Out'}
+                </button>
               </div>
 
               {/* Ecosystem Stats Card */}
@@ -3536,7 +3569,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                   </div>
 
                   <button type="submit" className="w-full h-10 bg-brand-charcoal text-white text-[9px] font-black uppercase tracking-widest rounded-xl">
-                    Register Controlled Partner Slot
+                    {isSr ? 'Registruj partnersko mesto' : 'Register Controlled Partner Slot'}
                   </button>
                 </form>
               </div>
@@ -3545,10 +3578,14 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
               <div className="bg-white border border-[#2D3025]/10 rounded-[28px] p-5 space-y-4 text-left">
                 <div className="flex items-center gap-1.5 border-b border-[#2D3025]/5 pb-3">
                   <Award size={14} className="text-amber-600" />
-                  <h3 className="text-xs uppercase tracking-widest font-black">Partner Portfolio Requests</h3>
+                  <h3 className="text-xs uppercase tracking-widest font-black">
+                    {isSr ? 'Zahtevi za proširenje portfolija' : 'Partner Portfolio Requests'}
+                  </h3>
                 </div>
                 {interestRequests.length === 0 ? (
-                  <p className="text-[10px] text-brand-charcoal/45 italic py-1">No active partner extension requests currently pending.</p>
+                  <p className="text-[10px] text-brand-charcoal/45 italic py-1">
+                    {isSr ? 'Trenutno nema aktivnih zahteva za proširenje portfolija na čekanju.' : 'No active partner extension requests currently pending.'}
+                  </p>
                 ) : (
                   <div className="space-y-2">
                     {interestRequests.map((req, idx) => (
@@ -3561,7 +3598,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                           onClick={() => handleApproveInterest(req)}
                           className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[9px] font-black uppercase tracking-wider"
                         >
-                          Approve Extension
+                          {isSr ? 'Odobri proširenje' : 'Approve Extension'}
                         </button>
                       </div>
                     ))}
@@ -3700,7 +3737,9 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                   <span className="text-[8px] uppercase tracking-wider font-mono text-[#4FC2BE]">CONCIERGE OPERATIONS</span>
                   <h2 className="text-sm font-black uppercase tracking-wide">IDEMO Route Coordinator</h2>
                 </div>
-                <button onClick={() => { triggerHaptic(10); setPortalRole('guest'); }} className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg text-[9px] font-bold uppercase">Log Out</button>
+                <button onClick={() => { triggerHaptic(10); setPortalRole('guest'); }} className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg text-[9px] font-bold uppercase">
+                  {isSr ? 'Odjavi se' : 'Log Out'}
+                </button>
               </div>
 
               {/* Inquiry Creator */}
@@ -3776,7 +3815,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                   </div>
 
                   <button type="submit" className="w-full h-10 bg-[#0C302F] text-white text-[9px] font-black uppercase tracking-widest rounded-xl">
-                    Generate Inquiry Card & Lock Routing
+                    {isSr ? 'Generiši karticu upita i zaključaj rutiranje' : 'Generate Inquiry Card & Lock Routing'}
                   </button>
                 </form>
               </div>
@@ -3862,7 +3901,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                               }}
                               className="h-8 bg-amber-50 text-amber-800 border border-amber-500/20 rounded-lg flex items-center justify-center gap-1 uppercase"
                             >
-                              <Check size={10} /> Copy Text
+                              <Check size={10} /> {isSr ? 'Kopiraj tekst' : 'Copy Text'}
                             </button>
                           </div>
                         </div>
@@ -3870,7 +3909,9 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                         {/* Reply Recorder */}
                         {inq.replies.length > 0 && (
                           <div className="pt-2 border-t border-[#2D3025]/5 space-y-1">
-                            <span className="text-[8.5px] font-mono uppercase font-black text-emerald-700">Recorded Partner Replies:</span>
+                            <span className="text-[8.5px] font-mono uppercase font-black text-emerald-700">
+                              {isSr ? 'Zabeleženi odgovori partnera:' : 'Recorded Partner Replies:'}
+                            </span>
                             {inq.replies.map((rep, idx) => (
                               <p key={idx} className="text-[10px] bg-emerald-500/5 text-emerald-900 border border-emerald-500/10 rounded-lg p-2 leading-relaxed">
                                 "{rep}"
@@ -3883,15 +3924,19 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                           {activeInquiryIdForReply === inq.id ? (
                             <div className="w-full space-y-2 pt-2">
                               <textarea 
-                                placeholder="Manually transcribe incoming WhatsApp/Viber response text..."
+                                placeholder={isSr ? 'Ručno prepišite WhatsApp/Viber odgovor partnera...' : 'Manually transcribe incoming WhatsApp/Viber response text...'}
                                 value={newReplyText}
                                 onChange={e => setNewReplyText(e.target.value)}
                                 className="w-full p-2 bg-white border border-[#2D3025]/10 rounded-lg text-xs"
                                 rows={2}
                               />
                               <div className="flex justify-end gap-1.5">
-                                <button onClick={() => setActiveInquiryIdForReply(null)} className="px-3 h-7 bg-transparent border text-brand-charcoal text-[9px] font-black uppercase rounded-lg">Cancel</button>
-                                <button onClick={() => handleSaveReply(inq.id)} className="px-3 h-7 bg-[#006666] text-white text-[9px] font-black uppercase rounded-lg">Record Reply & Resolve</button>
+                                <button onClick={() => setActiveInquiryIdForReply(null)} className="px-3 h-7 bg-transparent border text-brand-charcoal text-[9px] font-black uppercase rounded-lg">
+                                  {isSr ? 'Otkaži' : 'Cancel'}
+                                </button>
+                                <button onClick={() => handleSaveReply(inq.id)} className="px-3 h-7 bg-[#006666] text-white text-[9px] font-black uppercase rounded-lg">
+                                  {isSr ? 'Snimi odgovor i razreši' : 'Record Reply & Resolve'}
+                                </button>
                               </div>
                             </div>
                           ) : (
@@ -3899,7 +3944,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                               onClick={() => { triggerHaptic(10); setActiveInquiryIdForReply(inq.id); }}
                               className="text-[9px] uppercase tracking-widest font-black text-[#006666] hover:underline flex items-center gap-1"
                             >
-                              ✎ Record Incoming Response Manually
+                              {isSr ? '✎ Ručno zabeleži pristigli odgovor' : '✎ Record Incoming Response Manually'}
                             </button>
                           )}
                         </div>
@@ -3989,7 +4034,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
             const capabilityCards = [
               {
                 key: 'languages',
-                title: 'Languages',
+                title: isSr ? 'Jezici' : 'Languages',
                 icon: Globe,
                 items: LANGUAGES_CATALOGUE,
                 isLanguage: true,
@@ -3999,7 +4044,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
               },
               {
                 key: 'knowledge',
-                title: 'Knowledge',
+                title: isSr ? 'Poznavanje terena i baštine' : 'Knowledge',
                 icon: Award,
                 items: KNOWLEDGE_CATALOGUE,
                 isLanguage: false,
@@ -4009,7 +4054,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
               },
               {
                 key: 'experiences',
-                title: 'Experiences',
+                title: isSr ? 'Iskustva i aktivnosti' : 'Experiences',
                 icon: Sparkles,
                 items: EXPERIENCES_CATALOGUE,
                 isLanguage: false,
@@ -4019,7 +4064,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
               },
               {
                 key: 'services',
-                title: 'Services',
+                title: isSr ? 'Usluge i logistika' : 'Services',
                 icon: Briefcase,
                 items: SERVICES_CATALOGUE,
                 isLanguage: false,
@@ -4029,7 +4074,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
               },
               {
                 key: 'qualifications',
-                title: 'Professional Credentials',
+                title: isSr ? 'Stručne licence i akreditacije' : 'Professional Credentials',
                 icon: ShieldCheck,
                 items: QUALIFICATIONS_CATALOGUE,
                 isLanguage: false,
@@ -4123,11 +4168,13 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                 <div className="flex justify-between items-center bg-brand-charcoal px-6 py-4 rounded-[24px] text-white">
                   <div className="space-y-0.5 text-left">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[8px] uppercase tracking-widest font-mono text-amber-400 font-bold block">PARTNER PASSPORT WORKSPACE</span>
+                      <span className="text-[8px] uppercase tracking-widest font-mono text-amber-400 font-bold block">
+                        {isSr ? 'RADNI PROSTOR PASOŠA PARTNERA' : 'PARTNER PASSPORT WORKSPACE'}
+                      </span>
                       {(currentSimulatedPartner.isDemo || currentSimulatedPartner.id === 'UNO1' || currentSimulatedPartner.id === 'UNO2') && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[8.5px] font-mono tracking-wider font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                           <Sparkles className="w-2.5 h-2.5 shrink-0" />
-                          DEMONSTRATION ACCOUNT
+                          {isSr ? 'DEMO NALOG' : 'DEMONSTRATION ACCOUNT'}
                         </span>
                       )}
                     </div>
@@ -4137,7 +4184,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                     onClick={handlePartnerLogout} 
                     className="px-3.5 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-[9px] font-black uppercase tracking-wider cursor-pointer transition-colors shrink-0"
                   >
-                    Exit Session
+                    {isSr ? 'Završi sesiju' : 'Exit Session'}
                   </button>
                 </div>
 
@@ -4239,15 +4286,21 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                       <ShieldCheck size={14} />
                     </span>
                     <div className="space-y-0.5">
-                      <span className="text-[8px] uppercase tracking-widest font-mono text-brand-charcoal/40 font-bold block">Ecosystem Portfolio</span>
-                      <h3 className="text-xs uppercase tracking-wide font-black text-brand-charcoal">MY PARTNER PROFILE</h3>
+                      <span className="text-[8px] uppercase tracking-widest font-mono text-brand-charcoal/40 font-bold block">
+                        {isSr ? 'EKOSISTEM PORTFOLIO' : 'Ecosystem Portfolio'}
+                      </span>
+                      <h3 className="text-xs uppercase tracking-wide font-black text-brand-charcoal">
+                        {isSr ? 'MOJ PARTNERSKI PROFIL' : 'MY PARTNER PROFILE'}
+                      </h3>
                     </div>
                   </div>
 
                   {/* Progress Bar & Completeness */}
                   <div className="space-y-2 bg-[#FAF9F5] border border-[#2D3025]/5 p-4 rounded-2xl">
                     <div className="flex justify-between items-center">
-                      <span className="text-[9.5px] uppercase font-mono tracking-wider font-bold text-brand-charcoal/50">Portfolio Completeness</span>
+                      <span className="text-[9.5px] uppercase font-mono tracking-wider font-bold text-brand-charcoal/50">
+                        {isSr ? 'Popunjenost portfolija' : 'Portfolio Completeness'}
+                      </span>
                       <span className="text-xs font-mono font-black text-[#8A1F1F]">{portfolioMetrics.completenessPercentage}%</span>
                     </div>
                     {/* Progress Grid Segment (10 segments) */}
@@ -4269,7 +4322,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                       <div className="flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-[#8A1F1F]" />
                         <h4 className="text-xs uppercase font-mono font-black tracking-wider text-brand-charcoal">
-                          Professional Introduction & Passport Photo
+                          {isSr ? 'Profesionalno predstavljanje i fotografija pasoša' : 'Professional Introduction & Passport Photo'}
                         </h4>
                       </div>
                       <span className={`text-[8.5px] font-mono font-bold uppercase px-2 py-0.5 rounded ${
@@ -4278,30 +4331,36 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                         passportReviewStatus === 'changes_requested' ? 'bg-red-100 text-red-800' :
                         passportReviewStatus === 'withdrawn' ? 'bg-neutral-300 text-neutral-800' : 'bg-neutral-200 text-neutral-700'
                       }`}>
-                        {passportReviewStatus === 'approved' ? 'Approved & Live' :
-                         passportReviewStatus === 'pending_review' ? 'Under Review' :
-                         passportReviewStatus === 'changes_requested' ? 'Changes Requested' :
-                         passportReviewStatus === 'withdrawn' ? 'Withdrawn' : 'Draft'}
+                        {passportReviewStatus === 'approved' ? (isSr ? 'Odobreno & Aktivno' : 'Approved & Live') :
+                         passportReviewStatus === 'pending_review' ? (isSr ? 'Na pregledu' : 'Under Review') :
+                         passportReviewStatus === 'changes_requested' ? (isSr ? 'Zatražene izmene' : 'Changes Requested') :
+                         passportReviewStatus === 'withdrawn' ? (isSr ? 'Povučeno' : 'Withdrawn') : (isSr ? 'U pripremi' : 'Draft')}
                       </span>
                     </div>
 
                     <p className="text-[11px] text-brand-charcoal/70 leading-relaxed">
-                      Provide a brief professional introduction (max 200 words) and an optional photo. Once approved by IDEMO editorial review, this will be displayed to visitors when you accept an inquiry.
+                      {isSr
+                        ? 'Unesite kratko profesionalno predstavljanje (maksimalno 200 reči) i opcionu fotografiju. Nakon uredničkog odobrenja od strane IDEMO tima, ovo će biti prikazano posetiocima kada prihvatite upit.'
+                        : 'Provide a brief professional introduction (max 200 words) and an optional photo. Once approved by IDEMO editorial review, this will be displayed to visitors when you accept an inquiry.'}
                     </p>
 
                     {/* Word Counter & Textarea */}
                     <div className="space-y-1.5">
                       <div className="flex justify-between items-center text-[9px] font-mono text-brand-charcoal/50">
-                        <label className="uppercase font-bold">Introduction Text (Plain Text Only)</label>
+                        <label className="uppercase font-bold">
+                          {isSr ? 'Tekst predstavljanja (isključivo tekst)' : 'Introduction Text (Plain Text Only)'}
+                        </label>
                         <span className={`font-bold ${
                           (passportIntroDraft.trim() ? passportIntroDraft.trim().split(/\s+/).length : 0) > 200 ? 'text-red-600' : 'text-brand-charcoal'
                         }`}>
-                          {passportIntroDraft.trim() ? passportIntroDraft.trim().split(/\s+/).length : 0} / 200 words
+                          {passportIntroDraft.trim() ? passportIntroDraft.trim().split(/\s+/).length : 0} / 200 {isSr ? 'reči' : 'words'}
                         </span>
                       </div>
                       <textarea
                         rows={4}
-                        placeholder="e.g. Licensed professional guide with over 10 years of experience in Serbia's cultural heritage, natural meanders, and bespoke gastronomy tours across Belgrade..."
+                        placeholder={isSr 
+                          ? 'npr. Licencirani profesionalni vodič sa preko 10 godina iskustva u kulturnom nasleđu Srbije, prirodnim meandrima i gastronomskim turama po Beogradu...'
+                          : 'e.g. Licensed professional guide with over 10 years of experience in Serbia\'s cultural heritage, natural meanders, and bespoke gastronomy tours across Belgrade...'}
                         value={passportIntroDraft}
                         onChange={(e) => {
                           setPassportIntroDraft(e.target.value);
@@ -4534,7 +4593,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
                     {passportReviewNote && (
                       <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs font-mono text-amber-900">
-                        <strong>Editorial Reviewer Note:</strong> {passportReviewNote}
+                        <strong>{isSr ? 'Napomena urednika:' : 'Editorial Reviewer Note:'}</strong> {passportReviewNote}
                       </div>
                     )}
 
@@ -4543,16 +4602,18 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                       <div className="flex items-center gap-2">
                         <Phone className="w-3.5 h-3.5 text-[#8A1F1F]" />
                         <h5 className="text-[10px] uppercase font-mono font-bold text-brand-charcoal">
-                          Governed Professional Contact Information
+                          {isSr ? 'Zvanični profesionalni kontakt podaci' : 'Governed Professional Contact Information'}
                         </h5>
                       </div>
                       <p className="text-[10.5px] text-brand-charcoal/70 leading-relaxed">
-                        Optional direct professional contact details saved as draft for IDEMO review before visitor disclosure in My Travel Plan.
+                        {isSr
+                          ? 'Opcioni direktni profesionalni kontakt podaci koji se čuvaju kao nacrt za IDEMO pregled pre nego što se prikažu posetiocima u planu putovanja.'
+                          : 'Optional direct professional contact details saved as draft for IDEMO review before visitor disclosure in My Travel Plan.'}
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-[9px] font-mono uppercase font-bold text-brand-charcoal/60 mb-1">
-                            Professional Phone Number
+                            {isSr ? 'Broj telefona' : 'Professional Phone Number'}
                           </label>
                           <input
                             type="text"
@@ -4567,7 +4628,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                         </div>
                         <div>
                           <label className="block text-[9px] font-mono uppercase font-bold text-brand-charcoal/60 mb-1">
-                            Professional Email Address
+                            {isSr ? 'Email adresa' : 'Professional Email Address'}
                           </label>
                           <input
                             type="email"
@@ -4613,7 +4674,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             }
 
                             if (res.success) {
-                              setProfContactMsg({ type: 'success', text: res.message || 'Professional contact details updated.' });
+                              setProfContactMsg({ type: 'success', text: res.message || (isSr ? 'Kontakt podaci uspešno ažurirani.' : 'Professional contact details updated.') });
                             } else if (
                               res.error?.includes('disabled on this database version') ||
                               res.error?.includes('ENDPOINT_DISABLED') ||
@@ -4621,17 +4682,19 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             ) {
                               setProfContactMsg({
                                 type: 'warning',
-                                text: 'Saved locally in SafeStorage. Remote Supabase Edge Function deployment pending.',
+                                text: isSr ? 'Sačuvano lokalno u SafeStorage. Čeka se Supabase sinhronizacija.' : 'Saved locally in SafeStorage. Remote Supabase Edge Function deployment pending.',
                               });
                             } else {
-                              setProfContactMsg({ type: 'error', text: res.error || 'Failed to update contact info.' });
+                              setProfContactMsg({ type: 'error', text: res.error || (isSr ? 'Greška pri ažuriranju kontakta.' : 'Failed to update contact info.') });
                             }
                             setProfContactSaving(false);
                           }}
                           disabled={profContactSaving}
                           className="px-3 py-1.5 bg-[#2D3025] text-white rounded-lg text-[10px] font-mono font-bold uppercase hover:bg-black transition-colors disabled:opacity-50 cursor-pointer"
                         >
-                          {profContactSaving ? 'Saving...' : 'Save Professional Contact Info'}
+                          {profContactSaving 
+                            ? (isSr ? 'Čuvanje...' : 'Saving...') 
+                            : (isSr ? 'Sačuvaj kontakt podatke' : 'Save Professional Contact Info')}
                         </button>
                         {profContactMsg && (
                           <p className={`text-[10px] font-mono ${profContactMsg.type === 'success' ? 'text-emerald-700' : profContactMsg.type === 'warning' ? 'text-amber-700' : 'text-red-600'}`}>
@@ -5598,7 +5661,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             </div>
                             <div className="flex items-center gap-1.5">
                               <span className="text-[9px] font-mono font-bold bg-[#2D3025]/5 px-2 py-0.5 rounded-full text-brand-charcoal/60">
-                                {approvedCount}/{totalInGroup} Approved
+                                {approvedCount}/{totalInGroup} {isSr ? 'Odobreno' : 'Approved'}
                               </span>
                               <ChevronRight size={14} className={`text-brand-charcoal/40 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                             </div>
@@ -5637,15 +5700,15 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                     <div className="flex items-center gap-1.5 shrink-0 pl-1">
                                       {isApproved ? (
                                         <span className="flex items-center gap-1 text-[9px] font-mono font-bold text-emerald-700 bg-emerald-500/5 border border-emerald-500/15 px-2 py-0.5 rounded">
-                                          ✓ Approved
+                                          {isSr ? '✓ Odobreno' : '✓ Approved'}
                                         </span>
                                       ) : isPending ? (
                                         <span className="flex items-center gap-1 text-[9px] font-mono font-bold text-amber-700 bg-amber-500/5 border border-amber-500/15 px-2 py-0.5 rounded animate-pulse">
-                                          ⏳ Pending
+                                          {isSr ? '⏳ Na čekanju' : '⏳ Pending'}
                                         </span>
                                       ) : (
                                         <span className="flex items-center gap-1 text-[9px] font-mono font-bold text-brand-charcoal/40 bg-brand-charcoal/5 border border-brand-charcoal/5 px-2 py-0.5 rounded transition-colors duration-150">
-                                          ○ Available
+                                          {isSr ? '○ Dostupno' : '○ Available'}
                                         </span>
                                       )}
                                     </div>
@@ -5749,7 +5812,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                 title="Unread opportunity"
                               >
                                 <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
-                                <span>NEW</span>
+                                <span>{isSr ? 'NOVO' : 'NEW'}</span>
                               </span>
                             )}
                             <div>
@@ -5922,7 +5985,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                               <div className="flex-1 py-2.5 px-3.5 bg-[#142A1E] text-emerald-100 border border-emerald-700/60 rounded-xl flex items-center justify-center gap-2 shadow-xs cursor-default">
                                 <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />
                                 <span className="text-[10px] font-mono font-black uppercase tracking-wider text-emerald-200">
-                                  {isSr ? 'UPIT PRIHVAĆEN (INQUIRY ACCEPTED)' : 'INQUIRY ACCEPTED'}
+                                  {isSr ? 'UPIT PRIHVAĆEN' : 'INQUIRY ACCEPTED'}
                                 </span>
                               </div>
                             </div>
@@ -6170,7 +6233,9 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                           </span>
                           <div className="space-y-0.5">
                             <div className="flex items-center gap-2">
-                              <span className="text-[8px] uppercase tracking-widest font-mono text-brand-charcoal/40 font-bold block">Assigned Leads</span>
+                              <span className="text-[8px] uppercase tracking-widest font-mono text-brand-charcoal/40 font-bold block">
+                                {isSr ? 'Dodeljeni upiti' : 'Assigned Leads'}
+                              </span>
                               {activeInquiries.length > 0 && (
                                 <span className="px-1.5 py-0.2 rounded-full text-[8px] font-mono font-bold bg-amber-500/20 text-amber-900 border border-amber-500/30">
                                   {activeInquiries.length} {isSr ? 'aktivno' : 'active'}
@@ -6305,9 +6370,11 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                     </span>
                     <div className="space-y-0.5">
                       <span className="text-[8px] uppercase tracking-widest font-mono text-brand-charcoal/40 font-bold block">
-                        Secure Thread • office@idemo.group
+                        {isSr ? 'Bezbedna prepiska • office@idemo.group' : 'Secure Thread • office@idemo.group'}
                       </span>
-                      <h3 className="text-xs uppercase tracking-wide font-black text-brand-charcoal">MESSAGES WITH IDEMO</h3>
+                      <h3 className="text-xs uppercase tracking-wide font-black text-brand-charcoal">
+                        {isSr ? 'PORUKE SA IDEMO TIMOM' : 'MESSAGES WITH IDEMO'}
+                      </h3>
                     </div>
                   </div>
 
@@ -6325,7 +6392,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             {msg.text}
                           </div>
                           <span className="text-[8px] font-mono text-brand-charcoal/40 px-1">
-                            {isMe ? 'You → office@idemo.group' : 'IDEMO Curation'} • {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {isMe ? (isSr ? 'Vi → office@idemo.group' : 'You → office@idemo.group') : (isSr ? 'IDEMO Uredništvo' : 'IDEMO Curation')} • {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
                       );
@@ -6335,8 +6402,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                   {/* Send Message Input Form */}
                   <div className="flex gap-2 border-t border-[#2D3025]/5 pt-3">
                     <input 
-                      type="text"
-                      placeholder="Type secure reply to IDEMO team..."
+                      type="text" 
+                      placeholder={isSr ? 'Unesite poruku IDEMO timu...' : 'Type secure reply to IDEMO team...'}
                       value={partnerMessageInput}
                       onChange={e => setPartnerMessageInput(e.target.value)}
                       onKeyDown={e => {
@@ -6354,7 +6421,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                       }}
                       className="px-3 bg-brand-charcoal text-white rounded-xl text-[9px] font-black uppercase tracking-wider hover:bg-brand-charcoal/90 transition-colors flex items-center justify-center cursor-pointer"
                     >
-                      Send
+                      {isSr ? 'Pošalji' : 'Send'}
                     </button>
                   </div>
                 </div>
@@ -6371,7 +6438,9 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           <div className="fixed inset-0 z-[190] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
             <div className="bg-[#FAF9F5] border-2 border-[#E3DFD5] w-full max-w-[360px] rounded-[32px] overflow-hidden shadow-2xl p-6 relative flex flex-col text-left space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-[9px] font-mono font-black tracking-widest uppercase text-amber-600">PASSCODE VERIFICATION</span>
+                <span className="text-[9px] font-mono font-black tracking-widest uppercase text-amber-600">
+                  {isSr ? 'PROVERA PIN KODA' : 'PASSCODE VERIFICATION'}
+                </span>
                 <button onClick={() => setPinTargetPartner(null)} className="w-7 h-7 rounded-full bg-[#2D3025]/5 flex items-center justify-center text-[#2D3025]/50"><X size={12} /></button>
               </div>
 
@@ -6384,7 +6453,9 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
               </div>
 
               <div className="space-y-2 pt-2">
-                <label className="text-[9px] uppercase tracking-widest text-[#2D3025]/40 font-black block text-center">Enter 4-Digit Access PIN</label>
+                <label className="text-[9px] uppercase tracking-widest text-[#2D3025]/40 font-black block text-center">
+                  {isSr ? 'Unesite 4-cifreni pristupni PIN' : 'Enter 4-Digit Access PIN'}
+                </label>
                 <input 
                   type="password" 
                   maxLength={4}
@@ -6410,7 +6481,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                 }`}
               >
                 <Unlock size={12} />
-                <span>Verify & Unlock</span>
+                <span>{isSr ? 'Potvrdi i otključaj' : 'Verify & Unlock'}</span>
               </button>
             </div>
           </div>
@@ -6429,21 +6500,25 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
               className="bg-white border border-[#2D3025]/10 w-full max-w-[340px] rounded-[32px] overflow-hidden shadow-2xl p-6 flex flex-col text-left space-y-5"
             >
               <div className="space-y-1">
-                <span className="text-[8px] uppercase tracking-widest font-mono text-[#8A1F1F] font-black block">PORTFOLIO EXPANSION</span>
+                <span className="text-[8px] uppercase tracking-widest font-mono text-[#8A1F1F] font-black block">
+                  {isSr ? 'PROŠIRENJE PORTFOLIJA' : 'PORTFOLIO EXPANSION'}
+                </span>
                 <h3 className="text-sm font-serif font-black text-brand-charcoal leading-tight">
-                  Request Capability Extension
+                  {isSr ? 'Zahtev za proširenje kompetencije' : 'Request Capability Extension'}
                 </h3>
               </div>
 
               <div className="space-y-2 bg-[#FAF9F5] border border-[#2D3025]/5 p-4 rounded-2xl">
                 <p className="text-[9.5px] text-brand-charcoal/50 uppercase tracking-wider font-mono font-bold leading-none">
-                  Requesting Approval For:
+                  {isSr ? 'Zahtevano odobrenje za:' : 'Requesting Approval For:'}
                 </p>
                 <p className="text-sm font-serif font-black text-[#8A1F1F]">
                   {requestConfirmItem.labelText}
                 </p>
                 <p className="text-[10px] text-brand-charcoal/60 leading-relaxed pt-1">
-                  Once requested, this capability will enter your portal as <strong className="text-amber-700">Pending</strong> awaiting validation from the IDEMO curation team.
+                  {isSr 
+                    ? 'Nakon slanja zahteva, ova kompetencija ulazi u vaš radni prostor sa statusom Na čekanju dok je IDEMO uredništvo ne validira.' 
+                    : 'Once requested, this capability will enter your portal as Pending awaiting validation from the IDEMO curation team.'}
                 </p>
               </div>
 
@@ -6452,7 +6527,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                   onClick={() => { triggerHaptic(10); setRequestConfirmItem(null); }}
                   className="flex-1 h-10 border border-[#2D3025]/10 hover:bg-[#2D3025]/5 text-brand-charcoal rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center"
                 >
-                  Cancel
+                  {isSr ? 'Odustani' : 'Cancel'}
                 </button>
                 <button 
                   onClick={() => {
@@ -6464,7 +6539,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                   }}
                   className="flex-1 h-10 bg-[#8A1F1F] hover:bg-[#8A1F1F]/90 text-white rounded-xl text-[10px] font-black uppercase tracking-wider shadow-sm transition-all cursor-pointer flex items-center justify-center"
                 >
-                  Request
+                  {isSr ? 'Pošalji zahtev' : 'Request'}
                 </button>
               </div>
             </motion.div>

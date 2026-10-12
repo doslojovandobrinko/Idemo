@@ -357,10 +357,10 @@ export function StudioRecommendations({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="font-serif text-2xl font-bold text-[#1E2E20] tracking-tight">
-            Recommendations Desk
+            Destinations Desk (Curated spots & experiences)
           </h1>
           <p className="text-[#8C8A7D] text-xs sm:text-sm font-sans mt-0.5">
-            Manage, review, and audit 148 curated recommendations across Serbia destinations (135 Canonical Baseline v2).
+            Manage, review, and audit curated destinations (authentic spots & heritage) across Serbia.
           </p>
         </div>
 

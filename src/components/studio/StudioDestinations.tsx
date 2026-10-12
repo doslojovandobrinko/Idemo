@@ -94,10 +94,10 @@ export function StudioDestinations() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="font-serif text-2xl font-bold text-[#1E2E20] tracking-tight">
-            Destinations Directory
+            Destinations Hub (Regional travel packages)
           </h1>
           <p className="text-[#8C8A7D] text-xs sm:text-sm font-sans mt-0.5">
-            Manage active travel destinations, package release statuses, and spatial scope.
+            Manage active regional travel packages, release statuses, and spatial scope.
           </p>
         </div>
 

@@ -28,8 +28,8 @@ interface StudioSidebarProps {
 
 const NAV_ITEMS: StudioNavSection[] = [
   { id: 'dashboard', label: 'Dashboard', iconName: 'LayoutDashboard' },
-  { id: 'destinations', label: 'Destinations', iconName: 'MapPin', badge: '5 Active' },
-  { id: 'recommendations', label: 'Recommendations', iconName: 'Compass', badge: '113 Recs' },
+  { id: 'destinations', label: 'Destinations (Regional packages)', iconName: 'MapPin', badge: '5 Active' },
+  { id: 'recommendations', label: 'Destinations (Curated spots)', iconName: 'Compass', badge: '113 Spots' },
   { id: 'editorial-review', label: 'Editorial Review', iconName: 'FileCheck', badge: 'WP-10' },
   { id: 'partners', label: 'Partners', iconName: 'Users', badge: '5 Verified' },
   { id: 'partner-coverage', label: 'Coverage Control', iconName: 'ShieldCheck', badge: 'Matrix' },

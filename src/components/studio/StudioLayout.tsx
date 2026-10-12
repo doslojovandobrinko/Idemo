@@ -52,7 +52,9 @@ export function StudioLayout({
         return (
           <StudioDashboard
             session={session}
-            onNavigateTab={(tab) => handleNavigateTab(tab)}
+            onNavigateTab={handleNavigateTab}
+            customRecommendations={customRecommendations}
+            editorialStatuses={editorialStatuses}
           />
         );
       case 'destinations':
@@ -89,7 +91,14 @@ export function StudioLayout({
       case 'settings':
         return <StudioSettings session={session} />;
       default:
-        return <StudioDashboard session={session} onNavigateTab={(t) => handleNavigateTab(t)} />;
+        return (
+          <StudioDashboard 
+            session={session} 
+            onNavigateTab={handleNavigateTab}
+            customRecommendations={customRecommendations}
+            editorialStatuses={editorialStatuses}
+          />
+        );
     }
   };
 

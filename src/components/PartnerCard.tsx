@@ -38,7 +38,13 @@ interface PartnerCardProps {
 }
 
 export function PartnerCard({ language }: PartnerCardProps) {
-  const [portalLang, setPortalLang] = useState<string>('sr');
+  const [portalLang, setPortalLang] = useState<string>(() => {
+    try {
+      const saved = safeStorage.getItem('idemo_partner_lang');
+      if (saved === 'en' || saved === 'sr') return saved;
+    } catch {}
+    return 'sr';
+  });
   const isSr = portalLang === 'sr';
   const isZh = portalLang === 'zh';
 
@@ -246,7 +252,11 @@ export function PartnerCard({ language }: PartnerCardProps) {
                   {/* Language Selector for the local Serbian partners */}
                   <button 
                     onClick={() => {
-                      setPortalLang(prev => prev === 'sr' ? 'en' : prev === 'en' ? 'zh' : 'sr');
+                      setPortalLang(prev => {
+                        const next = prev === 'sr' ? 'en' : 'sr';
+                        try { safeStorage.setItem('idemo_partner_lang', next); } catch {}
+                        return next;
+                      });
                       triggerHaptic(5);
                     }}
                     className="text-[8px] font-mono font-black uppercase tracking-wider px-2.5 py-1 bg-brand-charcoal/5 hover:bg-brand-charcoal/10 rounded-md text-brand-charcoal/65 cursor-pointer leading-none flex items-center gap-1 border border-[#2D3025]/5"

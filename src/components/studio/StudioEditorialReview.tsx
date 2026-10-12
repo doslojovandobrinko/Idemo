@@ -44,6 +44,9 @@ import { draftExpansionPool } from '../../data/recommendations/serbia/draft_expa
 import { PARTNERS as PARTNERS_DATABASE } from '../../data/partners';
 import { StudioTab } from './types';
 import { CuratorReviewSection } from './CuratorReviewSection';
+import { CuratorAttentionRadar } from './CuratorAttentionRadar';
+import { aggregateCuratorTasks } from '../../lib/curatorTaskService';
+import { getPartnerRecommendationProposals } from '../../lib/partnerProposalService';
 import { saveLocalStudioDraft } from '../../lib/recommendationWorkflowService';
 import { 
   fetchPartnerProfileReviewQueue, 
@@ -268,6 +271,39 @@ export function StudioEditorialReview({
       setEditableRec(activeRec);
     }
   }, [activeRec]);
+
+  // Live proposals queue
+  const proposals = useMemo(() => {
+    try {
+      return getPartnerRecommendationProposals();
+    } catch {
+      return [];
+    }
+  }, []);
+
+  // Aggregated curator tasks with deterministic SLA aging
+  const curatorTasks = useMemo(() => {
+    return aggregateCuratorTasks({
+      recommendations: allRecs,
+      editorialStatuses,
+      partnerQueue: passportQueue,
+      proposals
+    });
+  }, [allRecs, editorialStatuses, passportQueue, proposals]);
+
+  const handleRadarNavigate = (tab: StudioTab, itemId?: string) => {
+    if (tab === 'editorial-review' && itemId) {
+      if (allRecs.some(r => r.id === itemId)) {
+        setSelectedRecId(itemId);
+        setActiveSubTab('overview');
+      } else if (passportQueue.some(p => p.partner_id === itemId)) {
+        setSelectedPassportPartnerId(itemId);
+        setActiveSubTab('partners');
+      }
+    } else if (onNavigateTab) {
+      onNavigateTab(tab, itemId);
+    }
+  };
 
   // Filter logic
   const filteredRecs = useMemo(() => {
@@ -495,6 +531,13 @@ export function StudioEditorialReview({
           </button>
         </div>
       </div>
+
+      {/* Curator Attention Radar with SLA Aging Triage */}
+      <CuratorAttentionRadar 
+        tasks={curatorTasks} 
+        onNavigateTab={handleRadarNavigate} 
+        compactDefault={true} 
+      />
 
       {/* Operational Executive Dashboard Metrics */}
       <div className="bg-white border border-[#E5E3DB] rounded-3xl p-5 shadow-xs space-y-4">

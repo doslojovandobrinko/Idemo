@@ -398,7 +398,7 @@ function NavButton({ icon, label, active, onClick, isQuiet, showIndicator }: { i
     <button
       onClick={onClick}
       aria-label={label + (showIndicator ? ' (New partner response)' : '')}
-      className={`flex flex-col items-center justify-center gap-1 transition-all cursor-pointer relative min-w-[42px] max-w-[62px] ${
+      className={`flex flex-col items-center justify-center gap-1 transition-all cursor-pointer relative w-full min-h-[44px] py-0.5 ${
         active ? 'text-brand-charcoal font-bold scale-105' : isQuiet ? 'text-brand-charcoal/30 hover:text-brand-charcoal/60' : 'text-brand-charcoal/40 hover:text-brand-charcoal/70'
       }`}
     >
@@ -408,7 +408,7 @@ function NavButton({ icon, label, active, onClick, isQuiet, showIndicator }: { i
           <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-accent-red border-2 border-white animate-pulse shrink-0" />
         )}
       </div>
-      <span className="text-[9px] uppercase font-mono tracking-wider truncate max-w-[56px] text-center">{label}</span>
+      <span className="text-[9px] uppercase font-mono tracking-wider truncate max-w-full text-center px-0.5">{label}</span>
       {showIndicator && <span className="sr-only">New partner response</span>}
     </button>
   );
@@ -2948,27 +2948,45 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Bottom Navigation */}
+      {/* Bottom Navigation: 6 Equal Segments Layout */}
       {currentScreen !== 'landing' && (
-        <nav className="fixed bottom-0 left-0 right-0 max-w-[420px] mx-auto bg-white/90 backdrop-blur-xl border-t border-border-main px-3 xs:px-4 pt-3.5 pb-9 flex justify-between items-center z-[110] rounded-t-[40px] shadow-[0_-8px_40px_rgba(0,0,0,0.08)]">
-          {/* Consumer User Group: Home, My Profile, Explore, Planner grouped closer together on the left */}
-          <div className="flex items-center justify-start gap-1 xs:gap-2 sm:gap-2.5">
-            <NavButton icon={<CustomHomeIcon size={24} />} label={t.home} active={currentScreen === 'home'} onClick={() => { triggerHaptic(8); navigateToScreen('home'); }} />
-            <NavButton icon={<CustomProfileIcon size={24} />} label={t.profile} active={currentScreen === 'profile'} onClick={() => { triggerHaptic(8); navigateToScreen('profile'); }} />
-            <NavButton icon={<CustomExploreIcon size={24} />} label={t.explore} active={currentScreen === 'explore'} onClick={() => { triggerHaptic(8); navigateToScreen('explore'); }} />
-            <NavButton icon={<CustomPlannerIcon size={24} />} label={t.plan} active={currentScreen === 'plan'} onClick={() => { triggerHaptic(8); navigateToScreen('plan'); }} showIndicator={hasUnreadPartnerProposal} />
-          </div>
+        <nav className="fixed bottom-0 left-0 right-0 max-w-[420px] mx-auto bg-white/90 backdrop-blur-xl border-t border-border-main px-2 xs:px-3 pt-3.5 pb-9 z-[110] rounded-t-[40px] shadow-[0_-8px_40px_rgba(0,0,0,0.08)]">
+          {/* 6 Equal Segments Grid: Segments 1-4 for consumer icons, Segment 5 empty, Segment 6 for partner icon */}
+          <div className="grid grid-cols-6 items-center w-full">
+            {/* Segment 1: Home */}
+            <div className="flex items-center justify-center">
+              <NavButton icon={<CustomHomeIcon size={24} />} label={t.home} active={currentScreen === 'home'} onClick={() => { triggerHaptic(8); navigateToScreen('home'); }} />
+            </div>
 
-          {/* Partner User Group: Separated by distinct spatial gap and subtle divider to signify distinct user groups */}
-          <div className="pl-3 xs:pl-4 border-l border-border-main/20 shrink-0 flex items-center justify-center">
-            <NavButton 
-              icon={<CustomPartnersIcon size={24} />} 
-              label={t.partners || 'Partners'} 
-              active={currentScreen === 'partners'} 
-              onClick={() => { triggerHaptic(8); navigateToScreen('partners'); }} 
-              isQuiet={currentScreen !== 'partners'}
-              showIndicator={hasPartnerUnseenBadge}
-            />
+            {/* Segment 2: My Profile */}
+            <div className="flex items-center justify-center">
+              <NavButton icon={<CustomProfileIcon size={24} />} label={t.profile} active={currentScreen === 'profile'} onClick={() => { triggerHaptic(8); navigateToScreen('profile'); }} />
+            </div>
+
+            {/* Segment 3: Explore */}
+            <div className="flex items-center justify-center">
+              <NavButton icon={<CustomExploreIcon size={24} />} label={t.explore} active={currentScreen === 'explore'} onClick={() => { triggerHaptic(8); navigateToScreen('explore'); }} />
+            </div>
+
+            {/* Segment 4: Planner */}
+            <div className="flex items-center justify-center">
+              <NavButton icon={<CustomPlannerIcon size={24} />} label={t.plan} active={currentScreen === 'plan'} onClick={() => { triggerHaptic(8); navigateToScreen('plan'); }} showIndicator={hasUnreadPartnerProposal} />
+            </div>
+
+            {/* Segment 5: Empty Spacer Segment */}
+            <div className="flex items-center justify-center" aria-hidden="true" />
+
+            {/* Segment 6: Partner Portal */}
+            <div className="flex items-center justify-center">
+              <NavButton 
+                icon={<CustomPartnersIcon size={24} />} 
+                label={t.partners || 'Partners'} 
+                active={currentScreen === 'partners'} 
+                onClick={() => { triggerHaptic(8); navigateToScreen('partners'); }} 
+                isQuiet={currentScreen !== 'partners'}
+                showIndicator={hasPartnerUnseenBadge}
+              />
+            </div>
           </div>
         </nav>
       )}
@@ -5190,9 +5208,9 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, allRecom
         <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 pt-1 border-b border-border-main/10">
           {[
             { id: 'stories', label: language === 'sr' ? 'Priče i običaji' : language === 'zh' ? '故事与习俗' : 'Stories & Customs', icon: <EditorialStoriesCustomsIcon size={18} /> },
+            { id: 'quiz', label: language === 'sr' ? 'Kulturni kviz' : language === 'zh' ? '文化问答' : 'Cultural Quiz', icon: '✨' },
             { id: 'wisdom', label: language === 'sr' ? 'Lokalna mudrost' : language === 'zh' ? '地方智慧' : 'Local Wisdom', icon: <EditorialLocalWisdomIcon size={18} /> },
-            { id: 'slang', label: language === 'sr' ? 'Sleng i bonton' : language === 'zh' ? '社交礼仪与方言' : 'Social Codes & Slang', icon: '💬' },
-            { id: 'quiz', label: language === 'sr' ? 'Kulturni kviz' : language === 'zh' ? '文化问答' : 'Cultural Quiz', icon: '✨' }
+            { id: 'slang', label: language === 'sr' ? 'Sleng i bonton' : language === 'zh' ? '社交礼仪与方言' : 'Social Codes & Slang', icon: '💬' }
           ].map(tab => (
             <button
               key={tab.id}
@@ -5326,6 +5344,24 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, allRecom
             </motion.div>
           )}
 
+          {activeBriefingTab === 'quiz' && (
+            <motion.div 
+              key="briefing-quiz"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+              className="pt-1"
+            >
+              <CulturalQuiz
+                language={language}
+                allRecommendations={allRecommendations || recommendations || INITIAL_RECOMMENDATIONS}
+                onSelectRec={onSelectRec}
+                triggerHaptic={triggerHaptic}
+              />
+            </motion.div>
+          )}
+
           {activeBriefingTab === 'wisdom' && (
             <motion.div 
               key="briefing-wisdom"
@@ -5386,24 +5422,6 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, allRecom
               className="pt-1"
             >
               <SlangCrypt language={language} />
-            </motion.div>
-          )}
-
-          {activeBriefingTab === 'quiz' && (
-            <motion.div 
-              key="briefing-quiz"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-              className="pt-1"
-            >
-              <CulturalQuiz
-                language={language}
-                allRecommendations={allRecommendations || recommendations || INITIAL_RECOMMENDATIONS}
-                onSelectRec={onSelectRec}
-                triggerHaptic={triggerHaptic}
-              />
             </motion.div>
           )}
         </AnimatePresence>

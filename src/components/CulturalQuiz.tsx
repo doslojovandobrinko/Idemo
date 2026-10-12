@@ -23,6 +23,7 @@ export default function CulturalQuiz({
   onSelectRec,
   triggerHaptic
 }: CulturalQuizProps) {
+  const quizContainerRef = React.useRef<HTMLDivElement>(null);
   // Monte Carlo sampled 6 questions from the 30 pool
   const [questions, setQuestions] = useState<QuizQuestion[]>(() => sampleRandomQuizQuestions(6));
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -37,6 +38,62 @@ export default function CulturalQuiz({
       }
     } catch {}
   }, [triggerHaptic]);
+
+  // Robust scrolling to align quiz container cleanly in view when advancing questions
+  const scrollToQuiz = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    if (!quizContainerRef.current) return;
+    const container = quizContainerRef.current;
+    
+    // Find the scrolling ancestor (e.g. HomeScreen overflow-y-auto container)
+    let scrollParent: HTMLElement | null = container.parentElement;
+    while (scrollParent) {
+      const style = window.getComputedStyle(scrollParent);
+      if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+        break;
+      }
+      scrollParent = scrollParent.parentElement;
+    }
+
+    if (scrollParent) {
+      const containerRect = container.getBoundingClientRect();
+      const parentRect = scrollParent.getBoundingClientRect();
+      const relativeTop = containerRect.top - parentRect.top;
+      // Position the quiz container 12px below the top of the scroll container
+      const targetScrollTop = scrollParent.scrollTop + relativeTop - 12;
+      
+      try {
+        scrollParent.scrollTo({
+          top: Math.max(0, targetScrollTop),
+          behavior
+        });
+      } catch {
+        scrollParent.scrollTop = Math.max(0, targetScrollTop);
+      }
+    } else {
+      try {
+        container.scrollIntoView({
+          behavior,
+          block: 'start'
+        });
+      } catch {
+        container.scrollIntoView();
+      }
+    }
+  }, []);
+
+  // When advancing to the next question, smoothly re-align the quiz card into clear view
+  // to prevent layout collapse from displacing the card above the viewport
+  React.useEffect(() => {
+    if (currentIndex > 0) {
+      scrollToQuiz('smooth');
+      const timer1 = setTimeout(() => scrollToQuiz('smooth'), 50);
+      const timer2 = setTimeout(() => scrollToQuiz('smooth'), 180);
+      return () => {
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+      };
+    }
+  }, [currentIndex, scrollToQuiz]);
 
   const currentQuestion = questions[currentIndex];
   const attemptedForCurrent = selectedAnswers[currentIndex] || [];
@@ -71,6 +128,7 @@ export default function CulturalQuiz({
     } else {
       setIsCompleted(true);
     }
+    scrollToQuiz('smooth');
   };
 
   const handleRestartQuiz = () => {
@@ -81,6 +139,7 @@ export default function CulturalQuiz({
     setSelectedAnswers({});
     setCorrectlyAnswered({});
     setIsCompleted(false);
+    scrollToQuiz('smooth');
   };
 
   // Find linked recommendations for the current question
@@ -123,7 +182,10 @@ export default function CulturalQuiz({
   };
 
   return (
-    <div className="w-full bg-[#FAF9F5] border border-border-main/70 rounded-[28px] p-5 sm:p-6 shadow-sm space-y-5">
+    <div 
+      ref={quizContainerRef}
+      className="w-full bg-[#FAF9F5] border border-border-main/70 rounded-[28px] p-5 sm:p-6 shadow-sm space-y-5 scroll-mt-6"
+    >
       {/* Quiz Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border-main/40 pb-4">
         <div>
@@ -166,11 +228,11 @@ export default function CulturalQuiz({
         {!isCompleted ? (
           <motion.div
             key={currentQuestion.id}
-            initial={{ opacity: 0, y: 8 }}
+            initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-            className="space-y-4"
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.15 }}
+            className="space-y-4 min-h-[280px]"
           >
             {/* Category tag & Question statement */}
             <div className="space-y-1.5">

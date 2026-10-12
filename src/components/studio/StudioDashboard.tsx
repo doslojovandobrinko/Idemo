@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Compass, 
   MapPin, 
@@ -17,20 +17,78 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { StudioUserSession, StudioTab } from './types';
+import { CuratorAttentionRadar } from './CuratorAttentionRadar';
+import { aggregateCuratorTasks, CuratorTask } from '../../lib/curatorTaskService';
+import { Recommendation } from '../../types';
+import { INITIAL_RECOMMENDATIONS } from '../../constants';
+import { draftExpansionPool } from '../../data/recommendations/serbia/draft_expansion';
+import { fetchPartnerProfileReviewQueue, PartnerProfileQueueItem } from '../../lib/partnerService';
+import { getPartnerRecommendationProposals } from '../../lib/partnerProposalService';
+import { getSupabaseClient } from '../../lib/supabaseClient';
 
 interface StudioDashboardProps {
   session: StudioUserSession;
-  onNavigateTab: (tab: StudioTab) => void;
+  onNavigateTab: (tab: StudioTab, itemId?: string) => void;
   recommendationCount?: number;
   partnerCount?: number;
+  customRecommendations?: Recommendation[];
+  editorialStatuses?: Record<string, 'CANDIDATE' | 'NEEDS RESEARCH' | 'APPROVED' | 'MERGE CANDIDATE' | 'RETIRED'>;
 }
 
 export function StudioDashboard({
   session,
   onNavigateTab,
   recommendationCount = 113,
-  partnerCount = 5
+  partnerCount = 5,
+  customRecommendations = [],
+  editorialStatuses = {}
 }: StudioDashboardProps) {
+  const [partnerQueue, setPartnerQueue] = useState<PartnerProfileQueueItem[]>([]);
+
+  useEffect(() => {
+    async function loadQueue() {
+      try {
+        const supabase = getSupabaseClient();
+        const token = (await supabase?.auth.getSession())?.data.session?.access_token;
+        const res = await fetchPartnerProfileReviewQueue(token, 'pending_review');
+        if (res.success && res.profiles) {
+          setPartnerQueue(res.profiles);
+        }
+      } catch {
+        // Fallback gracefully
+      }
+    }
+    loadQueue();
+  }, []);
+
+  // Aggregated recommendations pool
+  const allRecs = useMemo(() => {
+    const combined = [...INITIAL_RECOMMENDATIONS, ...draftExpansionPool, ...customRecommendations];
+    const map = new Map<string, Recommendation>();
+    combined.forEach(r => {
+      if (!map.has(r.id)) map.set(r.id, r);
+    });
+    return Array.from(map.values());
+  }, [customRecommendations]);
+
+  // Aggregate live proposals
+  const proposals = useMemo(() => {
+    try {
+      return getPartnerRecommendationProposals();
+    } catch {
+      return [];
+    }
+  }, []);
+
+  // Computed tasks with SLA aging tiers
+  const curatorTasks = useMemo(() => {
+    return aggregateCuratorTasks({
+      recommendations: allRecs,
+      editorialStatuses,
+      partnerQueue,
+      proposals
+    });
+  }, [allRecs, editorialStatuses, partnerQueue, proposals]);
   return (
     <div className="space-y-6 font-sans">
       {/* Welcome Banner */}
@@ -242,64 +300,11 @@ export function StudioDashboard({
             </div>
           </div>
 
-          {/* Items Requiring Attention */}
-          <div className="bg-white border border-[#E5E3DB] rounded-3xl p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-[#E5E3DB] pb-3">
-              <div className="flex items-center gap-2">
-                <AlertTriangle size={18} className="text-[#8A1F1F]" />
-                <h3 className="font-serif text-lg font-bold text-[#1E2E20]">
-                  Items Requiring Operational Attention
-                </h3>
-              </div>
-              <span className="font-mono text-[10px] text-[#8A1F1F] font-bold bg-[#FFEBEE] px-2.5 py-1 rounded-full border border-[#FFCDD2]">
-                3 ACTION ITEMS
-              </span>
-            </div>
-
-            <div className="space-y-2.5 font-mono text-xs">
-              <div 
-                onClick={() => onNavigateTab('partners')}
-                className="p-3 bg-[#FAF9F5] border border-[#E5E3DB] hover:border-[#23251E] rounded-xl flex items-center justify-between cursor-pointer transition-all"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-[#F57F17]" />
-                  <div>
-                    <span className="font-bold text-[#1E2E20]">Partner P-005 (Kula Wine & Ethno Estate)</span>
-                    <p className="text-[10px] text-[#8C8A7D] mt-0.5">Verification pending • Requires primary contact email confirmation</p>
-                  </div>
-                </div>
-                <ArrowUpRight size={14} className="text-[#8C8A7D]" />
-              </div>
-
-              <div 
-                onClick={() => onNavigateTab('recommendations')}
-                className="p-3 bg-[#FAF9F5] border border-[#E5E3DB] hover:border-[#23251E] rounded-xl flex items-center justify-between cursor-pointer transition-all"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-[#8A1F1F]" />
-                  <div>
-                    <span className="font-bold text-[#1E2E20]">49 Expansion Pool Candidates</span>
-                    <p className="text-[10px] text-[#8C8A7D] mt-0.5">Draft status • Completeness audit required before release approval</p>
-                  </div>
-                </div>
-                <ArrowUpRight size={14} className="text-[#8C8A7D]" />
-              </div>
-
-              <div 
-                onClick={() => onNavigateTab('publications')}
-                className="p-3 bg-[#FAF9F5] border border-[#E5E3DB] hover:border-[#23251E] rounded-xl flex items-center justify-between cursor-pointer transition-all"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-[#2E7D32]" />
-                  <div>
-                    <span className="font-bold text-[#1E2E20]">Destination Package v1.2.0</span>
-                    <p className="text-[10px] text-[#8C8A7D] mt-0.5">Published & Active • All 5 destinations synchronized</p>
-                  </div>
-                </div>
-                <ArrowUpRight size={14} className="text-[#8C8A7D]" />
-              </div>
-            </div>
-          </div>
+          {/* Dynamic Curator Attention Radar with Aging SLA indicators */}
+          <CuratorAttentionRadar 
+            tasks={curatorTasks} 
+            onNavigateTab={onNavigateTab} 
+          />
         </div>
 
         {/* Operator Quick Actions Sidebar */}
