@@ -68,9 +68,11 @@ import { ensureEnglishSync, ensureEnglishPartnerResponse } from '../lib/inquiryT
 import { 
   checkPartnerHasUnseenInquiries, 
   markPartnerInquiriesAsSeen, 
+  markAllActivePartnerInquiriesSeen,
   getPartnerSeenMessageCount, 
   markPartnerMessagesAsSeen 
 } from '../lib/partnerBadgeStorage';
+import { badgingService } from '../lib/badgingService';
 import { loadRecommendations } from '../lib/recommendationsLoader';
 
 // Static Lookup for IDEMO Recommendations
@@ -1242,6 +1244,16 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     };
   }, [recDropdownOpen]);
 
+  // Auto-clear unread badge once partner enters or views the opportunities workspace
+  useEffect(() => {
+    if (portalRole === 'partner' && partnerWorkspaceTab === 'opportunities') {
+      const timer = setTimeout(() => {
+        markAllActivePartnerInquiriesSeen();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [portalRole, partnerWorkspaceTab, inquiries.length]);
+
   const refreshOpportunities = async () => {
     const session = partnerSessionStorage.getPartnerSession();
     if (!session) return;
@@ -2043,6 +2055,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   };
 
   const handlePortalLogin = async () => {
+    badgingService.requestNotificationPermission().catch(() => {});
     const code = partnerCodeInput.trim().toUpperCase();
     const pin = pinInput.trim();
     setPinError('');
@@ -2878,6 +2891,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
   const handleVerifyPin = async () => {
     if (!pinTargetPartner) return;
+    badgingService.requestNotificationPermission().catch(() => {});
     const inputHash = await sha256(pinInput.trim());
     if (inputHash === pinTargetPartner.pinHash || inputHash === '68722dedde84631c45b4aade9365a91aa6fd11c5766e66191ffbf07361204a4c') {
       triggerHaptic([30, 15, 45]);

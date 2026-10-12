@@ -18,6 +18,7 @@ import { executeCoordinatedVisitorRequest } from '../lib/visitorRateCoordinator'
 import { isSupabaseConfigured } from '../lib/supabaseClient';
 import { routeOutboundAction } from '../lib/outboundRouter';
 import { ensureEnglishSync } from '../lib/inquiryTranslation';
+import { badgingService } from '../lib/badgingService';
 
 function getPartnerMonogram(name?: string): string {
   if (!name) return 'PTR';
@@ -413,6 +414,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
 
   const handleRequestArrangement = async () => {
     triggerHaptic(15);
+    badgingService.requestNotificationPermission().catch(() => {});
     setSubmitting(true);
     setSubmissionError(null);
     setProgress(25);
@@ -920,6 +922,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
 
   const handleTryAgain = async () => {
     triggerHaptic(15);
+    badgingService.requestNotificationPermission().catch(() => {});
     setActionInProgress(true);
     setStatusFeedback(language === 'sr' ? 'Kreiramo novi upit za traženje partnera...' : 'Creating new inquiry to search for available partners...');
 

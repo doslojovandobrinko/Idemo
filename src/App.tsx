@@ -388,7 +388,7 @@ import {
 import { fetchActiveProposal } from './lib/inquiryService';
 import { executeCoordinatedVisitorRequest } from './lib/visitorRateCoordinator';
 import { badgingService } from './lib/badgingService';
-import { checkAnyPartnerUnseenBadge } from './lib/partnerBadgeStorage';
+import { checkAnyPartnerUnseenBadge, refreshPartnerOpportunitiesBackground } from './lib/partnerBadgeStorage';
 
 // Available travel durations steps
 export const ALLOWED_TIMES = [4, 8, 12, 24, 36, 72];
@@ -1714,6 +1714,9 @@ export default function App() {
           setHasUnreadPartnerProposal(checkHasUnreadProposals());
           window.dispatchEvent(new Event('idemo_proposal_state_change'));
         }
+
+        // Also refresh partner opportunities if an active partner session exists
+        refreshPartnerOpportunitiesBackground().catch(() => {});
       } catch (e) {
         // Ignore background error
       }
@@ -1745,6 +1748,7 @@ export default function App() {
           scheduleNextPoll();
         });
         setHasUnreadPartnerProposal(checkHasUnreadProposals());
+        setHasPartnerUnseenBadge(checkAnyPartnerUnseenBadge());
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -1756,10 +1760,12 @@ export default function App() {
     };
   }, []);
 
-  // Immediate refresh whenever visitor opens My Planner screen
+  // Immediate refresh whenever visitor opens My Planner screen or Partners screen
   React.useEffect(() => {
     if (currentScreen === 'plan') {
       refreshActiveInquiryProposalsRef.current?.();
+    } else if (currentScreen === 'partners') {
+      refreshPartnerOpportunitiesBackground().catch(() => {});
     }
   }, [currentScreen]);
 

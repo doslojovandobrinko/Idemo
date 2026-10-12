@@ -7,6 +7,7 @@ import { badgingService } from '../lib/badgingService';
 import { 
   checkPartnerHasUnseenInquiries, 
   markPartnerInquiriesAsSeen, 
+  markAllActivePartnerInquiriesSeen,
   getPartnerSeenInquiryIds,
   checkAnyPartnerUnseenBadge,
   getPartnerSeenMessageCount,
@@ -22,7 +23,9 @@ export async function runBadgingTests(): Promise<{ passed: boolean; results: str
   try {
     await badgingService.setBadge(3);
     await badgingService.clearBadge();
-    results.push('PASS: badgingService setBadge and clearBadge execute cleanly');
+    const perm = await badgingService.requestNotificationPermission();
+    const hasPerm = badgingService.hasNotificationPermission();
+    results.push('PASS: badgingService setBadge, clearBadge, and permission checks execute cleanly');
   } catch (err: any) {
     results.push(`FAIL: badgingService error: ${err.message}`);
   }
@@ -55,7 +58,21 @@ export async function runBadgingTests(): Promise<{ passed: boolean; results: str
     results.push('FAIL: markPartnerInquiriesAsSeen did not clear unseen status');
   }
 
-  // Test 4: partner messages tracking
+  // Test 4: markAllActivePartnerInquiriesSeen functionality
+  safeStorage.setItem('idemo_portal_inquiries', JSON.stringify([
+    { id: 'inq_batch_1', partnerId: 'uno1', status: 'Active' },
+    { id: 'inq_batch_2', partnerId: 'uno1', status: 'Active' }
+  ]));
+  const hasUnseenBatchBefore = checkPartnerHasUnseenInquiries(['inq_batch_1', 'inq_batch_2']);
+  markAllActivePartnerInquiriesSeen();
+  const hasUnseenBatchAfter = checkPartnerHasUnseenInquiries(['inq_batch_1', 'inq_batch_2']);
+  if (hasUnseenBatchBefore && !hasUnseenBatchAfter) {
+    results.push('PASS: markAllActivePartnerInquiriesSeen successfully cleared all active portal inquiries');
+  } else {
+    results.push('FAIL: markAllActivePartnerInquiriesSeen did not clear batch');
+  }
+
+  // Test 5: partner messages tracking
   const initialSeen = getPartnerSeenMessageCount('UNO1');
   markPartnerMessagesAsSeen('UNO1', 5);
   const updatedSeen = getPartnerSeenMessageCount('UNO1');

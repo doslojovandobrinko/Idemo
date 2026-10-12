@@ -90,6 +90,35 @@ export const badgingService = {
   },
 
   /**
+   * Request user permission for Web App notifications and OS icon badging
+   * Must be called during an explicit user gesture (e.g. submitting an inquiry, logging in)
+   */
+  async requestNotificationPermission(): Promise<NotificationPermission> {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      return 'denied';
+    }
+    try {
+      if (Notification.permission === 'granted') {
+        return 'granted';
+      }
+      const permission = await Notification.requestPermission();
+      return permission;
+    } catch {
+      return 'denied';
+    }
+  },
+
+  /**
+   * Check if notification permission is currently granted
+   */
+  hasNotificationPermission(): boolean {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      return false;
+    }
+    return Notification.permission === 'granted';
+  },
+
+  /**
    * Update the OS app icon badge and browser favicon with the number of unseen responses
    * @param count Total number of unseen responses (0 to clear)
    */
