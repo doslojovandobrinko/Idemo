@@ -247,9 +247,14 @@ export function StudioEditorialReview({
         message: res.message || res.error || `Failed to perform ${action} on partner profile.`
       });
     } else {
+      if (action === 'approve' && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('idemo_partners_updated'));
+      }
       setActionFeedback({
         type: 'success',
-        message: `Partner profile successfully updated (${action.replace('_', ' ')}).`
+        message: action === 'approve'
+          ? 'Partner passport successfully approved, published, and migrated to Partner Directory!'
+          : `Partner profile successfully updated (${action.replace('_', ' ')}).`
       });
       setReviewerNoteInput('');
       await loadPassportQueue(passportFilter, true);

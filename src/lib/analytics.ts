@@ -6,6 +6,7 @@
  */
 
 import { safeStorage } from './safeStorage';
+import { recordRecommendationView } from './recommendationStatsService';
 
 export interface TelemetryData {
   anonymousId: string;
@@ -117,7 +118,10 @@ export function trackStoreClick() {
 }
 
 export function trackRecView(recId: string) {
-  // Disabled
+  // Anonymously record recommendation view (Zero PII, debounced)
+  if (recId) {
+    recordRecommendationView(recId).catch(() => {});
+  }
 }
 
 export function trackRecSave(recId: string) {

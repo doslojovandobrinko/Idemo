@@ -50,7 +50,8 @@ import {
   withdrawPartnerProfileContent,
   authorizePhotoUpload,
   uploadPhotoToSignedUrl,
-  updatePartnerProfessionalContact
+  updatePartnerProfessionalContact,
+  getPartnerCoverageQuota
 } from '../lib/partnerService';
 import { partnerSessionStorage } from '../lib/partnerSessionStorage';
 import { loadAuthoritativeCommunityEvents } from '../lib/communityFeedService';
@@ -1149,6 +1150,9 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   // Applied Expertise for Existing Recommendations
   const [appliedRecs, setAppliedRecs] = useState<string[]>([]);
   const [appliedRecsNote, setAppliedRecsNote] = useState<string>('');
+  const [canonicalRegion, setCanonicalRegion] = useState<string>('sa-belgrade-001');
+  const [recLimitMessage, setRecLimitMessage] = useState<string | null>(null);
+  const [filterByMyRegionOnly, setFilterByMyRegionOnly] = useState<boolean>(false);
   const [recSearchQuery, setRecSearchQuery] = useState<string>('');
   const [recDropdownOpen, setRecDropdownOpen] = useState<boolean>(false);
   const recDropdownRef = useRef<HTMLDivElement>(null);
@@ -1222,7 +1226,27 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
   const filteredCatalogRecs = useMemo(() => {
     const query = recSearchQuery.trim().toLowerCase();
-    const list = dynamicCatalogRecs.length > 0 ? dynamicCatalogRecs : RECOMMENDATIONS_LOOKUP;
+    let list = dynamicCatalogRecs.length > 0 ? dynamicCatalogRecs : RECOMMENDATIONS_LOOKUP;
+
+    if (filterByMyRegionOnly) {
+      const regKeywords: Record<string, string[]> = {
+        'sa-belgrade-001': ['belgrade', 'beograd', 'zemun', 'avala'],
+        'sa-novisad-002': ['novi sad', 'vojvodina', 'fruška', 'fruska', 'subotica', 'sombor', 'sremski'],
+        'sa-west-003': ['zlatibor', 'tara', 'uvac', 'drina', 'mokra gora', 'zapadna', 'podrinje', 'valjevo', 'loznica', 'bajina'],
+        'sa-sumadija-004': ['šumadija', 'sumadija', 'kragujevac', 'topola', 'aranđelovac', 'arandjelovac', 'central'],
+        'sa-east-005': ['đerdap', 'djerdap', 'golubac', 'istočna', 'istocna', 'danube', 'dunav', 'kladovo', 'homolje', 'srebrno'],
+        'sa-south-006': ['niš', 'nis', 'južna', 'juzna', 'south', 'vlasina', 'đavolja', 'djavolja', 'pirot', 'leskovac', 'stara planina']
+      };
+      const keywords = regKeywords[canonicalRegion] || [];
+      if (keywords.length > 0) {
+        list = list.filter(r => {
+          const loc = (r.location || '').toLowerCase();
+          const title = (r.title || '').toLowerCase();
+          return keywords.some(k => loc.includes(k) || title.includes(k));
+        });
+      }
+    }
+
     if (!query) return list;
     return list.filter(r => {
       const titleMatch = r.title.toLowerCase().includes(query) || (r.titleSr && r.titleSr.toLowerCase().includes(query));
@@ -1230,7 +1254,24 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       const locMatch = r.location && r.location.toLowerCase().includes(query);
       return titleMatch || catMatch || locMatch;
     });
-  }, [dynamicCatalogRecs, recSearchQuery]);
+  }, [dynamicCatalogRecs, recSearchQuery, filterByMyRegionOnly, canonicalRegion]);
+
+  // Derived approved assignments with their 1st, 2nd, 3rd priority ranks for display in passport
+  const approvedAssignments = useMemo(() => {
+    if (!activePartnerId) return [];
+    const quota = getPartnerCoverageQuota(activePartnerId);
+    return quota.assignedRecsWithPriority.map(item => {
+      const matched = (dynamicCatalogRecs.length > 0 ? dynamicCatalogRecs : RECOMMENDATIONS_LOOKUP).find(r => r.id === item.recId);
+      const title = matched ? (isSr ? (matched.titleSr || matched.title) : matched.title) : `Spot #${item.recId}`;
+      return {
+        recId: item.recId,
+        title,
+        category: matched?.category || 'Curated Spot',
+        location: matched?.location,
+        priorityRank: item.priorityRank
+      };
+    });
+  }, [activePartnerId, passportReviewStatus, dynamicCatalogRecs, isSr]);
 
   // Handle click outside & escape key to dismiss recommendations dropdown
   useEffect(() => {
@@ -1587,6 +1628,9 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
             setAppliedRecsNote(parsed.applied_recs_note);
           } else {
             setAppliedRecsNote('');
+          }
+          if (parsed.canonical_region) {
+            setCanonicalRegion(parsed.canonical_region);
           }
           setPassportModified(false);
           return;
@@ -4316,6 +4360,76 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                     </div>
                   </div>
 
+                  {/* APPROVED RECOMMENDATIONS & CONCIERGE PRIORITIES */}
+                  {passportReviewStatus === 'approved' && (
+                    <div className="border border-emerald-300 rounded-2xl p-4 bg-emerald-50/60 space-y-3">
+                      <div className="flex items-center justify-between border-b border-emerald-200 pb-2">
+                        <div className="flex items-center gap-2">
+                          <Award className="w-4 h-4 text-emerald-800" />
+                          <h4 className="text-xs uppercase font-mono font-bold tracking-wider text-emerald-950">
+                            {isSr ? 'Odobrene preporuke i prioriteti konsijerža' : 'Approved Recommendations & Concierge Priorities'}
+                          </h4>
+                        </div>
+                        <span className="text-[10px] font-mono font-bold bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded">
+                          {approvedAssignments.length} / 12 {isSr ? 'dodeljeno' : 'assigned'}
+                        </span>
+                      </div>
+
+                      {/* Quota meters */}
+                      <div className="grid grid-cols-3 gap-2 text-center text-xs font-mono">
+                        <div className="p-2 bg-white/90 rounded-xl border border-emerald-200 shadow-xs">
+                          <div className="text-[9.5px] text-stone-500 font-bold uppercase">{isSr ? '1. Prioritet (0m)' : '1st (0m Instant)'}</div>
+                          <div className="text-sm font-bold text-stone-900 mt-0.5">
+                            {approvedAssignments.filter(a => a.priorityRank === 1).length} / 4 max
+                          </div>
+                        </div>
+                        <div className="p-2 bg-white/90 rounded-xl border border-emerald-200 shadow-xs">
+                          <div className="text-[9.5px] text-stone-500 font-bold uppercase">{isSr ? '2. Prioritet (+30m)' : '2nd (+30m)'}</div>
+                          <div className="text-sm font-bold text-stone-900 mt-0.5">
+                            {approvedAssignments.filter(a => a.priorityRank === 2).length} / 4 max
+                          </div>
+                        </div>
+                        <div className="p-2 bg-white/90 rounded-xl border border-emerald-200 shadow-xs">
+                          <div className="text-[9.5px] text-stone-500 font-bold uppercase">{isSr ? '3. Prioritet (+60m)' : '3rd (+60m)'}</div>
+                          <div className="text-sm font-bold text-stone-900 mt-0.5">
+                            {approvedAssignments.filter(a => a.priorityRank === 3).length} / 4 max
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* List of approved spots with priorities */}
+                      {approvedAssignments.length === 0 ? (
+                        <div className="p-3 bg-white/80 rounded-xl border border-emerald-200 text-xs text-emerald-900 leading-relaxed">
+                          {isSr
+                            ? 'Pasoš je odobren! Urednički tim u IDEMO Studiju raspoređuje vaše preporuke u dispečerskoj matrici (do 4 na 1. mestu, 4 na 2. mestu, 4 na 3. mestu).'
+                            : 'Passport is approved! Editorial curators in IDEMO Studio are currently allocating your 1st, 2nd, and 3rd priority spots in the dispatch matrix (Max 4 as 1st, 4 as 2nd, 4 as 3rd).'}
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5 pt-1">
+                          {approvedAssignments.map((item) => (
+                            <div key={item.recId} className="p-2.5 bg-white rounded-xl border border-emerald-200 flex items-center justify-between gap-2 shadow-xs">
+                              <div className="min-w-0">
+                                <div className="text-xs font-serif font-bold text-stone-900 truncate">
+                                  {item.title}
+                                </div>
+                                <div className="text-[10px] font-mono text-stone-500 truncate">
+                                  {item.category} {item.location ? `· ${item.location}` : ''}
+                                </div>
+                              </div>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold shrink-0 ${
+                                item.priorityRank === 1 ? 'bg-amber-100 text-amber-900 border border-amber-300' :
+                                item.priorityRank === 2 ? 'bg-blue-100 text-blue-900 border border-blue-300' :
+                                'bg-stone-200 text-stone-800'
+                              }`}>
+                                {item.priorityRank === 1 ? '⭐ 1st Priority (0m)' : item.priorityRank === 2 ? '2nd Priority (+30m)' : '3rd Priority (+60m)'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* PARTNER PASSPORT INTRODUCTION & PHOTO EDITOR */}
                   <div className="border border-[#2D3025]/10 rounded-2xl p-4 bg-[#FAF9F5]/80 space-y-4">
                     <div className="flex items-center justify-between border-b border-[#2D3025]/5 pb-2.5">
@@ -4704,6 +4818,36 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                       </div>
                     </div>
 
+                    {/* CANONICAL REGION / PRIMARY SERVICE AREA */}
+                    <div className="p-3.5 bg-white border border-[#2D3025]/10 rounded-xl space-y-2">
+                      <div className="flex items-center gap-1.5 border-b border-[#2D3025]/5 pb-1.5">
+                        <MapPin size={14} className="text-[#8A1F1F]" />
+                        <span className="text-[10px] font-mono uppercase font-bold text-brand-charcoal">
+                          {isSr ? 'Matični kanonski region (Oblast delovanja)' : 'Canonical Service Region (Operational Focus)'}
+                        </span>
+                      </div>
+                      <p className="text-[10.5px] text-brand-charcoal/70 leading-relaxed">
+                        {isSr
+                          ? 'Izaberite vašu primarnu kanonsku oblast kako bi IDEMO sistem i urednički agent automatski analizirali geografsku usklađenost i predložili optimalni prioritet u matrici za odobrenje urednika.'
+                          : 'Select your primary canonical region so IDEMO AI and Editorial Agents can evaluate best geographic fit and propose optimal matrix priority slots for Curator review.'}
+                      </p>
+                      <select
+                        value={canonicalRegion}
+                        onChange={(e) => {
+                          setCanonicalRegion(e.target.value);
+                          setPassportModified(true);
+                        }}
+                        className="w-full px-3 py-2 bg-[#FAF9F5] border border-[#2D3025]/15 focus:border-[#8A1F1F] rounded-xl text-xs font-serif font-bold text-brand-charcoal outline-none transition-colors"
+                      >
+                        <option value="sa-belgrade-001">{isSr ? 'Beogradska mitropolitanska oblast (Belgrade Metropolitan Area)' : 'Belgrade Metropolitan Area'}</option>
+                        <option value="sa-novisad-002">{isSr ? 'Novi Sad i Vojvodina (Novi Sad & Vojvodina)' : 'Novi Sad & Vojvodina'}</option>
+                        <option value="sa-west-003">{isSr ? 'Zapadna Srbija i Podrinje (Western Serbia & Podrinje: Zlatibor, Tara, Uvac, Drina)' : 'Western Serbia & Podrinje (Zlatibor, Tara, Uvac, Drina)'}</option>
+                        <option value="sa-sumadija-004">{isSr ? 'Šumadija i Centralna Srbija (Šumadija & Central Serbia)' : 'Šumadija & Central Serbia'}</option>
+                        <option value="sa-east-005">{isSr ? 'Istočna Srbija i Donje Podunavlje (Eastern Serbia & Lower Danube)' : 'Eastern Serbia & Lower Danube'}</option>
+                        <option value="sa-south-006">{isSr ? 'Niš i Južna Srbija (Niš & Southern Serbia)' : 'Niš & Southern Serbia'}</option>
+                      </select>
+                    </div>
+
                     {/* APPLIED EXPERTISE FOR EXISTING RECOMMENDATIONS */}
                     <div className="p-3.5 bg-white border border-[#2D3025]/10 rounded-xl space-y-3">
                       <div className="flex items-center justify-between border-b border-[#2D3025]/5 pb-2">
@@ -4713,16 +4857,52 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             {isSr ? 'Prijavljena ekspertiza za postojeće preporuke' : 'Applied Expertise for Existing Recommendations'}
                           </span>
                         </div>
-                        <span className="text-[9px] font-mono font-bold text-[#8A1F1F] bg-[#8A1F1F]/10 px-2 py-0.5 rounded-full">
-                          {appliedRecs.length} {isSr ? 'odabrano' : 'selected'}
+                        <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                          appliedRecs.length >= 12 ? 'bg-[#8A1F1F] text-white' : 'text-[#8A1F1F] bg-[#8A1F1F]/10'
+                        }`}>
+                          {appliedRecs.length} / 12 {appliedRecs.length >= 12 ? (isSr ? '(Limit dostignut)' : '(Limit reached)') : (isSr ? 'odabrano' : 'selected')}
                         </span>
                       </div>
 
                       <p className="text-[10.5px] text-brand-charcoal/70 leading-relaxed">
                         {isSr
-                          ? 'Izaberite postojeće IDEMO preporuke za koje posedujete licencu ili proverenu lokalnu ekspertizu. IDEMO Kancelarija i urednici verifikuju vaš zahtev pre aktivacije direktnog usmeravanja upita.'
-                          : 'Select existing curated IDEMO recommendations where you possess licensing or verified local expertise. IDEMO Office and Curators will review and activate your direct routing priority upon verification.'}
+                          ? 'Predložite do najviše 12 postojećih IDEMO preporuka (do 4 za 1. prioritet, 4 za 2. prioritet i 4 za 3. prioritet po proceni urednika). Nakon verifikacije, vaš raspored prioriteta biće aktiviran.'
+                          : 'Propose up to 12 curated IDEMO recommendations max (up to 4 as 1st, 4 as 2nd, and 4 as 3rd priority by curator fit). Editorial Curators will verify and allocate your direct routing slots.'}
                       </p>
+
+                      {/* Limit warning banner */}
+                      {recLimitMessage && (
+                        <div className="p-2.5 bg-[#8A1F1F]/10 border border-[#8A1F1F]/30 rounded-xl text-xs font-mono font-bold text-[#8A1F1F] flex items-center justify-between">
+                          <span>⚠️ {recLimitMessage}</span>
+                          <button
+                            type="button"
+                            onClick={() => setRecLimitMessage(null)}
+                            className="text-xs hover:underline cursor-pointer px-1"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Regional Quick-Filter Toggle */}
+                      <div className="flex items-center justify-between gap-2 pb-1">
+                        <button
+                          type="button"
+                          onClick={() => setFilterByMyRegionOnly(!filterByMyRegionOnly)}
+                          className={`px-2.5 py-1 text-[10px] font-mono font-bold rounded-lg border transition-colors cursor-pointer flex items-center gap-1.5 ${
+                            filterByMyRegionOnly
+                              ? 'bg-[#8A1F1F] text-white border-[#8A1F1F]'
+                              : 'bg-neutral-50 text-brand-charcoal/80 border-[#2D3025]/20 hover:bg-neutral-100'
+                          }`}
+                        >
+                          <MapPin size={11} />
+                          <span>{filterByMyRegionOnly ? (isSr ? 'Prikaz: Samo u mojoj oblasti ✓' : 'Showing: Only in my region ✓') : (isSr ? 'Filtriraj: Samo u mojoj oblasti' : 'Filter: Only in my region')}</span>
+                        </button>
+
+                        <span className="text-[9.5px] font-mono text-brand-charcoal/50">
+                          {isSr ? 'Maksimalno 12 preporuka' : '12 recommendations max'}
+                        </span>
+                      </div>
 
                       {/* Searchable Multi-Select Component */}
                       <div className="space-y-2">
@@ -4784,10 +4964,23 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                       key={rec.id}
                                       onClick={() => {
                                         triggerHaptic(6);
+                                        if (!isSelected && appliedRecs.length >= 12) {
+                                          setRecLimitMessage(isSr ? '(Ovo je limit: možete predložiti najviše 12 preporuka)' : '( this is the limit : you can propose at most 12 recommendations)');
+                                          triggerHaptic(10);
+                                          return;
+                                        }
                                         setPassportModified(true);
-                                        setAppliedRecs(prev =>
-                                          prev.includes(rec.id) ? prev.filter(id => id !== rec.id) : [...prev, rec.id]
-                                        );
+                                        if (isSelected) {
+                                          setRecLimitMessage(null);
+                                          setAppliedRecs(prev => prev.filter(id => id !== rec.id));
+                                        } else {
+                                          if (appliedRecs.length === 11) {
+                                            setRecLimitMessage(isSr ? '(Ovo je limit: izabrali ste 12 preporuka — najviše 4 za 1., 4 za 2. i 4 za 3. prioritet po proceni urednika)' : '( this is the limit : you reached 12 recommendations — max 4 as 1st, 4 as 2nd, 4 as 3rd priority)');
+                                          } else {
+                                            setRecLimitMessage(null);
+                                          }
+                                          setAppliedRecs(prev => [...prev, rec.id]);
+                                        }
                                       }}
                                       className={`p-2.5 flex items-center justify-between gap-2 hover:bg-[#FAF9F5] cursor-pointer transition-colors ${
                                         isSelected ? 'bg-[#8A1F1F]/5' : ''
@@ -4819,8 +5012,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                               )}
                               {/* Sticky footer with Done confirmation button */}
                               <div className="p-2.5 bg-[#FAF9F5] border-t border-[#2D3025]/10 flex items-center justify-between gap-2 sticky bottom-0 z-10">
-                                <span className="text-[10px] font-mono text-brand-charcoal/70">
-                                  {appliedRecs.length} {isSr ? 'odabrano' : 'selected'}
+                                <span className={`text-[10px] font-mono font-bold ${appliedRecs.length >= 12 ? 'text-[#8A1F1F]' : 'text-brand-charcoal/70'}`}>
+                                  {appliedRecs.length} / 12 {appliedRecs.length >= 12 ? (isSr ? '(Limit)' : '(Limit)') : (isSr ? 'odabrano' : 'selected')}
                                 </span>
                                 <button
                                   type="button"
@@ -4901,7 +5094,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             profContactEmail || null,
                             undefined,
                             appliedRecs,
-                            appliedRecsNote || null
+                            appliedRecsNote || null,
+                            canonicalRegion
                           );
                           if (activePartnerId !== targetId) {
                             setPassportSaving(false);
@@ -4931,6 +5125,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                 contact_email: profContactEmail || parsed.contact_email || null,
                                 applied_recs: appliedRecs,
                                 applied_recs_note: appliedRecsNote || null,
+                                canonical_region: canonicalRegion,
                                 updated_at: new Date().toISOString(),
                               }));
                             } catch (err) {
@@ -4971,7 +5166,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             profContactEmail || null,
                             undefined,
                             appliedRecs,
-                            appliedRecsNote || null
+                            appliedRecsNote || null,
+                            canonicalRegion
                           );
                           if (activePartnerId !== targetId) {
                             setPassportSaving(false);
@@ -5003,6 +5199,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                 review_status: 'pending_review',
                                 applied_recs: appliedRecs,
                                 applied_recs_note: appliedRecsNote || null,
+                                canonical_region: canonicalRegion,
+                                updated_at: new Date().toISOString(),
                               }));
                             } catch (err) {
                               console.warn('Storage sync error:', err);

@@ -172,7 +172,145 @@ export function savePartnerOverridesToStorage(overrides: Record<string, Partner>
   }
 }
 
+/**
+ * Migrates a single approved passport record into the authoritative Partner Directory.
+ * Ensures the partner has stage: 'Approved' and verificationStatus: 'verified'.
+ */
+export function migrateApprovedPassportToDirectory(passportData: any, rawPartnerKeyOrCode: string): Partner {
+  const overrides = getPersistedPartnerOverrides();
+  const existingMap = new Map<string, Partner>();
+  STATIC_PARTNERS.forEach((p) => existingMap.set(p.id.toLowerCase(), p));
+  Object.values(overrides).forEach((p) => existingMap.set(p.id.toLowerCase(), p));
+
+  const portalPartnersRaw = safeStorage.getItem('idemo_portal_partners');
+  const portalPartners: any[] = portalPartnersRaw ? JSON.parse(portalPartnersRaw) : [];
+
+  const cleanKey = String(rawPartnerKeyOrCode).replace(/^idemo_partner_passport_/i, '').trim();
+  const matchedPortal = portalPartners.find(
+    (p) =>
+      String(p.id).toLowerCase() === cleanKey.toLowerCase() ||
+      String(p.publicCode || '').toLowerCase() === cleanKey.toLowerCase() ||
+      String(p.pin || '').toLowerCase() === cleanKey.toLowerCase()
+  );
+
+  const matchedExisting =
+    existingMap.get(cleanKey.toLowerCase()) ||
+    (matchedPortal?.id ? existingMap.get(String(matchedPortal.id).toLowerCase()) : undefined) ||
+    (passportData.partner_code ? existingMap.get(String(passportData.partner_code).toLowerCase()) : undefined);
+
+  // Authoritative Partner ID determination
+  let partnerId = matchedExisting?.id || matchedPortal?.id || cleanKey;
+  if (!partnerId.startsWith('P-') && !partnerId.includes('-')) {
+    partnerId = `P-${partnerId.toUpperCase()}`;
+  }
+
+  const partnerName =
+    passportData.partner_name ||
+    matchedExisting?.nameEn ||
+    matchedPortal?.name ||
+    passportData.partner_code ||
+    cleanKey;
+
+  const contactPhone =
+    passportData.published_contact_phone ||
+    passportData.draft_contact_phone ||
+    matchedExisting?.phone ||
+    matchedPortal?.contactPhone ||
+    '';
+
+  const contactEmail =
+    passportData.published_contact_email ||
+    passportData.draft_contact_email ||
+    matchedExisting?.email ||
+    '';
+
+  const introText =
+    passportData.intro_published ||
+    passportData.intro_draft ||
+    matchedExisting?.descriptionEn ||
+    '';
+
+  const category =
+    matchedExisting?.category ||
+    matchedPortal?.category ||
+    passportData.proposed_rec_category ||
+    'Tourist Guide';
+
+  const linkedRecs =
+    Array.isArray(passportData.applied_recs) && passportData.applied_recs.length > 0
+      ? passportData.applied_recs
+      : matchedExisting?.linkedRecommendations || matchedPortal?.assignedRecs || [];
+
+  const reviewedAtIso = passportData.reviewed_at || new Date().toISOString();
+  const lastVerifiedDate = reviewedAtIso.includes('T') ? reviewedAtIso.split('T')[0] : reviewedAtIso;
+
+  const migratedPartner: Partner = {
+    ...(matchedExisting || {}),
+    id: partnerId,
+    pinHash: matchedExisting?.pinHash || (matchedPortal?.pin ? `hash_${matchedPortal.pin}` : 'hash_default'),
+    nameEn: partnerName,
+    nameSr: matchedExisting?.nameSr || partnerName,
+    nameZh: matchedExisting?.nameZh || partnerName,
+    category,
+    partnerType: matchedExisting?.partnerType || 'Individual',
+    stage: 'Approved',
+    verificationStatus: 'verified',
+    verificationDetails: `Approved via IDEMO Partner Passport Review on ${reviewedAtIso}`,
+    lastVerified: lastVerifiedDate,
+    status: matchedExisting?.status === 'active' ? 'active' : 'invited',
+    descriptionEn: introText || matchedExisting?.descriptionEn,
+    descriptionSr: introText || matchedExisting?.descriptionSr,
+    descriptionZh: introText || matchedExisting?.descriptionZh,
+    phone: contactPhone || matchedExisting?.phone,
+    email: contactEmail || matchedExisting?.email,
+    directBookingPhone: contactPhone || matchedExisting?.directBookingPhone,
+    directBookingEmail: contactEmail || matchedExisting?.directBookingEmail,
+    linkedRecommendations: linkedRecs,
+    locationEn: matchedExisting?.locationEn || matchedPortal?.geography || 'Belgrade Metro & Serbia',
+    locationSr: matchedExisting?.locationSr || matchedPortal?.geography || 'Beograd & Srbija',
+    locationZh: matchedExisting?.locationZh || matchedPortal?.geography || '贝尔格莱德及塞尔维亚',
+  };
+
+  overrides[partnerId] = migratedPartner;
+  savePartnerOverridesToStorage(overrides);
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('idemo_partners_updated'));
+  }
+
+  return migratedPartner;
+}
+
+/**
+ * Scans all safeStorage Partner Passport entries and migrates any approved passports
+ * into the authoritative Partner Directory (overrides).
+ */
+export function syncApprovedPassportsToDirectory(): void {
+  try {
+    const passportKeys = safeStorage.getAllKeys().filter((k) => k.toLowerCase().startsWith('idemo_partner_passport_'));
+    for (const key of passportKeys) {
+      const raw = safeStorage.getItem(key);
+      if (!raw) continue;
+      let passportData: any;
+      try {
+        passportData = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+
+      if (passportData.review_status === 'approved') {
+        migrateApprovedPassportToDirectory(passportData, key);
+      }
+    }
+  } catch (err) {
+    console.warn('[IDEMO Partner Directory Sync] Failed syncing approved passports:', err);
+  }
+}
+
 export function getAllPartners(): Partner[] {
+  // First synchronize any approved passports into the directory
+  syncApprovedPassportsToDirectory();
+
   const overrides = getPersistedPartnerOverrides();
   const partnersMap = new Map<string, Partner>();
 

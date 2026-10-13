@@ -17,7 +17,8 @@ import {
   AlertCircle,
   PlusCircle,
   Award,
-  Compass
+  Compass,
+  MapPin
 } from 'lucide-react';
 import { StudioUserSession } from './types';
 import { 
@@ -26,7 +27,10 @@ import {
   PartnerProfileQueueItem, 
   PartnerProfileReviewStatusFilter,
   setPartnerCoveragePriorityRank,
-  getPartnerCoveragePriorityRank
+  getPartnerCoveragePriorityRank,
+  getPartnerCoverageQuota,
+  getPartnerFitAnalysis,
+  CANONICAL_REGIONS
 } from '../../lib/partnerService';
 import { 
   getPartnerRecommendationProposals, 
@@ -184,9 +188,80 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
     }
   };
 
-  const handleAssignAppliedRecs = (partnerId: string, partnerCode: string, recIds: string[], partnerName?: string) => {
-    if (!recIds || recIds.length === 0) return;
+  const handleApplyAgentPrioritization = async () => {
+    if (!selectedProfile || !selectedProfile.applied_recs || selectedProfile.applied_recs.length === 0) return;
+    setUpdatingRankRecId('ALL');
     try {
+      const candidateRecs = selectedProfile.applied_recs.slice(0, 12);
+      const fits = candidateRecs.map(recId => {
+        const matched = availableRecs.find(r => r.id === recId);
+        return {
+          recId,
+          title: matched?.title || recId,
+          fit: getPartnerFitAnalysis(selectedProfile.partner_id, recId, matched, selectedProfile.canonical_region)
+        };
+      }).sort((a, b) => b.fit.fitScore - a.fit.fitScore);
+
+      let r1Assigned = 0;
+      let r2Assigned = 0;
+      let r3Assigned = 0;
+      const newRanks: Record<string, number> = {};
+
+      for (const item of fits) {
+        let assignedRank = 3;
+        if (r1Assigned < 4 && item.fit.fitScore >= 70) {
+          assignedRank = 1;
+          r1Assigned++;
+        } else if (r2Assigned < 4 && item.fit.fitScore >= 50) {
+          assignedRank = 2;
+          r2Assigned++;
+        } else if (r3Assigned < 4) {
+          assignedRank = 3;
+          r3Assigned++;
+        } else if (r2Assigned < 4) {
+          assignedRank = 2;
+          r2Assigned++;
+        } else if (r1Assigned < 4) {
+          assignedRank = 1;
+          r1Assigned++;
+        }
+        newRanks[item.recId] = assignedRank;
+        await setPartnerCoveragePriorityRank(item.recId, selectedProfile.partner_id, assignedRank);
+      }
+
+      setCoverageRanks(prev => ({ ...prev, ...newRanks }));
+      setRecAssignFeedback(`Agent fit prioritization applied: ${r1Assigned} assigned as 1st, ${r2Assigned} as 2nd, and ${r3Assigned} as 3rd priority!`);
+      setTimeout(() => setRecAssignFeedback(null), 6000);
+    } catch (err: any) {
+      console.warn('Agent prioritization failed:', err);
+    } finally {
+      setUpdatingRankRecId(null);
+    }
+  };
+
+  const handleAssignAppliedRecs = async (partnerId: string, partnerCode: string, recIds: string[], partnerName?: string) => {
+    if (!recIds || recIds.length === 0) return;
+    if (recIds.length > 12) {
+      setActionFeedback({
+        type: 'error',
+        message: 'Quota limit exceeded: Each partner can be assigned to no more than 12 recommendations maximum (4 as 1st, 4 as 2nd, and 4 as 3rd priority).'
+      });
+      return;
+    }
+    try {
+      // 1. Authoritative assignment of priority ranks in idemo_coverage_ranks
+      for (const rid of recIds) {
+        const explicitRank = coverageRanks[rid] || getPartnerCoveragePriorityRank(rid, partnerId);
+        if (!explicitRank) {
+          const quota = getPartnerCoverageQuota(partnerId);
+          const rankToSet = quota.rank1Count < 4 ? 1 : quota.rank2Count < 4 ? 2 : 3;
+          await setPartnerCoveragePriorityRank(rid, partnerId, rankToSet);
+        } else {
+          await setPartnerCoveragePriorityRank(rid, partnerId, explicitRank);
+        }
+      }
+
+      // 2. Local SafeStorage snapshot update for portal partners
       const portalPartnersRaw = safeStorage.getItem('idemo_portal_partners');
       const list = portalPartnersRaw ? JSON.parse(portalPartnersRaw) : [];
       let found = false;
@@ -194,7 +269,7 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
         if (p.id === partnerId || (p.publicCode && p.publicCode.toUpperCase() === partnerCode.toUpperCase()) || (p.pin && p.pin === partnerCode)) {
           found = true;
           const currentRecs = Array.isArray(p.assignedRecs) ? p.assignedRecs : [];
-          const combined = Array.from(new Set([...currentRecs, ...recIds]));
+          const combined = Array.from(new Set([...currentRecs, ...recIds])).slice(0, 12);
           return { ...p, status: 'Active', eligibility: true, assignedRecs: combined };
         }
         return p;
@@ -213,15 +288,33 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
           channels: ['WhatsApp'],
           contactPhone: selectedProfile?.published_contact_phone || selectedProfile?.draft_contact_phone || '',
           instagram: `@${partnerCode.toLowerCase()}`,
-          assignedRecs: recIds,
-          contributions: recIds.length,
+          assignedRecs: recIds.slice(0, 12),
+          contributions: Math.min(recIds.length, 12),
           reliability: 100,
           eligibility: true
         });
       }
       safeStorage.setItem('idemo_portal_partners', JSON.stringify(updated));
+
+      // 3. Update passport snapshot with approved_recs
+      try {
+        const passKey = `idemo_partner_passport_${partnerId.toUpperCase()}`;
+        const existingPass = safeStorage.getItem(passKey);
+        if (existingPass) {
+          const parsedPass = JSON.parse(existingPass);
+          safeStorage.setItem(passKey, JSON.stringify({
+            ...parsedPass,
+            review_status: 'approved',
+            approved_recs: recIds.slice(0, 12),
+            updated_at: new Date().toISOString()
+          }));
+        }
+      } catch {
+        // ignore
+      }
+
       const displayName = partnerName || partnerCode;
-      setRecAssignFeedback(`Successfully assigned ${recIds.length} recommendation(s) to ${displayName}!`);
+      setRecAssignFeedback(`Successfully assigned ${recIds.length} recommendation(s) with priority ranks to ${displayName}!`);
       setTimeout(() => setRecAssignFeedback(null), 5000);
     } catch (err: any) {
       console.warn('Failed assigning recommendations in studio:', err);
@@ -274,10 +367,15 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
         if (recsToAssign.length > 0) {
           handleAssignAppliedRecs(selectedProfile.partner_id, selectedProfile.partner_code, recsToAssign, selectedProfile.partner_name);
         }
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('idemo_partners_updated'));
+        }
       }
       setActionFeedback({
         type: 'success',
-        message: `Partner Passport submission for ${selectedProfile.partner_name} (${selectedProfile.partner_code}) successfully ${action === 'approve' ? 'approved and published' : 'returned for changes'}.`
+        message: action === 'approve'
+          ? `Partner Passport for ${selectedProfile.partner_name} (${selectedProfile.partner_code}) successfully approved, published, and migrated to Partner Directory as Approved!`
+          : `Partner Passport submission for ${selectedProfile.partner_name} (${selectedProfile.partner_code}) successfully returned for changes.`
       });
       setReviewNote('');
       // Refresh queue after action
@@ -765,11 +863,18 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
               </div>
 
               {/* Submission Metadata */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-[#FAF9F5] p-3.5 rounded-2xl border border-[#E5E3DB] text-xs font-mono">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#FAF9F5] p-3.5 rounded-2xl border border-[#E5E3DB] text-xs font-mono">
                 <div>
                   <span className="text-[#8C8A7D] block text-[10px] uppercase font-bold">Submitted</span>
                   <span className="text-[#1E2E20] font-semibold">
                     {selectedProfile.submitted_at ? new Date(selectedProfile.submitted_at).toLocaleString() : 'N/A'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[#8C8A7D] block text-[10px] uppercase font-bold">Canonical Region</span>
+                  <span className="text-[#1E2E20] font-semibold flex items-center gap-1 truncate" title={CANONICAL_REGIONS[selectedProfile.canonical_region || '']?.nameEn || selectedProfile.canonical_region || 'Belgrade Metropolitan Area'}>
+                    <MapPin size={12} className="text-[#8A1F1F] shrink-0" />
+                    <span className="truncate">{CANONICAL_REGIONS[selectedProfile.canonical_region || '']?.nameEn || selectedProfile.canonical_region || 'Belgrade Metropolitan Area'}</span>
                   </span>
                 </div>
                 <div>
@@ -891,6 +996,53 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
                     </div>
                   </div>
 
+                  {/* Quota breakdown meters: max 12 total, max 4 as 1st, 4 as 2nd, 4 as 3rd */}
+                  {(() => {
+                    const q = getPartnerCoverageQuota(selectedProfile.partner_id);
+                    return (
+                      <div className="p-3 bg-white border border-[#E5E3DB] rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Award size={15} className="text-[#C5A059]" />
+                          <span className="font-bold text-[#1E2E20]">Allocation Quota (12 max):</span>
+                          <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 font-bold">
+                            ⭐ 1st: {q.rank1Count}/4 max
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-900 border border-blue-200 font-bold">
+                            🥈 2nd: {q.rank2Count}/4 max
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-stone-100 text-stone-800 border border-stone-200 font-bold">
+                            🥉 3rd: {q.rank3Count}/4 max
+                          </span>
+                        </div>
+                        <div className="text-[11px] font-bold text-[#1E2E20]">
+                          Total: <span className={q.totalAssigned >= 12 ? 'text-[#8A1F1F]' : 'text-emerald-700'}>{q.totalAssigned} / 12</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Agent Fit Analysis & Proposition Banner */}
+                  <div className="p-3 bg-gradient-to-r from-[#FAF9F5] to-amber-50/60 border border-[#C5A059]/40 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5 font-bold text-[#1E2E20] font-mono text-[11px]">
+                        <Sparkles size={13} className="text-[#C5A059]" />
+                        <span>Agent Fit Analysis & Proposition</span>
+                      </div>
+                      <p className="text-[11px] text-[#8C8A7D] leading-relaxed">
+                        Evaluated against canonical region <strong className="text-[#1E2E20] font-mono">{CANONICAL_REGIONS[selectedProfile.canonical_region || '']?.nameEn || 'Belgrade Metropolitan Area'}</strong>. Optimal fit recommendations are proposed into available 1st, 2nd, and 3rd slots (max 4 per tier, 12 total).
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={updatingRankRecId !== null}
+                      onClick={handleApplyAgentPrioritization}
+                      className="px-3 py-1.5 bg-[#1E2E20] hover:bg-[#2A3E2D] disabled:opacity-50 text-[#C5A059] font-mono text-[10px] font-bold uppercase rounded-lg transition-colors cursor-pointer shrink-0 shadow-xs flex items-center gap-1.5"
+                    >
+                      {updatingRankRecId === 'ALL' ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                      <span>Apply Agent Prioritization</span>
+                    </button>
+                  </div>
+
                   {selectedProfile.applied_recs_note && (
                     <div className="text-xs font-sans text-[#1E2E20] bg-white p-2.5 rounded-xl border border-[#E5E3DB]">
                       <span className="font-mono text-[10px] uppercase font-bold text-[#8C8A7D] block mb-0.5">Partner Expertise Note:</span>
@@ -906,10 +1058,11 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
                       const isChecked = selectedRecIds.has(recId);
                       const currentRank = coverageRanks[recId] || getPartnerCoveragePriorityRank(recId, selectedProfile.partner_id) || 1;
                       const isUpdatingThis = updatingRankRecId === recId;
+                      const fit = getPartnerFitAnalysis(selectedProfile.partner_id, recId, matched, selectedProfile.canonical_region);
                       return (
                         <div
                           key={recId}
-                          className={`p-3 bg-white border rounded-xl flex flex-col justify-between gap-2.5 shadow-xs transition-all ${
+                          className={`p-3 bg-white border rounded-xl flex flex-col justify-between gap-2 shadow-xs transition-all ${
                             isChecked ? 'border-[#23251E] bg-[#FAF9F5] ring-1 ring-[#23251E]/10' : 'border-[#E5E3DB] opacity-80 hover:opacity-100'
                           }`}
                         >
@@ -950,6 +1103,21 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
                             }`}>
                               {currentRank === 1 ? '1st (0m Instant)' : currentRank === 2 ? '2nd (+30m)' : '3rd (+60m)'}
                             </span>
+                          </div>
+
+                          {/* Fit proposition badge */}
+                          <div className="flex items-center gap-1.5 text-[9.5px] font-mono py-1 px-1.5 rounded bg-[#FAF9F5] border border-[#E5E3DB]/60">
+                            <span className={`font-bold px-1 py-0.2 rounded text-[8.5px] ${fit.fitTier === 'HIGH' ? 'bg-emerald-100 text-emerald-900' : fit.fitTier === 'MEDIUM' ? 'bg-blue-100 text-blue-900' : 'bg-stone-200 text-stone-800'}`}>
+                              Fit: {fit.fitScore}%
+                            </span>
+                            <span className="text-stone-600 truncate">
+                              {fit.regionMatch ? '🎯 Regional Match' : 'Scope: Secondary'}
+                            </span>
+                            {fit.proposedRank && (
+                              <span className="text-[#8A1F1F] font-bold ml-auto shrink-0">
+                                Agent: {fit.proposedRank === 1 ? '⭐ 1st' : fit.proposedRank === 2 ? '🥈 2nd' : '🥉 3rd'}
+                              </span>
+                            )}
                           </div>
 
                           {/* 1-Action Inquiry Queue Switcher */}

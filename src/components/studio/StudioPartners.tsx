@@ -46,6 +46,27 @@ export function StudioPartners({ targetPartnerId, session, initialSubTab = 'dire
       setSelectedPartnerId(targetPartnerId);
     }
   }, [targetPartnerId]);
+
+  // Reactive listener to ensure approved partner passports immediately reflect in directory
+  useEffect(() => {
+    const handleUpdate = () => {
+      setPartnerList(getAllPartners());
+    };
+    window.addEventListener('idemo_partners_updated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener('idemo_partners_updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
+  }, []);
+
+  // Refresh partner list whenever user navigates back to directory tab
+  useEffect(() => {
+    if (activeSubTab === 'directory') {
+      setPartnerList(getAllPartners());
+    }
+  }, [activeSubTab]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStageFilter, setSelectedStageFilter] = useState<string>('ALL');
 
@@ -71,7 +92,7 @@ export function StudioPartners({ targetPartnerId, session, initialSubTab = 'dire
       if (selectedStageFilter === 'ACTIVE') return st.isActive;
       if (selectedStageFilter === 'CANDIDATE') return st.isCandidate;
       if (selectedStageFilter === 'VERIFICATION') return st.stage === 'Verification';
-      if (selectedStageFilter === 'APPROVED') return st.isVerified && !st.isActive;
+      if (selectedStageFilter === 'APPROVED') return st.stage === 'Approved' || (st.isVerified && !st.isActive);
       if (selectedStageFilter === 'SUSPENDED') return st.isSuspended;
       if (selectedStageFilter === 'ARCHIVED') return st.isRetired;
 
@@ -107,8 +128,8 @@ export function StudioPartners({ targetPartnerId, session, initialSubTab = 'dire
     const st = getPartnerLifecycleState(p);
     if (st.isRetired) return { label: 'Archived', color: 'bg-gray-100 text-gray-600 border-gray-200' };
     if (st.isSuspended) return { label: 'Suspended', color: 'bg-red-100 text-red-700 border-red-200' };
+    if (st.stage === 'Approved' || (st.isVerified && !st.isActive)) return { label: 'Approved', color: 'bg-blue-50 text-blue-700 border-blue-200' };
     if (st.isActive) return { label: 'Active Partner', color: 'bg-[#E8F5E9] text-[#2E7D32] border-[#C8E6C9]' };
-    if (st.isVerified) return { label: 'Approved', color: 'bg-blue-50 text-blue-700 border-blue-200' };
     if (st.stage === 'Verification') return { label: 'Verification', color: 'bg-[#FFF8E1] text-[#F57F17] border-[#FFE082]' };
     return { label: 'Candidate', color: 'bg-purple-50 text-purple-700 border-purple-200' };
   };

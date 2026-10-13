@@ -9,7 +9,7 @@ import { Partner } from '../types';
 import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 import { PartnerCoverageRecord, QualificationState, ParticipationState, PassportVerificationState, RoutingPoolState } from '../components/studio/types';
 import { safeStorage } from './safeStorage';
-import { getAllPartners } from './partnerLifecycleService';
+import { getAllPartners, syncApprovedPassportsToDirectory } from './partnerLifecycleService';
 
 export interface OpportunityItem {
   match_id: string;
@@ -97,6 +97,7 @@ export interface PartnerProfileContent {
   proposed_rec_rationale?: string | null;
   applied_recs?: string[] | null;
   applied_recs_note?: string | null;
+  canonical_region?: string | null;
   review_status: 'draft' | 'pending_review' | 'approved' | 'changes_requested' | 'withdrawn';
   photo_consent_given: boolean;
   photo_consent_at: string | null;
@@ -241,7 +242,7 @@ export async function fetchAuthenticatedPartnerProfile(): Promise<FetchProfileRe
     return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
   }
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
   if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     return {
       success: true,
@@ -309,7 +310,7 @@ export async function fetchPartnerOpportunities(scope: 'new' | 'active' | 'histo
     return { success: false, error: 'UNAUTHORIZED: Partner session missing or expired.' };
   }
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
   if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     return {
       success: true,
@@ -360,7 +361,7 @@ export async function viewPartnerOpportunity(matchId: string): Promise<PartnerAc
   const session = partnerSessionStorage.getPartnerSession();
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
   if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     return {
       success: true,
@@ -400,7 +401,7 @@ export async function acceptPartnerOpportunity(matchId: string, message: string)
   const session = partnerSessionStorage.getPartnerSession();
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
   if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     return {
       success: true,
@@ -441,7 +442,7 @@ export async function declinePartnerOpportunity(matchId: string, message?: strin
   const session = partnerSessionStorage.getPartnerSession();
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
   if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     return {
       success: true,
@@ -486,7 +487,7 @@ export async function proposePartnerAlternative(
   const session = partnerSessionStorage.getPartnerSession();
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
   if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     return {
       success: true,
@@ -532,7 +533,7 @@ export async function acceptPartnerCounterOffer(matchId: string, message?: strin
   const session = partnerSessionStorage.getPartnerSession();
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
   if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     return {
       success: true,
@@ -572,7 +573,7 @@ export async function declinePartnerCounterOffer(matchId: string, message?: stri
   const session = partnerSessionStorage.getPartnerSession();
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
   if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     return {
       success: true,
@@ -615,7 +616,7 @@ export async function withdrawPartnerOpportunity(matchId: string, message?: stri
   const session = partnerSessionStorage.getPartnerSession();
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
   if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     return {
       success: true,
@@ -669,7 +670,53 @@ export async function changePartnerPin(
     };
   }
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const cleanCurrentPin = currentPin.trim();
+  const cleanNewPin = newPin.trim();
+  const cleanConfirmPin = confirmNewPin.trim();
+
+  // 1. Confirm new PIN match
+  if (cleanNewPin !== cleanConfirmPin) {
+    return {
+      success: false,
+      error: 'PIN_MISMATCH',
+      message: 'Novi PIN i potvrda se ne poklapaju.'
+    };
+  }
+
+  // 2. Validate PIN format & safety
+  if (!/^[0-9]{4}$/.test(cleanNewPin)) {
+    return {
+      success: false,
+      error: 'INVALID_PIN_FORMAT',
+      message: 'PIN mora sadržati tačno 4 cifre.'
+    };
+  }
+
+  if (cleanNewPin === '1234' || cleanNewPin === '4321') {
+    return {
+      success: false,
+      error: 'TRIVIAL_PIN',
+      message: 'PIN ne sme biti sekvencijalan.'
+    };
+  }
+
+  if (['0000', '1111', '2222', '3333', '4444', '5555', '6666', '7777', '8888', '9999'].includes(cleanNewPin)) {
+    return {
+      success: false,
+      error: 'REPEATED_PIN',
+      message: 'PIN ne sme sadržati sve iste cifre.'
+    };
+  }
+
+  if (cleanNewPin === cleanCurrentPin) {
+    return {
+      success: false,
+      error: 'PIN_REUSE',
+      message: 'Novi PIN ne može biti isti kao trenutni PIN.'
+    };
+  }
+
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
   if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     partnerSessionStorage.clearPartnerSession();
     return {
@@ -718,7 +765,7 @@ export async function getPartnerProfileContent(): Promise<FetchProfileContentRes
   const session = partnerSessionStorage.getPartnerSession();
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
   if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     return { success: false, error: 'BACKEND_UNAVAILABLE: Real backend configuration and valid partner session required.' };
   }
@@ -756,7 +803,7 @@ export async function authorizePhotoUpload(
   const session = partnerSessionStorage.getPartnerSession();
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
   if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     return { success: false, error: 'BACKEND_UNAVAILABLE: Real backend configuration and valid partner session required.' };
   }
@@ -838,12 +885,13 @@ export async function savePartnerProfileDraft(
     rationale?: string | null;
   },
   appliedRecs?: string[] | null,
-  appliedRecsNote?: string | null
+  appliedRecsNote?: string | null,
+  canonicalRegion?: string | null
 ): Promise<PartnerActionResult> {
   const session = partnerSessionStorage.getPartnerSession();
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
   if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     return { success: false, error: 'BACKEND_UNAVAILABLE: Real backend configuration and valid partner session required.' };
   }
@@ -873,6 +921,7 @@ export async function savePartnerProfileDraft(
         proposed_rec_rationale: proposal?.rationale || null,
         applied_recs: appliedRecs || null,
         applied_recs_note: appliedRecsNote || null,
+        canonical_region: canonicalRegion || null,
       }),
     });
 
@@ -892,7 +941,7 @@ export async function submitPartnerProfile(): Promise<PartnerActionResult> {
   const session = partnerSessionStorage.getPartnerSession();
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
   if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     return { success: false, error: 'BACKEND_UNAVAILABLE: Real backend configuration and valid partner session required.' };
   }
@@ -929,7 +978,7 @@ export async function withdrawPartnerProfileContent(
   const session = partnerSessionStorage.getPartnerSession();
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
   if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     return { success: false, error: 'BACKEND_UNAVAILABLE: Real backend configuration and valid partner session required.' };
   }
@@ -975,16 +1024,26 @@ export async function adminReviewPartnerProfile(
   let reviewNote: string | undefined = undefined;
   let studioToken: string | undefined = undefined;
 
-  const validActions = ['approve', 'request_changes', 'unpublish'];
-  if (validActions.includes(actionOrPartnerId)) {
+  const normalizeAction = (act?: string): 'approve' | 'request_changes' | 'unpublish' | null => {
+    const a = (act || '').toLowerCase();
+    if (a === 'approve' || a === 'approved') return 'approve';
+    if (a === 'request_changes' || a === 'changes_requested') return 'request_changes';
+    if (a === 'unpublish' || a === 'withdrawn') return 'unpublish';
+    return null;
+  };
+
+  const parsedAction1 = normalizeAction(actionOrPartnerId);
+  const parsedAction2 = normalizeAction(reviewNoteOrAction);
+
+  if (parsedAction1) {
     targetPartnerId = targetPartnerIdOrToken;
-    action = actionOrPartnerId as 'approve' | 'request_changes' | 'unpublish';
+    action = parsedAction1;
     reviewNote = reviewNoteOrAction;
     studioToken = studioTokenOrNote;
-  } else if (validActions.includes(reviewNoteOrAction || '')) {
+  } else if (parsedAction2) {
     studioToken = targetPartnerIdOrToken;
     targetPartnerId = actionOrPartnerId;
-    action = reviewNoteOrAction as 'approve' | 'request_changes' | 'unpublish';
+    action = parsedAction2;
     reviewNote = studioTokenOrNote;
   }
 
@@ -1053,6 +1112,44 @@ export async function adminReviewPartnerProfile(
     candidateKeys.push(`idemo_partner_passport_${matchedCode.toUpperCase()}`);
   }
 
+  // Also check portal partners for aliases and candidate keys
+  const portalPartnersRaw = safeStorage.getItem('idemo_portal_partners');
+  const portalPartners: any[] = portalPartnersRaw ? JSON.parse(portalPartnersRaw) : [];
+  const matchedPortal = portalPartners.find(
+    (p: any) =>
+      String(p.id).toLowerCase() === targetPartnerId.toLowerCase() ||
+      String(p.publicCode || '').toLowerCase() === targetPartnerId.toLowerCase() ||
+      String(p.pin || '').toLowerCase() === targetPartnerId.toLowerCase()
+  );
+  if (matchedPortal) {
+    if (matchedPortal.id) {
+      candidateKeys.push(`idemo_partner_passport_${matchedPortal.id.toUpperCase()}`);
+      candidateKeys.push(`idemo_partner_passport_${matchedPortal.id.toLowerCase()}`);
+    }
+    if (matchedPortal.publicCode) {
+      candidateKeys.push(`idemo_partner_passport_${matchedPortal.publicCode.toUpperCase()}`);
+      candidateKeys.push(`idemo_partner_passport_${matchedPortal.publicCode.toLowerCase()}`);
+    }
+  }
+
+  // Check all existing passport keys in safeStorage to catch any where parsed.partner_id or parsed.partner_code matches
+  const allPassportKeys = safeStorage.getAllKeys().filter((k) => k.toLowerCase().startsWith('idemo_partner_passport_'));
+  for (const pk of allPassportKeys) {
+    try {
+      const rawP = safeStorage.getItem(pk);
+      if (!rawP) continue;
+      const parsedP = JSON.parse(rawP);
+      if (
+        (parsedP.partner_id && String(parsedP.partner_id).toLowerCase() === targetPartnerId.toLowerCase()) ||
+        (parsedP.partner_code && String(parsedP.partner_code).toLowerCase() === targetPartnerId.toLowerCase())
+      ) {
+        candidateKeys.push(pk);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   let localUpdated = false;
   for (const k of candidateKeys) {
     const raw = safeStorage.getItem(k);
@@ -1075,6 +1172,46 @@ export async function adminReviewPartnerProfile(
         // ignore
       }
     }
+  }
+
+  // 4. Migrate approved passport into the authoritative Partner Directory
+  if (action === 'approve') {
+    // If not found in candidate keys, create safeStorage snapshot so migration succeeds
+    if (!localUpdated) {
+      const fallbackKey = `idemo_partner_passport_${targetPartnerId.toUpperCase()}`;
+      safeStorage.setItem(fallbackKey, JSON.stringify({
+        partner_id: targetPartnerId,
+        partner_code: matchedPortal?.publicCode || matched?.id || targetPartnerId,
+        partner_name: matchedPortal?.name || matched?.nameEn || targetPartnerId,
+        review_status: 'approved',
+        intro_published: matched?.descriptionEn || 'Approved partner passport.',
+        reviewed_at: new Date().toISOString(),
+        review_note: reviewNote || null,
+      }));
+      localUpdated = true;
+    }
+
+    // Update portal partners list if present
+    if (portalPartners.length > 0) {
+      let portalModified = false;
+      const updatedPortalList = portalPartners.map((pp: any) => {
+        if (
+          String(pp.id).toLowerCase() === targetPartnerId.toLowerCase() ||
+          String(pp.publicCode || '').toLowerCase() === targetPartnerId.toLowerCase() ||
+          (matched && String(pp.id).toLowerCase() === matched.id.toLowerCase())
+        ) {
+          portalModified = true;
+          return { ...pp, status: 'Active', eligibility: true };
+        }
+        return pp;
+      });
+      if (portalModified) {
+        safeStorage.setItem('idemo_portal_partners', JSON.stringify(updatedPortalList));
+      }
+    }
+
+    // Explicitly sync and migrate approved passports into the Partner Directory
+    syncApprovedPassportsToDirectory();
   }
 
   if (rpcSuccess || localUpdated) {
@@ -1115,6 +1252,7 @@ export interface PartnerProfileQueueItem {
   proposed_rec_rationale?: string | null;
   applied_recs?: string[] | null;
   applied_recs_note?: string | null;
+  canonical_region?: string | null;
   submitted_at: string | null;
   reviewed_at: string | null;
   reviewer_note: string | null;
@@ -1156,7 +1294,7 @@ export async function fetchPartnerProfileReviewQueue(
 
   // 2. Edge Function execution if token is present and RPC returned empty
   if (serverProfiles.length === 0 && studioToken && studioToken.trim()) {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
 
   const anonKey = getAnonKey();
   if (!anonKey) {
@@ -1247,6 +1385,9 @@ export async function fetchPartnerProfileReviewQueue(
           if (!mergedProfiles[idx].applied_recs_note && data.applied_recs_note) {
             mergedProfiles[idx].applied_recs_note = data.applied_recs_note;
           }
+          if (!mergedProfiles[idx].canonical_region && data.canonical_region) {
+            mergedProfiles[idx].canonical_region = data.canonical_region;
+          }
         }
         continue;
       }
@@ -1276,6 +1417,7 @@ export async function fetchPartnerProfileReviewQueue(
         published_contact_email: data.published_contact_email || data.contact_email || null,
         applied_recs: data.applied_recs || null,
         applied_recs_note: data.applied_recs_note || null,
+        canonical_region: data.canonical_region || null,
         submitted_at: data.submitted_at || data.updated_at || new Date().toISOString(),
         reviewed_at: data.reviewed_at || null,
         reviewer_note: data.review_note || null,
@@ -1304,7 +1446,7 @@ export async function updatePartnerProfessionalContact(
   const session = partnerSessionStorage.getPartnerSession();
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
   if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
     return { success: true, message: 'Mock professional contact details updated.' };
   }
@@ -1519,6 +1661,39 @@ export async function setPartnerCoveragePriorityRank(
   error?: string;
   message?: string;
 }> {
+  // Quota enforcement: max 12 total, max 4 per priority tier (1st, 2nd, 3rd)
+  const currentQuota = getPartnerCoverageQuota(partnerId);
+  const isCurrentlyRank1 = currentQuota.assignedRecsWithPriority.some(a => a.recId === recommendationId && a.priorityRank === 1);
+  const isCurrentlyRank2 = currentQuota.assignedRecsWithPriority.some(a => a.recId === recommendationId && a.priorityRank === 2);
+  const isCurrentlyRank3 = currentQuota.assignedRecsWithPriority.some(a => a.recId === recommendationId && a.priorityRank === 3);
+  const isAlreadyAssignedOnThisRec = isCurrentlyRank1 || isCurrentlyRank2 || isCurrentlyRank3;
+
+  if (!isAlreadyAssignedOnThisRec && currentQuota.totalAssigned >= 12) {
+    return {
+      success: false,
+      error: 'QUOTA_EXCEEDED: Partner has reached the maximum of 12 assigned recommendations (4 as 1st, 4 as 2nd, 4 as 3rd).'
+    };
+  }
+
+  if (priorityRank === 1 && !isCurrentlyRank1 && currentQuota.rank1Count >= 4) {
+    return {
+      success: false,
+      error: 'QUOTA_EXCEEDED: Partner already holds the maximum of 4 recommendations as 1st Priority (Primary).'
+    };
+  }
+  if (priorityRank === 2 && !isCurrentlyRank2 && currentQuota.rank2Count >= 4) {
+    return {
+      success: false,
+      error: 'QUOTA_EXCEEDED: Partner already holds the maximum of 4 recommendations as 2nd Priority (Secondary).'
+    };
+  }
+  if (priorityRank === 3 && !isCurrentlyRank3 && currentQuota.rank3Count >= 4) {
+    return {
+      success: false,
+      error: 'QUOTA_EXCEEDED: Partner already holds the maximum of 4 recommendations as 3rd Priority (Tertiary).'
+    };
+  }
+
   // Sync immediately to local safeStorage
   let localSwappedPartnerId: string | undefined;
   let localOldRank = 100;
@@ -1570,7 +1745,6 @@ export async function setPartnerCoveragePriorityRank(
     });
 
     if (error) {
-      // If RPC is pending deployment on remote database or unauthenticated in test suite, fallback safely to local state
       return {
         success: true,
         oldRank: localOldRank,
@@ -1623,5 +1797,236 @@ export function getPartnerCoveragePriorityRank(recommendationId: string, partner
   }
   return null;
 }
+
+export interface PartnerCoverageQuota {
+  partnerId: string;
+  totalAssigned: number;
+  rank1Count: number;
+  rank2Count: number;
+  rank3Count: number;
+  maxTotal: number;
+  maxPerRank: number;
+  canAssignRank1: boolean;
+  canAssignRank2: boolean;
+  canAssignRank3: boolean;
+  assignedRecsWithPriority: Array<{
+    recId: string;
+    priorityRank: 1 | 2 | 3;
+  }>;
+}
+
+/**
+ * Authoritative evaluation of a partner's assigned recommendation quota across priority ranks.
+ * Invariant: Max 12 recommendations total, max 4 as 1st, 4 as 2nd, 4 as 3rd.
+ */
+export function getPartnerCoverageQuota(partnerId: string): PartnerCoverageQuota {
+  let rank1Count = 0;
+  let rank2Count = 0;
+  let rank3Count = 0;
+  const assignedRecsWithPriority: Array<{ recId: string; priorityRank: 1 | 2 | 3 }> = [];
+
+  try {
+    const rawRanks = safeStorage.getItem('idemo_coverage_ranks');
+    if (rawRanks) {
+      const ranksMap: Record<string, Record<string, number>> = JSON.parse(rawRanks);
+      const normTarget = (partnerId || '').toLowerCase().trim();
+
+      for (const [recId, partners] of Object.entries(ranksMap)) {
+        for (const [pId, rank] of Object.entries(partners)) {
+          if (pId.toLowerCase().trim() === normTarget) {
+            if (rank === 1) {
+              rank1Count++;
+              assignedRecsWithPriority.push({ recId, priorityRank: 1 });
+            } else if (rank === 2) {
+              rank2Count++;
+              assignedRecsWithPriority.push({ recId, priorityRank: 2 });
+            } else if (rank === 3) {
+              rank3Count++;
+              assignedRecsWithPriority.push({ recId, priorityRank: 3 });
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  const totalAssigned = rank1Count + rank2Count + rank3Count;
+
+  return {
+    partnerId,
+    totalAssigned,
+    rank1Count,
+    rank2Count,
+    rank3Count,
+    maxTotal: 12,
+    maxPerRank: 4,
+    canAssignRank1: rank1Count < 4 && totalAssigned < 12,
+    canAssignRank2: rank2Count < 4 && totalAssigned < 12,
+    canAssignRank3: rank3Count < 4 && totalAssigned < 12,
+    assignedRecsWithPriority
+  };
+}
+
+export interface CanonicalRegionDefinition {
+  id: string;
+  nameEn: string;
+  nameSr: string;
+  keywords: string[];
+}
+
+export const CANONICAL_REGIONS: Record<string, CanonicalRegionDefinition> = {
+  'sa-belgrade-001': {
+    id: 'sa-belgrade-001',
+    nameEn: 'Belgrade Metropolitan Area',
+    nameSr: 'Beogradska mitropolitanska oblast',
+    keywords: ['belgrade', 'beograd', 'kalemegdan', 'skadarlija', 'zemun', 'avala', 'dorćol', 'dorcol', 'vracar', 'vračar', 'sava', 'dunav']
+  },
+  'sa-novisad-002': {
+    id: 'sa-novisad-002',
+    nameEn: 'Novi Sad & Vojvodina',
+    nameSr: 'Novi Sad i Vojvodina',
+    keywords: ['novi sad', 'vojvodina', 'petrovaradin', 'fruška gora', 'fruska gora', 'subotica', 'sombor', 'sremski karlovci', 'palic', 'palić']
+  },
+  'sa-west-003': {
+    id: 'sa-west-003',
+    nameEn: 'Western Serbia & Podrinje (Zlatibor, Tara, Uvac, Drina)',
+    nameSr: 'Zapadna Srbija i Podrinje (Zlatibor, Tara, Uvac, Drina)',
+    keywords: ['zlatibor', 'tara', 'uvac', 'drina', 'mokra gora', 'zapadna', 'podrinje', 'valjevo', 'loznica', 'bajina', 'uzice', 'užice', 'sargan', 'šargan']
+  },
+  'sa-sumadija-004': {
+    id: 'sa-sumadija-004',
+    nameEn: 'Šumadija & Central Serbia',
+    nameSr: 'Šumadija i Centralna Srbija',
+    keywords: ['šumadija', 'sumadija', 'kragujevac', 'topola', 'aranđelovac', 'arandjelovac', 'central', 'rudnik', 'oplenac']
+  },
+  'sa-east-005': {
+    id: 'sa-east-005',
+    nameEn: 'Eastern Serbia & Lower Danube',
+    nameSr: 'Istočna Srbija i Donje Podunavlje',
+    keywords: ['đerdap', 'djerdap', 'golubac', 'istočna', 'istocna', 'danube', 'dunav', 'kladovo', 'homolje', 'srebrno', 'rajac', 'gamzigrad', 'felix']
+  },
+  'sa-south-006': {
+    id: 'sa-south-006',
+    nameEn: 'Niš & Southern Serbia',
+    nameSr: 'Niš i Južna Srbija',
+    keywords: ['niš', 'nis', 'južna', 'juzna', 'south', 'vlasina', 'đavolja', 'djavolja', 'pirot', 'leskovac', 'stara planina', 'sokobanja']
+  }
+};
+
+export interface PartnerFitAnalysisResult {
+  partnerId: string;
+  recId: string;
+  fitScore: number;
+  fitTier: 'HIGH' | 'MEDIUM' | 'MODERATE';
+  regionMatch: boolean;
+  canonicalRegionId: string;
+  canonicalRegionName: string;
+  proposedRank: 1 | 2 | 3 | null;
+  quotaAvailable: boolean;
+  quotaSummary: {
+    rank1Count: number;
+    rank2Count: number;
+    rank3Count: number;
+    totalAssigned: number;
+  };
+  rationale: string;
+}
+
+/**
+ * Intelligent Fit Analysis & Proposition for Curator Approval:
+ * Evaluates geographic match between partner's canonical region and recommendation,
+ * assesses partner capabilities, and proposes the optimal priority slot (1, 2, or 3)
+ * strictly constrained by the 4/4/4 quota invariant (max 12 total).
+ */
+export function getPartnerFitAnalysis(
+  partnerId: string,
+  recId: string,
+  recDetails?: { title?: string; location?: string; category?: string },
+  forcedCanonicalRegion?: string | null
+): PartnerFitAnalysisResult {
+  const quota = getPartnerCoverageQuota(partnerId);
+
+  // 1. Resolve canonical region from parameter, stored passport, or portal partner
+  let regId = forcedCanonicalRegion || '';
+  if (!regId) {
+    try {
+      const pRaw = safeStorage.getItem(`idemo_partner_passport_${(partnerId || '').toUpperCase()}`) ||
+                    safeStorage.getItem(`idemo_partner_passport_${(partnerId || '').toLowerCase()}`);
+      if (pRaw) {
+        const parsed = JSON.parse(pRaw);
+        if (parsed.canonical_region) regId = parsed.canonical_region;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // Default fallback if unset
+  if (!regId || !CANONICAL_REGIONS[regId]) {
+    regId = 'sa-belgrade-001';
+  }
+
+  const regionDef = CANONICAL_REGIONS[regId] || CANONICAL_REGIONS['sa-belgrade-001'];
+  const title = (recDetails?.title || '').toLowerCase();
+  const loc = (recDetails?.location || '').toLowerCase();
+  const cat = (recDetails?.category || '').toLowerCase();
+
+  // 2. Geographic Match calculation
+  const isGeoMatch = regionDef.keywords.some(k => title.includes(k) || loc.includes(k));
+
+  // 3. Category & Guide capability heuristic
+  let score = 25; // baseline readiness
+  if (isGeoMatch) score += 55;
+  if (cat.includes('heritage') || cat.includes('cultural') || cat.includes('history') || cat.includes('monastery') || cat.includes('nature') || cat.includes('dining')) {
+    score += 15;
+  }
+  score = Math.min(score, 100);
+
+  const fitTier: 'HIGH' | 'MEDIUM' | 'MODERATE' = score >= 80 ? 'HIGH' : score >= 50 ? 'MEDIUM' : 'MODERATE';
+
+  // 4. Propose priority rank according to fit and quota availability
+  let proposedRank: 1 | 2 | 3 | null = null;
+  const quotaAvailable = quota.totalAssigned < 12;
+
+  if (quotaAvailable) {
+    if (fitTier === 'HIGH' && quota.rank1Count < 4) {
+      proposedRank = 1;
+    } else if ((fitTier === 'HIGH' || fitTier === 'MEDIUM') && quota.rank2Count < 4) {
+      proposedRank = 2;
+    } else if (quota.rank3Count < 4) {
+      proposedRank = 3;
+    } else if (quota.rank2Count < 4) {
+      proposedRank = 2;
+    } else if (quota.rank1Count < 4) {
+      proposedRank = 1;
+    }
+  }
+
+  const rationale = isGeoMatch
+    ? `Strong canonical alignment with ${regionDef.nameEn}. Geographic keywords match spot location.`
+    : `Secondary operational scope outside primary ${regionDef.nameEn} territory.`;
+
+  return {
+    partnerId,
+    recId,
+    fitScore: score,
+    fitTier,
+    regionMatch: isGeoMatch,
+    canonicalRegionId: regionDef.id,
+    canonicalRegionName: regionDef.nameEn,
+    proposedRank,
+    quotaAvailable,
+    quotaSummary: {
+      rank1Count: quota.rank1Count,
+      rank2Count: quota.rank2Count,
+      rank3Count: quota.rank3Count,
+      totalAssigned: quota.totalAssigned,
+    },
+    rationale,
+  };
+}
+
 
 
