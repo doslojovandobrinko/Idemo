@@ -199,7 +199,7 @@ export function migrateApprovedPassportToDirectory(passportData: any, rawPartner
     (passportData.partner_code ? existingMap.get(String(passportData.partner_code).toLowerCase()) : undefined);
 
   // Authoritative Partner ID determination
-  let partnerId = matchedExisting?.id || matchedPortal?.id || cleanKey;
+  let partnerId = passportData.partner_id || matchedExisting?.id || matchedPortal?.id || cleanKey;
   if (!partnerId.startsWith('P-') && !partnerId.includes('-')) {
     partnerId = `P-${partnerId.toUpperCase()}`;
   }
@@ -252,7 +252,13 @@ export function migrateApprovedPassportToDirectory(passportData: any, rawPartner
     nameSr: matchedExisting?.nameSr || partnerName,
     nameZh: matchedExisting?.nameZh || partnerName,
     category,
-    partnerType: matchedExisting?.partnerType || 'Individual',
+    partnerType: passportData.partner_type || matchedExisting?.partnerType || 'Individual',
+    website: passportData.website || matchedExisting?.website,
+    guideLicence: passportData.guide_licence || matchedExisting?.guideLicence,
+    pib: passportData.pib || matchedExisting?.pib,
+    languages: passportData.languages || matchedExisting?.languages || ['English', 'Serbian'],
+    transportCapacity: passportData.transport_capacity || matchedExisting?.transportCapacity || 'none',
+    noticeWindow: passportData.notice_window || matchedExisting?.noticeWindow || '24h',
     stage: 'Approved',
     verificationStatus: 'verified',
     verificationDetails: `Approved via IDEMO Partner Passport Review on ${reviewedAtIso}`,

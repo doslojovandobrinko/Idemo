@@ -18,7 +18,10 @@ import {
   PlusCircle,
   Award,
   Compass,
-  MapPin
+  MapPin,
+  Globe,
+  User,
+  ShieldCheck
 } from 'lucide-react';
 import { StudioUserSession } from './types';
 import { 
@@ -888,6 +891,121 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
                   <span className="text-[#1E2E20] font-semibold">
                     {selectedProfile.introduction_word_count} words
                   </span>
+                </div>
+              </div>
+
+              {/* Proposal 2: Credential & Operational Matching Profile Card */}
+              <div className="p-4 bg-[#FAF9F5] rounded-2xl border border-[#E5E3DB] space-y-3">
+                <div className="flex items-center justify-between border-b border-[#E5E3DB] pb-2">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck size={16} className="text-[#8A1F1F]" />
+                    <span className="font-serif text-sm font-bold text-[#1E2E20]">
+                      Credential & Operational Profile
+                    </span>
+                  </div>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase border ${
+                    selectedProfile.partner_type === 'Organisation'
+                      ? 'bg-blue-50 text-blue-900 border-blue-200'
+                      : 'bg-amber-50 text-amber-900 border-amber-200'
+                  }`}>
+                    {selectedProfile.partner_type === 'Organisation' ? '🏢 Agency / Organisation' : '👤 Individual Specialist'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs font-mono">
+                  {/* Contact details */}
+                  <div>
+                    <span className="text-[#8C8A7D] block text-[10px] uppercase font-bold">Contact Channel</span>
+                    <span className="text-[#1E2E20] font-semibold block truncate">
+                      📞 {selectedProfile.draft_contact_phone || selectedProfile.published_contact_phone || 'None'}
+                    </span>
+                    <span className="text-[#1E2E20] font-semibold block truncate">
+                      ✉️ {selectedProfile.draft_contact_email || selectedProfile.published_contact_email || 'None'}
+                    </span>
+                  </div>
+
+                  {/* Entity specific credentials */}
+                  {selectedProfile.partner_type === 'Organisation' ? (
+                    <>
+                      <div>
+                        <span className="text-[#8C8A7D] block text-[10px] uppercase font-bold">Agency Website</span>
+                        {selectedProfile.website ? (
+                          <a
+                            href={selectedProfile.website.startsWith('http') ? selectedProfile.website : `https://${selectedProfile.website}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[#8A1F1F] font-semibold hover:underline flex items-center gap-1 truncate"
+                          >
+                            <span>{selectedProfile.website}</span>
+                            <Globe size={11} />
+                          </a>
+                        ) : (
+                          <span className="text-[#8C8A7D] italic">No website provided</span>
+                        )}
+                      </div>
+
+                      <div>
+                        <span className="text-[#8C8A7D] block text-[10px] uppercase font-bold">PIB (Registration Tax ID)</span>
+                        {selectedProfile.pib ? (
+                          <span className="font-semibold flex items-center gap-1 text-[#1E2E20]">
+                            <span>{selectedProfile.pib}</span>
+                            {/^\d{9}$/.test(selectedProfile.pib.trim()) && (
+                              <span className="px-1.5 py-0.2 rounded text-[9px] bg-emerald-100 text-emerald-800 font-bold">
+                                ✓ Valid PIB
+                              </span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-[#8C8A7D] italic">Unspecified</span>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div>
+                      <span className="text-[#8C8A7D] block text-[10px] uppercase font-bold">Tourist Guide Licence</span>
+                      {selectedProfile.guide_licence ? (
+                        <span className="font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block mt-0.5">
+                          🎖️ {selectedProfile.guide_licence}
+                        </span>
+                      ) : (
+                        <span className="text-[#8C8A7D] italic">Unspecified</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Transport vehicle capacity */}
+                  <div>
+                    <span className="text-[#8C8A7D] block text-[10px] uppercase font-bold">Passenger Transport</span>
+                    <span className="font-semibold text-[#1E2E20]">
+                      {selectedProfile.transport_capacity === '1-4' ? '🚗 Car (1–4 pax)' :
+                       selectedProfile.transport_capacity === '5-8' ? '🚐 Minivan (5–8 pax)' :
+                       selectedProfile.transport_capacity === '9-19' ? '🚌 Minibus (9–19 pax)' :
+                       selectedProfile.transport_capacity === '20+' ? '🚍 Coach (20+ pax)' :
+                       '🚶 No transport (Walking/On-site)'}
+                    </span>
+                  </div>
+
+                  {/* Advance booking notice */}
+                  <div>
+                    <span className="text-[#8C8A7D] block text-[10px] uppercase font-bold">Advance Booking Notice</span>
+                    <span className="font-semibold text-[#1E2E20]">
+                      {selectedProfile.notice_window === 'same_day' ? '⚡ Same Day' :
+                       selectedProfile.notice_window === '48h' ? '⏱️ 48+ Hours' :
+                       '🕒 24 Hours'}
+                    </span>
+                  </div>
+
+                  {/* Languages */}
+                  <div>
+                    <span className="text-[#8C8A7D] block text-[10px] uppercase font-bold">Languages</span>
+                    <div className="flex flex-wrap gap-1 mt-0.5">
+                      {(selectedProfile.languages && selectedProfile.languages.length > 0 ? selectedProfile.languages : ['Serbian', 'English']).map(l => (
+                        <span key={l} className="px-1.5 py-0.2 rounded bg-white border border-[#E5E3DB] text-[9.5px] font-bold text-[#1E2E20]">
+                          {l}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 

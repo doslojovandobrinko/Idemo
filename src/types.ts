@@ -165,6 +165,11 @@ export interface Partner {
   linkedRecommendations?: string[];
   serviceAreas?: string[];
   is_open_for_inquiries?: boolean | string;
+  guideLicence?: string;
+  pib?: string;
+  languages?: string[];
+  transportCapacity?: 'none' | '1-4' | '5-8' | '9-19' | '20+' | string;
+  noticeWindow?: 'same_day' | '24h' | '48h' | string;
   stage?: 'Candidate' | 'Verification' | 'Approved' | 'Active' | 'Suspended' | 'Archived' | string;
   status?: 'invited' | 'active' | 'paused' | 'suspended' | 'closed' | string;
 }
@@ -244,6 +249,13 @@ export interface InquiryRecordV2 {
   requested_end_at: string;
   preferred_date: string;
   preferred_time: string;
+  language_requirements?: string[];
+  pickup_location?: string;
+  need_vehicle?: boolean;
+  party_size?: string;
+  free_note?: string;
+  orb_time_hours?: number;
+  orb_budget_eur?: number;
   status: 'draft' | 'submitting' | 'submitted' | 'failed';
   server_inquiry_id?: string;
   public_reference_code?: string;

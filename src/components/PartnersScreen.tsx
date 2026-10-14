@@ -9,7 +9,7 @@ import {
   KeyRound, CheckCircle2, Globe, Phone, MapPin, Sparkles, Lock, Unlock, X, 
   AlertCircle, Gift, Map as MapIcon, Search, Filter, CheckCircle, Award,
   ShieldCheck, Plus, Send, Check, Users, MessageCircle, Eye, ChevronRight, ChevronLeft, Briefcase, Loader2, Calendar, XCircle, Trash2, Camera,
-  FolderArchive, ChevronDown, Zap, UserCheck, MessageSquare, Compass, Package, Layers, Image as ImageIcon
+  FolderArchive, ChevronDown, Zap, UserCheck, MessageSquare, Compass, Package, Layers, Image as ImageIcon, User, Building2
 } from 'lucide-react';
 import { 
   getPartnerCarouselSlides, 
@@ -1147,6 +1147,15 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   const [profContactSaving, setProfContactSaving] = useState<boolean>(false);
   const [profContactMsg, setProfContactMsg] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
 
+  // Proposal 2: Lean Partner Passport & Operational Matching States
+  const [passportPartnerType, setPassportPartnerType] = useState<'Individual' | 'Organisation'>('Individual');
+  const [passportWebsite, setPassportWebsite] = useState<string>('');
+  const [passportGuideLicence, setPassportGuideLicence] = useState<string>('');
+  const [passportPib, setPassportPib] = useState<string>('');
+  const [passportLanguages, setPassportLanguages] = useState<string[]>(['Serbian', 'English']);
+  const [passportTransportCapacity, setPassportTransportCapacity] = useState<string>('none');
+  const [passportNoticeWindow, setPassportNoticeWindow] = useState<string>('24h');
+
   // Applied Expertise for Existing Recommendations
   const [appliedRecs, setAppliedRecs] = useState<string[]>([]);
   const [appliedRecsNote, setAppliedRecsNote] = useState<string>('');
@@ -1588,6 +1597,13 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       setProfContactMsg(null);
       setAppliedRecs([]);
       setAppliedRecsNote('');
+      setPassportPartnerType('Individual');
+      setPassportWebsite('');
+      setPassportGuideLicence('');
+      setPassportPib('');
+      setPassportLanguages(['Serbian', 'English']);
+      setPassportTransportCapacity('none');
+      setPassportNoticeWindow('24h');
     }
 
     const loadStoredOrCanonical = () => {
@@ -1631,6 +1647,27 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           }
           if (parsed.canonical_region) {
             setCanonicalRegion(parsed.canonical_region);
+          }
+          if (parsed.partner_type) {
+            setPassportPartnerType(parsed.partner_type === 'Organisation' ? 'Organisation' : 'Individual');
+          }
+          if (parsed.website) {
+            setPassportWebsite(parsed.website);
+          }
+          if (parsed.guide_licence) {
+            setPassportGuideLicence(parsed.guide_licence);
+          }
+          if (parsed.pib) {
+            setPassportPib(parsed.pib);
+          }
+          if (Array.isArray(parsed.languages) && parsed.languages.length > 0) {
+            setPassportLanguages(parsed.languages);
+          }
+          if (parsed.transport_capacity) {
+            setPassportTransportCapacity(parsed.transport_capacity);
+          }
+          if (parsed.notice_window) {
+            setPassportNoticeWindow(parsed.notice_window);
           }
           setPassportModified(false);
           return;
@@ -1707,6 +1744,27 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           }
           if (res.content.draft_contact_email || res.content.published_contact_email) {
             setProfContactEmail(res.content.draft_contact_email || res.content.published_contact_email || '');
+          }
+          if (res.content.partner_type) {
+            setPassportPartnerType(res.content.partner_type === 'Organisation' ? 'Organisation' : 'Individual');
+          }
+          if (res.content.website) {
+            setPassportWebsite(res.content.website);
+          }
+          if (res.content.guide_licence) {
+            setPassportGuideLicence(res.content.guide_licence);
+          }
+          if (res.content.pib) {
+            setPassportPib(res.content.pib);
+          }
+          if (Array.isArray(res.content.languages) && res.content.languages.length > 0) {
+            setPassportLanguages(res.content.languages);
+          }
+          if (res.content.transport_capacity) {
+            setPassportTransportCapacity(res.content.transport_capacity);
+          }
+          if (res.content.notice_window) {
+            setPassportNoticeWindow(res.content.notice_window);
           }
           setPassportModified(false);
         } else {
@@ -4454,9 +4512,63 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
                     <p className="text-[11px] text-brand-charcoal/70 leading-relaxed">
                       {isSr
-                        ? 'Unesite kratko profesionalno predstavljanje (maksimalno 200 reči) i opcionu fotografiju. Nakon uredničkog odobrenja od strane IDEMO tima, ovo će biti prikazano posetiocima kada prihvatite upit.'
-                        : 'Provide a brief professional introduction (max 200 words) and an optional photo. Once approved by IDEMO editorial review, this will be displayed to visitors when you accept an inquiry.'}
+                        ? 'Unesite osnovne podatke za pasoš partnera. Nakon uredničkog odobrenja, ovo omogućava raspodelu upita posetilaca i direktno usklađivanje.'
+                        : 'Provide your verified partner passport details. Once approved by IDEMO editorial review, this enables inquiry dispatch and direct matching.'}
                     </p>
+
+                    {/* PARTNER IDENTITY TYPE SEGMENT SELECTOR */}
+                    <div className="space-y-1.5 p-3 bg-white border border-[#2D3025]/10 rounded-xl">
+                      <label className="block text-[9.5px] font-mono uppercase font-bold text-brand-charcoal/70">
+                        {isSr ? 'Tip partnera / entiteta' : 'Partner Identity Type'}
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPassportPartnerType('Individual');
+                            setPassportModified(true);
+                          }}
+                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
+                            passportPartnerType === 'Individual'
+                              ? 'bg-[#1E2E20] text-white border-[#1E2E20] shadow-xs'
+                              : 'bg-[#FAF9F5] text-brand-charcoal/80 border-[#2D3025]/15 hover:bg-neutral-100'
+                          }`}
+                        >
+                          <User size={16} className={passportPartnerType === 'Individual' ? 'text-[#C5A059]' : 'text-brand-charcoal/60'} />
+                          <div>
+                            <div className="text-xs font-bold font-serif leading-none">
+                              {isSr ? 'Fizičko lice (Vodič)' : 'Individual Specialist'}
+                            </div>
+                            <div className={`text-[9px] font-mono mt-0.5 ${passportPartnerType === 'Individual' ? 'text-white/70' : 'text-brand-charcoal/50'}`}>
+                              {isSr ? 'Licencirani turistički vodič / ekspert' : 'Licensed tourist guide / specialist'}
+                            </div>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPassportPartnerType('Organisation');
+                            setPassportModified(true);
+                          }}
+                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
+                            passportPartnerType === 'Organisation'
+                              ? 'bg-[#1E2E20] text-white border-[#1E2E20] shadow-xs'
+                              : 'bg-[#FAF9F5] text-brand-charcoal/80 border-[#2D3025]/15 hover:bg-neutral-100'
+                          }`}
+                        >
+                          <Building2 size={16} className={passportPartnerType === 'Organisation' ? 'text-[#C5A059]' : 'text-brand-charcoal/60'} />
+                          <div>
+                            <div className="text-xs font-bold font-serif leading-none">
+                              {isSr ? 'Agencija / Organizacija' : 'Agency / Organisation'}
+                            </div>
+                            <div className={`text-[9px] font-mono mt-0.5 ${passportPartnerType === 'Organisation' ? 'text-white/70' : 'text-brand-charcoal/50'}`}>
+                              {isSr ? 'Registrovana agencija / prevoznik' : 'Registered agency / transport fleet'}
+                            </div>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
 
                     {/* Word Counter & Textarea */}
                     <div className="space-y-1.5">
@@ -4754,6 +4866,174 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             }}
                             className="w-full px-3 py-1.5 bg-white border border-[#2D3025]/15 rounded-lg text-xs text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none"
                           />
+                        </div>
+
+                        {/* ORGANISATION SPECIFIC: Website & PIB */}
+                        {passportPartnerType === 'Organisation' && (
+                          <>
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="block text-[9px] font-mono uppercase font-bold text-brand-charcoal/60">
+                                  {isSr ? 'Zvanični vebsajt agencije' : 'Agency / Operator Website'}
+                                </label>
+                                <span className="text-[8.5px] font-mono text-[#8A1F1F]">
+                                  {isSr ? 'Deli se u potvrdi upita' : 'Shared in inquiry confirmation'}
+                                </span>
+                              </div>
+                              <input
+                                type="url"
+                                placeholder="https://example.rs"
+                                value={passportWebsite}
+                                onChange={(e) => {
+                                  setPassportWebsite(e.target.value);
+                                  setPassportModified(true);
+                                }}
+                                className="w-full px-3 py-1.5 bg-white border border-[#2D3025]/15 rounded-lg text-xs text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="block text-[9px] font-mono uppercase font-bold text-brand-charcoal/60">
+                                  {isSr ? 'PIB (Poreski Identifikacioni Broj)' : 'PIB / Tax Registration No.'}
+                                </label>
+                                {passportPib.trim() && (
+                                  <span className={`text-[8.5px] font-mono font-bold flex items-center gap-0.5 ${
+                                    /^\d{9}$/.test(passportPib.trim()) ? 'text-emerald-700' : 'text-amber-700'
+                                  }`}>
+                                    {/^\d{9}$/.test(passportPib.trim()) ? (isSr ? '✓ Validan format (9 cifara)' : '✓ Valid Format (9 digits)') : (isSr ? '⚠️ Potrebno 9 cifara' : '⚠️ 9 digits required')}
+                                  </span>
+                                )}
+                              </div>
+                              <input
+                                type="text"
+                                maxLength={9}
+                                placeholder="e.g. 101234567"
+                                value={passportPib}
+                                onChange={(e) => {
+                                  setPassportPib(e.target.value.replace(/\D/g, ''));
+                                  setPassportModified(true);
+                                }}
+                                className="w-full px-3 py-1.5 bg-white border border-[#2D3025]/15 rounded-lg text-xs font-mono text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none"
+                              />
+                            </div>
+                          </>
+                        )}
+
+                        {/* INDIVIDUAL SPECIFIC: Guide Licence */}
+                        {passportPartnerType === 'Individual' && (
+                          <div className="sm:col-span-2">
+                            <label className="block text-[9px] font-mono uppercase font-bold text-brand-charcoal/60 mb-1">
+                              {isSr ? 'Broj legitimacije / licence turističkog vodiča' : 'Tourist Guide Official Licence ID'}
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="e.g. RS-VOD-0129"
+                              value={passportGuideLicence}
+                              onChange={(e) => {
+                                setPassportGuideLicence(e.target.value);
+                                setPassportModified(true);
+                              }}
+                              className="w-full px-3 py-1.5 bg-white border border-[#2D3025]/15 rounded-lg text-xs font-mono text-brand-charcoal focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* MOBILITY & PASSENGER TRANSPORT CAPACITY */}
+                      <div className="p-3 bg-[#FAF8F5] border border-[#2D3025]/10 rounded-xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[9.5px] font-mono uppercase font-bold text-brand-charcoal">
+                            {isSr ? 'Licencirani prevoz putnika & Kapacitet' : 'Licensed Passenger Transport & Vehicle Capacity'}
+                          </label>
+                          <span className="text-[8.5px] font-mono text-brand-charcoal/50">
+                            {isSr ? 'Za Agent 007 filtriranje grupa' : 'Used by Agent for group sizing'}
+                          </span>
+                        </div>
+                        <select
+                          value={passportTransportCapacity}
+                          onChange={(e) => {
+                            setPassportTransportCapacity(e.target.value);
+                            setPassportModified(true);
+                          }}
+                          className="w-full px-3 py-1.5 bg-white border border-[#2D3025]/15 rounded-lg text-xs text-brand-charcoal font-medium focus:ring-1 focus:ring-[#8A1F1F] focus:outline-none cursor-pointer"
+                        >
+                          <option value="none">{isSr ? 'Nema prevoza (Pešačke ture / Dolazak posetioca)' : 'No transport offered (Walking tours / Visitor vehicle)'}</option>
+                          <option value="1-4">{isSr ? '1–4 putnika (Licencirani automobil / Transfer)' : '1–4 passengers (Licensed car / Sedan transfer)'}</option>
+                          <option value="5-8">{isSr ? '5–8 putnika (Licencirani minivan / Kombi)' : '5–8 passengers (Licensed minivan)'}</option>
+                          <option value="9-19">{isSr ? '9–19 putnika (Minibus)' : '9–19 passengers (Minibus)'}</option>
+                          <option value="20+">{isSr ? '20+ putnika (Autobus / Velike grupe)' : '20+ passengers (Coach / Large groups)'}</option>
+                        </select>
+                      </div>
+
+                      {/* ADVANCE BOOKING NOTICE WINDOW */}
+                      <div className="p-3 bg-[#FAF8F5] border border-[#2D3025]/10 rounded-xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[9.5px] font-mono uppercase font-bold text-brand-charcoal">
+                            {isSr ? 'Minimalni rok najave (Advance Notice)' : 'Minimum Advance Booking Notice'}
+                          </label>
+                          <span className="text-[8.5px] font-mono text-brand-charcoal/50">
+                            {isSr ? 'Za automatsko usklađivanje u 12:00 / 18:00' : 'For 12 AM / 6 PM Agent matching'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[
+                            { value: 'same_day', labelSr: 'Isti dan', labelEn: 'Same Day' },
+                            { value: '24h', labelSr: '24 sata', labelEn: '24 Hours' },
+                            { value: '48h', labelSr: '48+ sati', labelEn: '48+ Hours' }
+                          ].map((opt) => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => {
+                                setPassportNoticeWindow(opt.value);
+                                setPassportModified(true);
+                              }}
+                              className={`py-1.5 px-2 rounded-lg text-xs font-mono font-bold border transition-all cursor-pointer ${
+                                passportNoticeWindow === opt.value
+                                  ? 'bg-[#1E2E20] text-[#C5A059] border-[#1E2E20]'
+                                  : 'bg-white text-brand-charcoal/70 border-[#2D3025]/15 hover:bg-neutral-100'
+                              }`}
+                            >
+                              {isSr ? opt.labelSr : opt.labelEn}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* OPERATIONAL LANGUAGES */}
+                      <div className="p-3 bg-[#FAF8F5] border border-[#2D3025]/10 rounded-xl space-y-2">
+                        <label className="block text-[9.5px] font-mono uppercase font-bold text-brand-charcoal">
+                          {isSr ? 'Jezici vođenja i komunikacije' : 'Operational Tour & Service Languages'}
+                        </label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {['Serbian', 'English', 'German', 'Russian', 'Italian', 'French', 'Spanish', 'Chinese'].map((lang) => {
+                            const isSelected = passportLanguages.includes(lang);
+                            return (
+                              <button
+                                key={lang}
+                                type="button"
+                                onClick={() => {
+                                  if (isSelected) {
+                                    if (passportLanguages.length > 1) {
+                                      setPassportLanguages(passportLanguages.filter(l => l !== lang));
+                                      setPassportModified(true);
+                                    }
+                                  } else {
+                                    setPassportLanguages([...passportLanguages, lang]);
+                                    setPassportModified(true);
+                                  }
+                                }}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-all cursor-pointer border ${
+                                  isSelected
+                                    ? 'bg-[#1E2E20] text-white border-[#1E2E20]'
+                                    : 'bg-white text-brand-charcoal/70 border-[#2D3025]/15 hover:bg-neutral-100'
+                                }`}
+                              >
+                                {isSelected ? '✓ ' : ''}{lang}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                       <div className="flex items-center justify-between pt-1">
@@ -5095,7 +5375,16 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             undefined,
                             appliedRecs,
                             appliedRecsNote || null,
-                            canonicalRegion
+                            canonicalRegion,
+                            {
+                              partnerType: passportPartnerType,
+                              website: passportWebsite || null,
+                              guideLicence: passportGuideLicence || null,
+                              pib: passportPib || null,
+                              languages: passportLanguages,
+                              transportCapacity: passportTransportCapacity,
+                              noticeWindow: passportNoticeWindow,
+                            }
                           );
                           if (activePartnerId !== targetId) {
                             setPassportSaving(false);
@@ -5123,6 +5412,13 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                 draft_contact_email: profContactEmail || null,
                                 contact_phone: profContactPhone || parsed.contact_phone || null,
                                 contact_email: profContactEmail || parsed.contact_email || null,
+                                partner_type: passportPartnerType,
+                                website: passportWebsite || null,
+                                guide_licence: passportGuideLicence || null,
+                                pib: passportPib || null,
+                                languages: passportLanguages,
+                                transport_capacity: passportTransportCapacity,
+                                notice_window: passportNoticeWindow,
                                 applied_recs: appliedRecs,
                                 applied_recs_note: appliedRecsNote || null,
                                 canonical_region: canonicalRegion,
@@ -5167,7 +5463,16 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             undefined,
                             appliedRecs,
                             appliedRecsNote || null,
-                            canonicalRegion
+                            canonicalRegion,
+                            {
+                              partnerType: passportPartnerType,
+                              website: passportWebsite || null,
+                              guideLicence: passportGuideLicence || null,
+                              pib: passportPib || null,
+                              languages: passportLanguages,
+                              transportCapacity: passportTransportCapacity,
+                              noticeWindow: passportNoticeWindow,
+                            }
                           );
                           if (activePartnerId !== targetId) {
                             setPassportSaving(false);
@@ -5197,6 +5502,13 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                 published_photo_path: passportPhotoPath,
                                 photo_consent_given: passportPhotoConsent,
                                 review_status: 'pending_review',
+                                partner_type: passportPartnerType,
+                                website: passportWebsite || null,
+                                guide_licence: passportGuideLicence || null,
+                                pib: passportPib || null,
+                                languages: passportLanguages,
+                                transport_capacity: passportTransportCapacity,
+                                notice_window: passportNoticeWindow,
                                 applied_recs: appliedRecs,
                                 applied_recs_note: appliedRecsNote || null,
                                 canonical_region: canonicalRegion,
