@@ -223,7 +223,22 @@ export function updateInquiryCachedProposalV2(
     const all = getAllInquiriesV2();
     const target = all.find((i) => i.server_inquiry_id === serverInquiryId || i.local_queue_id === serverInquiryId);
     if (target) {
-      target.cached_proposal = proposal;
+      if (proposal && target.cached_proposal && target.cached_proposal.match_id === proposal.match_id) {
+        target.cached_proposal = {
+          ...target.cached_proposal,
+          ...proposal,
+          partner_name: proposal.partner_name ?? target.cached_proposal.partner_name,
+          partner_code: proposal.partner_code ?? target.cached_proposal.partner_code,
+          partner_category: proposal.partner_category ?? target.cached_proposal.partner_category,
+          partner_photo_url: proposal.partner_photo_url ?? target.cached_proposal.partner_photo_url,
+          partner_intro: proposal.partner_intro ?? target.cached_proposal.partner_intro,
+          partner_languages: proposal.partner_languages ?? target.cached_proposal.partner_languages,
+          contact_phone: proposal.contact_phone ?? target.cached_proposal.contact_phone,
+          contact_email: proposal.contact_email ?? target.cached_proposal.contact_email,
+        };
+      } else {
+        target.cached_proposal = proposal;
+      }
       safeStorage.setItem(STORAGE_KEY_V2, JSON.stringify(all));
     }
   } catch (err) {

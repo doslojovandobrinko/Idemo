@@ -22,13 +22,33 @@ export function getPartnerSeenInquiryIds(): string[] {
 export function markPartnerInquiriesAsSeen(inquiryIds: string[]): void {
   try {
     const existing = new Set(getPartnerSeenInquiryIds());
-    inquiryIds.forEach(id => existing.add(id));
+    inquiryIds.forEach(id => {
+      if (id) existing.add(id);
+    });
     safeStorage.setItem(PARTNER_SEEN_INQUIRIES_KEY, JSON.stringify(Array.from(existing)));
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('idemo_partner_badge_change'));
     }
   } catch (err) {
     console.debug('[IDEMO Partner Badge] Failed to save seen inquiries:', err);
+  }
+}
+
+export function unmarkPartnerInquiriesAsSeen(inquiryIds: string[]): void {
+  try {
+    const existing = new Set(getPartnerSeenInquiryIds());
+    inquiryIds.forEach(id => {
+      if (id) {
+        existing.delete(id);
+        existing.delete(`confirmed_${id}`);
+      }
+    });
+    safeStorage.setItem(PARTNER_SEEN_INQUIRIES_KEY, JSON.stringify(Array.from(existing)));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('idemo_partner_badge_change'));
+    }
+  } catch (err) {
+    console.debug('[IDEMO Partner Badge] Failed to unmark seen inquiries:', err);
   }
 }
 
@@ -50,6 +70,24 @@ export function markPartnerMessagesAsSeen(partnerId: string, currentCount: numbe
   } catch (err) {
     console.debug('[IDEMO Partner Badge] Failed to mark messages seen:', err);
   }
+}
+
+/**
+ * Helper to compute the badge tracking key for an inquiry (distinguishes initial dispatch from visitor confirmation)
+ */
+export function getPartnerInquiryBadgeKey(inq: any): string {
+  const baseId = inq?.id || inq?.inquiryId || inq?.local_queue_id || inq?.matchId || '';
+  if (!baseId) return '';
+  const isConfirmed = Boolean(
+    inq?.visitorConfirmed === true ||
+    inq?.status === 'Confirmed by Traveler' ||
+    inq?.status === 'Arrangement Confirmed' ||
+    inq?.status === 'selected' ||
+    inq?.matchStatus === 'selected' ||
+    inq?.rawMatchStatus === 'selected' ||
+    inq?.inquiryStatus === 'confirmed'
+  );
+  return isConfirmed ? `confirmed_${baseId}` : String(baseId);
 }
 
 /**
@@ -80,7 +118,11 @@ export function markAllActivePartnerInquiriesSeen(): void {
       const pId = (inq.partnerId || '').toLowerCase();
       if (pId === partnerIdLower || (codeLower && pId === codeLower)) {
         const id = inq.id || inq.inquiryId || inq.local_queue_id;
-        if (id) activeIds.push(id);
+        if (id) {
+          activeIds.push(id);
+          const badgeKey = getPartnerInquiryBadgeKey(inq);
+          if (badgeKey) activeIds.push(badgeKey);
+        }
       }
     }
     if (activeIds.length > 0) {
@@ -128,7 +170,7 @@ export async function refreshPartnerOpportunitiesBackground(): Promise<boolean> 
       const existingInqs: any[] = rawInq ? JSON.parse(rawInq) : [];
       const existingMap = new Map<string, any>();
       existingInqs.forEach(inq => {
-        const key = inq.id || inq.inquiryId || inq.local_queue_id || inq.match_id;
+        const key = inq.id || inq.inquiryId || inq.local_queue_id || inq.match_id || inq.matchId;
         if (key) existingMap.set(key, inq);
       });
 
@@ -136,12 +178,23 @@ export async function refreshPartnerOpportunitiesBackground(): Promise<boolean> 
       for (const opp of combined) {
         const key = opp.match_id || opp.inquiry_id;
         if (!key) continue;
-        if (!existingMap.has(key)) {
+        const isConfirmedOnServer = opp.match_status === 'selected' || opp.inquiry_status === 'confirmed';
+        const existing = existingMap.get(key) || existingInqs.find(i => i.inquiryId === opp.inquiry_id || i.matchId === opp.match_id);
+
+        if (!existing) {
           existingMap.set(key, {
             id: key,
+            matchId: opp.match_id,
+            inquiryId: opp.inquiry_id,
+            recId: opp.recommendation_id,
+            recTitle: opp.recommendation_title,
             partnerId: partnerIdLower,
             matchStatus: opp.match_status || 'dispatched',
-            status: opp.inquiry_status || 'Active',
+            rawMatchStatus: opp.match_status || 'dispatched',
+            inquiryStatus: opp.inquiry_status || 'Active',
+            status: isConfirmedOnServer ? 'Confirmed by Traveler' : (opp.inquiry_status || 'Active'),
+            visitorConfirmed: isConfirmedOnServer,
+            visitorConfirmedAt: isConfirmedOnServer ? Date.now() : undefined,
             visitorName: opp.visitor_contact?.visitor_name || 'Verified Traveler',
             query: opp.visitor_notes || 'Traveler requested direct partner assistance via IDEMO dispatch.',
             createdAt: opp.created_at || new Date().toISOString(),
@@ -149,6 +202,27 @@ export async function refreshPartnerOpportunitiesBackground(): Promise<boolean> 
             requestedEndAt: opp.requested_end_at,
           });
           changed = true;
+        } else {
+          const wasConfirmed = Boolean(
+            existing.visitorConfirmed === true ||
+            existing.status === 'Confirmed by Traveler' ||
+            existing.matchStatus === 'selected' ||
+            existing.inquiryStatus === 'confirmed'
+          );
+          if (isConfirmedOnServer && !wasConfirmed) {
+            existing.status = 'Confirmed by Traveler';
+            existing.matchStatus = 'selected';
+            existing.rawMatchStatus = 'selected';
+            existing.inquiryStatus = 'confirmed';
+            existing.visitorConfirmed = true;
+            existing.visitorConfirmedAt = Date.now();
+            changed = true;
+          } else if (opp.match_status && opp.match_status !== existing.matchStatus && !wasConfirmed) {
+            existing.matchStatus = opp.match_status;
+            existing.rawMatchStatus = opp.match_status;
+            existing.inquiryStatus = opp.inquiry_status || existing.inquiryStatus;
+            changed = true;
+          }
         }
       }
 
@@ -156,6 +230,7 @@ export async function refreshPartnerOpportunitiesBackground(): Promise<boolean> 
         safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(Array.from(existingMap.values())));
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new Event('idemo_partner_badge_change'));
+          window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
         }
         return true;
       }
@@ -175,27 +250,41 @@ export function checkAnyPartnerUnseenBadge(): boolean {
     const session = partnerSessionStorage.getPartnerSession();
     if (!session || !session.partnerId) return false;
 
-    // 1. Check partner inquiries
+    // 1. Check partner inquiries (including unseen visitor confirmations)
     const rawInq = safeStorage.getItem('idemo_portal_inquiries');
     if (rawInq) {
       const inqs = JSON.parse(rawInq);
       const partnerIdLower = session.partnerId.toLowerCase();
       const codeLower = (session.publicCode || '').toLowerCase();
-      const activeIds: string[] = [];
+      const activeBadgeKeys: string[] = [];
 
       for (const inq of inqs) {
         const pId = (inq.partnerId || '').toLowerCase();
         if (pId === partnerIdLower || (codeLower && pId === codeLower)) {
+          const isConfirmedByVisitor = Boolean(
+            inq.visitorConfirmed === true ||
+            inq.status === 'Confirmed by Traveler' ||
+            inq.status === 'Arrangement Confirmed' ||
+            inq.status === 'selected' ||
+            inq.matchStatus === 'selected' ||
+            inq.rawMatchStatus === 'selected' ||
+            inq.inquiryStatus === 'confirmed'
+          );
           const isCounter = inq.matchStatus === 'counter_by_visitor';
-          const isClosed = inq.status === 'Completed' || inq.status === 'Declined' || inq.status === 'closed';
-          if (isCounter || !isClosed) {
+          const isClosed = inq.status === 'Completed' || inq.status === 'Declined' || inq.status === 'closed' || inq.status === 'Released' || inq.matchStatus === 'not_selected';
+          const isAcceptedPendingVisitor = !isConfirmedByVisitor && (inq.status === 'Locked / Accepted' || inq.status === 'accepted' || inq.status === 'responded' || inq.matchStatus === 'responded');
+
+          if (isConfirmedByVisitor && !inq.partnerAcknowledgedConfirmation) {
+            const badgeKey = getPartnerInquiryBadgeKey(inq);
+            if (badgeKey) activeBadgeKeys.push(badgeKey);
+          } else if (isCounter || (!isClosed && !isAcceptedPendingVisitor && !isConfirmedByVisitor)) {
             const id = inq.id || inq.inquiryId || inq.local_queue_id;
-            if (id) activeIds.push(id);
+            if (id) activeBadgeKeys.push(id);
           }
         }
       }
 
-      if (checkPartnerHasUnseenInquiries(activeIds)) {
+      if (checkPartnerHasUnseenInquiries(activeBadgeKeys)) {
         return true;
       }
     }

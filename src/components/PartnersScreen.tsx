@@ -71,7 +71,8 @@ import {
   markPartnerInquiriesAsSeen, 
   markAllActivePartnerInquiriesSeen,
   getPartnerSeenMessageCount, 
-  markPartnerMessagesAsSeen 
+  markPartnerMessagesAsSeen,
+  getPartnerInquiryBadgeKey
 } from '../lib/partnerBadgeStorage';
 import { badgingService } from '../lib/badgingService';
 import { loadRecommendations } from '../lib/recommendationsLoader';
@@ -147,6 +148,10 @@ interface Inquiry {
   language?: string;
   budget?: string;
   availableTime?: string;
+  partySize?: string;
+  pickupPlace?: string;
+  transportMode?: string;
+  startTimeWindow?: string;
   subjectExpertise?: string;
   category?: 'Tourist Guide' | 'Medical/Wellbeing' | 'Limousine/Transport';
   dispatchStage?: 1 | 2;
@@ -158,6 +163,7 @@ interface Inquiry {
   releaseReason?: string;
   visitorConfirmed?: boolean;
   visitorConfirmedAt?: number;
+  partnerAcknowledgedConfirmation?: boolean;
 }
 
 // Initial Controlled Ecosystem Partner Structure (10 Guides, 3 Medical, 10 Transport, 7 Open, 2 Demonstration)
@@ -984,9 +990,80 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
   const [authenticatedPartnerProfile, setAuthenticatedPartnerProfile] = useState<AuthenticatedPartnerProfile | null>(null);
 
+  const parseStructuredInquiryNotes = (rawNotes: string) => {
+    let parsedGuest = '';
+    let parsedParty = '';
+    let parsedLang = '';
+    let parsedStart = '';
+    let parsedTransport = '';
+    let parsedPickup = '';
+    let parsedOrbTime = '';
+    let parsedOrbBudget = '';
+    let parsedPrefTime = '';
+    let cleanFreeQuery = (rawNotes || '').trim() || 'Traveler requested direct partner assistance via IDEMO dispatch.';
+
+    const bracketMatch = (rawNotes || '').match(/^\[([^\]]+)\]\s*(.*)$/s);
+    if (bracketMatch) {
+      const headerContent = bracketMatch[1];
+      const trailingNotes = (bracketMatch[2] || '').trim();
+      cleanFreeQuery = trailingNotes || 'Standard arrangement requested.';
+      const segments = headerContent.split('|').map(s => s.trim());
+      for (const seg of segments) {
+        if (seg.startsWith('Guest:')) parsedGuest = seg.replace('Guest:', '').trim();
+        else if (seg.startsWith('Party of')) parsedParty = seg.replace('Party of', '').trim();
+        else if (seg.startsWith('Lang:')) parsedLang = seg.replace('Lang:', '').trim();
+        else if (seg.startsWith('Start:')) parsedStart = seg.replace('Start:', '').trim();
+        else if (seg.startsWith('Transport:')) parsedTransport = seg.replace('Transport:', '').trim();
+        else if (seg.startsWith('Pickup:')) parsedPickup = seg.replace('Pickup:', '').trim();
+        else if (seg.startsWith('ORB Time:')) parsedOrbTime = seg.replace('ORB Time:', '').trim();
+        else if (seg.startsWith('ORB Budget:')) parsedOrbBudget = seg.replace('ORB Budget:', '').trim();
+        else if (seg.startsWith('Preferred Time:')) parsedPrefTime = seg.replace('Preferred Time:', '').trim();
+      }
+    }
+
+    return {
+      parsedGuest,
+      parsedParty,
+      parsedLang,
+      parsedStart,
+      parsedTransport,
+      parsedPickup,
+      parsedOrbTime,
+      parsedOrbBudget,
+      parsedPrefTime,
+      cleanFreeQuery,
+    };
+  };
+
   const mapOpportunityToInquiry = (opp: OpportunityItem, partnerId: string, partnerName: string): Inquiry => {
     const matchId = opp.match_id;
     const matchStatus = opp.match_status || 'Dispatched Stage 1';
+    const rawNotes = opp.visitor_notes || '';
+    const parsed = parseStructuredInquiryNotes(rawNotes);
+
+    // Check existing local portal record to preserve partnerAcknowledgedConfirmation and reply history
+    let existingPortalInq: any = null;
+    try {
+      const rawPortal = safeStorage.getItem('idemo_portal_inquiries');
+      if (rawPortal) {
+        const list = JSON.parse(rawPortal);
+        if (Array.isArray(list)) {
+          existingPortalInq = list.find((item: any) =>
+            (matchId && (item.id === matchId || item.matchId === matchId)) ||
+            (opp.inquiry_id && (item.id === opp.inquiry_id || item.inquiryId === opp.inquiry_id))
+          );
+        }
+      }
+    } catch {}
+
+    const isConfirmed = Boolean(
+      opp.match_status === 'selected' ||
+      opp.inquiry_status === 'confirmed' ||
+      existingPortalInq?.visitorConfirmed === true ||
+      existingPortalInq?.status === 'Confirmed by Traveler' ||
+      (opp.inquiry_id && getConfirmedArrangementByServerId(opp.inquiry_id))
+    );
+
     return {
       id: matchId || opp.inquiry_id,
       matchId,
@@ -995,22 +1072,31 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       recTitle: opp.recommendation_title,
       partnerId,
       partnerName,
-      status: matchStatus,
-      matchStatus,
-      inquiryStatus: opp.inquiry_status,
-      rawMatchStatus: opp.match_status,
-      visitorName: opp.visitor_contact?.visitor_name || 'Verified Traveler',
-      query: opp.visitor_notes || 'Traveler requested direct partner assistance via IDEMO dispatch.',
-      replies: [],
+      status: isConfirmed ? 'Confirmed by Traveler' : matchStatus,
+      matchStatus: isConfirmed ? 'selected' : matchStatus,
+      inquiryStatus: isConfirmed ? 'confirmed' : opp.inquiry_status,
+      rawMatchStatus: isConfirmed ? 'selected' : opp.match_status,
+      visitorConfirmed: isConfirmed,
+      visitorConfirmedAt: isConfirmed ? (existingPortalInq?.visitorConfirmedAt || Date.now()) : undefined,
+      partnerAcknowledgedConfirmation: existingPortalInq?.partnerAcknowledgedConfirmation || false,
+      visitorName: opp.visitor_contact?.visitor_name || parsed.parsedGuest || 'Verified Traveler',
+      query: parsed.cleanFreeQuery,
+      replies: existingPortalInq?.replies || [],
       createdAt: opp.created_at || new Date().toISOString(),
       requestedStartAt: opp.requested_start_at,
       requestedEndAt: opp.requested_end_at,
       counterProposal: (opp as any).counter_proposal || (opp.match_status === 'counter_by_visitor' ? {
         proposedStartAt: opp.requested_start_at,
-        notes: opp.visitor_notes
+        notes: parsed.cleanFreeQuery
       } : undefined),
       geography: 'Belgrade & Serbia',
-      language: 'English',
+      language: parsed.parsedLang || 'English',
+      budget: parsed.parsedOrbBudget || undefined,
+      availableTime: parsed.parsedOrbTime || undefined,
+      partySize: parsed.parsedParty || undefined,
+      pickupPlace: parsed.parsedPickup || undefined,
+      transportMode: parsed.parsedTransport || undefined,
+      startTimeWindow: parsed.parsedStart || undefined,
       subjectExpertise: opp.recommendation_title,
       category: 'Tourist Guide',
       dispatchStage: 1,
@@ -1049,10 +1135,12 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           setInquiries(fetchedInquiries);
           safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(fetchedInquiries));
           window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+          window.dispatchEvent(new Event('idemo_partner_badge_change'));
         } else {
           setInquiries([]);
           safeStorage.setItem('idemo_portal_inquiries', JSON.stringify([]));
           window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+          window.dispatchEvent(new Event('idemo_partner_badge_change'));
         }
 
         if (profileRes.profile.must_change_pin || session.mustChangePin) {
@@ -1152,7 +1240,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   const [passportWebsite, setPassportWebsite] = useState<string>('');
   const [passportGuideLicence, setPassportGuideLicence] = useState<string>('');
   const [passportPib, setPassportPib] = useState<string>('');
-  const [passportLanguages, setPassportLanguages] = useState<string[]>(['Serbian', 'English']);
+  const [passportLanguages, setPassportLanguages] = useState<string[]>([]);
   const [passportTransportCapacity, setPassportTransportCapacity] = useState<string>('none');
   const [passportNoticeWindow, setPassportNoticeWindow] = useState<string>('24h');
 
@@ -1336,10 +1424,12 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
         setInquiries(fetched);
         safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(fetched));
         window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+        window.dispatchEvent(new Event('idemo_partner_badge_change'));
       } else {
         setInquiries([]);
         safeStorage.setItem('idemo_portal_inquiries', JSON.stringify([]));
         window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+        window.dispatchEvent(new Event('idemo_partner_badge_change'));
       }
     }
   };
@@ -1413,23 +1503,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
         proposedEndAt = inquiry.requestedEndAt || null;
       }
 
-      const proposalRecord: CachedProposalRecord = {
-        schema_version: 1,
-        match_id: matchId,
-        response_id: responseId,
-        response_type: alternativeOffer ? 'propose_alternative' : 'accept_as_requested',
-        message: alternativeOffer 
-          ? (alternativeOffer.note ? `${ensureEnglishSync(alternativeOffer.note)} (${alternativeOffer.date} ${alternativeOffer.time})` : `Alternative proposed: ${alternativeOffer.date} ${alternativeOffer.time}`)
-          : ensureEnglishSync(message),
-        proposed_start_at: proposedStartAt,
-        proposed_end_at: proposedEndAt,
-        cached_at: Date.now(),
-      };
-
-      // 1. Persist proposal to visitor storage
-      updateInquiryCachedProposalV2(serverOrLocalId, proposalRecord);
-
-      // 1b. Resolve partner contact channels and immediately populate confirmed arrangement
+      // 1. Resolve Partner Passport identity, photo, and "Allow me to introduce myself" professional introduction
       const catalogPartner = INITIAL_PORTAL_PARTNERS.find(p =>
         (authenticatedPartnerProfile && (p.id.toLowerCase() === authenticatedPartnerProfile.public_code?.toLowerCase() || p.id.toLowerCase() === authenticatedPartnerProfile.id?.toLowerCase())) ||
         (currentSimulatedPartner && p.id.toLowerCase() === currentSimulatedPartner.id.toLowerCase()) ||
@@ -1437,19 +1511,21 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
         p.id.toLowerCase() === 'uno1'
       );
 
-      const contactPhone = authenticatedPartnerProfile?.published_contact_phone ||
-        authenticatedPartnerProfile?.draft_contact_phone ||
+      const contactPhone = (authenticatedPartnerProfile as any)?.contact_phone ||
+        (authenticatedPartnerProfile as any)?.published_contact_phone ||
+        (authenticatedPartnerProfile as any)?.draft_contact_phone ||
         currentSimulatedPartner?.contactPhone ||
         catalogPartner?.contactPhone ||
         '+381 62 187 3260';
 
-      const contactEmail = authenticatedPartnerProfile?.published_contact_email ||
-        authenticatedPartnerProfile?.draft_contact_email ||
+      const contactEmail = (authenticatedPartnerProfile as any)?.contact_email ||
+        (authenticatedPartnerProfile as any)?.published_contact_email ||
+        (authenticatedPartnerProfile as any)?.draft_contact_email ||
         'concierge@idemo.travel';
 
-      // Resolve authentic photo from upload preview, storage snapshot, catalog, or canonical portrait
       const targetPartnerCode = (authenticatedPartnerProfile?.public_code || currentSimulatedPartner?.publicCode || currentSimulatedPartner?.id || catalogPartner?.id || 'UNO1').toUpperCase();
       let storedPassportPhoto: string | null = null;
+      let storedPassportIntro: string | null = null;
       try {
         const storedPassportRaw = safeStorage.getItem(`idemo_partner_passport_${targetPartnerCode}`) ||
                                    safeStorage.getItem(`idemo_partner_passport_${targetPartnerCode.toLowerCase()}`);
@@ -1459,9 +1535,12 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           if (cand && (cand.startsWith('/') || cand.startsWith('http://') || cand.startsWith('https://') || cand.startsWith('data:'))) {
             storedPassportPhoto = cand;
           }
+          if (parsedStored.intro_published || parsedStored.intro_draft || parsedStored.bio) {
+            storedPassportIntro = parsedStored.intro_published || parsedStored.intro_draft || parsedStored.bio;
+          }
         }
       } catch (e) {
-        console.warn('Failed to resolve stored partner photo for arrangement:', e);
+        console.warn('Failed to resolve stored partner passport for proposal preview:', e);
       }
 
       const defaultCanonicalPortrait = '/assets/images/partners/uno_portrait.svg';
@@ -1473,44 +1552,63 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
         catalogPartner?.photoUrl || 
         defaultCanonicalPortrait;
 
-      const arrangementRecord: ConfirmedArrangementRecord = {
+      const resolvedIntro =
+        storedPassportIntro ||
+        (authenticatedPartnerProfile as any)?.intro_published ||
+        (authenticatedPartnerProfile as any)?.intro_draft ||
+        (authenticatedPartnerProfile as any)?.bio ||
+        currentSimulatedPartner?.introduction ||
+        catalogPartner?.introduction ||
+        'I am a licensed local guide with strong knowledge of Belgrade, Serbian history, cultural heritage and traditional gastronomy. I enjoy helping visitors understand the stories behind the places they see and creating memorable experiences tailored to their interests.';
+
+      const resolvedCategory =
+        (authenticatedPartnerProfile as any)?.category ||
+        currentSimulatedPartner?.category ||
+        catalogPartner?.category ||
+        'Licensed Tourist Guide';
+
+      const resolvedLanguages =
+        (authenticatedPartnerProfile as any)?.languages ||
+        currentSimulatedPartner?.languages ||
+        catalogPartner?.languages ||
+        ['English', 'Serbian'];
+
+      const proposalRecord: CachedProposalRecord = {
+        schema_version: 1,
         match_id: matchId,
-        partner_name: partnerName,
-        partner_code: authenticatedPartnerProfile?.public_code || currentSimulatedPartner?.publicCode || catalogPartner?.publicCode || 'UNO1',
-        category: authenticatedPartnerProfile?.category || currentSimulatedPartner?.category || catalogPartner?.category || 'Tourist Guide',
-        verification_status: 'IDEMO Verified Host',
-        photo_url: resolvedPhotoUrl,
-        contact_phone: contactPhone,
-        contact_email: contactEmail,
-        introduction: authenticatedPartnerProfile?.bio || currentSimulatedPartner?.introduction || catalogPartner?.introduction || null,
-        languages: authenticatedPartnerProfile?.languages || currentSimulatedPartner?.languages || catalogPartner?.languages || ['English', 'Serbian'],
-        service_areas: currentSimulatedPartner?.geography ? [currentSimulatedPartner.geography] : ['Belgrade'],
-        capabilities: currentSimulatedPartner?.capabilities || catalogPartner?.capabilities || ['Licensed Tourist Guide'],
-        portfolio_items: [],
-        confirmed_terms: proposalRecord.message,
+        response_id: responseId,
+        response_type: alternativeOffer ? 'propose_alternative' : 'accept_as_requested',
+        message: alternativeOffer 
+          ? (alternativeOffer.note ? `${ensureEnglishSync(alternativeOffer.note)} (${alternativeOffer.date} ${alternativeOffer.time})` : `Alternative proposed: ${alternativeOffer.date} ${alternativeOffer.time}`)
+          : ensureEnglishSync(message),
         proposed_start_at: proposedStartAt,
         proposed_end_at: proposedEndAt,
-        confirmed_at: Date.now(),
+        partner_name: partnerName,
+        partner_code: targetPartnerCode,
+        partner_category: resolvedCategory,
+        partner_photo_url: resolvedPhotoUrl,
+        partner_intro: resolvedIntro,
+        partner_languages: resolvedLanguages,
+        contact_phone: contactPhone,
+        contact_email: contactEmail,
+        cached_at: Date.now(),
       };
 
-      saveConfirmedArrangementV2(serverOrLocalId, arrangementRecord);
+      // 2. Persist active proposal to visitor storage and clear any premature confirmed state
+      // Arrangement is ONLY locked when the Visitor clicks ACCEPT in PlanCard!
+      updateInquiryCachedProposalV2(serverOrLocalId, proposalRecord);
+      saveConfirmedArrangementV2(serverOrLocalId, null);
 
-      // 2. Update visitor status label
-      const statusLabel = isSr ? 'Upit prihvaćen — kontakt otključan' : 'Inquiry accepted — contact unlocked';
+      // 3. Update visitor status label to awaiting visitor decision
+      const statusLabel = isSr ? 'Ponuda partnera — čeka Vašu odluku' : 'Partner Proposal — Awaiting Your Decision';
       updateInquiryServerStatusV2(serverOrLocalId, statusLabel);
 
-      // 3. Mark proposal as unread so red dot turns ON immediately
+      // 4. Mark proposal as unread so red dot turns ON immediately
       removeSeenProposal(serverOrLocalId);
       const sig = `${matchId}_${responseId}`;
       removeSeenProposal(sig);
 
-      // 4. Dispatch events for instant UI update (<10ms)
-      window.dispatchEvent(new CustomEvent('idemo_arrangement_confirmed', {
-        detail: {
-          inquiryId: serverOrLocalId,
-          arrangement: arrangementRecord
-        }
-      }));
+      // 5. Dispatch events for instant UI update (<10ms) to show Proposal Review Card
       window.dispatchEvent(new CustomEvent('idemo_proposal_state_change', {
         detail: {
           inquiryId: serverOrLocalId,
@@ -1651,16 +1749,16 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           if (parsed.partner_type) {
             setPassportPartnerType(parsed.partner_type === 'Organisation' ? 'Organisation' : 'Individual');
           }
-          if (parsed.website) {
-            setPassportWebsite(parsed.website);
+          if (parsed.website !== undefined) {
+            setPassportWebsite(parsed.website || '');
           }
-          if (parsed.guide_licence) {
-            setPassportGuideLicence(parsed.guide_licence);
+          if (parsed.guide_licence !== undefined) {
+            setPassportGuideLicence(parsed.guide_licence || '');
           }
-          if (parsed.pib) {
-            setPassportPib(parsed.pib);
+          if (parsed.pib !== undefined) {
+            setPassportPib(parsed.pib || '');
           }
-          if (Array.isArray(parsed.languages) && parsed.languages.length > 0) {
+          if (Array.isArray(parsed.languages)) {
             setPassportLanguages(parsed.languages);
           }
           if (parsed.transport_capacity) {
@@ -1748,16 +1846,16 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           if (res.content.partner_type) {
             setPassportPartnerType(res.content.partner_type === 'Organisation' ? 'Organisation' : 'Individual');
           }
-          if (res.content.website) {
-            setPassportWebsite(res.content.website);
+          if (res.content.website !== undefined) {
+            setPassportWebsite(res.content.website || '');
           }
-          if (res.content.guide_licence) {
-            setPassportGuideLicence(res.content.guide_licence);
+          if (res.content.guide_licence !== undefined) {
+            setPassportGuideLicence(res.content.guide_licence || '');
           }
-          if (res.content.pib) {
-            setPassportPib(res.content.pib);
+          if (res.content.pib !== undefined) {
+            setPassportPib(res.content.pib || '');
           }
-          if (Array.isArray(res.content.languages) && res.content.languages.length > 0) {
+          if (Array.isArray(res.content.languages)) {
             setPassportLanguages(res.content.languages);
           }
           if (res.content.transport_capacity) {
@@ -2032,20 +2130,25 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
             const alreadyPresent = merged.find(m => m.id === vId || m.inquiryId === vId || (m.recId === vInq.recommendation_id && m.visitorName === vInq.visitor_name));
             const isConfirmed = (vInq as any).status === 'Arrangement Confirmed' || !!getConfirmedArrangementByServerId(vId);
             if (!alreadyPresent) {
+              const parsedLocal = parseStructuredInquiryNotes(vInq.visitor_notes || '');
               merged.unshift({
                 id: vId,
                 inquiryId: vInq.server_inquiry_id,
                 recId: vInq.recommendation_id,
                 recTitle: vInq.recommendation_title || (vInq.recommendation_id === '1' ? 'Uvac Meanders' : 'Recommendation'),
-                visitorName: vInq.visitor_name || 'Verified Traveler',
-                query: vInq.visitor_notes || 'Arrangement request for Uvac Meanders',
+                visitorName: vInq.visitor_name || parsedLocal.parsedGuest || 'Verified Traveler',
+                query: parsedLocal.cleanFreeQuery,
                 status: isConfirmed ? 'Confirmed by Traveler' : vInq.cached_proposal ? 'Locked / Accepted' : 'Pending',
                 visitorConfirmed: isConfirmed,
                 visitorConfirmedAt: isConfirmed ? Date.now() : undefined,
-                dateSubmitted: vInq.created_at || new Date().toISOString(),
-                availableTime: vInq.preferred_time || 'Anytime',
-                language: 'English',
-                budget: 'Standard',
+                createdAt: vInq.created_at || new Date().toISOString(),
+                availableTime: parsedLocal.parsedOrbTime || vInq.preferred_time || 'Anytime',
+                language: parsedLocal.parsedLang || 'English',
+                budget: parsedLocal.parsedOrbBudget || 'Standard',
+                partySize: parsedLocal.parsedParty || undefined,
+                pickupPlace: parsedLocal.parsedPickup || undefined,
+                transportMode: parsedLocal.parsedTransport || undefined,
+                startTimeWindow: parsedLocal.parsedStart || undefined,
                 geography: 'Uvac / Zlatar',
                 replies: vInq.cached_proposal?.message ? [vInq.cached_proposal.message] : [],
                 requestedStartAt: vInq.requested_start_at,
@@ -2067,17 +2170,22 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       const detail = e.detail;
       if (detail) {
         setInquiries(prev => prev.map(inq => {
-          const isMatch = inq.id === detail.inquiryId || inq.inquiryId === detail.inquiryId || inq.matchId === detail.matchId;
+          const isMatch = inq.id === detail.inquiryId || inq.inquiryId === detail.inquiryId || inq.matchId === detail.matchId || inq.id === detail.matchId;
           if (isMatch) {
             return {
               ...inq,
               status: 'Confirmed by Traveler',
+              matchStatus: 'selected',
+              rawMatchStatus: 'selected',
+              inquiryStatus: 'confirmed',
               visitorConfirmed: true,
               visitorConfirmedAt: detail.confirmedAt || Date.now(),
+              partnerAcknowledgedConfirmation: false,
             };
           }
           return inq;
         }));
+        window.dispatchEvent(new Event('idemo_partner_badge_change'));
       }
     };
     window.addEventListener('idemo_proposal_confirmed_by_visitor', handleVisitorConfirmed);
@@ -2217,31 +2325,38 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           setAuthenticatedPartnerProfile(profileRes.profile);
           setActivePartnerId(profileRes.profile.id);
 
-          // Step 3: Fetch assigned opportunities for authenticated partner
-          const oppsRes = await fetchPartnerOpportunities('new');
-          if (oppsRes.success && oppsRes.opportunities && oppsRes.opportunities.length > 0) {
-            const fetchedInquiries: Inquiry[] = oppsRes.opportunities.map(opp => ({
-              id: opp.match_id || opp.inquiry_id,
-              recId: opp.recommendation_id,
-              recTitle: opp.recommendation_title,
-              partnerId: profileRes.profile!.id,
-              partnerName: profileRes.profile!.name,
-              status: (opp.match_status as any) || 'Dispatched Stage 1',
-              visitorName: opp.visitor_contact?.visitor_name || 'Verified Traveler',
-              query: opp.visitor_notes || 'Traveler requested direct partner assistance via IDEMO dispatch.',
-              replies: [],
-              createdAt: opp.created_at || new Date().toISOString(),
-              geography: 'Belgrade & Serbia',
-              language: 'English',
-              subjectExpertise: opp.recommendation_title,
-              category: 'Tourist Guide',
-              dispatchStage: 1,
-            }));
+          // Step 3: Fetch both 'new' and 'active' assigned opportunities for authenticated partner (includes confirmed arrangements)
+          const [newOppsRes, activeOppsRes] = await Promise.all([
+            fetchPartnerOpportunities('new'),
+            fetchPartnerOpportunities('active'),
+          ]);
+          const combinedOpps: OpportunityItem[] = [];
+          const seenKeys = new Set<string>();
+          if (newOppsRes.success && newOppsRes.opportunities) {
+            for (const o of newOppsRes.opportunities) {
+              const k = o.match_id || o.inquiry_id;
+              if (!seenKeys.has(k)) { seenKeys.add(k); combinedOpps.push(o); }
+            }
+          }
+          if (activeOppsRes.success && activeOppsRes.opportunities) {
+            for (const o of activeOppsRes.opportunities) {
+              const k = o.match_id || o.inquiry_id;
+              if (!seenKeys.has(k)) { seenKeys.add(k); combinedOpps.push(o); }
+            }
+          }
+          if (combinedOpps.length > 0) {
+            const fetchedInquiries: Inquiry[] = combinedOpps.map(opp =>
+              mapOpportunityToInquiry(opp, profileRes.profile!.id, profileRes.profile!.name)
+            );
             setInquiries(fetchedInquiries);
             safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(fetchedInquiries));
+            window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+            window.dispatchEvent(new Event('idemo_partner_badge_change'));
           } else {
             setInquiries([]);
             safeStorage.setItem('idemo_portal_inquiries', JSON.stringify([]));
+            window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+            window.dispatchEvent(new Event('idemo_partner_badge_change'));
           }
 
           if (profileRes.profile.must_change_pin || res.partner.must_change_pin) {
@@ -2849,6 +2964,39 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     setTimeout(() => setPartnerActionFeedback(null), 5000);
   };
 
+  // Partner explicitly acknowledges Traveler's final confirmation
+  const handlePartnerAcknowledgeConfirmation = (inquiryId: string) => {
+    triggerHaptic([20, 30]);
+    const keysToMarkSeen: string[] = [inquiryId, `confirmed_${inquiryId}`];
+
+    const updated = inquiries.map(inq => {
+      if (inq.id === inquiryId || inq.matchId === inquiryId || inq.inquiryId === inquiryId) {
+        if (inq.id) { keysToMarkSeen.push(inq.id, `confirmed_${inq.id}`); }
+        if (inq.matchId) { keysToMarkSeen.push(inq.matchId, `confirmed_${inq.matchId}`); }
+        if (inq.inquiryId) { keysToMarkSeen.push(inq.inquiryId, `confirmed_${inq.inquiryId}`); }
+        return {
+          ...inq,
+          partnerAcknowledgedConfirmation: true,
+        };
+      }
+      return inq;
+    });
+
+    setInquiries(updated);
+    safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(updated));
+    markPartnerInquiriesAsSeen(keysToMarkSeen);
+    window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+    window.dispatchEvent(new Event('idemo_partner_badge_change'));
+
+    setPartnerActionFeedback({
+      type: 'success',
+      message: isSr
+        ? 'Potvrda aranžmana je primljena k znanju! Potvrđeni aranžman je sačuvan u vašoj Arhivi obrađenih prilika ispod.'
+        : 'Traveler confirmation acknowledged! This locked arrangement is now saved in your Handled Opportunities Archive below.'
+    });
+    setTimeout(() => setPartnerActionFeedback(null), 6000);
+  };
+
   // Message prefill copy templates
   const getOutboundCopyText = (inq: Inquiry, partner: PortalPartner) => {
     return `IDEMO PRIVILEGED OUTREACH PROTOCOL\n` +
@@ -3106,50 +3254,12 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           </div>
         )}
 
-          {/* Dev Bypass Shortcuts Bar */}
-          {portalRole !== 'guest' && (import.meta as any).env.DEV && (
+          {/* Legacy Dev Bypass Shortcuts Bar obscured — Partner Portals now use authoritative session login */}
+          {false && portalRole !== 'guest' && (import.meta as any).env.DEV && (
             <div className="bg-brand-charcoal/5 border border-brand-charcoal/15 rounded-2xl p-3 space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-[8px] uppercase tracking-wider font-bold text-[#2D3025]/40 font-mono">SYSTEM INTEGRATION SANDBOX</span>
                 <span className="text-[7.5px] font-mono bg-emerald-500/10 text-emerald-700 px-1.5 py-0.5 rounded">ONLINE</span>
-              </div>
-              <div className="flex flex-wrap gap-1">
-                <button onClick={() => { triggerHaptic(10); setPortalRole('admin'); }} className={`px-2.5 py-1 rounded-lg text-[8px] font-mono font-black uppercase ${portalRole === 'admin' ? 'bg-amber-600 text-white' : 'bg-white border text-brand-charcoal/60'}`}>
-                  [ADMIN]
-                </button>
-                <button onClick={() => { triggerHaptic(10); setPortalRole('concierge'); }} className={`px-2.5 py-1 rounded-lg text-[8px] font-mono font-black uppercase ${portalRole === 'concierge' ? 'bg-amber-600 text-white' : 'bg-white border text-brand-charcoal/60'}`}>
-                  [CONCIERGE]
-                </button>
-                <button onClick={() => { triggerHaptic(10); setPortalRole('partner'); setActivePartnerId('UNO1'); }} className={`px-2.5 py-1 rounded-lg text-[8px] font-mono font-black uppercase ${portalRole === 'partner' && activePartnerId === 'UNO1' ? 'bg-amber-600 text-white' : 'bg-white border text-brand-charcoal/60'}`}>
-                  [PARTNER: UNO1]
-                </button>
-                <button onClick={() => { triggerHaptic(10); setPortalRole('partner'); setActivePartnerId('UNO2'); }} className={`px-2.5 py-1 rounded-lg text-[8px] font-mono font-black uppercase ${portalRole === 'partner' && activePartnerId === 'UNO2' ? 'bg-amber-600 text-white' : 'bg-white border text-brand-charcoal/60'}`}>
-                  [PARTNER: UNO2]
-                </button>
-                <button onClick={() => { triggerHaptic(10); setPortalRole('partner'); setActivePartnerId('p-tg-1'); }} className={`px-2.5 py-1 rounded-lg text-[8px] font-mono font-black uppercase ${portalRole === 'partner' && activePartnerId === 'p-tg-1' ? 'bg-amber-600 text-white' : 'bg-white border text-brand-charcoal/60'}`}>
-                  [PARTNER: TG]
-                </button>
-                <button onClick={() => { triggerHaptic(10); setPortalRole('partner'); setActivePartnerId('p-mw-1'); }} className={`px-2.5 py-1 rounded-lg text-[8px] font-mono font-black uppercase ${portalRole === 'partner' && activePartnerId === 'p-mw-1' ? 'bg-amber-600 text-white' : 'bg-white border text-brand-charcoal/60'}`}>
-                  [PARTNER: MED]
-                </button>
-                <button onClick={() => { triggerHaptic(10); setPortalRole('partner'); setActivePartnerId('p-tr-1'); }} className={`px-2.5 py-1 rounded-lg text-[8px] font-mono font-black uppercase ${portalRole === 'partner' && activePartnerId === 'p-tr-1' ? 'bg-amber-600 text-white' : 'bg-white border text-brand-charcoal/60'}`}>
-                  [PARTNER: LIM]
-                </button>
-                <button 
-                  onClick={() => { 
-                    triggerHaptic([20, 30, 20]); 
-                    setInquiries([]); 
-                    safeStorage.setItem('idemo_portal_inquiries', JSON.stringify([])); 
-                    safeStorage.setItem('idemo_partner_passed_inquiries_map', JSON.stringify({})); 
-                    window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change')); 
-                  }} 
-                  className="px-2.5 py-1 rounded-lg text-[8px] font-mono font-black uppercase bg-rose-700 text-white border border-rose-800 hover:bg-rose-800 transition-colors"
-                >
-                  [PURGE INQUIRIES (0)]
-                </button>
-                <button onClick={() => { triggerHaptic(10); setPortalRole('guest'); }} className={`px-2.5 py-1 rounded-lg text-[8px] font-mono font-black uppercase ${portalRole === 'guest' ? 'bg-amber-600 text-white' : 'bg-white border text-brand-charcoal/60'}`}>
-                  [EXIT]
-                </button>
               </div>
             </div>
           )}
@@ -3928,19 +4038,32 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                 <div className="space-y-4">
                   {inquiries.map(inq => {
                     const matchedPartner = partnersList.find(p => p.id === inq.partnerId) || partnersList[0];
+                    const qParsed = parseStructuredInquiryNotes(inq.query || '');
+                    const qGuestName = (inq.visitorName && inq.visitorName !== 'Verified Traveler' ? inq.visitorName : '') || qParsed.parsedGuest || inq.visitorName || 'Verified Traveler';
                     return (
                       <div key={inq.id} className="border border-[#2D3025]/10 bg-[#FAF9F5]/30 rounded-xl p-4 space-y-3 relative">
                         <span className="absolute right-4 top-4 text-[8px] font-mono text-brand-charcoal/30">{inq.id}</span>
                         
                         <div className="space-y-0.5">
-                          <p className="text-xs font-serif font-black text-brand-charcoal">Traveler: {inq.visitorName}</p>
+                          <p className="text-xs font-serif font-black text-brand-charcoal">Traveler: {qGuestName}</p>
                           <p className="text-[8.5px] font-mono text-brand-charcoal/50 leading-none">
                             Recommendation: <strong className="text-brand-charcoal">{inq.recTitle}</strong> • Assigned Partner: <strong className="text-[#006666]">{inq.partnerName}</strong>
                           </p>
                         </div>
 
-                        <div className="p-3 bg-white border border-[#2D3025]/5 rounded-xl text-[10.5px] leading-relaxed italic text-brand-charcoal/80">
-                          "{inq.query}"
+                        <div className="p-3 bg-white border border-[#2D3025]/5 rounded-xl text-[11px] leading-relaxed text-brand-charcoal/90 space-y-1">
+                          {(qParsed.parsedStart || qParsed.parsedParty || qParsed.parsedPickup) && (
+                            <div className="text-[10px] font-mono font-bold text-[#3E5037] flex flex-wrap gap-x-3 gap-y-1 not-italic border-b border-[#2D3025]/10 pb-1.5 mb-1">
+                              {qParsed.parsedStart && <span>Start: {qParsed.parsedStart}</span>}
+                              {qParsed.parsedParty && <span>Party: {qParsed.parsedParty}</span>}
+                              {qParsed.parsedLang && <span>Lang: {qParsed.parsedLang}</span>}
+                              {qParsed.parsedTransport && <span>Transport: {qParsed.parsedTransport}</span>}
+                              {qParsed.parsedPickup && <span>Pickup: {qParsed.parsedPickup}</span>}
+                              {qParsed.parsedOrbTime && <span>ORB Time: {qParsed.parsedOrbTime}</span>}
+                              {qParsed.parsedOrbBudget && <span>ORB Budget: {qParsed.parsedOrbBudget}</span>}
+                            </div>
+                          )}
+                          <div className="italic">"{qParsed.cleanFreeQuery}"</div>
                         </div>
 
                         {/* Status controllers */}
@@ -4251,14 +4374,39 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                 inq.inquiryStatus === 'canceled'
               );
 
-              return isCounter || (!isConfirmedByVisitor && !isAccepted && !isAlternative && !isDeclined && !isCompleted);
+              // Keep Visitor-confirmed inquiries in Active Opportunities until Partner explicitly clicks "Acknowledge Confirmation"
+              const isUnacknowledgedConfirmation = isConfirmedByVisitor && !inq.partnerAcknowledgedConfirmation;
+
+              return isUnacknowledgedConfirmation || isCounter || (!isConfirmedByVisitor && !isAccepted && !isAlternative && !isDeclined && !isCompleted);
+            }).sort((a, b) => {
+              const aConf = Boolean(a.visitorConfirmed || a.status === 'Confirmed by Traveler' || a.matchStatus === 'selected' || a.inquiryStatus === 'confirmed');
+              const bConf = Boolean(b.visitorConfirmed || b.status === 'Confirmed by Traveler' || b.matchStatus === 'selected' || b.inquiryStatus === 'confirmed');
+              if (aConf && !bConf) return -1;
+              if (!aConf && bConf) return 1;
+              return 0;
             });
+
+            const unacknowledgedConfirmedInquiries = activeInquiries.filter(inq =>
+              Boolean(
+                inq.visitorConfirmed === true ||
+                inq.status === 'Confirmed by Traveler' ||
+                inq.status === 'Arrangement Confirmed' ||
+                inq.status === 'selected' ||
+                inq.matchStatus === 'selected' ||
+                inq.rawMatchStatus === 'selected' ||
+                inq.inquiryStatus === 'confirmed'
+              ) && !inq.partnerAcknowledgedConfirmation
+            );
 
             const pastInquiries = assignedInquiries.filter(inq => !activeInquiries.includes(inq));
             const currentMessages = getMessagesForPartner(currentSimulatedPartner.id);
 
-            const activeInquiryIds = activeInquiries.map((inq: any) => inq.id || inq.inquiryId || inq.local_queue_id).filter(Boolean);
-            const hasUnseenInquiries = checkPartnerHasUnseenInquiries(activeInquiryIds);
+            const activeInquiryIds = activeInquiries.map((inq: any) => getPartnerInquiryBadgeKey(inq)).filter(Boolean);
+            const nonConfirmedInquiryIds = activeInquiries
+              .filter(inq => !unacknowledgedConfirmedInquiries.includes(inq))
+              .map((inq: any) => getPartnerInquiryBadgeKey(inq))
+              .filter(Boolean);
+            const hasUnseenInquiries = checkPartnerHasUnseenInquiries(activeInquiryIds) || unacknowledgedConfirmedInquiries.length > 0;
             const hasUnseenMessages = currentMessages.length > getPartnerSeenMessageCount(currentSimulatedPartner.id);
 
             const isPassportSubmitted = passportReviewStatus === 'pending_review';
@@ -4297,7 +4445,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                     id="tab-partner-opportunities"
                     onClick={() => {
                       setPartnerWorkspaceTab('opportunities');
-                      markPartnerInquiriesAsSeen(activeInquiryIds);
+                      markPartnerInquiriesAsSeen(nonConfirmedInquiryIds);
                       if (typeof window !== 'undefined') {
                         window.dispatchEvent(new Event('idemo_partner_badge_change'));
                       }
@@ -5432,12 +5580,26 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                           setPassportSaving(false);
                           if (res.success) {
                             setPassportReviewStatus('draft');
-                            setPassportMsg({ type: 'success', text: isSr ? 'Nacrt pasoša uspešno sačuvan.' : 'Passport draft saved successfully.' });
+                            setPassportModified(false);
+                            setPassportMsg({
+                              type: 'success',
+                              text: isSr ? 'Nacrt pasoša uspešno sačuvan na serveru.' : 'Passport draft saved to server.',
+                            });
                           } else if (res.error && res.error.includes('BACKEND_UNAVAILABLE')) {
                             setPassportReviewStatus('draft');
-                            setPassportMsg({ type: 'success', text: isSr ? 'Nacrt pasoša sačuvan lokalno (Demo režim).' : 'Passport draft saved locally (Demo mode).' });
+                            setPassportMsg({
+                              type: 'info',
+                              text: isSr
+                                ? 'Sačuvano samo lokalno u pregledaču (udaljeni server nije dostupan u demo režimu).'
+                                : 'Saved locally in browser only (remote server persistence unavailable in demo mode).',
+                            });
                           } else {
-                            setPassportMsg({ type: 'error', text: res.error || (isSr ? 'Greška pri čuvanju nacrta.' : 'Failed to save draft.') });
+                            setPassportMsg({
+                              type: 'error',
+                              text: isSr
+                                ? `Udaljeno čuvanje nije uspelo (${res.error || 'greška servera'}). Izmena je sačuvana samo lokalno.`
+                                : `Remote save failed (${res.error || 'server error'}). Changes were saved locally only.`,
+                            });
                           }
                         }}
                         className="px-3.5 py-2 bg-white border border-[#2D3025]/20 hover:bg-neutral-50 text-brand-charcoal text-[10px] font-mono font-bold uppercase rounded-xl transition-colors cursor-pointer"
@@ -5453,7 +5615,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                           setPassportSaving(true);
                           setPassportMsg(null);
                           // First save draft
-                          await savePartnerProfileDraft(
+                          const draftRes = await savePartnerProfileDraft(
                             passportIntroDraft,
                             passportPhotoPath,
                             passportPhotoMime,
@@ -5476,6 +5638,16 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                           );
                           if (activePartnerId !== targetId) {
                             setPassportSaving(false);
+                            return;
+                          }
+                          if (!draftRes.success && !draftRes.error?.includes('BACKEND_UNAVAILABLE')) {
+                            setPassportSaving(false);
+                            setPassportMsg({
+                              type: 'error',
+                              text: isSr
+                                ? `Udaljeno čuvanje nacrta nije uspelo (${draftRes.error || 'greška servera'}). Podaci su sačuvani samo lokalno i nisu podneti na server.`
+                                : `Remote draft save failed (${draftRes.error || 'server error'}). Changes were saved locally only and not submitted to server.`,
+                            });
                             return;
                           }
                           // Submit
@@ -5520,16 +5692,29 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                           }
 
                           setPassportSaving(false);
-                          if (subRes.success) {
+                          if (subRes.success && draftRes.success) {
                             setPassportReviewStatus('pending_review');
                             setPassportModified(false);
                             setPassportMsg(null);
-                          } else if (subRes.error && subRes.error.includes('BACKEND_UNAVAILABLE')) {
+                          } else if (
+                            (subRes.error && subRes.error.includes('BACKEND_UNAVAILABLE')) ||
+                            (draftRes.error && draftRes.error.includes('BACKEND_UNAVAILABLE'))
+                          ) {
                             setPassportReviewStatus('pending_review');
                             setPassportModified(false);
-                            setPassportMsg(null);
+                            setPassportMsg({
+                              type: 'info',
+                              text: isSr
+                                ? 'Podneto samo u lokalnom demo pregledaču (udaljeni server nije dostupan).'
+                                : 'Submitted in local browser cache only (remote server persistence unavailable in demo mode).',
+                            });
                           } else {
-                            setPassportMsg({ type: 'error', text: subRes.error || (isSr ? 'Greška pri podnošenju.' : 'Failed to submit.') });
+                            setPassportMsg({
+                              type: 'error',
+                              text: isSr
+                                ? `Udaljeno podnošenje nije uspelo (${subRes.error || 'greška servera'}). Izmena je sačuvana samo lokalno.`
+                                : `Remote submission failed (${subRes.error || 'server error'}). Changes were saved locally only.`,
+                            });
                           }
                         }}
                         className={`px-3.5 py-2 text-[10px] font-mono font-bold uppercase rounded-xl transition-all cursor-pointer shadow-xs ${
@@ -6295,6 +6480,25 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
                     const isAltFormOpen = altFormOpenId === inq.id;
 
+                    // Dynamically unpack any structured bracket header even if inquiry was synced raw into storage
+                    const runtimeParsed = parseStructuredInquiryNotes(inq.query || '');
+                    const displayVisitorName =
+                      (inq.visitorName && inq.visitorName !== 'Verified Traveler' ? inq.visitorName : '') ||
+                      runtimeParsed.parsedGuest ||
+                      inq.visitorName ||
+                      'Verified Traveler';
+                    const displayPartySize = inq.partySize || runtimeParsed.parsedParty || '1–2';
+                    const displayLanguage = (inq.language && inq.language !== 'English' ? inq.language : runtimeParsed.parsedLang || inq.language || 'English');
+                    const displayStartWindow =
+                      inq.startTimeWindow ||
+                      runtimeParsed.parsedStart ||
+                      (inq.requestedStartAt ? new Date(inq.requestedStartAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Flexible');
+                    const displayTransport = inq.transportMode || runtimeParsed.parsedTransport || (isSr ? 'Po dogovoru' : 'To coordinate');
+                    const displayPickup = inq.pickupPlace || runtimeParsed.parsedPickup || inq.geography || 'Belgrade & Serbia';
+                    const displayOrbTime = inq.availableTime || runtimeParsed.parsedOrbTime || 'N/A';
+                    const displayOrbBudget = inq.budget || runtimeParsed.parsedOrbBudget || 'N/A';
+                    const displayFreeNote = runtimeParsed.cleanFreeQuery;
+
                     return (
                       <div 
                         key={inq.id} 
@@ -6303,14 +6507,14 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                             handleViewOpportunity(inq.matchId || inq.id);
                           }
                         }}
-                        className={`border rounded-2xl p-4 space-y-3 shadow-xs text-left ${
+                        className={`border rounded-2xl p-4 space-y-3.5 shadow-xs text-left ${
                           isArchived 
                             ? 'border-[#2D3025]/8 bg-[#FAF9F5]/40 opacity-95' 
-                            : 'border-[#2D3025]/10 bg-[#FAF9F5]/60'
+                            : 'border-[#2D3025]/15 bg-[#FAF9F5]'
                         }`}
                       >
                         {/* Card Header */}
-                        <div className="flex justify-between items-start gap-2">
+                        <div className="flex justify-between items-start gap-2 border-b border-[#2D3025]/10 pb-2.5">
                           <div className="text-left flex items-start gap-2">
                             {(inq.matchStatus === 'offered' || inq.rawMatchStatus === 'offered') && (
                               <span 
@@ -6318,7 +6522,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                   e.stopPropagation();
                                   handleViewOpportunity(inq.matchId || inq.id);
                                 }}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-mono font-bold bg-red-500/10 text-red-700 border border-red-500/20 cursor-pointer hover:bg-red-100 shrink-0 mt-0.5"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-red-500/10 text-red-700 border border-red-500/20 cursor-pointer hover:bg-red-100 shrink-0 mt-0.5"
                                 title="Unread opportunity"
                               >
                                 <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
@@ -6326,17 +6530,20 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                               </span>
                             )}
                             <div>
-                              <h4 className="text-xs font-serif font-black text-brand-charcoal">{inq.visitorName}</h4>
-                              <p className="text-[9px] font-mono text-brand-charcoal/60 font-bold uppercase">{inq.recTitle}</p>
+                              <span className="text-[10px] font-mono uppercase tracking-wider font-extrabold text-[#5C5A4D] block">
+                                {isSr ? 'PUTNIK / GOST' : 'PREFERRED GUEST NAME'}
+                              </span>
+                              <h4 className="text-base font-serif font-black text-brand-charcoal leading-tight">{displayVisitorName}</h4>
+                              <p className="text-xs font-mono text-[#3E5037] font-black uppercase mt-0.5">{inq.recTitle}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
                             {isArchived && (
-                              <span className="text-[7.5px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-brand-charcoal/5 text-brand-charcoal/50 border border-brand-charcoal/10">
+                              <span className="text-[9px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-brand-charcoal/5 text-brand-charcoal/60 border border-brand-charcoal/10">
                                 {isSr ? 'ARHIVA' : 'ARCHIVED'}
                               </span>
                             )}
-                            <span className={`text-[8.5px] font-mono font-bold uppercase px-2.5 py-1 rounded-md border ${
+                            <span className={`text-[10px] font-mono font-bold uppercase px-2.5 py-1 rounded-md border ${
                               isConfirmedByVisitor
                                 ? 'bg-emerald-700 text-white border-emerald-700 shadow-2xs'
                                 : isPendingAction
@@ -6364,19 +6571,89 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                           </div>
                         </div>
 
-                        {/* Inquiry Query / Visitor Notes */}
-                        <div className="bg-white border border-[#2D3025]/10 rounded-xl p-3 text-[11.5px] text-brand-charcoal/90 leading-relaxed italic text-left shadow-2xs">
-                          "{inq.query}"
+                        {/* 1. INITIAL STRUCTURED REQUIREMENT BRIEF (Clean, Legible Sunlight Format) */}
+                        <div className="bg-white rounded-xl border-2 border-[#2D3025]/15 p-3.5 space-y-3 text-left shadow-2xs">
+                          <div className="flex items-center justify-between border-b border-[#2D3025]/10 pb-1.5">
+                            <span className="text-[11px] font-mono uppercase tracking-wider font-black text-[#1E2E20]">
+                              {isSr ? 'SPECIFIKACIJA ZAHTEVA GOSTA' : 'GUEST REQUIREMENT SPECIFICATION'}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3 text-xs font-sans text-brand-charcoal">
+                            <div className="bg-[#FAF9F5] p-2.5 rounded-lg border border-[#2D3025]/10">
+                              <span className="text-[10px] font-mono uppercase font-extrabold text-[#5C5A4D] block">
+                                {isSr ? 'Datum i vreme početka' : 'Start Date & Time'}
+                              </span>
+                              <span className="text-[13px] font-black text-brand-charcoal block mt-0.5">
+                                {displayStartWindow}
+                              </span>
+                            </div>
+
+                            <div className="bg-[#FAF9F5] p-2.5 rounded-lg border border-[#2D3025]/10">
+                              <span className="text-[10px] font-mono uppercase font-extrabold text-[#5C5A4D] block">
+                                {isSr ? 'Broj osoba / Jezik' : 'Party Size & Language'}
+                              </span>
+                              <span className="text-[13px] font-black text-brand-charcoal block mt-0.5">
+                                {displayPartySize} {isSr ? 'osobe' : 'Guests'} · {displayLanguage}
+                              </span>
+                            </div>
+
+                            <div className="bg-[#FAF9F5] p-2.5 rounded-lg border border-[#2D3025]/10">
+                              <span className="text-[10px] font-mono uppercase font-extrabold text-[#5C5A4D] block">
+                                {isSr ? 'Prevoz i mobilnost' : 'Transport / Mobility'}
+                              </span>
+                              <span className="text-[13px] font-black text-brand-charcoal block mt-0.5">
+                                {displayTransport}
+                              </span>
+                            </div>
+
+                            <div className="bg-[#FAF9F5] p-2.5 rounded-lg border border-[#2D3025]/10">
+                              <span className="text-[10px] font-mono uppercase font-extrabold text-[#5C5A4D] block">
+                                {isSr ? 'Mesto preuzimanja / susreta' : 'Pickup / Meeting Place'}
+                              </span>
+                              <span className="text-[13px] font-black text-brand-charcoal block mt-0.5">
+                                {displayPickup}
+                              </span>
+                            </div>
+
+                            <div className="bg-[#E8EFE9]/70 p-2.5 rounded-lg border border-[#3E5037]/25">
+                              <span className="text-[10px] font-mono uppercase font-extrabold text-[#3E5037] block">
+                                {isSr ? 'ORB Raspoloživo vreme' : 'ORB Time Available'}
+                              </span>
+                              <span className="text-[13px] font-black text-[#1E2E20] block mt-0.5">
+                                {displayOrbTime}
+                              </span>
+                            </div>
+
+                            <div className="bg-[#E8EFE9]/70 p-2.5 rounded-lg border border-[#3E5037]/25">
+                              <span className="text-[10px] font-mono uppercase font-extrabold text-[#3E5037] block">
+                                {isSr ? 'ORB Raspoloživi budžet' : 'ORB Budget Available'}
+                              </span>
+                              <span className="text-[13px] font-black text-[#1E2E20] block mt-0.5">
+                                {displayOrbBudget}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* 2. DEDICATED CLEAN VISITOR NOTE (Free-Text Box) */}
+                          <div className="bg-[#FAF9F5] border-l-4 border-[#800020] rounded-r-xl p-3 space-y-1">
+                            <span className="text-[10px] font-mono uppercase tracking-wider font-black text-[#800020] block">
+                              {isSr ? 'NAPOMENA GOSTA (POSEBNI ZAHTEVI)' : 'GUEST PERSONAL NOTE'}
+                            </span>
+                            <p className="text-sm font-bold text-brand-charcoal leading-relaxed not-italic">
+                              "{displayFreeNote}"
+                            </p>
+                          </div>
                         </div>
 
                         {/* Proposal 1: 30-Minute Cascading Response Countdown for Pending Opportunities */}
                         {isPendingAction && !isArchived && inq.createdAt && (
                           <div className="flex items-center justify-between p-2.5 bg-amber-500/10 border border-amber-500/25 rounded-xl text-left">
                             <div className="space-y-0.5">
-                              <span className="text-[8px] font-mono font-bold uppercase tracking-wider text-amber-900 block">
+                              <span className="text-[9.5px] font-mono font-bold uppercase tracking-wider text-amber-900 block">
                                 {isSr ? 'IDEMO KASKADNI ODGOVOR (SLA)' : 'IDEMO CASCADING SLA'}
                               </span>
-                              <p className="text-[9.5px] text-amber-950/80 font-sans leading-snug">
+                              <p className="text-[11px] text-amber-950/85 font-sans leading-snug">
                                 {isSr
                                   ? 'Nakon 30 minuta bez odgovora, upit se automatski i diskretno prosleđuje sledećem rangiranom partneru.'
                                   : 'If unanswered within 30 mins, inquiry automatically and discreetly cascades to next ranked partner.'}
@@ -6391,20 +6668,20 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                         {/* Visitor Counter Proposal Section if present */}
                         {(inq.matchStatus === 'counter_by_visitor' || inq.rawMatchStatus === 'counter_by_visitor' || (inq.counterProposal && (inq.counterProposal.proposedStartAt || inq.counterProposal.notes))) && (
                           <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2 text-left">
-                            <div className="flex items-center gap-1.5 text-amber-950 font-mono text-[9px] font-bold uppercase">
-                              <Calendar size={13} className="text-amber-800 shrink-0" />
+                            <div className="flex items-center gap-1.5 text-amber-950 font-mono text-[10px] font-bold uppercase">
+                              <Calendar size={14} className="text-amber-800 shrink-0" />
                               <span>{isSr ? 'Posetilac je predložio novi termin / uslove:' : 'Visitor Counter-Proposal:'}</span>
                             </div>
                             <div className="bg-white/90 p-2.5 rounded-lg text-xs font-sans text-brand-charcoal space-y-1 border border-amber-500/15">
                               {(inq.counterProposal?.proposedStartAt || inq.requestedStartAt) && (
-                                <p className="font-mono text-[10.5px] font-black text-amber-950">
+                                <p className="font-mono text-xs font-black text-amber-950">
                                   <strong>{isSr ? 'Predloženi termin:' : 'Proposed Date/Time:'}</strong>{' '}
                                   {inq.counterProposal?.proposedStartAt || inq.requestedStartAt}
                                 </p>
                               )}
-                              {(inq.counterProposal?.notes || inq.query) && (
-                                <p className="text-[11px] italic text-brand-charcoal/80">
-                                  "{inq.counterProposal?.notes || inq.query}"
+                              {(inq.counterProposal?.notes || displayFreeNote) && (
+                                <p className="text-xs italic text-brand-charcoal/85">
+                                  "{parseStructuredInquiryNotes(inq.counterProposal?.notes || displayFreeNote).cleanFreeQuery}"
                                 </p>
                               )}
                             </div>
@@ -6415,9 +6692,9 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                   handleAcceptCounter(inq.matchId || inq.id);
                                 }}
                                 disabled={actionLoading[inq.id] || actionLoading[inq.matchId || '']}
-                                className="flex-1 py-2 px-3 bg-emerald-700 hover:bg-emerald-800 text-white text-[9.5px] font-black uppercase tracking-wider rounded-xl cursor-pointer flex items-center justify-center gap-1.5 shadow-xs transition-colors disabled:opacity-50"
+                                className="flex-1 min-h-[44px] py-2 px-3 bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-black uppercase tracking-wider rounded-xl cursor-pointer flex items-center justify-center gap-1.5 shadow-xs transition-colors disabled:opacity-50"
                               >
-                                <CheckCircle2 size={13} />
+                                <CheckCircle2 size={14} />
                                 <span>{isSr ? 'Prihvati kontra-predlog' : 'Accept Counter-Proposal'}</span>
                               </button>
                               <button
@@ -6426,22 +6703,14 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                   handleDeclineCounter(inq.matchId || inq.id);
                                 }}
                                 disabled={actionLoading[inq.id] || actionLoading[inq.matchId || '']}
-                                className="flex-1 py-2 px-3 bg-white border border-red-500/30 hover:bg-red-50 text-red-700 text-[9.5px] font-black uppercase tracking-wider rounded-xl cursor-pointer flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                                className="flex-1 min-h-[44px] py-2 px-3 bg-white border border-red-500/30 hover:bg-red-50 text-red-700 text-[11px] font-black uppercase tracking-wider rounded-xl cursor-pointer flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
                               >
-                                <XCircle size={13} />
+                                <XCircle size={14} />
                                 <span>{isSr ? 'Odbij kontra-predlog' : 'Decline Counter-Proposal'}</span>
                               </button>
                             </div>
                           </div>
                         )}
-
-                        {/* Metadata Grid */}
-                        <div className="grid grid-cols-2 gap-2 text-[9px] font-mono text-brand-charcoal/70 bg-white/60 p-2.5 rounded-xl border border-[#2D3025]/5 text-left">
-                          <div><span className="text-brand-charcoal/40 uppercase font-bold">{isSr ? 'Lokacija:' : 'Geography:'}</span> {inq.geography || 'N/A'}</div>
-                          <div><span className="text-brand-charcoal/40 uppercase font-bold">{isSr ? 'Jezik:' : 'Language:'}</span> {inq.language || 'English'}</div>
-                          <div><span className="text-brand-charcoal/40 uppercase font-bold">{isSr ? 'Budžet:' : 'Budget:'}</span> {inq.budget || 'N/A'}</div>
-                          <div><span className="text-brand-charcoal/40 uppercase font-bold">{isSr ? 'Vreme:' : 'Available Time:'}</span> {inq.availableTime || 'N/A'}</div>
-                        </div>
 
                         {/* Show Reply Thread / Submitted Responses */}
                         {inq.replies && inq.replies.length > 0 && (
@@ -6468,23 +6737,45 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                           </div>
                         )}
 
-                        {/* Confirmed by Visitor Banner */}
+                        {/* Confirmed by Visitor Banner & Partner Acknowledgement Action */}
                         {isConfirmedByVisitor && (
-                          <div className="bg-emerald-600/15 border-2 border-emerald-600/30 rounded-xl p-3 text-left space-y-1.5 shadow-2xs">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5 font-mono text-[10.5px] font-black uppercase text-emerald-900">
+                          <div className="bg-emerald-600/15 border-2 border-emerald-600/40 rounded-xl p-3.5 text-left space-y-2.5 shadow-xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5 font-mono text-[11px] font-black uppercase text-emerald-950">
                                 <CheckCircle2 size={16} className="text-emerald-700 shrink-0" />
                                 <span>{isSr ? 'POTVRĐENO OD STRANE POSETIOCA' : 'PROPOSAL CONFIRMED BY TRAVELER'}</span>
                               </div>
-                              <span className="text-[8px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-emerald-700 text-white">
+                              <span className="text-[8.5px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-emerald-700 text-white shrink-0">
                                 {isSr ? 'Aranžman zaključen' : 'Arrangement Locked'}
                               </span>
                             </div>
-                            <p className="text-[10.5px] text-emerald-950 font-sans leading-relaxed">
+                            <p className="text-xs text-emerald-950 font-sans font-semibold leading-relaxed">
                               {isSr 
-                                ? 'Posetilac je prihvatio vaše uslove i zvanično potvrdio aranžman! Možete pristupiti direktnoj realizaciji i kontaktu.' 
-                                : 'The traveler has confirmed your terms and accepted the proposal! You may proceed with direct realization and contact.'}
+                                ? `Posetilac (${displayVisitorName}) je prihvatio vaše uslove i zvanično potvrdio aranžman! Vaš direktni kontakt je otključan posetiocu u sekciji Moj Planer.` 
+                                : `The traveler (${displayVisitorName}) has accepted your proposal and officially confirmed the arrangement! Your direct contact details are now unlocked for the traveler in My Planner.`}
                             </p>
+                            {!inq.partnerAcknowledgedConfirmation ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePartnerAcknowledgeConfirmation(inq.id);
+                                }}
+                                className="w-full min-h-[44px] py-2.5 px-4 bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] text-white rounded-xl font-mono text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
+                              >
+                                <CheckCircle2 size={15} />
+                                <span>
+                                  {isSr
+                                    ? '✓ POTVRDI PRIJEM I SAČUVAJ U ARHIVU'
+                                    : '✓ ACKNOWLEDGE CONFIRMATION & SAVE TO ARCHIVE'}
+                                </span>
+                              </button>
+                            ) : (
+                              <div className="text-[10px] font-mono font-bold uppercase text-emerald-800 flex items-center gap-1.5 pt-1 border-t border-emerald-600/20">
+                                <CheckCircle2 size={13} className="text-emerald-700 shrink-0" />
+                                <span>{isSr ? 'Prijem potvrde evidentiran' : 'Confirmation Acknowledged by Partner'}</span>
+                              </div>
+                            )}
                           </div>
                         )}
 
@@ -6781,6 +7072,56 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                           <CheckCircle2 size={16} className="text-emerald-700 shrink-0 mt-0.5" />
                           <div className="flex-1 text-[11px] leading-snug font-medium">
                             {partnerActionFeedback.message}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* TOP-OF-WORKSPACE NOTIFICATION BANNER WHEN TRAVELER ACCEPTS & CONFIRMS PARTNER */}
+                      {unacknowledgedConfirmedInquiries.length > 0 && (
+                        <div className="p-4 rounded-2xl bg-[#142A1E] text-white border-2 border-emerald-500/50 shadow-md space-y-3 text-left animate-fade-in">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                              <span className="text-[11px] font-mono font-black uppercase tracking-wider text-emerald-300">
+                                {isSr
+                                  ? 'NOVA POTVRDA GOSTA — ARANŽMAN ZAKLJUČEN!'
+                                  : 'NEW TRAVELER CONFIRMATION — ARRANGEMENT LOCKED!'}
+                              </span>
+                            </div>
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-[9.5px] font-mono font-black text-emerald-200 shrink-0">
+                              {unacknowledgedConfirmedInquiries.length} {isSr ? 'POTVRĐENO' : 'CONFIRMED'}
+                            </span>
+                          </div>
+                          <p className="text-xs font-sans text-emerald-50/90 leading-relaxed">
+                            {isSr
+                              ? 'Posetilac je pregledao vaš Partner Pasoš i zvanično prihvatio vašu ponudu. Vaši kontakt podaci su sada otključani posetiocu za direktnu komunikaciju.'
+                              : 'The traveler reviewed your Partner Passport introduction and officially accepted your proposal. Your contact details are now unlocked for direct guest coordination.'}
+                          </p>
+                          <div className="space-y-2 pt-1">
+                            {unacknowledgedConfirmedInquiries.map(confInq => {
+                              const parsedConf = parseStructuredInquiryNotes(confInq.query || '');
+                              const guestLabel = (confInq.visitorName && confInq.visitorName !== 'Verified Traveler' ? confInq.visitorName : '') || parsedConf.parsedGuest || 'Verified Traveler';
+                              return (
+                                <div key={`banner_${confInq.id}`} className="bg-white/10 border border-white/15 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                  <div className="space-y-0.5">
+                                    <div className="text-xs font-serif font-black text-white">
+                                      {guestLabel} · <span className="text-emerald-300 font-mono uppercase">{confInq.recTitle}</span>
+                                    </div>
+                                    <div className="text-[11px] font-mono text-emerald-100/80">
+                                      {(confInq.startTimeWindow || parsedConf.parsedStart || 'Flexible')} · {(confInq.partySize || parsedConf.parsedParty || '1–2')} {isSr ? 'osobe' : 'Guests'}
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePartnerAcknowledgeConfirmation(confInq.id)}
+                                    className="min-h-[40px] px-3.5 py-2 bg-emerald-500 hover:bg-emerald-400 text-[#0F2217] font-mono text-[10.5px] font-black uppercase tracking-wider rounded-xl cursor-pointer transition-colors shrink-0 flex items-center justify-center gap-1.5 shadow-xs"
+                                  >
+                                    <CheckCircle2 size={14} />
+                                    <span>{isSr ? 'Potvrdi prijem' : 'Acknowledge'}</span>
+                                  </button>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       )}

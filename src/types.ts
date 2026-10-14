@@ -212,6 +212,14 @@ export interface CachedProposalRecord {
   message: string;
   proposed_start_at?: string | null;
   proposed_end_at?: string | null;
+  partner_name?: string;
+  partner_code?: string;
+  partner_category?: string;
+  partner_photo_url?: string | null;
+  partner_intro?: string | null;
+  partner_languages?: string[];
+  contact_phone?: string | null;
+  contact_email?: string | null;
   cached_at: number;
   schema_version: 1;
 }
@@ -249,13 +257,13 @@ export interface InquiryRecordV2 {
   requested_end_at: string;
   preferred_date: string;
   preferred_time: string;
-  language_requirements?: string[];
-  pickup_location?: string;
-  need_vehicle?: boolean;
+  language_requirements?: string;
+  pickup_place?: string;
   party_size?: string;
-  free_note?: string;
-  orb_time_hours?: number;
-  orb_budget_eur?: number;
+  transport_mode?: string;
+  date_flexibility?: string;
+  orb_time_available?: string;
+  orb_budget_available?: string;
   status: 'draft' | 'submitting' | 'submitted' | 'failed';
   server_inquiry_id?: string;
   public_reference_code?: string;

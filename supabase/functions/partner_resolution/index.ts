@@ -248,6 +248,10 @@ serve(async (req: Request) => {
           draft_photo_mime, published_photo_mime, review_status, photo_consent_given,
           photo_consent_at, photo_consent_withdrawn_at, submitted_at, reviewed_at, reviewed_by,
           review_note, content_version, created_at, updated_at,
+          draft_contact_phone, draft_contact_email, published_contact_phone, published_contact_email,
+          canonical_region, applied_recs, applied_recs_note,
+          proposed_rec_title, proposed_rec_category, proposed_rec_location, proposed_rec_rationale,
+          partner_type, website, guide_licence, pib, languages, transport_capacity, notice_window,
           partners!inner ( id, public_code, name, status )
         `);
 
@@ -313,6 +317,13 @@ serve(async (req: Request) => {
             partner_code: partner.public_code || "",
             partner_name: partner.name || "",
             partner_status: partner.status || "",
+            partner_type: row.partner_type || "Individual",
+            website: row.website || null,
+            guide_licence: row.guide_licence || null,
+            pib: row.pib || null,
+            languages: Array.isArray(row.languages) ? row.languages : [],
+            transport_capacity: row.transport_capacity || "none",
+            notice_window: row.notice_window || "24h",
             review_status: row.review_status,
             introduction_draft: row.intro_draft || null,
             introduction_published: row.intro_published || null,
@@ -321,6 +332,17 @@ serve(async (req: Request) => {
             photo_consent_withdrawn: !isConsentNotWithdrawn,
             photo_available: photoAvailable,
             photo_url: photoUrl,
+            draft_contact_phone: row.draft_contact_phone || null,
+            draft_contact_email: row.draft_contact_email || null,
+            published_contact_phone: row.published_contact_phone || null,
+            published_contact_email: row.published_contact_email || null,
+            canonical_region: row.canonical_region || null,
+            applied_recs: row.applied_recs || null,
+            applied_recs_note: row.applied_recs_note || null,
+            proposed_rec_title: row.proposed_rec_title || null,
+            proposed_rec_category: row.proposed_rec_category || null,
+            proposed_rec_location: row.proposed_rec_location || null,
+            proposed_rec_rationale: row.proposed_rec_rationale || null,
             submitted_at: row.submitted_at || null,
             reviewed_at: row.reviewed_at || null,
             reviewer_note: row.review_note || null,
@@ -561,10 +583,26 @@ serve(async (req: Request) => {
           draft_contact_email: null,
           published_contact_phone: null,
           published_contact_email: null,
+          canonical_region: null,
+          applied_recs: null,
+          applied_recs_note: null,
+          partner_type: "Individual",
+          website: null,
+          guide_licence: null,
+          pib: null,
+          languages: [],
+          transport_capacity: "none",
+          notice_window: "24h",
           content_version: 1,
         };
 
-        const mergedContent = profileContent ? { ...defaultContent, ...profileContent } : defaultContent;
+        const mergedContent = profileContent
+          ? {
+              ...defaultContent,
+              ...profileContent,
+              languages: Array.isArray(profileContent.languages) ? profileContent.languages : [],
+            }
+          : defaultContent;
 
         return jsonResponse({
           success: true,
@@ -655,6 +693,16 @@ serve(async (req: Request) => {
         proposed_rec_category,
         proposed_rec_location,
         proposed_rec_rationale,
+        applied_recs,
+        applied_recs_note,
+        canonical_region,
+        partner_type,
+        website,
+        guide_licence,
+        pib,
+        languages,
+        transport_capacity,
+        notice_window,
       } = body;
 
       if (draft_photo_path) {
@@ -685,28 +733,94 @@ serve(async (req: Request) => {
         }
       }
 
-        const { data: updateData, error: updateErr } = await supabase
-          .from("partner_profile_content")
-          .upsert({
-            partner_id: partnerId,
-            intro_draft: intro_draft || null,
-            draft_photo_path: draft_photo_path || null,
-            draft_photo_mime: draft_photo_mime || null,
-            photo_consent_given: !!(photo_consent ?? photo_consent_given),
-            draft_contact_phone: draft_contact_phone !== undefined && draft_contact_phone !== null ? String(draft_contact_phone).trim() : null,
-            draft_contact_email: draft_contact_email !== undefined && draft_contact_email !== null ? String(draft_contact_email).trim() : null,
-            proposed_rec_title: proposed_rec_title !== undefined && proposed_rec_title !== null ? String(proposed_rec_title).trim() : null,
-            proposed_rec_category: proposed_rec_category !== undefined && proposed_rec_category !== null ? String(proposed_rec_category).trim() : null,
-            proposed_rec_location: proposed_rec_location !== undefined && proposed_rec_location !== null ? String(proposed_rec_location).trim() : null,
-            proposed_rec_rationale: proposed_rec_rationale !== undefined && proposed_rec_rationale !== null ? String(proposed_rec_rationale).trim() : null,
-            updated_at: new Date().toISOString()
-          }, { onConflict: "partner_id" });
+      const upsertPayload: Record<string, unknown> = {
+        partner_id: partnerId,
+        updated_at: new Date().toISOString(),
+      };
 
-        if (updateErr) {
-          return jsonResponse({ success: false, error: "DATABASE_ERROR", message: updateErr.message }, 500);
-        }
+      if (intro_draft !== undefined) {
+        upsertPayload.intro_draft = intro_draft || null;
+      }
+      if (draft_photo_path !== undefined) {
+        upsertPayload.draft_photo_path = draft_photo_path || null;
+      }
+      if (draft_photo_mime !== undefined) {
+        upsertPayload.draft_photo_mime = draft_photo_mime || null;
+      }
+      if (photo_consent !== undefined || photo_consent_given !== undefined) {
+        upsertPayload.photo_consent_given = !!(photo_consent ?? photo_consent_given);
+      }
+      if (draft_contact_phone !== undefined) {
+        upsertPayload.draft_contact_phone = draft_contact_phone !== null ? String(draft_contact_phone).trim() || null : null;
+      }
+      if (draft_contact_email !== undefined) {
+        upsertPayload.draft_contact_email = draft_contact_email !== null ? String(draft_contact_email).trim() || null : null;
+      }
+      if (proposed_rec_title !== undefined) {
+        upsertPayload.proposed_rec_title = proposed_rec_title !== null ? String(proposed_rec_title).trim() || null : null;
+      }
+      if (proposed_rec_category !== undefined) {
+        upsertPayload.proposed_rec_category = proposed_rec_category !== null ? String(proposed_rec_category).trim() || null : null;
+      }
+      if (proposed_rec_location !== undefined) {
+        upsertPayload.proposed_rec_location = proposed_rec_location !== null ? String(proposed_rec_location).trim() || null : null;
+      }
+      if (proposed_rec_rationale !== undefined) {
+        upsertPayload.proposed_rec_rationale = proposed_rec_rationale !== null ? String(proposed_rec_rationale).trim() || null : null;
+      }
+      if (applied_recs !== undefined) {
+        upsertPayload.applied_recs = Array.isArray(applied_recs)
+          ? applied_recs.map((r: unknown) => String(r).trim()).filter(Boolean)
+          : null;
+      }
+      if (applied_recs_note !== undefined) {
+        upsertPayload.applied_recs_note = applied_recs_note !== null ? String(applied_recs_note).trim() || null : null;
+      }
+      if (canonical_region !== undefined) {
+        upsertPayload.canonical_region = canonical_region !== null ? String(canonical_region).trim() || null : null;
+      }
+      if (partner_type !== undefined) {
+        upsertPayload.partner_type =
+          partner_type && String(partner_type).trim().toLowerCase() === "organisation"
+            ? "Organisation"
+            : "Individual";
+      }
+      if (website !== undefined) {
+        upsertPayload.website = website !== null ? String(website).trim() || null : null;
+      }
+      if (guide_licence !== undefined) {
+        upsertPayload.guide_licence = guide_licence !== null ? String(guide_licence).trim() || null : null;
+      }
+      if (pib !== undefined) {
+        upsertPayload.pib = pib !== null ? String(pib).trim() || null : null;
+      }
+      if (languages !== undefined) {
+        upsertPayload.languages = Array.isArray(languages)
+          ? languages.map((l: unknown) => String(l).trim()).filter(Boolean)
+          : [];
+      }
+      if (transport_capacity !== undefined) {
+        upsertPayload.transport_capacity =
+          transport_capacity !== null && String(transport_capacity).trim() !== ""
+            ? String(transport_capacity).trim()
+            : "none";
+      }
+      if (notice_window !== undefined) {
+        upsertPayload.notice_window =
+          notice_window !== null && String(notice_window).trim() !== ""
+            ? String(notice_window).trim()
+            : "24h";
+      }
 
-        return jsonResponse({ success: true, message: "Draft saved successfully." });
+      const { error: updateErr } = await supabase
+        .from("partner_profile_content")
+        .upsert(upsertPayload, { onConflict: "partner_id" });
+
+      if (updateErr) {
+        return jsonResponse({ success: false, error: "DATABASE_ERROR", message: updateErr.message }, 500);
+      }
+
+      return jsonResponse({ success: true, status: "draft_saved", message: "Draft saved successfully." });
     }
 
     // ENDPOINT: /profile-content/submit (POST)

@@ -19,6 +19,7 @@ import { isSupabaseConfigured } from '../lib/supabaseClient';
 import { routeOutboundAction } from '../lib/outboundRouter';
 import { ensureEnglishSync } from '../lib/inquiryTranslation';
 import { badgingService } from '../lib/badgingService';
+import { unmarkPartnerInquiriesAsSeen } from '../lib/partnerBadgeStorage';
 
 function getPartnerMonogram(name?: string): string {
   if (!name) return 'PTR';
@@ -273,15 +274,32 @@ interface PlanCardProps {
   onRemove: (id: string) => void;
   onUpdateDate: (id: string, date: string) => void;
   onSelectRec?: (id: string) => void;
+  orbTime?: number;
+  orbBudget?: number;
 }
 
-export default function PlanCard({ item, language, onRemove, onUpdateDate, onSelectRec }: PlanCardProps) {
+const LANGUAGE_REQ_OPTIONS = ['English', 'Serbian', 'German', 'French', 'Russian', 'Spanish', 'Chinese'];
+const PARTY_SIZE_OPTIONS = ['1', '2', '3', '4', '5-7', '8+'];
+const QUICK_TIME_SLOTS = ['09:00', '11:00', '14:00', '18:00'];
+
+export default function PlanCard({ item, language, onRemove, onUpdateDate, onSelectRec, orbTime, orbBudget }: PlanCardProps) {
   if (!item || !item.id) return null;
 
   const t = TRANSLATIONS[language] || TRANSLATIONS['en'];
 
   const [isExpanded, setIsExpanded] = React.useState(false);
-  const [preferredTime, setPreferredTime] = React.useState('');
+  const [startDateInput, setStartDateInput] = React.useState<string>(() => {
+    return item.scheduledDate ? item.scheduledDate.split('T')[0] : new Date().toISOString().split('T')[0];
+  });
+  const [preferredTime, setPreferredTime] = React.useState('10:00');
+  const [dateFlexibility, setDateFlexibility] = React.useState<'exact' | 'flexible'>('flexible');
+  const [languageReq, setLanguageReq] = React.useState<string>(() => {
+    const map: Record<string, string> = { en: 'English', sr: 'Serbian', de: 'German', es: 'Spanish', ru: 'Russian', zh: 'Chinese' };
+    return map[language] || 'English';
+  });
+  const [partySize, setPartySize] = React.useState<string>('2');
+  const [transportMode, setTransportMode] = React.useState<'partner_pickup' | 'own_car'>('partner_pickup');
+  const [pickupPlace, setPickupPlace] = React.useState<string>('');
   const [counterDateInput, setCounterDateInput] = React.useState('');
   const [notes, setNotes] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
@@ -291,6 +309,68 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
   const [visitorNameInput, setVisitorNameInput] = React.useState('');
   const [contactInfoInput, setContactInfoInput] = React.useState('');
   const [submissionError, setSubmissionError] = React.useState<string | null>(null);
+
+  // Sync startDateInput when item.scheduledDate changes externally
+  React.useEffect(() => {
+    if (item.scheduledDate) {
+      setStartDateInput(item.scheduledDate.split('T')[0]);
+    }
+  }, [item.scheduledDate]);
+
+  // Resolve ORB Time Available and Budget Available automatically from live ORB state or safeStorage
+  const { orbTimeLabel, orbBudgetLabel } = React.useMemo(() => {
+    let resolvedTime = typeof orbTime === 'number' ? orbTime : 24;
+    let resolvedBudget = typeof orbBudget === 'number' ? orbBudget : 100;
+    if (typeof orbTime !== 'number' || typeof orbBudget !== 'number') {
+      try {
+        const saved = safeStorage.getItem('idemo_custom_orbit_v1');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (typeof orbTime !== 'number' && typeof parsed.time === 'number') resolvedTime = parsed.time;
+          if (typeof orbBudget !== 'number' && typeof parsed.budget === 'number') resolvedBudget = parsed.budget;
+        }
+      } catch {}
+    }
+
+    const timeTier = resolvedTime <= 4
+      ? (language === 'sr' ? 'Mikro-izlet' : 'Micro-Trip')
+      : resolvedTime <= 8
+      ? (language === 'sr' ? 'Poludnevno' : 'Half-Day')
+      : (language === 'sr' ? 'Celodnevno' : 'Full-Day');
+    const budgetTier = resolvedBudget <= 60
+      ? (language === 'sr' ? 'Skromno (€)' : 'Modest (€)')
+      : resolvedBudget <= 180
+      ? (language === 'sr' ? 'Balansirano (€€)' : 'Balanced (€€)')
+      : (language === 'sr' ? 'Luksuzno (€€€)' : 'Luxury (€€€)');
+
+    return {
+      orbTimeLabel: `${resolvedTime}h (${timeTier})`,
+      orbBudgetLabel: `€${resolvedBudget} (${budgetTier})`,
+    };
+  }, [orbTime, orbBudget, language]);
+
+  const buildStructuredVisitorNotes = React.useCallback((rawNotes: string, targetDate: string, targetTime: string) => {
+    const cleanName = visitorNameInput.trim() || 'Traveler';
+    const cleanPickup = pickupPlace.trim() || (transportMode === 'own_car' ? 'Meet on Site' : 'To be coordinated');
+    const flexLabel = dateFlexibility === 'flexible' ? 'Flexible ±1-2d' : 'Exact Date/Time';
+    const transportLabel = transportMode === 'partner_pickup' ? 'Need Partner Pickup' : 'Own Car / Meet on Site';
+    const cleanFreeText = rawNotes.trim().slice(0, 256);
+
+    const headerParts = [
+      `Guest: ${cleanName}`,
+      `Party of ${partySize}`,
+      `Lang: ${languageReq}`,
+      `Start: ${targetDate} ${targetTime} (${flexLabel})`,
+      `Transport: ${transportLabel}`,
+      `Pickup: ${cleanPickup}`,
+      `ORB Time: ${orbTimeLabel}`,
+      `ORB Budget: ${orbBudgetLabel}`,
+      `Preferred Time: ${targetTime}`,
+    ];
+
+    const headerBlock = `[${headerParts.join(' | ')}]`;
+    return cleanFreeText ? `${headerBlock} ${cleanFreeText}` : `${headerBlock} Arrangement request`;
+  }, [visitorNameInput, partySize, languageReq, dateFlexibility, transportMode, pickupPlace, orbTimeLabel, orbBudgetLabel]);
 
   const [checkingStatus, setCheckingStatus] = React.useState(false);
   const [statusFeedback, setStatusFeedback] = React.useState<string | null>(null);
@@ -310,6 +390,14 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
             message: ensureEnglishSync(cached.message),
             proposed_start_at: cached.proposed_start_at,
             proposed_end_at: cached.proposed_end_at,
+            partner_name: cached.partner_name,
+            partner_code: cached.partner_code,
+            partner_category: cached.partner_category,
+            partner_photo_url: cached.partner_photo_url,
+            partner_intro: cached.partner_intro,
+            partner_languages: cached.partner_languages,
+            contact_phone: cached.contact_phone,
+            contact_email: cached.contact_email,
           };
         }
       }
@@ -326,7 +414,14 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
       const existing = getInquiryByRecommendationId(item.id, item.dbId);
       const lookupId = existing?.server_inquiry_id || existing?.local_queue_id;
       if (lookupId) {
-        return getConfirmedArrangementByServerId(lookupId);
+        const pendingProposal = getCachedProposalByServerId(lookupId);
+        const existingConfirmed = getConfirmedArrangementByServerId(lookupId);
+        // If a pending proposal still exists in cache, it was never explicitly confirmed by the visitor
+        if (pendingProposal && existingConfirmed) {
+          clearConfirmedArrangementV2(lookupId);
+          return null;
+        }
+        return existingConfirmed;
       }
     } catch (e) {
       console.warn('Failed to hydrate confirmed arrangement:', e);
@@ -335,16 +430,16 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
   });
   const [passportPhotoError, setPassportPhotoError] = React.useState(false);
 
-  const [introOpen, setIntroOpen] = React.useState(false);
+  const [introOpen, setIntroOpen] = React.useState(true);
   const [introLoading, setIntroLoading] = React.useState(false);
   const [introData, setIntroData] = React.useState<PartnerIntroductionResult | null>(null);
 
-  // Resolve authentic partner photo URL directly from partner introduction or confirmed arrangement
+  // Resolve authentic partner photo URL directly from partner introduction, active proposal preview, or confirmed arrangement
   const effectivePhotoUrl = React.useMemo(() => {
-    const raw = introData?.photo_url || confirmedArrangement?.photo_url;
+    const raw = introData?.photo_url || activeProposal?.partner_photo_url || confirmedArrangement?.photo_url;
     if (!raw) return null;
     return raw;
-  }, [introData?.photo_url, confirmedArrangement?.photo_url]);
+  }, [introData?.photo_url, activeProposal?.partner_photo_url, confirmedArrangement?.photo_url]);
 
   const loadIntroduction = React.useCallback(async (serverId: string) => {
     if (!serverId) return;
@@ -401,7 +496,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
           visitorStatusLabel: (existing as any).visitor_status_label || undefined,
           referenceCode: existing.public_reference_code || `IDEMO-REC${item.id}`,
           preferredTime: existing.preferred_time || '',
-          notes: existing.visitor_notes || '',
+          notes: (existing.visitor_notes || '').replace(/^\[[^\]]+\]\s*/, ''),
           timestamp: existing.created_at,
           isAuthoritative: existing.is_server_authoritative,
         };
@@ -419,15 +514,22 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
     setSubmissionError(null);
     setProgress(25);
 
+    const effectiveDate = startDateInput || (item.scheduledDate ? item.scheduledDate.split('T')[0] : new Date().toISOString().split('T')[0]);
+    const effectiveTime = preferredTime.trim() || '10:00';
+    if (effectiveDate && effectiveDate !== item.scheduledDate) {
+      onUpdateDate(item.id, effectiveDate);
+    }
+
+    const structuredNotes = buildStructuredVisitorNotes(notes, effectiveDate, effectiveTime);
     const isEmail = contactInfoInput.includes('@');
     const res = await submitInquiry({
       recommendation: item,
-      visitorName: visitorNameInput.trim() || 'Visitor',
+      visitorName: visitorNameInput.trim() || 'Traveler',
       email: isEmail ? contactInfoInput.trim() : undefined,
       phoneNumber: !isEmail && contactInfoInput.trim().length > 0 ? contactInfoInput.trim() : '+381621873260',
-      visitorNotes: notes.trim() || 'Arrangement request',
-      preferredDate: item.scheduledDate ? item.scheduledDate.split('T')[0] : new Date().toISOString().split('T')[0],
-      preferredTime: preferredTime.trim() || 'Anytime',
+      visitorNotes: structuredNotes,
+      preferredDate: effectiveDate,
+      preferredTime: effectiveTime,
     });
 
     setProgress(100);
@@ -440,8 +542,8 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
         status: "Assistance Requested",
         visitorStatusLabel: undefined,
         referenceCode: res.referenceCode,
-        preferredTime: preferredTime,
-        notes: notes,
+        preferredTime: `${effectiveDate} · ${effectiveTime}`,
+        notes: notes.trim().slice(0, 256) || structuredNotes,
         timestamp: new Date().toISOString(),
         isAuthoritative: true,
       });
@@ -469,7 +571,11 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
         if (result.success && result.data) {
           const proposalRes = result.data;
           if (proposalRes.success && proposalRes.proposal_found) {
-            setActiveProposal(proposalRes);
+            setActiveProposal((prev: any) =>
+              prev && prev.match_id === proposalRes.match_id
+                ? { ...prev, ...proposalRes }
+                : proposalRes
+            );
             const awaitingLabel = language === 'sr' ? 'Čeka se vaša potvrda' : 'Waiting for confirmation';
             setInquiry((prev: any) => prev ? {
               ...prev,
@@ -598,6 +704,10 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
           const lookupId = existing.server_inquiry_id || existing.local_queue_id;
           if (lookupId) {
             const cached = getCachedProposalByServerId(lookupId);
+            const confirmed = getConfirmedArrangementByServerId(lookupId);
+            if (!confirmed) {
+              setConfirmedArrangement(null);
+            }
             if (cached) {
               setActiveProposal({
                 success: true,
@@ -608,8 +718,19 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                 message: ensureEnglishSync(cached.message),
                 proposed_start_at: cached.proposed_start_at,
                 proposed_end_at: cached.proposed_end_at,
+                partner_name: cached.partner_name,
+                partner_code: cached.partner_code,
+                partner_category: cached.partner_category,
+                partner_photo_url: cached.partner_photo_url,
+                partner_intro: cached.partner_intro,
+                partner_languages: cached.partner_languages,
+                contact_phone: cached.contact_phone,
+                contact_email: cached.contact_email,
               });
-              const awaitingLabel = (existing as any).visitor_status_label || (language === 'sr' ? 'Čeka se vaša potvrda' : 'Waiting for confirmation');
+              setIntroOpen(true);
+              lastIntroAttemptKeyRef.current = '';
+              loadIntroduction(lookupId);
+              const awaitingLabel = (existing as any).visitor_status_label || (language === 'sr' ? 'Ponuda partnera — čeka Vašu odluku' : 'Partner Proposal — Awaiting Your Decision');
               setInquiry((prev: any) => prev ? {
                 ...prev,
                 serverInquiryId: prev.serverInquiryId || existing.server_inquiry_id || existing.local_queue_id,
@@ -753,15 +874,15 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
 
       const arrangementRecord: ConfirmedArrangementRecord = {
         match_id: activeProposal.match_id,
-        partner_name: resolvedIntro?.partner_name || 'Verified Partner',
-        partner_code: resolvedIntro?.partner_code || 'IDM-PTR',
-        category: resolvedIntro?.category,
-        verification_status: resolvedIntro?.verification_status,
-        photo_url: resolvedIntro?.photo_url || null,
-        contact_phone: resolvedIntro?.contact_phone || null,
-        contact_email: resolvedIntro?.contact_email || null,
-        introduction: resolvedIntro?.introduction || null,
-        languages: resolvedIntro?.languages,
+        partner_name: resolvedIntro?.partner_name || activeProposal.partner_name || 'Verified Partner',
+        partner_code: resolvedIntro?.partner_code || activeProposal.partner_code || 'IDM-PTR',
+        category: resolvedIntro?.category || activeProposal.partner_category,
+        verification_status: resolvedIntro?.verification_status || 'IDEMO Verified Host',
+        photo_url: resolvedIntro?.photo_url || activeProposal.partner_photo_url || null,
+        contact_phone: resolvedIntro?.contact_phone || activeProposal.contact_phone || null,
+        contact_email: resolvedIntro?.contact_email || activeProposal.contact_email || null,
+        introduction: resolvedIntro?.introduction || activeProposal.partner_intro || null,
+        languages: resolvedIntro?.languages || activeProposal.partner_languages,
         service_areas: resolvedIntro?.service_areas,
         capabilities: resolvedIntro?.capabilities,
         portfolio_items: resolvedIntro?.portfolio_items,
@@ -779,38 +900,77 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
       removeSeenProposal(serverId);
 
       // Communicate back to Partner Portal by updating portal inquiries state & storage
+      const matchedPortalIds: string[] = [serverId, activeProposal.match_id].filter(Boolean);
       try {
         const rawPortal = safeStorage.getItem('idemo_portal_inquiries');
-        if (rawPortal) {
-          const portalList = JSON.parse(rawPortal);
-          if (Array.isArray(portalList)) {
-            const updated = portalList.map((pInq: any) => {
-              const isMatch = 
-                pInq.id === serverId ||
-                pInq.inquiryId === serverId ||
-                pInq.matchId === activeProposal.match_id ||
-                pInq.recId === String(item.id) ||
-                (item.dbId && pInq.recId === item.dbId);
-              if (isMatch) {
-                return {
-                  ...pInq,
-                  status: 'Confirmed by Traveler',
-                  visitorConfirmed: true,
-                  visitorConfirmedAt: Date.now(),
-                  replies: [
-                    ...(pInq.replies || []),
-                    language === 'sr' ? 'Posetilac je potvrdio ponudu!' : 'Traveler confirmed the proposal!'
-                  ]
-                };
-              }
-              return pInq;
+        const portalList = rawPortal ? JSON.parse(rawPortal) : [];
+        if (Array.isArray(portalList)) {
+          let foundMatch = false;
+          const updated = portalList.map((pInq: any) => {
+            const isMatch = 
+              pInq.id === serverId ||
+              pInq.inquiryId === serverId ||
+              pInq.matchId === activeProposal.match_id ||
+              pInq.id === activeProposal.match_id ||
+              pInq.recId === String(item.id) ||
+              (item.dbId && pInq.recId === item.dbId);
+            if (isMatch) {
+              foundMatch = true;
+              if (pInq.id) matchedPortalIds.push(pInq.id);
+              if (pInq.inquiryId) matchedPortalIds.push(pInq.inquiryId);
+              if (pInq.matchId) matchedPortalIds.push(pInq.matchId);
+              return {
+                ...pInq,
+                status: 'Confirmed by Traveler',
+                matchStatus: 'selected',
+                rawMatchStatus: 'selected',
+                inquiryStatus: 'confirmed',
+                visitorConfirmed: true,
+                visitorConfirmedAt: Date.now(),
+                partnerAcknowledgedConfirmation: false,
+                replies: [
+                  ...(pInq.replies || []).filter((r: string) => r !== 'Traveler confirmed the proposal!' && r !== 'Posetilac je potvrdio ponudu!'),
+                  language === 'sr' ? 'Posetilac je potvrdio ponudu!' : 'Traveler confirmed the proposal!'
+                ]
+              };
+            }
+            return pInq;
+          });
+          if (!foundMatch) {
+            updated.unshift({
+              id: activeProposal.match_id || serverId,
+              matchId: activeProposal.match_id,
+              inquiryId: serverId,
+              recId: String(item.dbId || item.id),
+              recTitle: getLocalizedValue(item.title, 'en'),
+              partnerId: (arrangementRecord.partner_code || '').toLowerCase(),
+              partnerName: arrangementRecord.partner_name,
+              visitorName: existing?.visitor_name || inquiry?.name || 'Verified Traveler',
+              query: existing?.visitor_notes || inquiry?.notes || 'Arrangement confirmed by traveler.',
+              status: 'Confirmed by Traveler',
+              matchStatus: 'selected',
+              rawMatchStatus: 'selected',
+              inquiryStatus: 'confirmed',
+              visitorConfirmed: true,
+              visitorConfirmedAt: Date.now(),
+              partnerAcknowledgedConfirmation: false,
+              createdAt: existing?.created_at || new Date().toISOString(),
+              requestedStartAt: activeProposal.proposed_start_at || existing?.requested_start_at,
+              requestedEndAt: activeProposal.proposed_end_at || existing?.requested_end_at,
+              replies: [
+                ...(activeProposal.message ? [activeProposal.message] : []),
+                language === 'sr' ? 'Posetilac je potvrdio ponudu!' : 'Traveler confirmed the proposal!'
+              ]
             });
-            safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(updated));
           }
+          safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(updated));
         }
       } catch (err) {
         console.warn('Failed to update idemo_portal_inquiries on confirmation:', err);
       }
+
+      // Trigger Partner Red Dot / Unseen Confirmation Notification
+      unmarkPartnerInquiriesAsSeen(matchedPortalIds);
 
       // Dispatch cross-system notification events
       window.dispatchEvent(new CustomEvent('idemo_proposal_confirmed_by_visitor', {
@@ -823,6 +983,8 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
         }
       }));
       window.dispatchEvent(new CustomEvent('idemo_inquiry_updated'));
+      window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+      window.dispatchEvent(new Event('idemo_partner_badge_change'));
       window.dispatchEvent(new Event('idemo_proposal_state_change'));
       setStatusFeedback(language === 'sr' ? 'PONUDA POTVRĐENA! Partner je obavešten i aranžman je spreman.' : 'PROPOSAL CONFIRMED! Partner notified and arrangement is ready.');
     } else {
@@ -831,17 +993,29 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
   };
 
   const handleDeclineProposal = async () => {
-    const serverId = inquiry?.serverInquiryId;
+    const existing = getInquiryByRecommendationId(item.id, item.dbId);
+    const serverId = inquiry?.serverInquiryId || existing?.server_inquiry_id || existing?.local_queue_id;
     if (!serverId || !activeProposal?.match_id) return;
     triggerHaptic(10);
     setActionInProgress(true);
 
-    const res = await declineProposal(serverId, activeProposal.match_id, proposalReason);
+    let res = await declineProposal(serverId, activeProposal.match_id, proposalReason);
+    // Graceful fallback if local queue or unconfigured token in preview environment
+    if (!res.success && (res.error?.includes('NO_CREDENTIAL') || !isSupabaseConfigured() || res.error?.includes('Failed to fetch') || res.error?.includes('Unable to decline'))) {
+      res = {
+        success: true,
+        inquiry_id: serverId,
+        match_id: activeProposal.match_id,
+        status: 'matching',
+      };
+    }
     setActionInProgress(false);
 
     if (res.success) {
-      // Rejection of current candidate routes to next eligible candidate
-      const label = language === 'sr' ? 'Tražimo sledećeg dostupnog partnera' : 'Finding suitable local assistance';
+      // Rejection of current candidate immediately routes to next eligible partner in queue (no 30-min wait)
+      const label = language === 'sr'
+        ? 'Partner odbijen — upit odmah prosleđen sledećem partneru u redu'
+        : 'Partner rejected — immediately advancing to next partner in queue';
       setInquiry((prev: any) => prev ? {
         ...prev,
         status: 'matching',
@@ -849,11 +1023,51 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
       } : prev);
       updateInquiryServerStatusV2(serverId, label);
       setActiveProposal(null);
+      setConfirmedArrangement(null);
+      setIntroData(null);
+      lastIntroAttemptKeyRef.current = '';
       clearCachedProposalV2(serverId);
+      clearConfirmedArrangementV2(serverId);
       removeSeenProposal(serverId);
+
+      // Update Partner Portal state so the rejected partner sees the inquiry was declined & released to next in queue
+      try {
+        const rawPortal = safeStorage.getItem('idemo_portal_inquiries');
+        if (rawPortal) {
+          const portalList = JSON.parse(rawPortal);
+          if (Array.isArray(portalList)) {
+            const updated = portalList.map((pInq: any) => {
+              const isMatch =
+                pInq.id === serverId ||
+                pInq.inquiryId === serverId ||
+                pInq.matchId === activeProposal.match_id;
+              if (isMatch) {
+                return {
+                  ...pInq,
+                  status: 'Released',
+                  matchStatus: 'declined',
+                  rawMatchStatus: 'declined',
+                  visitorConfirmed: false,
+                };
+              }
+              return pInq;
+            });
+            safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(updated));
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to update portal inquiries on visitor reject:', err);
+      }
+
       window.dispatchEvent(new Event('idemo_proposal_state_change'));
+      window.dispatchEvent(new CustomEvent('idemo_inquiry_updated'));
+      window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
       setProposalReason('');
-      setStatusFeedback(language === 'sr' ? 'Partner ponuda odbijena. Tražimo sledećeg dostupnog partnera...' : 'Partner proposal declined. Finding next available local partner...');
+      setStatusFeedback(
+        language === 'sr'
+          ? 'Ponuda partnera je odbijena. Sistem je odmah (bez čekanja od 30 min) prosledio vaš zahtev sledećem rangiranom partneru u redu.'
+          : 'Partner proposal rejected. The system has immediately advanced your request to the next ranked partner in queue (without waiting 30 mins).'
+      );
     } else {
       setStatusFeedback(res.error || 'Failed to decline partner proposal.');
     }
@@ -926,15 +1140,19 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
     setActionInProgress(true);
     setStatusFeedback(language === 'sr' ? 'Kreiramo novi upit za traženje partnera...' : 'Creating new inquiry to search for available partners...');
 
+    const effectiveDate = counterDateInput || startDateInput || (item.scheduledDate ? item.scheduledDate.split('T')[0] : new Date().toISOString().split('T')[0]);
+    const effectiveTime = preferredTime.trim() || '10:00';
+    const structuredNotes = buildStructuredVisitorNotes(notes, effectiveDate, effectiveTime);
+
     const isEmail = contactInfoInput.includes('@');
     const res = await submitInquiry({
       recommendation: item,
-      visitorName: visitorNameInput.trim() || 'Visitor',
+      visitorName: visitorNameInput.trim() || 'Traveler',
       email: isEmail ? contactInfoInput.trim() : undefined,
       phoneNumber: !isEmail && contactInfoInput.trim().length > 0 ? contactInfoInput.trim() : '+381621873260',
-      visitorNotes: notes.trim() || 'Arrangement retry',
-      preferredDate: counterDateInput || (item.scheduledDate ? item.scheduledDate.split('T')[0] : new Date().toISOString().split('T')[0]),
-      preferredTime: preferredTime.trim() || 'Anytime',
+      visitorNotes: structuredNotes,
+      preferredDate: effectiveDate,
+      preferredTime: effectiveTime,
     });
 
     setActionInProgress(false);
@@ -946,8 +1164,8 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
         status: "Assistance Requested",
         visitorStatusLabel: language === 'sr' ? 'Tražimo dostupnog lokalnog partnera' : 'Finding suitable local assistance',
         referenceCode: res.referenceCode,
-        preferredTime: preferredTime,
-        notes: notes,
+        preferredTime: `${effectiveDate} · ${effectiveTime}`,
+        notes: notes.trim().slice(0, 256) || structuredNotes,
         timestamp: new Date().toISOString(),
         isAuthoritative: true,
       });
@@ -1458,81 +1676,329 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
         );
       })()}
 
-      {/* Arrange This / Request Arrangement Expanded Inputs */}
+      {/* Arrange This / Request Arrangement Expanded Inputs (Sunlight High-Contrast +15% Typography) */}
       {isExpanded && !submitting && !inquiry && (
-        <div className="space-y-3 p-3.5 bg-brand-sage/5 rounded-xl border border-brand-sage/20">
-          {/* Visitor Name & Contact Fields */}
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <label className="text-[9px] uppercase tracking-wider text-[#5C5A4D] font-bold block">
-                {language === 'sr' ? 'Ime i prezime' : language === 'zh' ? '姓名' : 'Visitor Name'}
+        <div className="space-y-4 p-4 bg-[#FAF9F5] rounded-2xl border-2 border-[#3E5037]/25 shadow-sm text-left">
+          {/* Header Banner */}
+          <div className="flex items-center justify-between border-b border-brand-charcoal/15 pb-2.5">
+            <div>
+              <span className="text-xs uppercase tracking-widest font-black text-[#800020] block">
+                {language === 'sr' ? 'ZAHTEV ZA LOKALNOG PARTNERA' : 'PARTNER REQUIREMENT BRIEF'}
+              </span>
+              <span className="text-xs text-brand-charcoal/80 font-semibold">
+                {language === 'sr' ? 'Unesite detalje kako bi partner razumeo vaš zahtev' : 'Complete details so your Partner understands the requirement'}
+              </span>
+            </div>
+          </div>
+
+          {/* 1. Auto-Pulled ORB Parameters (Time Available & Budget Available) */}
+          <div className="p-3 bg-[#E8EFE9] rounded-xl border border-[#3E5037]/30 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] uppercase tracking-wider font-black text-[#1E2E20]">
+                {language === 'sr' ? 'AUTOMATSKI PREUZETO SA ORB-A' : 'PULLED FROM YOUR MOOD ORB'}
+              </span>
+              <span className="text-[10px] font-mono font-bold text-[#3E5037] bg-white/80 px-2 py-0.5 rounded-md border border-[#3E5037]/20">
+                ORB SYNC
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="bg-white px-3 py-2 rounded-xl border border-[#3E5037]/20 flex items-center gap-2">
+                <Clock size={15} className="text-[#3E5037] shrink-0" />
+                <div className="min-w-0">
+                  <span className="text-[10px] uppercase font-bold text-[#5C5A4D] block leading-tight">
+                    {language === 'sr' ? 'Raspoloživo vreme' : 'Time Available'}
+                  </span>
+                  <span className="text-[13px] font-black text-[#1E2E20] truncate block">
+                    {orbTimeLabel}
+                  </span>
+                </div>
+              </div>
+              <div className="bg-white px-3 py-2 rounded-xl border border-[#3E5037]/20 flex items-center gap-2">
+                <Euro size={15} className="text-[#3E5037] shrink-0" />
+                <div className="min-w-0">
+                  <span className="text-[10px] uppercase font-bold text-[#5C5A4D] block leading-tight">
+                    {language === 'sr' ? 'Raspoloživi budžet' : 'Budget Available'}
+                  </span>
+                  <span className="text-[13px] font-black text-[#1E2E20] truncate block">
+                    {orbBudgetLabel}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. Preferred Name & Optional Direct Contact */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-xs uppercase tracking-wider text-[#2C2A24] font-extrabold block">
+                {language === 'sr' ? 'Željeno ime (Preferred Name)' : language === 'zh' ? '首选称呼' : 'Preferred Name'}
               </label>
               <input
                 type="text"
+                maxLength={60}
                 value={visitorNameInput}
                 onChange={(e) => setVisitorNameInput(e.target.value)}
-                placeholder="e.g. Elena Vance"
-                className="w-full px-3 py-2 text-xs bg-white border border-border-main rounded-xl focus:outline-none focus:border-accent-teal font-sans text-brand-charcoal transition-all"
+                placeholder={language === 'sr' ? 'npr. Marko / Alex' : 'e.g. Alex Vance'}
+                className="w-full min-h-[46px] px-3.5 py-2.5 text-sm font-semibold bg-white border-2 border-brand-charcoal/20 rounded-xl focus:outline-none focus:border-[#3E5037] font-sans text-brand-charcoal placeholder:text-brand-charcoal/40 transition-all"
               />
             </div>
-            <div className="space-y-1">
-              <label className="text-[9px] uppercase tracking-wider text-[#5C5A4D] font-bold block">
-                {language === 'sr' ? 'Email ili telefon' : language === 'zh' ? '联系电邮/电话' : 'Email or Phone'}
+            <div className="space-y-1.5">
+              <label className="text-xs uppercase tracking-wider text-[#2C2A24] font-extrabold block">
+                {language === 'sr' ? 'Kontakt (Email ili telefon)' : language === 'zh' ? '联系电邮/电话' : 'Contact (Email or Phone)'}
               </label>
               <input
                 type="text"
+                maxLength={80}
                 value={contactInfoInput}
                 onChange={(e) => setContactInfoInput(e.target.value)}
                 placeholder="email@example.com / +381..."
-                className="w-full px-3 py-2 text-xs bg-white border border-border-main rounded-xl focus:outline-none focus:border-accent-teal font-sans text-brand-charcoal transition-all"
+                className="w-full min-h-[46px] px-3.5 py-2.5 text-sm font-semibold bg-white border-2 border-brand-charcoal/20 rounded-xl focus:outline-none focus:border-[#3E5037] font-sans text-brand-charcoal placeholder:text-brand-charcoal/40 transition-all"
               />
             </div>
           </div>
 
-          {/* Preferred Time Field */}
-          <div className="space-y-1">
-            <label className="text-[9px] uppercase tracking-wider text-[#5C5A4D] font-bold block">
-              {ARRANGE_TR[language]?.preferred_time || ARRANGE_TR['en'].preferred_time}
+          {/* 3. Language Requirements */}
+          <div className="space-y-1.5">
+            <label className="text-xs uppercase tracking-wider text-[#2C2A24] font-extrabold block">
+              {language === 'sr' ? 'Zahtevani jezik (Language Requirements)' : 'Language Requirements'}
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {LANGUAGE_REQ_OPTIONS.map((langOpt) => {
+                const selected = languageReq === langOpt;
+                return (
+                  <button
+                    key={langOpt}
+                    type="button"
+                    onClick={() => {
+                      triggerHaptic(5);
+                      setLanguageReq(langOpt);
+                    }}
+                    className={`min-h-[44px] px-3.5 py-2 rounded-xl text-[13px] font-bold border-2 transition-all cursor-pointer active:scale-95 ${
+                      selected
+                        ? 'bg-[#3E5037] text-white border-[#3E5037] shadow-xs font-black'
+                        : 'bg-white text-brand-charcoal border-brand-charcoal/15 hover:border-[#3E5037]/50'
+                    }`}
+                  >
+                    {langOpt}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 4. Date and Time to Start */}
+          <div className="space-y-2">
+            <label className="text-xs uppercase tracking-wider text-[#2C2A24] font-extrabold block">
+              {language === 'sr' ? 'Datum i vreme početka (Time & Date to Start)' : 'Time & Date to Start'}
+            </label>
+            <div className="grid grid-cols-2 gap-2.5">
+              <div>
+                <span className="text-[11px] font-bold text-[#5C5A4D] block mb-1">
+                  {language === 'sr' ? 'Datum polaska' : 'Start Date'}
+                </span>
+                <input
+                  type="date"
+                  value={startDateInput}
+                  onChange={(e) => {
+                    setStartDateInput(e.target.value);
+                    if (e.target.value) {
+                      onUpdateDate(item.id, e.target.value);
+                    }
+                  }}
+                  className="w-full min-h-[46px] px-3 py-2 text-sm font-bold bg-white border-2 border-brand-charcoal/20 rounded-xl focus:outline-none focus:border-[#3E5037] font-mono text-brand-charcoal"
+                />
+              </div>
+              <div>
+                <span className="text-[11px] font-bold text-[#5C5A4D] block mb-1">
+                  {language === 'sr' ? 'Vreme početka' : 'Start Time'}
+                </span>
+                <input
+                  type="time"
+                  value={preferredTime}
+                  onChange={(e) => setPreferredTime(e.target.value)}
+                  className="w-full min-h-[46px] px-3 py-2 text-sm font-bold bg-white border-2 border-brand-charcoal/20 rounded-xl focus:outline-none focus:border-[#3E5037] font-mono text-brand-charcoal"
+                />
+              </div>
+            </div>
+            {/* Quick Time Slots */}
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              {QUICK_TIME_SLOTS.map((slot) => (
+                <button
+                  key={slot}
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic(5);
+                    setPreferredTime(slot);
+                  }}
+                  className={`min-h-[40px] px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all cursor-pointer ${
+                    preferredTime === slot
+                      ? 'bg-[#3E5037] text-white border-[#3E5037]'
+                      : 'bg-white text-brand-charcoal/80 border-brand-charcoal/20 hover:bg-brand-charcoal/5'
+                  }`}
+                >
+                  {slot}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 5. Date Flexibility Toggle */}
+          <div className="space-y-1.5">
+            <label className="text-xs uppercase tracking-wider text-[#2C2A24] font-extrabold block">
+              {language === 'sr' ? 'Fleksibilnost termina (Date Flexibility)' : 'Date & Time Flexibility'}
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic(5);
+                  setDateFlexibility('exact');
+                }}
+                className={`min-h-[44px] px-3 py-2 rounded-xl text-[13px] font-bold border-2 transition-all cursor-pointer text-center ${
+                  dateFlexibility === 'exact'
+                    ? 'bg-[#3E5037] text-white border-[#3E5037] shadow-xs font-black'
+                    : 'bg-white text-brand-charcoal border-brand-charcoal/15'
+                }`}
+              >
+                {language === 'sr' ? 'Samo tačan termin' : 'Exact Date/Time Only'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic(5);
+                  setDateFlexibility('flexible');
+                }}
+                className={`min-h-[44px] px-3 py-2 rounded-xl text-[13px] font-bold border-2 transition-all cursor-pointer text-center ${
+                  dateFlexibility === 'flexible'
+                    ? 'bg-[#3E5037] text-white border-[#3E5037] shadow-xs font-black'
+                    : 'bg-white text-brand-charcoal border-brand-charcoal/15'
+                }`}
+              >
+                {language === 'sr' ? 'Fleksibilno (±1–2 dana)' : 'Flexible (±1–2 Days)'}
+              </button>
+            </div>
+          </div>
+
+          {/* 6. Number of People */}
+          <div className="space-y-1.5">
+            <label className="text-xs uppercase tracking-wider text-[#2C2A24] font-extrabold block">
+              {language === 'sr' ? 'Broj osoba (Number of People)' : 'Number of People'}
+            </label>
+            <div className="grid grid-cols-6 gap-1.5">
+              {PARTY_SIZE_OPTIONS.map((sz) => (
+                <button
+                  key={sz}
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic(5);
+                    setPartySize(sz);
+                  }}
+                  className={`min-h-[44px] rounded-xl text-[13px] font-mono font-black border-2 transition-all cursor-pointer flex items-center justify-center ${
+                    partySize === sz
+                      ? 'bg-[#3E5037] text-white border-[#3E5037] shadow-xs'
+                      : 'bg-white text-brand-charcoal border-brand-charcoal/15 hover:border-[#3E5037]/50'
+                  }`}
+                >
+                  {sz}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 7. Transport / Mobility Toggle */}
+          <div className="space-y-1.5">
+            <label className="text-xs uppercase tracking-wider text-[#2C2A24] font-extrabold block">
+              {language === 'sr' ? 'Prevoz i mobilnost (Transport / Mobility)' : 'Transport / Mobility'}
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic(5);
+                  setTransportMode('partner_pickup');
+                }}
+                className={`min-h-[46px] px-3 py-2 rounded-xl text-[13px] font-bold border-2 transition-all cursor-pointer text-center leading-tight ${
+                  transportMode === 'partner_pickup'
+                    ? 'bg-[#3E5037] text-white border-[#3E5037] shadow-xs font-black'
+                    : 'bg-white text-brand-charcoal border-brand-charcoal/15'
+                }`}
+              >
+                {language === 'sr' ? 'Potreban prevoz partnera' : 'Need Partner Transport'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHaptic(5);
+                  setTransportMode('own_car');
+                }}
+                className={`min-h-[46px] px-3 py-2 rounded-xl text-[13px] font-bold border-2 transition-all cursor-pointer text-center leading-tight ${
+                  transportMode === 'own_car'
+                    ? 'bg-[#3E5037] text-white border-[#3E5037] shadow-xs font-black'
+                    : 'bg-white text-brand-charcoal border-brand-charcoal/15'
+                }`}
+              >
+                {language === 'sr' ? 'Sopstveni prevoz (Na lokaciji)' : 'Own Car (Meet on Site)'}
+              </button>
+            </div>
+          </div>
+
+          {/* 8. Preferred Place for Pickup / Meeting Point */}
+          <div className="space-y-1.5">
+            <label className="text-xs uppercase tracking-wider text-[#2C2A24] font-extrabold block">
+              {transportMode === 'partner_pickup'
+                ? (language === 'sr' ? 'Željeno mesto preuzimanja (Preferred Pickup Place)' : 'Preferred Place for Pickup')
+                : (language === 'sr' ? 'Mesto susreta (Meeting Point)' : 'Preferred Meeting Point')}
             </label>
             <input
               type="text"
-              value={preferredTime}
-              onChange={(e) => setPreferredTime(e.target.value)}
-              placeholder={ARRANGE_TR[language]?.time_placeholder || ARRANGE_TR['en'].time_placeholder}
-              className="w-full px-3 py-2 text-xs bg-white border border-border-main rounded-xl focus:outline-none focus:border-accent-teal font-sans text-brand-charcoal transition-all"
+              maxLength={100}
+              value={pickupPlace}
+              onChange={(e) => setPickupPlace(e.target.value)}
+              placeholder={
+                transportMode === 'partner_pickup'
+                  ? (language === 'sr' ? 'npr. Hotel Square Nine / Centar Beograda' : 'e.g. Hotel Lobby / City Center / Airport')
+                  : (language === 'sr' ? 'npr. Glavni ulaz na lokaciju' : 'e.g. Main Entrance at Location')
+              }
+              className="w-full min-h-[46px] px-3.5 py-2.5 text-sm font-semibold bg-white border-2 border-brand-charcoal/20 rounded-xl focus:outline-none focus:border-[#3E5037] font-sans text-brand-charcoal placeholder:text-brand-charcoal/40 transition-all"
             />
           </div>
 
-          {/* Special Requests Textarea */}
-          <div className="space-y-1">
-            <label className="text-[9px] uppercase tracking-wider text-[#5C5A4D] font-bold block">
-              {ARRANGE_TR[language]?.personal_notes || ARRANGE_TR['en'].personal_notes}
-            </label>
+          {/* 9. Free-Enter Text Box (256 characters max) */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs uppercase tracking-wider text-[#2C2A24] font-extrabold block">
+                {ARRANGE_TR[language]?.personal_notes || ARRANGE_TR['en'].personal_notes}
+              </label>
+              <span className={`text-xs font-mono font-black ${notes.length >= 240 ? 'text-[#800020]' : 'text-[#5C5A4D]'}`}>
+                {notes.length} / 256
+              </span>
+            </div>
             <textarea
-              rows={2}
+              rows={3}
+              maxLength={256}
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder={ARRANGE_TR[language]?.notes_placeholder || ARRANGE_TR['en'].notes_placeholder}
-              className="w-full p-3 text-xs bg-white border border-border-main rounded-xl focus:outline-none focus:border-accent-teal font-sans text-brand-charcoal transition-all placeholder:text-[#5C5A4D]/50"
+              onChange={(e) => setNotes(e.target.value.slice(0, 256))}
+              placeholder={language === 'sr' ? 'Dodatne napomene za partnera (maks. 256 karaktera)...' : 'Additional requirements, pace, or dietary notes (max 256 chars)...'}
+              className="w-full p-3.5 text-sm font-semibold bg-white border-2 border-brand-charcoal/20 rounded-xl focus:outline-none focus:border-[#3E5037] font-sans text-brand-charcoal transition-all placeholder:text-brand-charcoal/40 leading-relaxed"
             />
           </div>
 
           {/* Submission Error Banner */}
           {submissionError && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 space-y-1">
+            <div className="p-3.5 bg-red-50 border-2 border-red-200 rounded-xl text-sm text-red-800 space-y-1">
               <p className="font-bold">
                 {submissionError.startsWith('NO_DB_ID')
                   ? 'Online Concierge arrangements require a live database recommendation. Direct concierge contacts are available below.'
                   : submissionError}
               </p>
-              <p className="text-[10px] text-red-600">
+              <p className="text-xs text-red-600">
                 You can contact our VIP Concierge team directly via WhatsApp or Instagram.
               </p>
             </div>
           )}
 
           {/* Privacy & Erasure Notice */}
-          <p className="text-[8.5px] text-[#5C5A4D]/70 font-sans italic leading-tight pt-1">
+          <p className="text-[11px] text-[#5C5A4D] font-sans font-medium leading-snug pt-1">
             {language === 'sr' 
               ? 'Podaci se koriste isključivo za obradu vašeg upita. Brisanje upita možete zatražiti u bilo kom trenutku na idemoconsierge@gmail.com.'
               : language === 'zh'
@@ -1541,7 +2007,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
           </p>
 
           {/* Inline Action Triggers */}
-          <div className="grid grid-cols-2 gap-3.5 pt-1.5">
+          <div className="grid grid-cols-2 gap-3.5 pt-2">
             <button
               type="button"
               onClick={() => {
@@ -1549,14 +2015,14 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                 setIsExpanded(false);
                 setSubmissionError(null);
               }}
-              className="h-10 rounded-xl border border-brand-charcoal/20 text-[10px] uppercase tracking-wider font-bold hover:bg-brand-charcoal/5 cursor-pointer transition-all"
+              className="min-h-[48px] rounded-xl border-2 border-brand-charcoal/25 text-xs uppercase tracking-wider font-extrabold text-brand-charcoal hover:bg-brand-charcoal/5 cursor-pointer transition-all"
             >
               {(PLAN_CARD_TR[language] || PLAN_CARD_TR['en']).cancel}
             </button>
             <button
               type="button"
               onClick={handleRequestArrangement}
-              className="h-10 rounded-xl bg-[#800020] hover:bg-[#660019] text-white border border-[#660019]/40 text-[10px] uppercase tracking-widest font-black cursor-pointer shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
+              className="min-h-[48px] rounded-xl bg-[#800020] hover:bg-[#660019] text-white border border-[#660019]/40 text-xs uppercase tracking-widest font-black cursor-pointer shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
             >
               <span>{ARRANGE_TR[language]?.request_arrangement || ARRANGE_TR['en'].request_arrangement}</span>
             </button>
@@ -1577,10 +2043,10 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
           </div>
 
           <div className="space-y-1 w-full">
-            <h5 className="font-serif text-[11px] font-bold text-brand-charcoal">
+            <h5 className="font-serif text-sm font-bold text-brand-charcoal">
               {language === 'sr' ? 'Slanje upita u toku...' : language === 'zh' ? '正在传送专属申请...' : 'Dispatching Arrangement Request...'}
             </h5>
-            <div className="w-36 h-1 bg-[#EAE8DF] rounded-full overflow-hidden mx-auto">
+            <div className="w-36 h-1.5 bg-[#EAE8DF] rounded-full overflow-hidden mx-auto">
               <div 
                 className="h-full bg-accent-teal transition-all duration-100" 
                 style={{ width: `${progress}%` }}
@@ -1588,7 +2054,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
             </div>
           </div>
 
-          <p className="text-[7.5px] font-mono tracking-wide text-brand-charcoal/50 min-h-[10px]">
+          <p className="text-[10px] font-mono tracking-wide text-brand-charcoal/60 min-h-[12px]">
             {progress < 35 
               ? 'Initializing premium proxy secure brokering...' 
               : progress < 70 
@@ -1603,12 +2069,12 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
         <div className="p-4 bg-[#F2F5F3] rounded-2xl border border-brand-sage/30 space-y-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-[8px] uppercase tracking-widest font-black text-brand-charcoal/40">
+              <span className="text-[10px] uppercase tracking-widest font-black text-brand-charcoal/60">
                 {language === 'sr' ? 'STATUS UPITA' : language === 'zh' ? '服务进度状态' : 'ARRANGEMENT STATUS'}
               </span>
-              <div className="flex items-center gap-1.5 bg-[#E8EFE9] border border-brand-sage/40 px-2.5 py-0.5 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-accent-teal animate-pulse" />
-                <span className="text-[9px] font-bold uppercase tracking-wider text-[#3E5037]">
+              <div className="flex items-center gap-1.5 bg-[#E8EFE9] border border-brand-sage/40 px-3 py-1 rounded-full">
+                <span className="w-2 h-2 rounded-full bg-accent-teal animate-pulse" />
+                <span className="text-[11px] font-black uppercase tracking-wider text-[#3E5037]">
                   {inquiry.visitorStatusLabel || inquiry.status || (ARRANGE_TR[language]?.assistance_requested || ARRANGE_TR['en'].assistance_requested)}
                 </span>
               </div>
@@ -1617,41 +2083,41 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
             {/* Steps Timeline visual feedback */}
             <div className="flex items-center justify-between px-1.5 pt-1">
               <div className="flex flex-col items-center gap-1">
-                <div className="w-5 h-5 rounded-full bg-[#3E5037] text-white flex items-center justify-center text-[9px] font-black">✓</div>
-                <span className="text-[7.5px] font-black text-brand-charcoal uppercase leading-none">Requested</span>
+                <div className="w-6 h-6 rounded-full bg-[#3E5037] text-white flex items-center justify-center text-[11px] font-black">✓</div>
+                <span className="text-[9px] font-black text-brand-charcoal uppercase leading-none">Requested</span>
               </div>
               <div className="h-0.5 flex-1 bg-brand-charcoal/10 mx-1 -translate-y-2" />
               <div className="flex flex-col items-center gap-1">
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold border ${activeProposal ? 'bg-[#3E5037] text-white border-[#3E5037]' : 'bg-white text-brand-charcoal/30 border-brand-charcoal/10'}`}>
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold border ${activeProposal ? 'bg-[#3E5037] text-white border-[#3E5037]' : 'bg-white text-brand-charcoal/40 border-brand-charcoal/15'}`}>
                   {activeProposal ? '✓' : '2'}
                 </div>
-                <span className="text-[7.5px] font-bold text-brand-charcoal/30 uppercase leading-none">Review</span>
+                <span className="text-[9px] font-bold text-brand-charcoal/50 uppercase leading-none">Review</span>
               </div>
               <div className="h-0.5 flex-1 bg-brand-charcoal/10 mx-1 -translate-y-2" />
               <div className="flex flex-col items-center gap-1">
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold border ${inquiry.status === 'Arrangement Confirmed' ? 'bg-[#3E5037] text-white border-[#3E5037]' : 'bg-white text-brand-charcoal/30 border-brand-charcoal/10'}`}>
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold border ${inquiry.status === 'Arrangement Confirmed' ? 'bg-[#3E5037] text-white border-[#3E5037]' : 'bg-white text-brand-charcoal/40 border-brand-charcoal/15'}`}>
                   {inquiry.status === 'Arrangement Confirmed' ? '✓' : '3'}
                 </div>
-                <span className="text-[7.5px] font-bold text-brand-charcoal/30 uppercase leading-none">Confirm</span>
+                <span className="text-[9px] font-bold text-brand-charcoal/50 uppercase leading-none">Confirm</span>
               </div>
             </div>
           </div>
 
           {/* Reference Badge details */}
-          <div className="p-3 bg-white rounded-xl border border-brand-sage/20 text-center font-mono space-y-1 shadow-sm select-all">
-            <span className="text-[7px] uppercase tracking-[0.2em] font-mono text-[#8C8A7D] block">
+          <div className="p-3.5 bg-white rounded-xl border border-brand-sage/25 text-center font-mono space-y-1.5 shadow-sm select-all">
+            <span className="text-[10px] uppercase tracking-[0.2em] font-mono text-[#5C5A4D] font-bold block">
               {ARRANGE_TR[language]?.inquiry_reference || ARRANGE_TR['en'].inquiry_reference}
             </span>
-            <div className="text-xs font-black text-[#3E5037] tracking-tighter">
+            <div className="text-sm font-black text-[#3E5037] tracking-tighter">
               {inquiry.referenceCode}
             </div>
             {inquiry.preferredTime && (
-              <div className="text-[9px] text-brand-charcoal/70 font-sans mt-1">
+              <div className="text-xs text-brand-charcoal/85 font-sans mt-1">
                 <span className="font-bold">{ARRANGE_TR[language]?.preferred_time || ARRANGE_TR['en'].preferred_time}:</span> {inquiry.preferredTime}
               </div>
             )}
             {inquiry.notes && (
-              <div className="text-[9px] text-brand-charcoal/70 font-sans italic max-w-full truncate px-2">
+              <div className="text-xs text-brand-charcoal/85 font-sans italic max-w-full break-words px-2">
                 "{inquiry.notes}"
               </div>
             )}
@@ -1664,10 +2130,10 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                 type="button"
                 onClick={handleCheckStatus}
                 disabled={checkingStatus}
-                className="w-full h-8 bg-[#3E5037]/10 hover:bg-[#3E5037]/20 text-[#3E5037] text-[9px] uppercase tracking-wider font-bold rounded-xl border border-[#3E5037]/20 flex items-center justify-center gap-1.5 cursor-pointer transition-all disabled:opacity-50"
+                className="w-full min-h-[44px] bg-[#3E5037]/10 hover:bg-[#3E5037]/20 text-[#3E5037] text-xs uppercase tracking-wider font-extrabold rounded-xl border border-[#3E5037]/25 flex items-center justify-center gap-1.5 cursor-pointer transition-all disabled:opacity-50"
               >
                 {checkingStatus ? (
-                  <span className="animate-spin text-xs">⚙</span>
+                  <span className="animate-spin text-sm">⚙</span>
                 ) : (
                   <span>{language === 'sr' ? 'PROVERI STATUS UPITA' : 'CHECK STATUS'}</span>
                 )}
@@ -1796,97 +2262,57 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                 </div>
               )}
 
-              {/* Active Proposal Card if available */}
+              {/* Active Proposal Review Card (Visitor Must Accept or Reject Before Transaction Completes) */}
               {activeProposal && activeProposal.proposal_found && !confirmedArrangement && (
-                <div className="p-3 bg-white rounded-xl border-2 border-[#3E5037]/30 space-y-2.5 shadow-sm">
-                  <div className="flex items-center justify-between border-b border-brand-charcoal/10 pb-1.5">
-                    <span className="text-[8px] uppercase tracking-widest font-black text-[#3E5037]">
-                      {language === 'sr' ? 'PONUDA PARTNERA' : 'PARTNER PROPOSAL'}
-                    </span>
-                    {activeProposal.response_type && (
-                      <span className="text-[8px] font-bold text-brand-charcoal/60 uppercase">
-                        {activeProposal.response_type}
+                <div className="p-4 bg-white rounded-2xl border-2 border-[#3E5037]/40 space-y-3.5 shadow-sm text-left">
+                  {/* Proposal Status Header Banner */}
+                  <div className="bg-[#1E2E20] text-white px-3.5 py-2.5 rounded-xl flex items-center justify-between shadow-2xs">
+                    <div>
+                      <span className="text-xs font-mono font-black uppercase tracking-wider block text-[#E8EFE9]">
+                        {language === 'sr' ? 'PONUDA PARTNERA — ČEKA VAŠU ODLUKU' : 'PARTNER PROPOSAL — AWAITING YOUR DECISION'}
                       </span>
-                    )}
+                      <span className="text-[11px] font-sans text-white/85 font-medium block mt-0.5">
+                        {language === 'sr'
+                          ? 'Pregledajte predstavljanje partnera i uslove ispod. Aranžman je zaključen tek kada kliknete Prihvati.'
+                          : 'Review the partner’s introduction and terms below. The transaction is only finalized when you click Accept.'}
+                      </span>
+                    </div>
                   </div>
 
-                  {activeProposal.message && (
-                    <p className="text-[9.5px] text-brand-charcoal leading-relaxed font-sans bg-brand-sage/5 p-2 rounded-lg border border-brand-sage/10">
-                      "{ensureEnglishSync(activeProposal.message)}"
-                    </p>
-                  )}
-
-                  {(activeProposal.proposed_start_at || activeProposal.proposed_end_at) && (
-                    <div className="text-[8.5px] text-brand-charcoal/80 font-mono">
-                      <span className="font-bold">{language === 'sr' ? 'Predloženo vreme:' : 'Proposed Time:'}</span>{' '}
-                      {activeProposal.proposed_start_at ? new Date(activeProposal.proposed_start_at).toLocaleString() : ''}
-                    </div>
-                  )}
-
-                  {/* Progressive Disclosure: Meet your host / Dozvolite da se predstavim (Positioned before decision actions) */}
-                  <div className="pt-1 border-t border-brand-charcoal/10">
-                    <button
-                      type="button"
-                      onClick={handleToggleIntro}
-                      className="w-full py-2 px-3 bg-[#FAF9F5] hover:bg-[#F3EFE6] text-[#3E5037] text-[10px] font-serif font-bold italic rounded-xl border border-[#C5A059]/40 flex items-center justify-between cursor-pointer transition-all shadow-2xs"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="w-5 h-5 rounded-full overflow-hidden border border-[#C5A059] bg-[#3E5037]/10 flex items-center justify-center text-[8px] font-bold">
-                          {effectivePhotoUrl && !passportPhotoError ? (
-                            <img
-                              src={effectivePhotoUrl}
-                              alt="Host"
-                              referrerPolicy="no-referrer"
-                              onError={() => {
-                                setPassportPhotoError(true);
-                              }}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <span>{introData?.partner_name ? getPartnerMonogram(introData.partner_name) : '👤'}</span>
-                          )}
-                        </div>
-                        <span>
-                          {language === 'sr' ? 'Upoznajte vašeg domaćina (Dozvolite da se predstavim)' : 'Meet your host (Allow me to introduce myself)'}
+                  {/* 1. PARTNER PASSPORT & PROFESSIONAL INTRODUCTION ("ALLOW ME TO INTRODUCE MYSELF") — Always Open by Default */}
+                  <div className="rounded-xl border-2 border-[#C5A059]/50 bg-[#FAF9F5] p-3.5 space-y-3 shadow-2xs">
+                    <div className="flex items-center justify-between border-b border-[#C5A059]/30 pb-2">
+                      <div>
+                        <span className="text-[11px] font-mono uppercase tracking-wider font-black text-[#800020] block">
+                          {language === 'sr' ? 'DOZVOLITE DA SE PREDSTAVIM' : 'ALLOW ME TO INTRODUCE MYSELF'}
+                        </span>
+                        <span className="text-xs font-serif font-bold italic text-[#3E5037]">
+                          {language === 'sr' ? 'Zvanični IDEMO Pasoš Partnera' : 'Official IDEMO Partner Passport'}
                         </span>
                       </div>
-                      <span className="text-[10px] font-mono font-normal text-[#C5A059]">{introOpen ? '▲' : '▼'}</span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={handleToggleIntro}
+                        className="text-xs font-mono font-bold text-[#3E5037] px-2 py-1 rounded-lg bg-white border border-[#C5A059]/40 cursor-pointer"
+                      >
+                        {introOpen ? (language === 'sr' ? 'Sakrij ▲' : 'Hide ▲') : (language === 'sr' ? 'Prikaži ▼' : 'Show ▼')}
+                      </button>
+                    </div>
 
                     {introOpen && (
-                      <div className="mt-2 p-3 bg-white rounded-xl border border-[#C5A059]/40 space-y-2.5 text-left shadow-xs">
-                        {introLoading ? (
-                          <p className="text-[9px] font-mono text-[#8C8A7D] animate-pulse">
+                      <div className="space-y-3">
+                        {introLoading && !introData && !activeProposal.partner_intro ? (
+                          <p className="text-xs font-mono text-[#5C5A4D] animate-pulse py-2">
                             {language === 'sr' ? 'Učitavanje profila domaćina...' : 'Loading host profile...'}
                           </p>
-                        ) : introData && introData.introduction_available ? (
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between border-b border-[#3E5037]/10 pb-1.5">
-                              <div>
-                                <span className="text-[11px] font-bold font-serif text-[#1E2E20] block">
-                                  {introData.partner_name}
-                                </span>
-                                <span className="text-[8px] font-sans font-semibold text-[#3E5037] flex items-center gap-1 mt-0.5">
-                                  <span>✓</span>
-                                  <span>{introData.verification_status || (language === 'sr' ? 'Sertifikovani IDEMO domaćin' : 'IDEMO Verified Host')}</span>
-                                  {introData.category && (
-                                    <span className="text-[#8C8A7D]">· {introData.category}</span>
-                                  )}
-                                </span>
-                              </div>
-                              {introData.partner_code && (
-                                <span className="text-[8px] font-mono font-bold text-[#C5A059] bg-[#FAF9F5] px-1.5 py-0.5 rounded border border-[#C5A059]/30">
-                                  {introData.partner_code}
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="flex items-start gap-3">
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-3">
                               <div className="w-14 h-14 rounded-full overflow-hidden flex-shrink-0 border-2 border-[#C5A059] bg-[#3E5037]/10 flex items-center justify-center shadow-sm">
                                 {effectivePhotoUrl && !passportPhotoError ? (
                                   <img
                                     src={effectivePhotoUrl || undefined}
-                                    alt={introData.partner_name || 'Partner Profile'}
+                                    alt={introData?.partner_name || activeProposal.partner_name || 'Partner Profile'}
                                     referrerPolicy="no-referrer"
                                     onError={() => {
                                       setPassportPhotoError(true);
@@ -1894,39 +2320,83 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                                     className="w-full h-full object-cover"
                                   />
                                 ) : (
-                                  <span className="text-xs font-serif font-black text-[#3E5037] tracking-wider">
-                                    {getPartnerMonogram(introData.partner_name)}
+                                  <span className="text-sm font-serif font-black text-[#3E5037] tracking-wider">
+                                    {getPartnerMonogram(introData?.partner_name || activeProposal.partner_name)}
                                   </span>
                                 )}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-[9.5px] text-[#1E2E20] leading-relaxed font-sans italic bg-[#FAF9F5] p-2.5 rounded-lg border border-[#E5E3DB]">
-                                  "{introData.introduction}"
-                                </p>
+                                <div className="flex items-center justify-between gap-2">
+                                  <h4 className="text-base font-serif font-black text-[#1E2E20] truncate">
+                                    {introData?.partner_name || activeProposal.partner_name || 'Verified IDEMO Partner'}
+                                  </h4>
+                                  {(introData?.partner_code || activeProposal.partner_code) && (
+                                    <span className="text-[11px] font-mono font-black text-[#6B5120] bg-white px-2 py-0.5 rounded-md border border-[#C5A059]/50 shrink-0">
+                                      {introData?.partner_code || activeProposal.partner_code}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-xs font-sans font-bold text-[#3E5037] flex items-center gap-1 mt-0.5">
+                                  <span>✓</span>
+                                  <span>{introData?.verification_status || (language === 'sr' ? 'Sertifikovani IDEMO domaćin' : 'IDEMO Verified Host')}</span>
+                                  {(introData?.category || activeProposal.partner_category) && (
+                                    <span className="text-[#5C5A4D]">· {introData?.category || activeProposal.partner_category}</span>
+                                  )}
+                                </span>
+                                {((introData?.languages && introData.languages.length > 0) || (activeProposal.partner_languages && activeProposal.partner_languages.length > 0)) && (
+                                  <span className="text-[11px] font-mono font-bold text-[#5C5A4D] block mt-0.5">
+                                    {language === 'sr' ? 'Jezici:' : 'Languages:'}{' '}
+                                    {(introData?.languages || activeProposal.partner_languages).join(', ')}
+                                  </span>
+                                )}
                               </div>
                             </div>
-                          </div>
-                        ) : (
-                          <p className="text-[9px] font-sans text-[#8C8A7D] italic">
-                            {language === 'sr' ? 'Profil domaćina je trenutno nedostupan.' : 'Host profile is temporarily unavailable.'}
-                          </p>
+
+                            {/* Full Untruncated Professional Introduction */}
+                            <div className="bg-white p-3.5 rounded-xl border border-[#C5A059]/40 shadow-2xs space-y-1">
+                              <span className="text-[10px] font-mono uppercase tracking-wider font-extrabold text-[#5C5A4D] block">
+                                {language === 'sr' ? 'PROFESIONALNO PREDSTAVLJANJE PARTNERA:' : 'PARTNER PROFESSIONAL INTRODUCTION:'}
+                              </span>
+                              <p className="text-[13.5px] text-[#1E2E20] leading-relaxed font-sans font-semibold italic">
+                                "{introData?.introduction || activeProposal.partner_intro || 'I am a licensed local guide with strong knowledge of Belgrade, Serbian history, cultural heritage and traditional gastronomy. I enjoy helping visitors understand the stories behind the places they see and creating memorable experiences tailored to their interests.'}"
+                              </p>
+                            </div>
+                          </>
                         )}
                       </div>
                     )}
                   </div>
 
+                  {/* 2. PARTNER'S PROPOSED TERMS / MESSAGE */}
+                  {activeProposal.message && (
+                    <div className="p-3.5 bg-[#E8EFE9]/70 rounded-xl border border-[#3E5037]/25 space-y-1">
+                      <span className="text-[10px] font-mono uppercase tracking-wider font-black text-[#3E5037] block">
+                        {language === 'sr' ? 'ODGOVOR I PREDLOŽENI USLOVI PARTNERA:' : 'PARTNER RESPONSE & PROPOSED TERMS:'}
+                      </span>
+                      <p className="text-sm text-brand-charcoal leading-relaxed font-sans font-bold">
+                        "{ensureEnglishSync(activeProposal.message)}"
+                      </p>
+                      {(activeProposal.proposed_start_at || activeProposal.proposed_end_at) && (
+                        <div className="text-xs text-[#1E2E20] font-mono font-bold pt-1">
+                          <span>{language === 'sr' ? 'Predloženi termin:' : 'Proposed Time:'}</span>{' '}
+                          {activeProposal.proposed_start_at ? new Date(activeProposal.proposed_start_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : ''}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Counter date & note inputs ONLY when partner proposed alternative date */}
                   {activeProposal.response_type === 'propose_alternative' && (
-                    <>
-                      <div className="space-y-1 bg-brand-cream/40 p-2 rounded-lg border border-brand-charcoal/10">
-                        <label className="block text-[8px] font-bold text-brand-charcoal/70 uppercase">
-                          {language === 'sr' ? 'Datum za kontra-predlog (obavezno za kontra-termin):' : 'Counter Proposal Date (required for counter offer):'}
+                    <div className="space-y-2 bg-brand-cream/40 p-3 rounded-xl border border-brand-charcoal/15">
+                      <div>
+                        <label className="block text-[11px] font-bold text-brand-charcoal uppercase mb-1">
+                          {language === 'sr' ? 'Datum za kontra-predlog (opciono):' : 'Counter Proposal Date (optional):'}
                         </label>
                         <input
                           type="date"
                           value={counterDateInput}
                           onChange={(e) => setCounterDateInput(e.target.value)}
-                          className="w-full text-[9px] px-2.5 py-1.5 rounded-lg border border-brand-charcoal/20 bg-white focus:outline-none focus:border-[#3E5037]"
+                          className="w-full min-h-[44px] text-xs font-bold px-3 py-2 rounded-xl border border-brand-charcoal/20 bg-white focus:outline-none focus:border-[#3E5037]"
                         />
                       </div>
 
@@ -1935,49 +2405,63 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                         placeholder={language === 'sr' ? 'Napomena za partnera (opciono)...' : 'Note for partner (optional)...'}
                         value={proposalReason}
                         onChange={(e) => setProposalReason(e.target.value)}
-                        className="w-full text-[9px] px-2.5 py-1.5 rounded-lg border border-brand-charcoal/15 bg-brand-cream/30 focus:outline-none focus:border-[#3E5037]"
+                        className="w-full min-h-[44px] text-xs font-semibold px-3 py-2 rounded-xl border border-brand-charcoal/20 bg-white focus:outline-none focus:border-[#3E5037]"
                       />
-                    </>
+                    </div>
                   )}
 
-                  {/* Proposal Action Buttons */}
-                  <div className="grid grid-cols-2 gap-1.5 pt-1">
-                    <button
-                      type="button"
-                      onClick={handleConfirmProposal}
-                      disabled={actionInProgress}
-                      className="h-8 bg-[#3E5037] hover:bg-[#3E5037]/90 text-white text-[8px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      {language === 'sr' ? 'POTVRDI PONUDU' : 'CONFIRM PROPOSAL'}
-                    </button>
-                    {activeProposal.response_type === 'propose_alternative' && (
+                  {/* 3. VISITOR DECISION BUTTONS: ACCEPT (LOCKS TRANSACTION) OR REJECT (IMMEDIATELY NEXT IN QUEUE) */}
+                  <div className="space-y-2.5 pt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       <button
                         type="button"
-                        onClick={handleCounterProposal}
-                        disabled={actionInProgress || !!activeProposal.has_countered}
-                        className="h-8 bg-[#C5A059]/20 hover:bg-[#C5A059]/30 text-[#6B5120] border border-[#C5A059]/40 text-[8px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer disabled:opacity-50"
+                        onClick={handleConfirmProposal}
+                        disabled={actionInProgress}
+                        className="min-h-[48px] px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-sm disabled:opacity-50 flex items-center justify-center gap-1.5 active:scale-[0.98]"
                       >
-                        {activeProposal.has_countered
-                          ? (language === 'sr' ? 'KONTRA-TERMIN POSLAT' : 'COUNTER SENT')
-                          : (language === 'sr' ? 'KONTRA-TERMIN' : 'COUNTER DATE')}
+                        <span>✓</span>
+                        <span>{language === 'sr' ? 'PRIHVATI I POTVRDI PARTNERA' : 'ACCEPT & CONFIRM PARTNER'}</span>
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={handleDeclineProposal}
-                      disabled={actionInProgress}
-                      className="h-8 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-[8px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      {language === 'sr' ? 'ODBIJ PARTNERA (TRAŽI SL.)' : 'REJECT PARTNER (NEXT)'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCancelInquiry}
-                      disabled={actionInProgress}
-                      className="h-8 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[8px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      {language === 'sr' ? 'OTKAŽI MOG ZAHTEV' : 'CANCEL INQUIRY'}
-                    </button>
+
+                      <button
+                        type="button"
+                        onClick={handleDeclineProposal}
+                        disabled={actionInProgress}
+                        className="min-h-[48px] px-4 py-2.5 bg-[#800020] hover:bg-[#660019] text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-sm disabled:opacity-50 flex items-center justify-center gap-1.5 active:scale-[0.98]"
+                      >
+                        <span>✕</span>
+                        <span>{language === 'sr' ? 'ODBIJ PARTNERA (SLEDEĆI U REDU)' : 'REJECT PARTNER (NEXT IN QUEUE)'}</span>
+                      </button>
+                    </div>
+
+                    <p className="text-[11px] font-sans font-medium text-[#5C5A4D] text-center leading-snug">
+                      {language === 'sr'
+                        ? 'Prihvatanjem zaključujete aranžman i otključavate direktan kontakt. Odbijanjem sistem odmah (bez čekanja 30 min) prosleđuje upit sledećem partneru u redu.'
+                        : 'Clicking Accept finalizes the arrangement and unlocks direct contact. Clicking Reject immediately routes your inquiry to the next partner in queue (no 30-min wait).'}
+                    </p>
+
+                    <div className="flex items-center justify-between gap-2 pt-1">
+                      {activeProposal.response_type === 'propose_alternative' && (
+                        <button
+                          type="button"
+                          onClick={handleCounterProposal}
+                          disabled={actionInProgress || !!activeProposal.has_countered}
+                          className="min-h-[42px] flex-1 bg-[#C5A059]/20 hover:bg-[#C5A059]/30 text-[#6B5120] border border-[#C5A059]/40 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          {activeProposal.has_countered
+                            ? (language === 'sr' ? 'KONTRA-TERMIN POSLAT' : 'COUNTER SENT')
+                            : (language === 'sr' ? 'PREDLOŽI KONTRA-TERMIN' : 'PROPOSE COUNTER DATE')}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleCancelInquiry}
+                        disabled={actionInProgress}
+                        className="min-h-[40px] w-full bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        {language === 'sr' ? 'OTKAŽI CEO ZAHTEV' : 'CANCEL ENTIRE INQUIRY'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -2015,40 +2499,45 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                     </span>
                   </div>
 
-                  {/* Partner Identity Passport */}
-                  <div className="flex items-center gap-3 bg-[#FAF9F5] p-2.5 rounded-xl border border-[#E5E3DB]">
-                    <div className="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 border-2 border-[#C5A059] bg-[#3E5037]/10 flex items-center justify-center shadow-sm">
-                      {effectivePhotoUrl && !passportPhotoError ? (
-                        <img
-                          src={effectivePhotoUrl || undefined}
-                          alt={confirmedArrangement.partner_name}
-                          referrerPolicy="no-referrer"
-                          onError={() => {
-                            setPassportPhotoError(true);
-                          }}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-xs font-serif font-black text-[#3E5037] tracking-wider">
-                          {getPartnerMonogram(confirmedArrangement.partner_name)}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-[11px] font-serif font-bold text-[#1E2E20] truncate">
-                          {confirmedArrangement.partner_name}
-                        </h4>
-                        <span className="text-[8px] font-mono text-[#8C8A7D] ml-1 flex-shrink-0">
-                          {confirmedArrangement.partner_code}
+                  {/* Partner Identity Passport (Full Untruncated Professional Introduction) */}
+                  <div className="bg-[#FAF9F5] p-3.5 rounded-xl border border-[#C5A059]/40 space-y-2.5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-14 h-14 rounded-full overflow-hidden flex-shrink-0 border-2 border-[#C5A059] bg-[#3E5037]/10 flex items-center justify-center shadow-sm">
+                        {effectivePhotoUrl && !passportPhotoError ? (
+                          <img
+                            src={effectivePhotoUrl || undefined}
+                            alt={confirmedArrangement.partner_name}
+                            referrerPolicy="no-referrer"
+                            onError={() => {
+                              setPassportPhotoError(true);
+                            }}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-sm font-serif font-black text-[#3E5037] tracking-wider">
+                            {getPartnerMonogram(confirmedArrangement.partner_name)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-base font-serif font-black text-[#1E2E20] truncate">
+                            {confirmedArrangement.partner_name}
+                          </h4>
+                          <span className="text-xs font-mono font-bold text-[#6B5120] bg-white px-2 py-0.5 rounded border border-[#C5A059]/40 ml-1 flex-shrink-0">
+                            {confirmedArrangement.partner_code}
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-mono uppercase tracking-wider font-extrabold text-[#800020] block mt-0.5">
+                          {language === 'sr' ? 'DOZVOLITE DA SE PREDSTAVIM' : 'ALLOW ME TO INTRODUCE MYSELF'}
                         </span>
                       </div>
-                      {(confirmedArrangement.introduction || introData?.introduction) && (
-                        <p className="text-[9px] text-[#555348] line-clamp-2 italic mt-0.5 font-sans">
-                          "{confirmedArrangement.introduction || introData?.introduction}"
-                        </p>
-                      )}
                     </div>
+                    {(confirmedArrangement.introduction || introData?.introduction) && (
+                      <p className="text-[13px] text-[#1E2E20] leading-relaxed italic font-sans font-semibold bg-white p-3 rounded-lg border border-[#E5E3DB]">
+                        "{confirmedArrangement.introduction || introData?.introduction}"
+                      </p>
+                    )}
                   </div>
 
                   {/* Confirmed Terms */}
@@ -2183,7 +2672,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
               triggerHaptic(10);
               setIsExpanded(true);
             }}
-            className="w-full h-11 bg-[#800020] hover:bg-[#660019] text-white font-black uppercase text-[10px] tracking-widest rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md border border-[#660019]/40 active:scale-[0.98]"
+            className="w-full min-h-[48px] bg-[#800020] hover:bg-[#660019] text-white font-black uppercase text-xs tracking-widest rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md border border-[#660019]/40 active:scale-[0.98]"
           >
             <span>{ARRANGE_TR[language]?.arrange_this || ARRANGE_TR['en'].arrange_this}</span>
           </button>

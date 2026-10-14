@@ -671,6 +671,8 @@ export async function fetchPartnerIntroduction(inquiryId: string): Promise<Partn
   const anonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
 
   // Attempt remote fetch when Supabase is configured and credential token is present
+  let remotePartnerName: string | undefined;
+  let remotePartnerCode: string | undefined;
   if (supabaseUrl && token) {
     try {
       const response = await fetch(
@@ -687,6 +689,12 @@ export async function fetchPartnerIntroduction(inquiryId: string): Promise<Partn
 
       if (response.ok) {
         const resData = await response.json();
+        if (resData.partner_name && resData.partner_name !== 'Verified Partner') {
+          remotePartnerName = resData.partner_name;
+        }
+        if (resData.partner_code && resData.partner_code !== 'IDM-PTR') {
+          remotePartnerCode = String(resData.partner_code).toUpperCase();
+        }
         if (resData.introduction_available && resData.introduction) {
           const remotePhotoUrl = resData.photo_url || null;
           return {
@@ -715,20 +723,36 @@ export async function fetchPartnerIntroduction(inquiryId: string): Promise<Partn
     }
   }
 
-  // Resilient Fallback: Resolve canonical partner passport from local context
-  const proposalMsg = targetInquiry?.cached_proposal?.message || '';
-  const matchId = targetInquiry?.cached_proposal?.match_id || '';
+  // Resilient Fallback: Resolve canonical partner passport from local context (cached_proposal, remote partner code, or confirmed_arrangement)
+  const cachedProp = targetInquiry?.cached_proposal;
+  const proposalMsg = cachedProp?.message || '';
+  const matchId = cachedProp?.match_id || '';
+  const cachedCode = (cachedProp?.partner_code || remotePartnerCode || '').toUpperCase();
   const arrangementCode = (targetInquiry?.confirmed_arrangement?.partner_code || '').toUpperCase();
   
-  let partnerCode = 'UNO1';
+  let partnerCode = cachedCode || arrangementCode || 'UNO1';
   let passport = CANONICAL_PARTNER_PASSPORTS.UNO1; // Default to official UNO Guide
 
-  if (proposalMsg.includes('UNO2') || matchId.includes('UNO2') || arrangementCode.includes('UNO2')) {
+  if (cachedCode === 'UNO2' || proposalMsg.includes('UNO2') || matchId.includes('UNO2') || arrangementCode.includes('UNO2')) {
     partnerCode = 'UNO2';
     passport = CANONICAL_PARTNER_PASSPORTS.UNO2;
-  } else if (proposalMsg.includes('UNO1') || matchId.includes('UNO1') || arrangementCode.includes('UNO1')) {
+  } else if (cachedCode === 'UNO1' || proposalMsg.includes('UNO1') || matchId.includes('UNO1') || arrangementCode.includes('UNO1')) {
     partnerCode = 'UNO1';
     passport = CANONICAL_PARTNER_PASSPORTS.UNO1;
+  } else if (cachedCode && CANONICAL_PARTNER_PASSPORTS[cachedCode]) {
+    partnerCode = cachedCode;
+    passport = CANONICAL_PARTNER_PASSPORTS[cachedCode];
+  } else if (cachedCode) {
+    partnerCode = cachedCode;
+    passport = {
+      ...CANONICAL_PARTNER_PASSPORTS.DEFAULT,
+      name: cachedProp?.partner_name || remotePartnerName || 'Verified Partner',
+      code: partnerCode,
+      photo_url: cachedProp?.partner_photo_url || CANONICAL_PARTNER_PASSPORTS.DEFAULT.photo_url,
+      category: cachedProp?.partner_category || 'IDEMO Verified Partner',
+      bio: cachedProp?.partner_intro || CANONICAL_PARTNER_PASSPORTS.DEFAULT.bio,
+      languages: cachedProp?.partner_languages || CANONICAL_PARTNER_PASSPORTS.DEFAULT.languages,
+    };
   } else if (targetInquiry?.confirmed_arrangement?.partner_code) {
     partnerCode = targetInquiry.confirmed_arrangement.partner_code.toUpperCase();
     passport = CANONICAL_PARTNER_PASSPORTS[partnerCode] || {
@@ -745,8 +769,8 @@ export async function fetchPartnerIntroduction(inquiryId: string): Promise<Partn
   }
 
   // Check for locally saved/updated passport or photo in safeStorage
-  let dynamicBio = passport.bio;
-  let dynamicPhotoUrl = targetInquiry?.confirmed_arrangement?.photo_url || passport.photo_url || null;
+  let dynamicBio = cachedProp?.partner_intro || passport.bio;
+  let dynamicPhotoUrl = cachedProp?.partner_photo_url || targetInquiry?.confirmed_arrangement?.photo_url || passport.photo_url || null;
 
   try {
     const rawStored = safeStorage.getItem(`idemo_partner_passport_${partnerCode}`) ||
@@ -768,8 +792,8 @@ export async function fetchPartnerIntroduction(inquiryId: string): Promise<Partn
   }
 
   // Resolve verified contact phone and email once partner has responded/accepted
-  let resolvedPhone: string | null = targetInquiry?.confirmed_arrangement?.contact_phone || null;
-  let resolvedEmail: string | null = targetInquiry?.confirmed_arrangement?.contact_email || null;
+  let resolvedPhone: string | null = cachedProp?.contact_phone || targetInquiry?.confirmed_arrangement?.contact_phone || null;
+  let resolvedEmail: string | null = cachedProp?.contact_email || targetInquiry?.confirmed_arrangement?.contact_email || null;
 
   if (!resolvedPhone || !resolvedEmail) {
     // Check known verified contact numbers from canonical passports
@@ -788,14 +812,14 @@ export async function fetchPartnerIntroduction(inquiryId: string): Promise<Partn
   return {
     success: true,
     introduction_available: true,
-    partner_name: passport.name,
-    partner_code: passport.code,
-    category: passport.category,
+    partner_name: cachedProp?.partner_name || remotePartnerName || passport.name,
+    partner_code: partnerCode || passport.code,
+    category: cachedProp?.partner_category || passport.category,
     verification_status: passport.verification_status,
     introduction: dynamicBio,
     photo_available: true,
     photo_url: dynamicPhotoUrl,
-    languages: passport.languages,
+    languages: cachedProp?.partner_languages || passport.languages,
     service_areas: passport.service_areas,
     capabilities: passport.capabilities,
     portfolio_items: passport.portfolio_items,

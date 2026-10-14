@@ -1,7 +1,10 @@
 -- IDEMO LEAN PARTNER PASSPORT & OPERATIONAL MATCHING PROFILE (PROPOSAL 2)
 -- Migration: 20261013010000_lean_partner_passport_proposal_2.sql
 -- Description: Enriches partner_profile_content with Agency vs Individual distinction,
---              website, guide licence, PIB, languages, transport capacity, and notice window.
+--              website, guide licence, PIB, languages, transport capacity, and notice window,
+--              and updates fetch_partner_profile_review_queue_secure with explicit enum-to-text comparison.
+--              Partner draft saves remain governed by the partner_resolution Edge Function
+--              using established x-partner-session authentication.
 
 -- 1. Extend public.partner_profile_content table with Proposal 2 fields
 ALTER TABLE public.partner_profile_content
@@ -9,151 +12,20 @@ ALTER TABLE public.partner_profile_content
   ADD COLUMN IF NOT EXISTS website TEXT NULL,
   ADD COLUMN IF NOT EXISTS guide_licence TEXT NULL,
   ADD COLUMN IF NOT EXISTS pib TEXT NULL,
-  ADD COLUMN IF NOT EXISTS languages TEXT[] DEFAULT ARRAY['English', 'Serbian'],
+  ADD COLUMN IF NOT EXISTS languages TEXT[] DEFAULT '{}'::TEXT[],
   ADD COLUMN IF NOT EXISTS transport_capacity TEXT DEFAULT 'none',
   ADD COLUMN IF NOT EXISTS notice_window TEXT DEFAULT '24h',
   ADD COLUMN IF NOT EXISTS applied_recs TEXT[] NULL,
   ADD COLUMN IF NOT EXISTS applied_recs_note TEXT NULL,
   ADD COLUMN IF NOT EXISTS canonical_region TEXT NULL;
 
--- 2. Create Lean Save RPC
-CREATE OR REPLACE FUNCTION public.save_partner_profile_draft_lean_secure(
-  p_partner_id UUID,
-  p_intro_draft TEXT,
-  p_draft_photo_path TEXT,
-  p_draft_photo_mime TEXT,
-  p_photo_consent BOOLEAN,
-  p_contact_phone TEXT,
-  p_contact_email TEXT,
-  p_partner_type TEXT DEFAULT 'Individual',
-  p_website TEXT DEFAULT NULL,
-  p_guide_licence TEXT DEFAULT NULL,
-  p_pib TEXT DEFAULT NULL,
-  p_languages TEXT[] DEFAULT ARRAY['English', 'Serbian'],
-  p_transport_capacity TEXT DEFAULT 'none',
-  p_notice_window TEXT DEFAULT '24h',
-  p_canonical_region TEXT DEFAULT NULL,
-  p_applied_recs TEXT[] DEFAULT NULL,
-  p_applied_recs_note TEXT DEFAULT NULL
-)
-RETURNS JSONB
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_word_count INT := 0;
-  v_clean_intro TEXT;
-  v_consent_time TIMESTAMPTZ;
-  v_partner_type TEXT;
-BEGIN
-  -- Word count validation (max 200 words)
-  IF p_intro_draft IS NOT NULL AND TRIM(p_intro_draft) <> '' THEN
-    v_clean_intro := TRIM(p_intro_draft);
-    v_word_count := CARDINALITY(REGEXP_SPLIT_TO_ARRAY(v_clean_intro, '\s+'));
-    IF v_word_count > 200 THEN
-      RETURN jsonb_build_object(
-        'success', FALSE,
-        'error', 'WORD_LIMIT_EXCEEDED',
-        'message', 'Introduction text cannot exceed 200 words.'
-      );
-    END IF;
-  ELSE
-    v_clean_intro := NULL;
-  END IF;
+-- Ensure column default is '{}' even if the column was previously created with another default
+ALTER TABLE public.partner_profile_content
+  ALTER COLUMN languages SET DEFAULT '{}'::TEXT[];
 
-  IF p_photo_consent IS TRUE THEN
-    v_consent_time := NOW();
-  ELSE
-    v_consent_time := NULL;
-  END IF;
-
-  v_partner_type := CASE 
-    WHEN LOWER(TRIM(COALESCE(p_partner_type, 'Individual'))) = 'organisation' THEN 'Organisation'
-    ELSE 'Individual'
-  END;
-
-  INSERT INTO public.partner_profile_content (
-    partner_id,
-    intro_draft,
-    draft_photo_path,
-    draft_photo_mime,
-    review_status,
-    photo_consent_given,
-    photo_consent_at,
-    draft_contact_phone,
-    draft_contact_email,
-    partner_type,
-    website,
-    guide_licence,
-    pib,
-    languages,
-    transport_capacity,
-    notice_window,
-    canonical_region,
-    applied_recs,
-    applied_recs_note,
-    updated_at
-  )
-  VALUES (
-    p_partner_id,
-    v_clean_intro,
-    p_draft_photo_path,
-    p_draft_photo_mime,
-    'draft',
-    COALESCE(p_photo_consent, FALSE),
-    v_consent_time,
-    NULLIF(TRIM(p_contact_phone), ''),
-    NULLIF(TRIM(p_contact_email), ''),
-    v_partner_type,
-    NULLIF(TRIM(p_website), ''),
-    NULLIF(TRIM(p_guide_licence), ''),
-    NULLIF(TRIM(p_pib), ''),
-    COALESCE(p_languages, ARRAY['English', 'Serbian']),
-    COALESCE(p_transport_capacity, 'none'),
-    COALESCE(p_notice_window, '24h'),
-    NULLIF(TRIM(p_canonical_region), ''),
-    p_applied_recs,
-    NULLIF(TRIM(p_applied_recs_note), ''),
-    NOW()
-  )
-  ON CONFLICT (partner_id) DO UPDATE SET
-    intro_draft = EXCLUDED.intro_draft,
-    draft_photo_path = EXCLUDED.draft_photo_path,
-    draft_photo_mime = EXCLUDED.draft_photo_mime,
-    review_status = CASE 
-      WHEN partner_profile_content.review_status IN ('pending_review', 'approved', 'changes_requested') THEN partner_profile_content.review_status
-      ELSE 'draft'::public.partner_profile_review_status
-    END,
-    photo_consent_given = EXCLUDED.photo_consent_given,
-    photo_consent_at = COALESCE(EXCLUDED.photo_consent_at, partner_profile_content.photo_consent_at),
-    draft_contact_phone = EXCLUDED.draft_contact_phone,
-    draft_contact_email = EXCLUDED.draft_contact_email,
-    partner_type = EXCLUDED.partner_type,
-    website = EXCLUDED.website,
-    guide_licence = EXCLUDED.guide_licence,
-    pib = EXCLUDED.pib,
-    languages = EXCLUDED.languages,
-    transport_capacity = EXCLUDED.transport_capacity,
-    notice_window = EXCLUDED.notice_window,
-    canonical_region = COALESCE(EXCLUDED.canonical_region, partner_profile_content.canonical_region),
-    applied_recs = COALESCE(EXCLUDED.applied_recs, partner_profile_content.applied_recs),
-    applied_recs_note = COALESCE(EXCLUDED.applied_recs_note, partner_profile_content.applied_recs_note),
-    updated_at = NOW();
-
-  RETURN jsonb_build_object(
-    'success', TRUE,
-    'status', 'draft_saved',
-    'message', 'Lean partner passport draft successfully saved.'
-  );
-END;
-$$;
-
-GRANT EXECUTE ON FUNCTION public.save_partner_profile_draft_lean_secure(
-  UUID, TEXT, TEXT, TEXT, BOOLEAN, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT[], TEXT, TEXT, TEXT, TEXT[], TEXT
-) TO anon, authenticated, service_role;
-
--- 3. Update fetch_partner_profile_review_queue_secure to include Proposal 2 fields
+-- 2. Update fetch_partner_profile_review_queue_secure to include Proposal 2 fields,
+--    enforce editorial_lead / super_admin / service_role authorization,
+--    and fix enum-to-text comparison (ppc.review_status::TEXT = v_status)
 CREATE OR REPLACE FUNCTION public.fetch_partner_profile_review_queue_secure(
   p_status TEXT DEFAULT 'pending_review'
 )
@@ -163,9 +35,38 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
+  v_auth_role TEXT;
+  v_caller_role TEXT;
   v_results JSONB;
   v_status TEXT;
 BEGIN
+  v_auth_role := COALESCE(auth.role(), '');
+
+  -- Enforce Curator / Studio Authorization (service_role bypasses; authenticated requires editorial_lead or super_admin)
+  IF v_auth_role != 'service_role' THEN
+    IF auth.uid() IS NULL THEN
+      RETURN jsonb_build_object(
+        'success', FALSE,
+        'error', 'UNAUTHORIZED',
+        'message', 'Authentication required.'
+      );
+    END IF;
+
+    v_caller_role := COALESCE(
+      auth.jwt() -> 'app_metadata' ->> 'role',
+      auth.jwt() ->> 'role',
+      ''
+    );
+
+    IF v_caller_role NOT IN ('editorial_lead', 'super_admin') THEN
+      RETURN jsonb_build_object(
+        'success', FALSE,
+        'error', 'FORBIDDEN',
+        'message', 'Editorial review access is restricted.'
+      );
+    END IF;
+  END IF;
+
   v_status := LOWER(TRIM(COALESCE(p_status, 'pending_review')));
 
   SELECT COALESCE(
@@ -179,7 +80,7 @@ BEGIN
         'website', ppc.website,
         'guide_licence', ppc.guide_licence,
         'pib', ppc.pib,
-        'languages', COALESCE(ppc.languages, ARRAY['English', 'Serbian']),
+        'languages', COALESCE(ppc.languages, '{}'::TEXT[]),
         'transport_capacity', COALESCE(ppc.transport_capacity, 'none'),
         'notice_window', COALESCE(ppc.notice_window, '24h'),
         'review_status', ppc.review_status,
@@ -200,10 +101,10 @@ BEGIN
         'canonical_region', ppc.canonical_region,
         'applied_recs', ppc.applied_recs,
         'applied_recs_note', ppc.applied_recs_note,
-        'proposed_rec_title', ppc.proposed_rec_title,
-        'proposed_rec_category', ppc.proposed_rec_category,
-        'proposed_rec_location', ppc.proposed_rec_location,
-        'proposed_rec_rationale', ppc.proposed_rec_rationale,
+        'proposed_rec_title', to_jsonb(ppc)->>'proposed_rec_title',
+        'proposed_rec_category', to_jsonb(ppc)->>'proposed_rec_category',
+        'proposed_rec_location', to_jsonb(ppc)->>'proposed_rec_location',
+        'proposed_rec_rationale', to_jsonb(ppc)->>'proposed_rec_rationale',
         'submitted_at', ppc.submitted_at,
         'reviewed_at', ppc.reviewed_at,
         'reviewer_note', ppc.review_note,
@@ -226,7 +127,7 @@ BEGIN
   FROM public.partner_profile_content ppc
   JOIN public.partners p ON p.id = ppc.partner_id
   WHERE (v_status = 'all' AND ppc.review_status IN ('pending_review', 'changes_requested', 'approved'))
-     OR (v_status != 'all' AND ppc.review_status = v_status);
+     OR (v_status != 'all' AND ppc.review_status::TEXT = v_status);
 
   RETURN jsonb_build_object(
     'success', TRUE,
@@ -237,4 +138,7 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.fetch_partner_profile_review_queue_secure(TEXT) TO anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.fetch_partner_profile_review_queue_secure(TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.fetch_partner_profile_review_queue_secure(TEXT) FROM anon;
+GRANT EXECUTE ON FUNCTION public.fetch_partner_profile_review_queue_secure(TEXT) TO authenticated, service_role;
+

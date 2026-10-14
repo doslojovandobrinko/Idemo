@@ -914,65 +914,45 @@ export async function savePartnerProfileDraft(
     const targetKey = `idemo_partner_passport_${(session.partnerId || '').toUpperCase()}`;
     const existingRaw = safeStorage.getItem(targetKey);
     const existing = existingRaw ? JSON.parse(existingRaw) : {};
-    safeStorage.setItem(targetKey, JSON.stringify({
+    const nextLocalRecord: Record<string, unknown> = {
       ...existing,
-      intro_draft: introDraft,
-      draft_photo_path: draftPhotoPath,
-      draft_photo_mime: draftPhotoMime,
-      photo_consent_given: photoConsent,
-      draft_contact_phone: draftContactPhone || null,
-      draft_contact_email: draftContactEmail || null,
-      canonical_region: canonicalRegion || null,
-      applied_recs: appliedRecs || null,
-      applied_recs_note: appliedRecsNote || null,
-      partner_type: extraDetails?.partnerType || existing.partner_type || 'Individual',
-      website: extraDetails?.website || existing.website || null,
-      guide_licence: extraDetails?.guideLicence || existing.guide_licence || null,
-      pib: extraDetails?.pib || existing.pib || null,
-      languages: extraDetails?.languages || existing.languages || ['English', 'Serbian'],
-      transport_capacity: extraDetails?.transportCapacity || existing.transport_capacity || 'none',
-      notice_window: extraDetails?.noticeWindow || existing.notice_window || '24h',
+      intro_draft: introDraft !== undefined ? introDraft : (existing.intro_draft ?? null),
+      draft_photo_path: draftPhotoPath !== undefined ? draftPhotoPath : (existing.draft_photo_path ?? null),
+      draft_photo_mime: draftPhotoMime !== undefined ? draftPhotoMime : (existing.draft_photo_mime ?? null),
+      photo_consent_given: photoConsent !== undefined ? photoConsent : (existing.photo_consent_given ?? false),
       updated_at: new Date().toISOString(),
-    }));
+    };
+    if (draftContactPhone !== undefined) nextLocalRecord.draft_contact_phone = draftContactPhone || null;
+    if (draftContactEmail !== undefined) nextLocalRecord.draft_contact_email = draftContactEmail || null;
+    if (canonicalRegion !== undefined) nextLocalRecord.canonical_region = canonicalRegion || null;
+    if (appliedRecs !== undefined) nextLocalRecord.applied_recs = appliedRecs;
+    if (appliedRecsNote !== undefined) nextLocalRecord.applied_recs_note = appliedRecsNote || null;
+    if (extraDetails?.partnerType !== undefined) nextLocalRecord.partner_type = extraDetails.partnerType || 'Individual';
+    if (extraDetails?.website !== undefined) nextLocalRecord.website = extraDetails.website || null;
+    if (extraDetails?.guideLicence !== undefined) nextLocalRecord.guide_licence = extraDetails.guideLicence || null;
+    if (extraDetails?.pib !== undefined) nextLocalRecord.pib = extraDetails.pib || null;
+    if (extraDetails?.languages !== undefined) {
+      nextLocalRecord.languages = Array.isArray(extraDetails.languages) ? extraDetails.languages : [];
+    }
+    if (extraDetails?.transportCapacity !== undefined) {
+      nextLocalRecord.transport_capacity = extraDetails.transportCapacity || 'none';
+    }
+    if (extraDetails?.noticeWindow !== undefined) {
+      nextLocalRecord.notice_window = extraDetails.noticeWindow || '24h';
+    }
+    safeStorage.setItem(targetKey, JSON.stringify(nextLocalRecord));
   } catch (err) {
     console.warn('Local SafeStorage sync warning:', err);
   }
 
-  // 2. Direct Supabase Lean RPC execution if client is available
-  const supabase = getSupabaseClient();
-  if (supabase && session.partnerId && !session.sessionToken.startsWith('mock_session_')) {
-    try {
-      const { data: rpcData, error: rpcErr } = await supabase.rpc('save_partner_profile_draft_lean_secure', {
-        p_partner_id: session.partnerId,
-        p_intro_draft: introDraft,
-        p_draft_photo_path: draftPhotoPath,
-        p_draft_photo_mime: draftPhotoMime,
-        p_photo_consent: photoConsent,
-        p_contact_phone: draftContactPhone || null,
-        p_contact_email: draftContactEmail || null,
-        p_partner_type: extraDetails?.partnerType || 'Individual',
-        p_website: extraDetails?.website || null,
-        p_guide_licence: extraDetails?.guideLicence || null,
-        p_pib: extraDetails?.pib || null,
-        p_languages: extraDetails?.languages || ['English', 'Serbian'],
-        p_transport_capacity: extraDetails?.transportCapacity || 'none',
-        p_notice_window: extraDetails?.noticeWindow || '24h',
-        p_canonical_region: canonicalRegion || null,
-        p_applied_recs: appliedRecs || null,
-        p_applied_recs_note: appliedRecsNote || null,
-      });
-      if (!rpcErr && rpcData && rpcData.success) {
-        return { success: true, status: 'draft_saved', message: rpcData.message || 'Lean passport draft saved.' };
-      }
-    } catch {
-      // Fallback to Edge function below
-    }
-  }
-
   const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
   if (!supabaseUrl || session.sessionToken.startsWith('mock_session_')) {
-    // Return success based on local SafeStorage persistence
-    return { success: true, status: 'draft_saved', message: 'Passport draft saved locally in SafeStorage.' };
+    return {
+      success: false,
+      status: 'local_only',
+      error: 'BACKEND_UNAVAILABLE: Saved locally in SafeStorage only (remote persistence unavailable).',
+      message: 'Passport draft saved locally in SafeStorage only.',
+    };
   }
 
   const url = getFunctionUrl('profile-content/draft');
@@ -992,34 +972,40 @@ export async function savePartnerProfileDraft(
         draft_photo_path: draftPhotoPath,
         draft_photo_mime: draftPhotoMime,
         photo_consent: photoConsent,
-        draft_contact_phone: draftContactPhone || null,
-        draft_contact_email: draftContactEmail || null,
-        proposed_rec_title: proposal?.title || null,
-        proposed_rec_category: proposal?.category || null,
-        proposed_rec_location: proposal?.location || null,
-        proposed_rec_rationale: proposal?.rationale || null,
-        applied_recs: appliedRecs || null,
-        applied_recs_note: appliedRecsNote || null,
-        canonical_region: canonicalRegion || null,
-        partner_type: extraDetails?.partnerType || 'Individual',
-        website: extraDetails?.website || null,
-        guide_licence: extraDetails?.guideLicence || null,
-        pib: extraDetails?.pib || null,
-        languages: extraDetails?.languages || ['English', 'Serbian'],
-        transport_capacity: extraDetails?.transportCapacity || 'none',
-        notice_window: extraDetails?.noticeWindow || '24h',
+        ...(draftContactPhone !== undefined ? { draft_contact_phone: draftContactPhone || null } : {}),
+        ...(draftContactEmail !== undefined ? { draft_contact_email: draftContactEmail || null } : {}),
+        ...(proposal?.title !== undefined ? { proposed_rec_title: proposal.title || null } : {}),
+        ...(proposal?.category !== undefined ? { proposed_rec_category: proposal.category || null } : {}),
+        ...(proposal?.location !== undefined ? { proposed_rec_location: proposal.location || null } : {}),
+        ...(proposal?.rationale !== undefined ? { proposed_rec_rationale: proposal.rationale || null } : {}),
+        ...(appliedRecs !== undefined ? { applied_recs: appliedRecs } : {}),
+        ...(appliedRecsNote !== undefined ? { applied_recs_note: appliedRecsNote || null } : {}),
+        ...(canonicalRegion !== undefined ? { canonical_region: canonicalRegion || null } : {}),
+        ...(extraDetails?.partnerType !== undefined ? { partner_type: extraDetails.partnerType || 'Individual' } : {}),
+        ...(extraDetails?.website !== undefined ? { website: extraDetails.website || null } : {}),
+        ...(extraDetails?.guideLicence !== undefined ? { guide_licence: extraDetails.guideLicence || null } : {}),
+        ...(extraDetails?.pib !== undefined ? { pib: extraDetails.pib || null } : {}),
+        ...(extraDetails?.languages !== undefined ? { languages: Array.isArray(extraDetails.languages) ? extraDetails.languages : [] } : {}),
+        ...(extraDetails?.transportCapacity !== undefined ? { transport_capacity: extraDetails.transportCapacity || 'none' } : {}),
+        ...(extraDetails?.noticeWindow !== undefined ? { notice_window: extraDetails.noticeWindow || '24h' } : {}),
       }),
     });
 
     const data = await res.json().catch(() => ({}));
+    const remoteSucceeded = res.ok && !!data.success;
     return {
-      success: !!data.success,
-      status: data.status,
+      success: remoteSucceeded,
+      status: remoteSucceeded ? (data.status || 'draft_saved') : 'local_only',
       message: data.message,
-      error: data.success ? undefined : (data.error || data.message),
+      error: remoteSucceeded ? undefined : (data.error || data.message || `REMOTE_SAVE_FAILED (HTTP ${res.status})`),
     };
   } catch (err: any) {
-    return { success: true, status: 'draft_saved', message: 'Passport draft saved locally in SafeStorage.' };
+    return {
+      success: false,
+      status: 'local_only',
+      error: `NETWORK_FAILURE: ${err?.message || String(err)}`,
+      message: 'Passport draft saved locally in SafeStorage only; remote server could not be reached.',
+    };
   }
 }
 
@@ -1481,6 +1467,8 @@ export async function fetchPartnerProfileReviewQueue(
           if (!mergedProfiles[idx].canonical_region && data.canonical_region) {
             mergedProfiles[idx].canonical_region = data.canonical_region;
           }
+          // Proposal 2 fields on remote records are authoritative (including null and []);
+          // never refill cleared Proposal 2 values from local SafeStorage cache.
         }
         continue;
       }
@@ -1511,6 +1499,13 @@ export async function fetchPartnerProfileReviewQueue(
         applied_recs: data.applied_recs || null,
         applied_recs_note: data.applied_recs_note || null,
         canonical_region: data.canonical_region || null,
+        partner_type: data.partner_type || 'Individual',
+        website: data.website || null,
+        guide_licence: data.guide_licence || null,
+        pib: data.pib || null,
+        languages: Array.isArray(data.languages) ? data.languages : [],
+        transport_capacity: data.transport_capacity || 'none',
+        notice_window: data.notice_window || '24h',
         submitted_at: data.submitted_at || data.updated_at || new Date().toISOString(),
         reviewed_at: data.reviewed_at || null,
         reviewer_note: data.review_note || null,

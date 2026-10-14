@@ -9589,6 +9589,9 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
                    language={language}
                    onRemove={onRemove} 
                    onUpdateDate={onUpdateDate}
+                   onSelectRec={onSelectRec}
+                   orbTime={time}
+                   orbBudget={budget}
                  />
                </div>
              ))}
