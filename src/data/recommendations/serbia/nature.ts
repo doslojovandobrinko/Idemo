@@ -14,7 +14,7 @@ export const natureRecommendations: Recommendation[] = [
     "category": "Nature, Travel",
     "shortDescription": "The Uvac Gorge is home to the most dramatic river meanders in Europe. This nature reserve is the last sanctuary for the Griffon Vulture, providing breathtaking views from the Molitva lookout. A true hidden gem for those seeking pristine wilderness and natural architectural wonders in western Serbia.",
     "longDescription": "The Uvac Gorge is a natural masterpiece in southwestern Serbia, carved into the limestone of the Pešter plateau. The dramatic meanders of the Uvac River twist like a giant emerald serpent, a result of millions of years of geological carving. This Special Nature Reserve is the ultimate sanctuary for the Griffon Vulture (Gyps fulvus), a species brought back from the brink of extinction here. Visitors can explore the 10-meter deep usak cave system or hike to the Molitva (Prayer) lookout at 1,247m for the iconic panoramic view. The region is also famous for Sjenica cheese and the rugged hospitality of the Highland Serbs.",
-    "image": "/src/assets/images/uvac_meanders_1778841048759.webp",
+    "image": "/src/assets/images/uvac_meanders_1778841048759.png",
     "duration": "4-6 hours",
     "travelTime": "3.5 - 4 hours",
     "travelTimeMinutes": 220,

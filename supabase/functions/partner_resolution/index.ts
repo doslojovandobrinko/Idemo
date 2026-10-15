@@ -844,6 +844,176 @@ serve(async (req: Request) => {
       });
     }
 
+    // Helper: Non-blocking OneSignal push dispatch after partner proposal persistence.
+    // Preserves proposal delivery if push sending fails; reports failure without duplicating proposal.
+    const dispatchVisitorProposalPushByMatch = async (matchId: string, responseId?: string) => {
+      try {
+        const { data: matchRow } = await supabase
+          .from("inquiry_matches")
+          .select("id, inquiry_id")
+          .eq("id", matchId)
+          .maybeSingle();
+
+        const inquiryId = matchRow?.inquiry_id;
+        if (!inquiryId) {
+          return { sent: false, error: "MATCH_INQUIRY_NOT_FOUND" };
+        }
+
+        const { data: dispatchCtx, error: ctxErr } = await supabase.rpc(
+          "get_visitor_push_dispatch_context",
+          { p_inquiry_id: inquiryId }
+        );
+
+        if (ctxErr || !dispatchCtx?.found) {
+          return {
+            sent: false,
+            error: `DISPATCH_CONTEXT_ERROR: ${ctxErr?.message || dispatchCtx?.error || "Inquiry not found"}`
+          };
+        }
+
+        const resolvedResponseId = responseId || dispatchCtx.response_id || null;
+
+        // Strict UUID validation for target proposal response
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (!resolvedResponseId || typeof resolvedResponseId !== "string" || !uuidRegex.test(resolvedResponseId)) {
+          return {
+            sent: false,
+            error: "INVALID_PROPOSAL_RESPONSE_UUID: Cannot dispatch OneSignal push without a valid proposal response UUID."
+          };
+        }
+
+        const targetOutboxKey = `visitor_proposal_push_${resolvedResponseId}`;
+
+        // Select the push job by exact idempotency_key matching "visitor_proposal_push_" + response UUID
+        const { data: outboxRows } = await supabase
+          .from("notification_outbox")
+          .select("*")
+          .eq("recipient_type", "visitor")
+          .eq("recipient_id", inquiryId)
+          .eq("channel", "push")
+          .eq("idempotency_key", targetOutboxKey)
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        const job = outboxRows?.[0];
+        if (job?.status === "sent") {
+          return { sent: true, deduplicated: true, provider_message_id: job.provider_message_id };
+        }
+
+        const recordOutboxFailure = async (errorCode: string, errorMsg: string) => {
+          if (!job?.id) return;
+          const nextRetry = (Number(job.retry_count) || 0) + 1;
+          const maxRetries = Number(job.max_retries) || 3;
+          await supabase
+            .from("notification_outbox")
+            .update({
+              status: nextRetry < maxRetries ? "failed" : "permanently_failed",
+              retry_count: nextRetry,
+              last_error: errorMsg,
+              last_error_code: errorCode,
+              idempotency_key: targetOutboxKey,
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", job.id);
+        };
+
+        const oneSignalAppId = Deno.env.get("ONESIGNAL_APP_ID")?.trim();
+        const oneSignalApiKey = Deno.env.get("ONESIGNAL_REST_API_KEY")?.trim();
+
+        if (!oneSignalAppId || !oneSignalApiKey) {
+          const errMsg = "MISSING_ONESIGNAL_CONFIG: ONESIGNAL_APP_ID and ONESIGNAL_REST_API_KEY must be configured in backend secrets.";
+          await recordOutboxFailure("MISSING_ONESIGNAL_CONFIG", errMsg);
+          return { sent: false, error: errMsg };
+        }
+
+        const visitorExternalId =
+          typeof dispatchCtx.visitor_external_id === "string" && dispatchCtx.visitor_external_id.trim() !== ""
+            ? dispatchCtx.visitor_external_id.trim()
+            : "";
+
+        if (!visitorExternalId) {
+          const errMsg = "MISSING_VISITOR_PUSH_IDENTITY: Inquiry has no bound OneSignal external_id.";
+          await recordOutboxFailure("MISSING_VISITOR_PUSH_IDENTITY", errMsg);
+          return { sent: false, error: errMsg };
+        }
+
+        const unreadCount = Math.max(0, Number(dispatchCtx.unread_count ?? 1));
+
+        // Bounded fetch timeout (5000ms)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+        try {
+          const osResponse = await fetch("https://api.onesignal.com/notifications", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json; charset=utf-8",
+              "Authorization": `Key ${oneSignalApiKey}`
+            },
+            body: JSON.stringify({
+              app_id: oneSignalAppId,
+              target_channel: "push",
+              include_aliases: {
+                external_id: [visitorExternalId]
+              },
+              headings: {
+                en: "IDEMO"
+              },
+              contents: {
+                en: "You have a new partner proposal ready to review."
+              },
+              ios_badgeType: "SetTo",
+              ios_badgeCount: unreadCount,
+              idempotency_key: resolvedResponseId,
+              data: {
+                inquiry_id: inquiryId,
+                match_id: matchId,
+                response_id: resolvedResponseId,
+                action: "review_proposal"
+              }
+            }),
+            signal: controller.signal
+          });
+
+          const osBody = await osResponse.json().catch(() => ({}));
+          if (!osResponse.ok || !osBody?.id) {
+            const errDetail = osBody?.errors ? JSON.stringify(osBody.errors) : `HTTP_${osResponse.status}`;
+            const errMsg = `ONESIGNAL_DISPATCH_FAILED: ${errDetail}`;
+            await recordOutboxFailure("ONESIGNAL_DISPATCH_FAILED", errMsg);
+            return { sent: false, error: errMsg };
+          }
+
+          const providerMessageId = String(osBody.id);
+          if (job?.id) {
+            await supabase
+              .from("notification_outbox")
+              .update({
+                status: "sent",
+                idempotency_key: targetOutboxKey,
+                provider_message_id: providerMessageId,
+                processed_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+              .eq("id", job.id);
+          }
+
+          return { sent: true, provider_message_id: providerMessageId, badge_count: unreadCount };
+        } catch (fetchErr: any) {
+          const isTimeout = fetchErr?.name === "AbortError";
+          const errMsg = isTimeout
+            ? "ONESIGNAL_TIMEOUT: OneSignal API call timed out after 5000ms."
+            : `ONESIGNAL_FETCH_ERROR: ${fetchErr?.message || "Unknown fetch error"}`;
+          await recordOutboxFailure(isTimeout ? "ONESIGNAL_TIMEOUT" : "ONESIGNAL_FETCH_ERROR", errMsg);
+          return { sent: false, error: errMsg };
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      } catch (pushErr: any) {
+        console.error("[PARTNER_RESOLUTION_PUSH_ERROR]", pushErr?.message || pushErr);
+        return { sent: false, error: pushErr?.message || "Unknown push dispatch error" };
+      }
+    };
+
     // ENDPOINT: /opportunities/accept (POST)
     if (pathname.endsWith("/opportunities/accept") && req.method === "POST") {
       const body = await req.json().catch(() => ({}));
@@ -853,11 +1023,22 @@ serve(async (req: Request) => {
         return jsonResponse({ success: false, error: "MISSING_FIELDS", message: "match_id and message are required." }, 400);
       }
 
-      return invokeRpc(supabase, "accept_partner_opportunity_secure", {
+      const { data, error } = await supabase.rpc("accept_partner_opportunity_secure", {
         p_partner_id: partnerId,
         p_match_id: match_id,
         p_message: message,
       });
+
+      if (error) {
+        return jsonResponse({ success: false, error: "DATABASE_ERROR", message: error.message }, 500);
+      }
+
+      if (!data?.success) {
+        return jsonResponse(data, 400);
+      }
+
+      const pushResult = await dispatchVisitorProposalPushByMatch(match_id, data.response_id);
+      return jsonResponse({ ...data, push_notification: pushResult }, 200);
     }
 
     // ENDPOINT: /opportunities/decline (POST)
@@ -889,13 +1070,24 @@ serve(async (req: Request) => {
         }, 400);
       }
 
-      return invokeRpc(supabase, "propose_partner_alternative_secure", {
+      const { data, error } = await supabase.rpc("propose_partner_alternative_secure", {
         p_partner_id: partnerId,
         p_match_id: match_id,
         p_proposed_start: proposed_start_at,
         p_proposed_end: proposed_end_at,
         p_message: message,
       });
+
+      if (error) {
+        return jsonResponse({ success: false, error: "DATABASE_ERROR", message: error.message }, 500);
+      }
+
+      if (!data?.success) {
+        return jsonResponse(data, 400);
+      }
+
+      const pushResult = await dispatchVisitorProposalPushByMatch(match_id, data.response_id);
+      return jsonResponse({ ...data, push_notification: pushResult }, 200);
     }
 
     // ENDPOINT: /opportunities/accept-counter (POST)

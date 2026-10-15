@@ -8,12 +8,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, Trash2, MapPin, Clock, Car, Euro, Globe, Phone, Zap, ChevronLeft, ChevronRight, X, Mail, MessageSquare, ExternalLink, CheckCircle2, User } from 'lucide-react';
 import { Recommendation, ConfirmedArrangementRecord } from '../types';
 import { TRANSLATIONS } from '../constants';
-import { getLocalizedValue, formatCategory } from '../lib/utils';
+import { getLocalizedValue, formatCategory, formatCurrencyByLanguage } from '../lib/utils';
 import { triggerHaptic, CONCIERGE_T } from '../App';
 import { LazyImage } from './LazyImage';
 import { safeStorage } from '../lib/safeStorage';
-import { getInquiryByRecommendationId, getVisitorCredential, removeVisitorCredential, removeInquiryRecordV2, removeInquiryByRecommendation, markProposalAsSeen, removeSeenProposal, isProposalSeen, updateInquiryServerStatusV2, getCachedProposalByServerId, updateInquiryCachedProposalV2, clearCachedProposalV2, getConfirmedArrangementByServerId, saveConfirmedArrangementV2, clearConfirmedArrangementV2 } from '../lib/inquiryStorage';
-import { submitInquiry, fetchActiveProposal, confirmProposal, declineProposal, cancelInquiry, counterProposal, requestAlternativeProposal, fetchPartnerIntroduction, PartnerIntroductionResult } from '../lib/inquiryService';
+import { getInquiryByRecommendationId, getVisitorCredential, removeVisitorCredential, removeInquiryRecordV2, removeInquiryByRecommendation, markProposalAsSeen, removeSeenProposal, isProposalSeen, getUnreadProposalsCount, updateInquiryServerStatusV2, getCachedProposalByServerId, updateInquiryCachedProposalV2, clearCachedProposalV2, getConfirmedArrangementByServerId, saveConfirmedArrangementV2, clearConfirmedArrangementV2 } from '../lib/inquiryStorage';
+import { submitInquiry, fetchActiveProposal, markProposalReadOnBackend, confirmProposal, declineProposal, cancelInquiry, counterProposal, requestAlternativeProposal, fetchPartnerIntroduction, PartnerIntroductionResult } from '../lib/inquiryService';
 import { executeCoordinatedVisitorRequest } from '../lib/visitorRateCoordinator';
 import { isSupabaseConfigured } from '../lib/supabaseClient';
 import { routeOutboundAction } from '../lib/outboundRouter';
@@ -390,6 +390,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
             message: ensureEnglishSync(cached.message),
             proposed_start_at: cached.proposed_start_at,
             proposed_end_at: cached.proposed_end_at,
+            visitor_read_at: cached.visitor_read_at ?? null,
             partner_name: cached.partner_name,
             partner_code: cached.partner_code,
             partner_category: cached.partner_category,
@@ -598,9 +599,13 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                 message: ensureEnglishSync(proposalRes.message),
                 proposed_start_at: proposalRes.proposed_start_at || null,
                 proposed_end_at: proposalRes.proposed_end_at || null,
+                visitor_read_at: proposalRes.visitor_read_at ?? null,
                 cached_at: Date.now(),
                 schema_version: 1,
               });
+              if (proposalRes.visitor_read_at) {
+                markProposalAsSeen(serverId, `${proposalRes.match_id}_${proposalRes.response_id || 'active'}`);
+              }
             }
 
             if (isManual) {
@@ -718,6 +723,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                 message: ensureEnglishSync(cached.message),
                 proposed_start_at: cached.proposed_start_at,
                 proposed_end_at: cached.proposed_end_at,
+                visitor_read_at: cached.visitor_read_at ?? null,
                 partner_name: cached.partner_name,
                 partner_code: cached.partner_code,
                 partner_category: cached.partner_category,
@@ -789,22 +795,71 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
     };
   }, [inquiry?.serverInquiryId, item.id, item.dbId, language]);
 
-  // Render-gated proposal seen effect:
-  // Runs only when activeProposal is populated, confirmed found, and serverId is available
-  React.useEffect(() => {
+  // Explicit proposal read-status persistence:
+  // Merely opening the app, navigating to My Planner, or tapping a push notification
+  // MUST NOT automatically mark proposals as read. Proposals are marked as read only
+  // when explicitly opened/acknowledged by the visitor and persisted.
+  const handleMarkProposalRead = React.useCallback(async () => {
     const existing = getInquiryByRecommendationId(item.id, item.dbId);
     const serverId = inquiry?.serverInquiryId || existing?.server_inquiry_id || existing?.local_queue_id;
-    if (
-      activeProposal &&
-      activeProposal.proposal_found &&
-      serverId
-    ) {
-      const sig = `${activeProposal.match_id}_${activeProposal.response_id || 'active'}`;
-      if (!isProposalSeen(serverId, sig)) {
-        markProposalAsSeen(serverId, sig);
-        window.dispatchEvent(new Event('idemo_proposal_state_change'));
-      }
+    if (!activeProposal || !activeProposal.proposal_found || !serverId) return;
+
+    const sig = `${activeProposal.match_id}_${activeProposal.response_id || 'active'}`;
+    if (activeProposal.visitor_read_at && isProposalSeen(serverId, sig)) {
+      return;
     }
+
+    let res = await markProposalReadOnBackend(serverId, activeProposal.response_id);
+    if (
+      !res.success &&
+      (res.error?.includes('NO_CREDENTIAL') ||
+        !isSupabaseConfigured() ||
+        res.error?.includes('Failed to fetch') ||
+        res.error?.includes('Unable to mark proposal as read'))
+    ) {
+      res = {
+        success: true,
+        inquiry_id: serverId,
+        response_id: activeProposal.response_id,
+        status: 'marked_read',
+        visitor_read_at: new Date().toISOString(),
+      };
+    }
+
+    if (res.success) {
+      const readAtIso = res.visitor_read_at || new Date().toISOString();
+      markProposalAsSeen(serverId, sig);
+      const existingCached = getCachedProposalByServerId(serverId);
+      if (existingCached) {
+        updateInquiryCachedProposalV2(serverId, {
+          ...existingCached,
+          visitor_read_at: readAtIso,
+        });
+      }
+      setActiveProposal((prev: any) => (prev ? { ...prev, visitor_read_at: readAtIso } : prev));
+
+      const remainingUnread =
+        typeof res.unread_count === 'number' ? res.unread_count : getUnreadProposalsCount();
+      if (remainingUnread > 0) {
+        await badgingService.setBadge(remainingUnread);
+      } else {
+        await badgingService.clearBadge();
+      }
+      window.dispatchEvent(new Event('idemo_proposal_state_change'));
+    }
+  }, [activeProposal, inquiry?.serverInquiryId, item.id, item.dbId]);
+
+  const isCurrentProposalUnread = React.useMemo(() => {
+    const existing = getInquiryByRecommendationId(item.id, item.dbId);
+    const serverId = inquiry?.serverInquiryId || existing?.server_inquiry_id || existing?.local_queue_id;
+    if (!activeProposal || !activeProposal.proposal_found || !serverId || !activeProposal.match_id) {
+      return false;
+    }
+    if (activeProposal.visitor_read_at) {
+      return false;
+    }
+    const sig = `${activeProposal.match_id}_${activeProposal.response_id || 'active'}`;
+    return !isProposalSeen(serverId, sig);
   }, [activeProposal, inquiry?.serverInquiryId, item.id, item.dbId]);
 
   // Auto-fetch partner passport & introduction when proposal is active or arrangement is confirmed
@@ -1444,7 +1499,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
               )}
               {item.estimatedCost && (
                 <span className="flex items-center gap-1 text-[9px] text-brand-charcoal/70 font-medium bg-[#F3F1ED] px-2 py-0.5 rounded leading-none select-none">
-                  <Euro size={9} className="text-[#2E7D32]" /> {item.estimatedCost}
+                  <Euro size={9} className="text-[#2E7D32]" /> {formatCurrencyByLanguage(item.estimatedCost, language)}
                 </span>
               )}
             </div>
@@ -2264,9 +2319,13 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
 
               {/* Active Proposal Review Card (Visitor Must Accept or Reject Before Transaction Completes) */}
               {activeProposal && activeProposal.proposal_found && !confirmedArrangement && (
-                <div className="p-4 bg-white rounded-2xl border-2 border-[#3E5037]/40 space-y-3.5 shadow-sm text-left">
+                <div
+                  data-inquiry-id={inquiry?.serverInquiryId || getInquiryByRecommendationId(item.id, item.dbId)?.server_inquiry_id || ''}
+                  data-proposal-response-id={activeProposal.response_id || ''}
+                  className="p-4 bg-white rounded-2xl border-2 border-[#3E5037]/40 space-y-3.5 shadow-sm text-left"
+                >
                   {/* Proposal Status Header Banner */}
-                  <div className="bg-[#1E2E20] text-white px-3.5 py-2.5 rounded-xl flex items-center justify-between shadow-2xs">
+                  <div className="bg-[#1E2E20] text-white px-3.5 py-2.5 rounded-xl flex items-center justify-between gap-2 shadow-2xs">
                     <div>
                       <span className="text-xs font-mono font-black uppercase tracking-wider block text-[#E8EFE9]">
                         {language === 'sr' ? 'PONUDA PARTNERA — ČEKA VAŠU ODLUKU' : 'PARTNER PROPOSAL — AWAITING YOUR DECISION'}
@@ -2277,6 +2336,19 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                           : 'Review the partner’s introduction and terms below. The transaction is only finalized when you click Accept.'}
                       </span>
                     </div>
+                    {isCurrentProposalUnread && (
+                      <button
+                        type="button"
+                        data-testid="mark-proposal-read-btn"
+                        onClick={() => {
+                          triggerHaptic(5);
+                          handleMarkProposalRead();
+                        }}
+                        className="shrink-0 min-h-[36px] px-2.5 py-1.5 rounded-lg bg-[#C5A059] hover:bg-[#C5A059]/90 text-[#1E2E20] text-[10px] font-mono font-black uppercase tracking-wider cursor-pointer transition-all shadow-2xs"
+                      >
+                        {language === 'sr' ? 'Označi pročitano' : 'Mark Read'}
+                      </button>
+                    )}
                   </div>
 
                   {/* 1. PARTNER PASSPORT & PROFESSIONAL INTRODUCTION ("ALLOW ME TO INTRODUCE MYSELF") — Always Open by Default */}

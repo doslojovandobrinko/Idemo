@@ -9,6 +9,7 @@
 
 import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 import { resolveServiceAreaUuid } from './recommendationWorkflowService';
+import { INITIAL_RECOMMENDATIONS } from '../data/recommendations/serbia';
 
 export type MediaWorkflowState =
   | 'empty'
@@ -139,10 +140,18 @@ export function getApprovedPrimaryMedia(recommendationId: string, defaultImage?:
   if (approvalRecord) {
     return approvalRecord.canonicalMediaRef || approvalRecord.proposedImage || approvalRecord.proposedMediaRef || '';
   }
+  if (defaultImage && (defaultImage.startsWith('recommendation-media/') || defaultImage.startsWith('/recommendation-media/'))) {
+    return defaultImage;
+  }
+  const canonicalRec = INITIAL_RECOMMENDATIONS.find(r => r.id === recommendationId);
+  const canonicalImg = canonicalRec?.image;
+  if (canonicalImg && !canonicalImg.endsWith('/.webp') && canonicalImg !== '/src/assets/images/.webp' && canonicalImg !== '/assets/images/.webp') {
+    return canonicalImg;
+  }
   if (defaultImage && !defaultImage.endsWith('/.webp') && defaultImage !== '/src/assets/images/.webp' && defaultImage !== '/assets/images/.webp') {
     return defaultImage;
   }
-  return '/src/assets/images/uvac_meanders_1778841048759.webp';
+  return '';
 }
 
 /**

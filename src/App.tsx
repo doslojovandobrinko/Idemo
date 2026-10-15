@@ -383,7 +383,9 @@ import {
   updateInquiryCachedProposalV2, 
   updateInquiryServerStatusV2, 
   clearCachedProposalV2, 
-  checkHasUnreadProposals 
+  checkHasUnreadProposals,
+  getUnreadProposalsCount,
+  markProposalAsSeen
 } from './lib/inquiryStorage';
 import { fetchActiveProposal } from './lib/inquiryService';
 import { executeCoordinatedVisitorRequest } from './lib/visitorRateCoordinator';
@@ -1035,6 +1037,32 @@ interface NavigationHistoryEntry {
   depth: number;
 }
 
+function determineShowOnboarding(): boolean {
+  try {
+    let openCount: number;
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      const sessionVal = window.sessionStorage.getItem('idemo_session_app_open_count');
+      if (sessionVal) {
+        openCount = parseInt(sessionVal, 10);
+      } else {
+        const raw = safeStorage.getItem('idemo_app_open_count_v1');
+        openCount = (raw ? parseInt(raw, 10) : 0) + 1;
+        safeStorage.setItem('idemo_app_open_count_v1', openCount.toString());
+        window.sessionStorage.setItem('idemo_session_app_open_count', openCount.toString());
+      }
+    } else {
+      const raw = safeStorage.getItem('idemo_app_open_count_v1');
+      openCount = (raw ? parseInt(raw, 10) : 0) + 1;
+      safeStorage.setItem('idemo_app_open_count_v1', openCount.toString());
+    }
+
+    // Per user rule: Show 3 intro cards ONLY on the 1st and 3rd app openings
+    return openCount === 1 || openCount === 3;
+  } catch {
+    return true;
+  }
+}
+
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('landing');
   const [selectedRecId, setSelectedRecId] = useState<string | null>(null);
@@ -1042,15 +1070,10 @@ export default function App() {
   const [previewPreviousScreen, setPreviewPreviousScreen] = useState<AppScreen>('home');
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => {
-    try {
-      return safeStorage.getItem('idemo_onboarded_v3') !== 'true';
-    } catch {
-      return true;
-    }
-  });
+  const [showOnboarding, setShowOnboarding] = useState<boolean>(() => determineShowOnboarding());
   const [onboardingKey, setOnboardingKey] = useState<number>(0);
   const [hasUnreadPartnerProposal, setHasUnreadPartnerProposal] = useState<boolean>(() => checkHasUnreadProposals());
+  const [unreadPartnerProposalsCount, setUnreadPartnerProposalsCount] = useState<number>(() => getUnreadProposalsCount());
   const [hasPartnerUnseenBadge, setHasPartnerUnseenBadge] = useState<boolean>(() => checkAnyPartnerUnseenBadge());
   const [, setLocationTicker] = useState<number>(0);
 
@@ -1565,8 +1588,21 @@ export default function App() {
 
       const screenParam = qParams.get('screen') || qParams.get('route');
       const recIdParam = qParams.get('rec_id') || qParams.get('recId') || qParams.get('recommendation');
+      const proposalInquiryIdParam = qParams.get('proposal_inquiry_id') || qParams.get('inquiry_id');
 
-      if (screenParam) {
+      if (proposalInquiryIdParam && getVisitorCredential(proposalInquiryIdParam)) {
+        // Notification tap navigation: open My Planner and focus the relevant proposal
+        // using the existing visitor token authentication flow without marking it as read.
+        setCurrentScreen('plan');
+        safeStorage.setItem('idemo_onboarded_v3', 'true');
+        setShowOnboarding(false);
+        setTimeout(() => {
+          const targetEl = document.querySelector(`[data-inquiry-id="${proposalInquiryIdParam}"]`);
+          if (targetEl && typeof (targetEl as HTMLElement).scrollIntoView === 'function') {
+            (targetEl as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 350);
+      } else if (screenParam) {
         const validScreens: AppScreen[] = ['landing', 'home', 'explore', 'plan', 'profile'];
         if (validScreens.includes(screenParam as AppScreen)) {
           setCurrentScreen(screenParam as AppScreen);
@@ -1586,7 +1622,7 @@ export default function App() {
       }
 
       // Cleanse parameters only if there's tracking data without direct routes
-      if (srcAttribution && !screenParam && !recIdParam) {
+      if (srcAttribution && !screenParam && !recIdParam && !proposalInquiryIdParam) {
         const targetCleanUrl = window.location.pathname;
         window.history.replaceState({}, document.title, targetCleanUrl);
       }
@@ -1650,10 +1686,30 @@ export default function App() {
   React.useEffect(() => {
     // Synchronize proposal unread state with local event bus
     const handleProposalStateChange = () => {
-      setHasUnreadPartnerProposal(checkHasUnreadProposals());
+      const nextCount = getUnreadProposalsCount();
+      setUnreadPartnerProposalsCount(nextCount);
+      setHasUnreadPartnerProposal(nextCount > 0);
+    };
+
+    const handlePushNotificationOpen = (event: Event) => {
+      const detail = (event as CustomEvent)?.detail;
+      const targetInquiryId = detail?.inquiry_id || detail?.proposal_inquiry_id;
+      if (targetInquiryId && getVisitorCredential(targetInquiryId)) {
+        setCurrentScreen('plan');
+        safeStorage.setItem('idemo_onboarded_v3', 'true');
+        setShowOnboarding(false);
+        refreshActiveInquiryProposalsRef.current?.();
+        setTimeout(() => {
+          const targetEl = document.querySelector(`[data-inquiry-id="${targetInquiryId}"]`);
+          if (targetEl && typeof (targetEl as HTMLElement).scrollIntoView === 'function') {
+            (targetEl as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 350);
+      }
     };
 
     window.addEventListener('idemo_proposal_state_change', handleProposalStateChange);
+    window.addEventListener('idemo_push_notification_open', handlePushNotificationOpen);
 
     let pollTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -1694,8 +1750,12 @@ export default function App() {
                   message: proposalRes.message || '',
                   proposed_start_at: proposalRes.proposed_start_at || null,
                   proposed_end_at: proposalRes.proposed_end_at || null,
+                  visitor_read_at: proposalRes.visitor_read_at ?? null,
                   cached_at: Date.now(),
                 });
+                if (proposalRes.visitor_read_at) {
+                  markProposalAsSeen(serverId, `${proposalRes.match_id}_${proposalRes.response_id || 'active'}`);
+                }
                 updateInquiryServerStatusV2(serverId, 'Waiting for confirmation');
                 stateChanged = true;
               } else if (proposalRes.success && !proposalRes.proposal_found) {
@@ -1711,7 +1771,9 @@ export default function App() {
         }
 
         if (stateChanged) {
-          setHasUnreadPartnerProposal(checkHasUnreadProposals());
+          const nextCount = getUnreadProposalsCount();
+          setUnreadPartnerProposalsCount(nextCount);
+          setHasUnreadPartnerProposal(nextCount > 0);
           window.dispatchEvent(new Event('idemo_proposal_state_change'));
         }
 
@@ -1747,7 +1809,9 @@ export default function App() {
         refreshActiveInquiryProposals().then(() => {
           scheduleNextPoll();
         });
-        setHasUnreadPartnerProposal(checkHasUnreadProposals());
+        const nextCount = getUnreadProposalsCount();
+        setUnreadPartnerProposalsCount(nextCount);
+        setHasUnreadPartnerProposal(nextCount > 0);
         setHasPartnerUnseenBadge(checkAnyPartnerUnseenBadge());
       }
     };
@@ -1755,6 +1819,7 @@ export default function App() {
 
     return () => {
       window.removeEventListener('idemo_proposal_state_change', handleProposalStateChange);
+      window.removeEventListener('idemo_push_notification_open', handlePushNotificationOpen);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (pollTimeoutId) clearTimeout(pollTimeoutId);
     };
@@ -1782,13 +1847,13 @@ export default function App() {
   }, []);
 
   React.useEffect(() => {
-    const totalCount = (hasUnreadPartnerProposal ? 1 : 0) + (hasPartnerUnseenBadge ? 1 : 0);
+    const totalCount = unreadPartnerProposalsCount + (hasPartnerUnseenBadge ? 1 : 0);
     if (totalCount > 0) {
       badgingService.setBadge(totalCount);
     } else {
       badgingService.clearBadge();
     }
-  }, [hasUnreadPartnerProposal, hasPartnerUnseenBadge]);
+  }, [unreadPartnerProposalsCount, hasUnreadPartnerProposal, hasPartnerUnseenBadge]);
 
   const [lowSignalMode, setLowSignalMode] = useState<boolean>(() => {
     try {
@@ -1889,6 +1954,10 @@ export default function App() {
 
   const handleResetOnboarding = () => {
     try {
+      safeStorage.removeItem('idemo_app_open_count_v1');
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        window.sessionStorage.removeItem('idemo_session_app_open_count');
+      }
       safeStorage.removeItem('idemo_onboarded_v3');
       safeStorage.removeItem('idemo_discovery_dismissed_v1');
     } catch (e) {}
@@ -10277,14 +10346,33 @@ function ExploreScreen({
   };
 
   const categories = [
-    { id: Category.WELLBEING, icon: <Heart size={16} />, label: 'Wellbeing' },
-    { id: Category.MEDICAL, icon: <ShieldCheck size={16} />, label: 'Medical' },
-    { id: Category.NATURE, icon: <MapPin size={16} />, label: 'Nature' },
-    { id: Category.HISTORY, icon: <Theater size={16} />, label: 'History' },
-    { id: Category.GASTRONOMY, icon: <Utensils size={16} />, label: 'Gastronomy' },
-    { id: Category.TRAVEL, icon: <MapIcon size={16} />, label: 'Travel' },
-    { id: Category.CLUBBING, icon: <Music size={16} />, label: 'Clubbing' },
+    { id: Category.WELLBEING, icon: <Heart size={15} />, label: "Wellbeing" },
+    { id: Category.MEDICAL, icon: <ShieldCheck size={15} />, label: "Medical" },
+    { id: Category.NATURE, icon: <MapPin size={15} />, label: "Nature" },
+    { id: Category.HISTORY, icon: <Theater size={15} />, label: "History" },
+    { id: Category.GASTRONOMY, icon: <Utensils size={15} />, label: "Gastronomy" },
+    { id: Category.TRAVEL, icon: <MapIcon size={15} />, label: "Travel" },
+    { id: Category.CLUBBING, icon: <Music size={15} />, label: "Clubbing" },
   ];
+
+  const getCategoryCount = useCallback((catId: string | null) => {
+    if (!catId) return recommendations.length;
+    return recommendations.filter((r: any) => {
+      if (!r.category) return false;
+      const rCats = typeof r.category === "string"
+        ? r.category.split(",").map((s: string) => s.trim())
+        : [r.category];
+      return rCats.includes(catId);
+    }).length;
+  }, [recommendations]);
+
+  const getAreaCount = useCallback((regId: string | null) => {
+    if (!regId) return recommendations.length;
+    return recommendations.filter((r: any) => {
+      if (!r.location) return false;
+      return isLocationInRegion(r.location, regId);
+    }).length;
+  }, [recommendations]);
 
   const filteredRecs = showEverything
     ? recommendations
@@ -10479,18 +10567,21 @@ function ExploreScreen({
         </div>
 
         <div className="flex gap-2 items-center">
-          <div className="flex-1 flex bg-[#EAE8DF]/40 p-1.5 rounded-2xl border border-border-main shadow-inner h-13 items-center">
+          <div className="flex-1 flex bg-[#EFECE3] p-1 rounded-2xl border border-[#DFDCD1] shadow-xs h-12 items-center">
             <button
               onClick={() => {
                 setExploreMode('categories');
                 setSelectedAreaId(null);
                 triggerHaptic(10);
               }}
-              className={`flex-1 py-1.5 text-[12px] uppercase tracking-widest font-black rounded-xl transition-all cursor-pointer h-[40px] flex items-center justify-center active:translate-y-[1px] ${
-                exploreMode === 'categories' ? 'bg-[#800020] text-white shadow-sm border border-[#800020]' : 'text-[#5C5A4D] hover:text-brand-charcoal'
+              className={`flex-1 py-1.5 text-[11px] uppercase tracking-[0.16em] font-extrabold rounded-xl transition-all cursor-pointer h-[38px] flex items-center justify-center gap-1.5 active:scale-[0.98] ${
+                exploreMode === 'categories' ? 'bg-[#800020] text-white shadow-sm border border-[#800020]' : 'text-[#5C5A4D] hover:text-brand-charcoal hover:bg-white/40'
               }`}
             >
-              {t.categories_label}
+              <span>{t.categories_label}</span>
+              <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-full ${exploreMode === 'categories' ? 'bg-white/20 text-white' : 'bg-[#E3E0D3] text-[#5C5A4D]'}`}>
+                {getCategoryCount(selectedCategory)}
+              </span>
             </button>
             <button
               onClick={() => {
@@ -10498,12 +10589,15 @@ function ExploreScreen({
                 setSelectedCategory(null);
                 triggerHaptic(10);
               }}
-              className={`flex-1 py-1.5 text-[12px] uppercase tracking-widest font-black rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer h-[40px] active:translate-y-[1px] ${
-                exploreMode === 'areas' ? 'bg-[#800020] text-white shadow-sm border border-[#800020]' : 'text-[#5C5A4D] hover:text-brand-charcoal'
+              className={`flex-1 py-1.5 text-[11px] uppercase tracking-[0.16em] font-extrabold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer h-[38px] active:scale-[0.98] ${
+                exploreMode === 'areas' ? 'bg-[#800020] text-white shadow-sm border border-[#800020]' : 'text-[#5C5A4D] hover:text-brand-charcoal hover:bg-white/40'
               }`}
             >
-              <Compass size={13} className={exploreMode === 'areas' ? 'text-white' : 'text-accent-red'} />
-              {t.areas_label}
+              <Compass size={13} className={exploreMode === 'areas' ? 'text-white' : 'text-accent-teal'} />
+              <span>{t.areas_label}</span>
+              <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-full ${exploreMode === 'areas' ? 'bg-white/20 text-white' : 'bg-[#E3E0D3] text-[#5C5A4D]'}`}>
+                {getAreaCount(selectedAreaId)}
+              </span>
             </button>
           </div>
 
@@ -10512,14 +10606,14 @@ function ExploreScreen({
               setVibeFilterOpen(!vibeFilterOpen);
               triggerHaptic(10);
             }}
-            className={`h-13 px-4 rounded-2xl border transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:translate-y-[1px] active:shadow-none min-w-[50px] ${
+            className={`h-12 px-3.5 rounded-2xl border transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-[0.97] min-w-[50px] ${
               vibeFilterOpen || selectedVibes.length > 0
-                ? 'bg-[#800020] border-[#800020] text-white font-black'
-                : 'bg-white border-[#C2C0B5] text-brand-charcoal hover:bg-brand-pearl'
+                ? 'bg-[#800020] border-[#800020] text-white font-extrabold'
+                : 'bg-white border-[#DCD9CC] text-brand-charcoal hover:bg-[#FAF9F5]'
             }`}
           >
             <Heart size={14} fill={(vibeFilterOpen || selectedVibes.length > 0) ? '#FFFFFF' : 'none'} className={(vibeFilterOpen || selectedVibes.length > 0) ? 'text-white' : 'text-accent-red'} />
-            <span className="text-[12px] uppercase tracking-wider font-extrabold whitespace-nowrap">
+            <span className="text-[11px] uppercase tracking-[0.14em] font-extrabold whitespace-nowrap">
               {t.vibe_label}
               {selectedVibes.length > 0 && ` (${selectedVibes.length})`}
             </span>
@@ -10605,67 +10699,111 @@ function ExploreScreen({
       </div>
 
       {exploreMode === 'categories' ? (
-        <div className="flex gap-2 overflow-x-auto pb-2 -mx-6 px-6 no-scrollbar touch-pan-x">
-          <button 
-            onClick={() => {
-              setSelectedCategory(null);
-              triggerHaptic(10);
-            }}
-            className={`px-5 py-3 rounded-full text-[12px] font-black uppercase tracking-widest border transition-all whitespace-nowrap shadow-xs active:translate-y-[1px] cursor-pointer min-h-[44px] ${
-              !selectedCategory ? 'bg-[#800020] text-white border-[#800020] font-bold' : 'bg-white text-[#5C5A4D] border-border-main hover:bg-[#F8F7F2]'
-            }`}
-          >
-            {t.all}
-          </button>
-          {categories.map(cat => (
+        <div className="relative group">
+          <div className="flex gap-2.5 overflow-x-auto pb-2 pt-0.5 -mx-6 px-6 no-scrollbar touch-pan-x items-center">
             <button 
-              key={cat.id}
               onClick={() => {
-                setSelectedCategory(cat.id);
+                setSelectedCategory(null);
                 triggerHaptic(10);
-                if (recordCategoryViewSignal) {
-                  recordCategoryViewSignal(cat.id);
-                } else {
-                  trackCategoryViewSignal(cat.id);
-                }
               }}
-              className={`flex items-center gap-2 px-5 py-3 rounded-full text-[12px] font-black uppercase tracking-widest border transition-all whitespace-nowrap shadow-xs active:translate-y-[1px] cursor-pointer min-h-[44px] ${
-                selectedCategory === cat.id ? 'bg-[#800020] text-white border-[#800020] font-bold' : 'bg-white text-[#5C5A4D] border-border-main hover:bg-[#F8F7F2]'
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[11px] font-extrabold uppercase tracking-[0.16em] border transition-all duration-200 whitespace-nowrap shadow-xs active:scale-[0.97] cursor-pointer min-h-[46px] ${
+                !selectedCategory 
+                  ? 'bg-[#800020] text-white border-[#800020] shadow-sm' 
+                  : 'bg-white text-[#4A483D] border-[#E3E1D5] hover:border-[#C5C2B3] hover:bg-[#FAF9F5]'
               }`}
             >
-              {cat.icon}
-              {t['category_' + cat.id.toLowerCase()] || cat.label}
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center ${!selectedCategory ? 'bg-white/20 text-white' : 'bg-accent-teal/10 text-accent-teal'}`}>
+                <Sparkles size={11} />
+              </div>
+              <span>{t.all}</span>
+              <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-mono font-bold ${!selectedCategory ? 'bg-white/20 text-white' : 'bg-[#EAE8DE] text-[#5C5A4D]'}`}>
+                {getCategoryCount(null)}
+              </span>
             </button>
-          ))}
+
+            {categories.map(cat => {
+              const isActive = selectedCategory === cat.id;
+              const count = getCategoryCount(cat.id);
+              return (
+                <button 
+                  key={cat.id}
+                  onClick={() => {
+                    setSelectedCategory(cat.id);
+                    triggerHaptic(10);
+                    if (recordCategoryViewSignal) {
+                      recordCategoryViewSignal(cat.id);
+                    } else {
+                      trackCategoryViewSignal(cat.id);
+                    }
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[11px] font-extrabold uppercase tracking-[0.16em] border transition-all duration-200 whitespace-nowrap shadow-xs active:scale-[0.97] cursor-pointer min-h-[46px] ${
+                    isActive 
+                      ? 'bg-[#800020] text-white border-[#800020] shadow-sm' 
+                      : 'bg-white text-[#4A483D] border-[#E3E1D5] hover:border-[#C5C2B3] hover:bg-[#FAF9F5]'
+                  }`}
+                >
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center ${isActive ? 'bg-white/20 text-white' : 'bg-accent-teal/10 text-accent-teal'}`}>
+                    {cat.icon}
+                  </div>
+                  <span>{t['category_' + cat.id.toLowerCase()] || cat.label}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-mono font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-[#EAE8DE] text-[#5C5A4D]'}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       ) : (
-        <div className="flex gap-2 overflow-x-auto pb-2 -mx-6 px-6 no-scrollbar touch-pan-x">
-          <button 
-            onClick={() => {
-              setSelectedAreaId(null);
-              triggerHaptic(10);
-            }}
-            className={`px-5 py-3 rounded-full text-[12px] font-black uppercase tracking-widest border transition-all whitespace-nowrap shadow-xs active:translate-y-[1px] cursor-pointer min-h-[44px] ${
-              !selectedAreaId ? 'bg-[#800020] text-white border-[#800020] font-bold' : 'bg-white text-[#5C5A4D] border-border-main hover:bg-[#F8F7F2]'
-            }`}
-          >
-            {t.all}
-          </button>
-          {REGIONS.map(reg => (
+        <div className="relative group">
+          <div className="flex gap-2.5 overflow-x-auto pb-2 pt-0.5 -mx-6 px-6 no-scrollbar touch-pan-x items-center">
             <button 
-              key={reg.id}
               onClick={() => {
-                setSelectedAreaId(reg.id);
+                setSelectedAreaId(null);
                 triggerHaptic(10);
               }}
-              className={`flex items-center gap-1.5 px-5 py-3 rounded-full text-[12px] font-black uppercase tracking-widest border transition-all whitespace-nowrap shadow-xs active:translate-y-[1px] cursor-pointer min-h-[44px] ${
-                selectedAreaId === reg.id ? 'bg-[#800020] text-white border-[#800020] font-bold' : 'bg-white text-[#5C5A4D] border-border-main hover:bg-[#F8F7F2]'
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[11px] font-extrabold uppercase tracking-[0.16em] border transition-all duration-200 whitespace-nowrap shadow-xs active:scale-[0.97] cursor-pointer min-h-[46px] ${
+                !selectedAreaId 
+                  ? 'bg-[#800020] text-white border-[#800020] shadow-sm' 
+                  : 'bg-white text-[#4A483D] border-[#E3E1D5] hover:border-[#C5C2B3] hover:bg-[#FAF9F5]'
               }`}
             >
-              <span className={selectedAreaId === reg.id ? 'text-white' : 'text-accent-teal'}>{reg.icon}</span>
-              <span>{reg.name[language as keyof typeof reg.name] || reg.name.en}</span>
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center ${!selectedAreaId ? 'bg-white/20 text-white' : 'bg-accent-teal/10 text-accent-teal'}`}>
+                <MapPin size={11} />
+              </div>
+              <span>{t.all}</span>
+              <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-mono font-bold ${!selectedAreaId ? 'bg-white/20 text-white' : 'bg-[#EAE8DE] text-[#5C5A4D]'}`}>
+                {getAreaCount(null)}
+              </span>
             </button>
-          ))}
+
+            {REGIONS.map(reg => {
+              const isActive = selectedAreaId === reg.id;
+              const count = getAreaCount(reg.id);
+              return (
+                <button 
+                  key={reg.id}
+                  onClick={() => {
+                    setSelectedAreaId(reg.id);
+                    triggerHaptic(10);
+                  }}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[11px] font-extrabold uppercase tracking-[0.16em] border transition-all duration-200 whitespace-nowrap shadow-xs active:scale-[0.97] cursor-pointer min-h-[46px] ${
+                    isActive 
+                      ? 'bg-[#800020] text-white border-[#800020] shadow-sm' 
+                      : 'bg-white text-[#4A483D] border-[#E3E1D5] hover:border-[#C5C2B3] hover:bg-[#FAF9F5]'
+                  }`}
+                >
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center ${isActive ? 'bg-white/20 text-white' : 'bg-accent-teal/10 text-accent-teal'}`}>
+                    {reg.icon}
+                  </div>
+                  <span>{reg.name[language as keyof typeof reg.name] || reg.name.en}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-mono font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-[#EAE8DE] text-[#5C5A4D]'}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 

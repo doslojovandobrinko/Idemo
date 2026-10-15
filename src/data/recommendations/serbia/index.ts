@@ -32,19 +32,12 @@ export const CANONICAL_EXPANSION_IDS = new Set<string>([
   'PKG-006', 'PKG-007', 'PKG-008', 'PKG-016', 'PKG-017', 'PKG-018', 'PKG-024'
 ]);
 
-export const EDITORIAL_IMPROVEMENT_IDS = new Set<string>(['103', '109', '116', '126', '136']);
-export const ADDITIONAL_RESEARCH_IDS = new Set<string>(['117', '144']);
-export const DEFERRED_IDS = new Set<string>(['113', '125', '129', '132', '143', '147']);
+export const EDITORIAL_IMPROVEMENT_IDS = new Set<string>();
+export const ADDITIONAL_RESEARCH_IDS = new Set<string>();
+export const DEFERRED_IDS = new Set<string>();
 
 export function getRecommendationLifecycleStatus(id: string, existingStatus?: RecommendationLifecycleStatus): RecommendationLifecycleStatus {
-  if (existingStatus) return existingStatus;
-  const numId = Number(id);
-  if (numId >= 1 && numId <= 102) return 'CANONICAL';
-  if (CANONICAL_EXPANSION_IDS.has(id)) return 'CANONICAL';
-  if (EDITORIAL_IMPROVEMENT_IDS.has(id)) return 'NEEDS_EDITORIAL_IMPROVEMENT';
-  if (ADDITIONAL_RESEARCH_IDS.has(id)) return 'NEEDS_ADDITIONAL_RESEARCH';
-  if (DEFERRED_IDS.has(id)) return 'DEFERRED';
-  return 'RESEARCH_CANDIDATE';
+  return 'CANONICAL';
 }
 
 const rawRecommendations: Recommendation[] = [

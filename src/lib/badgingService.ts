@@ -81,7 +81,30 @@ function updateFaviconBadge(hasBadge: boolean): void {
   }
 }
 
+let lastAppliedBadgeCount = 0;
+
 export const badgingService = {
+  /**
+   * Returns the most recently applied badge count (0 when cleared).
+   */
+  getLastAppliedCount(): number {
+    return lastAppliedBadgeCount;
+  },
+
+  /**
+   * Reports whether a verified native wrapper JS bridge is configured.
+   * Per governance rules, undocumented/speculative AppMyWeb JS bridge calls are not invoked.
+   */
+  getNativeWrapperBridgeStatus(): {
+    w3cBadgingSupported: boolean;
+    nativeWrapperBridgeConfigured: boolean;
+  } {
+    return {
+      w3cBadgingSupported: typeof window !== 'undefined' && 'setAppBadge' in navigator,
+      nativeWrapperBridgeConfigured: false,
+    };
+  },
+
   /**
    * Check if the Web App Badging API is available in the current browser/OS
    */
@@ -124,14 +147,17 @@ export const badgingService = {
    */
   async setBadge(count: number): Promise<void> {
     try {
-      if (count <= 0) {
+      const normalized = Math.max(0, Math.floor(Number(count) || 0));
+      if (normalized <= 0) {
         await this.clearBadge();
         return;
       }
 
+      lastAppliedBadgeCount = normalized;
+
       // 1. Direct Web App Badging API (Android PWA, iOS 16.4+ Web App, macOS/Windows PWA)
       if (this.isSupported()) {
-        await (navigator as any).setAppBadge(count);
+        await (navigator as any).setAppBadge(normalized);
       }
 
       // 2. Browser Tab Favicon dynamic notification badge
@@ -141,7 +167,7 @@ export const badgingService = {
       if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({
           type: 'SET_BADGE',
-          count: count
+          count: normalized
         });
       }
     } catch (err) {
@@ -155,6 +181,8 @@ export const badgingService = {
    */
   async clearBadge(): Promise<void> {
     try {
+      lastAppliedBadgeCount = 0;
+
       if (typeof window !== 'undefined' && 'clearAppBadge' in navigator) {
         await (navigator as any).clearAppBadge();
       }
@@ -172,3 +200,4 @@ export const badgingService = {
     }
   }
 };
+

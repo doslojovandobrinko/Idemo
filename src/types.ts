@@ -212,6 +212,7 @@ export interface CachedProposalRecord {
   message: string;
   proposed_start_at?: string | null;
   proposed_end_at?: string | null;
+  visitor_read_at?: string | null;
   partner_name?: string;
   partner_code?: string;
   partner_category?: string;
@@ -298,6 +299,8 @@ export interface VisitorProposalResult {
   proposed_start_at?: string;
   proposed_end_at?: string;
   created_at?: string;
+  visitor_read_at?: string | null;
+  unread_count?: number;
   has_countered?: boolean;
   error?: string;
   retryAfter?: number;
@@ -307,7 +310,10 @@ export interface VisitorActionResult {
   success: boolean;
   inquiry_id?: string;
   match_id?: string;
+  response_id?: string;
   status?: string;
+  visitor_read_at?: string | null;
+  unread_count?: number;
   error?: string;
 }
 

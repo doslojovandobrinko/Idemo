@@ -163,6 +163,9 @@ serve(async (req) => {
     let inquiryId = "";
     const rawToken = req.headers.get("x-visitor-token") ?? "";
     let matchId = "";
+    let responseId = "";
+    let visitorExternalId = "";
+    let siblingInquiries: any[] = [];
     let reason = "";
     let proposedStartAt = "";
     let proposedEndAt = "";
@@ -174,6 +177,9 @@ serve(async (req) => {
       const body = await req.json().catch(() => ({}));
       inquiryId = body.inquiry_id ?? "";
       matchId = body.match_id ?? "";
+      responseId = body.response_id ?? body.proposal_id ?? "";
+      visitorExternalId = typeof body.visitor_external_id === "string" ? body.visitor_external_id.trim() : "";
+      siblingInquiries = Array.isArray(body.sibling_inquiries) ? body.sibling_inquiries : [];
       reason = body.reason ?? "";
       proposedStartAt = body.proposed_start_at ?? body.proposed_start ?? "";
       proposedEndAt = body.proposed_end_at ?? body.proposed_end ?? "";
@@ -197,6 +203,10 @@ serve(async (req) => {
       return errorResponse(400, "Access denied", "Invalid match UUID format.");
     }
 
+    if (responseId && !uuidRegex.test(responseId)) {
+      return errorResponse(400, "Access denied", "Invalid response UUID format.");
+    }
+
     // Token format validation
     const tokenFormatValid = /^idm_rc_[0-9a-f]{32}$/i.test(rawToken);
     if (!tokenFormatValid) {
@@ -205,7 +215,12 @@ serve(async (req) => {
 
     // 5. Pre-validation Admission Guard: Atomically reserve capacity before credential validation.
     // Uses check_and_increment_rate_limits with dedicated admission buckets to prevent concurrent bypass.
-    const isReadOnly = path.endsWith("/proposal") || path.endsWith("/status");
+    const isReadOnly =
+      path.endsWith("/proposal") ||
+      path.endsWith("/status") ||
+      path.endsWith("/mark-proposal-read") ||
+      path.endsWith("/bind-push-identity") ||
+      path.endsWith("/unbind-push-identity");
     const admissionScope = isReadOnly ? "admission:read" : "admission:mutation";
     const admissionSourceHash = await hmacSha256(secret, `${clientIp}:${admissionScope}`);
     const admissionTargetHash = await hmacSha256(secret, `${clientIp}:${inquiryId}:${admissionScope}`);
@@ -276,6 +291,29 @@ serve(async (req) => {
       rpcName = "get_visitor_inquiry_status";
     } else if (path.endsWith("/proposal")) {
       rpcName = "get_visitor_active_proposal";
+    } else if (path.endsWith("/mark-proposal-read")) {
+      if (req.method !== "POST") {
+        return errorResponse(405, "Method not allowed.");
+      }
+      rpcName = "mark_visitor_proposal_read";
+      rpcParams.p_response_id = responseId || null;
+      rpcParams.p_sibling_inquiries = siblingInquiries;
+    } else if (path.endsWith("/bind-push-identity")) {
+      if (req.method !== "POST") {
+        return errorResponse(405, "Method not allowed.");
+      }
+      if (!visitorExternalId) {
+        return errorResponse(400, "Missing required visitor_external_id.", "Missing visitor_external_id.");
+      }
+      rpcName = "bind_visitor_push_identity";
+      rpcParams.p_visitor_external_id = visitorExternalId;
+      rpcParams.p_sibling_inquiries = siblingInquiries;
+    } else if (path.endsWith("/unbind-push-identity")) {
+      if (req.method !== "POST") {
+        return errorResponse(405, "Method not allowed.");
+      }
+      rpcName = "unbind_visitor_push_identity";
+      rpcParams.p_sibling_inquiries = siblingInquiries;
     } else if (path.endsWith("/confirm")) {
       if (!matchId) return errorResponse(400, "Access denied", "Missing match_id for confirmation.");
       rpcName = "confirm_proposal";

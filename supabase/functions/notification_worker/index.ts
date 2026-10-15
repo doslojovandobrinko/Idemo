@@ -32,6 +32,17 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  // Enforce HTTP POST requirement for notification_worker
+  if (req.method !== "POST") {
+    return new Response(
+      JSON.stringify({ error: "Method not allowed" }),
+      {
+        status: 405,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+
   try {
     // 2. Enforce Privileged Endpoint Security via custom worker-secret header
     const workerSecretHeader = req.headers.get("x-idemo-worker-secret");
@@ -115,11 +126,17 @@ serve(async (req) => {
         console.log(`Processing notification ${id}: channel=${channel}, recipient=${recipient_type}:${recipient_id}`);
         
         // 6. Stable Provider Idempotency
-        // Use the outbox UUID 'id' as a stable idempotency key retained across retries
-        const idempotencyKey = id;
+        // Retain explicit idempotency_key if set by trigger, otherwise fall back to outbox UUID
+        const idempotencyKey = notification.idempotency_key || id;
 
         // Dispatch with provider-specific idempotency key
-        const providerResponse = await dispatchNotificationWithIdempotency(channel, payload, idempotencyKey);
+        const providerResponse = await dispatchNotificationWithIdempotency(
+          supabase,
+          notification,
+          channel,
+          payload,
+          idempotencyKey
+        );
 
         if (!providerResponse.success) {
           throw new Error(providerResponse.error || "Delivery failed");
@@ -160,7 +177,7 @@ serve(async (req) => {
             retry_count: nextRetryCount,
             last_error: errorMsg,
             last_error_code: "DELIVERY_FAILED",
-            idempotency_key: id, // Retain the stable idempotency key across retries
+            idempotency_key: notification.idempotency_key || id, // Retain stable idempotency key across retries
             scheduled_at: nextRetryCount < max_retries ? nextScheduledAt : notification.scheduled_at,
             updated_at: new Date().toISOString()
           })
@@ -195,24 +212,120 @@ serve(async (req) => {
 });
 
 /**
- * Idempotent dispatch simulation layer representing delivery via external SMTP, SMS, or WhatsApp
+ * Dispatches visitor push notifications via OneSignal REST API using database unread count
+ * as the absolute badge source of truth, and falls back to non-push channel logging for partner/concierge.
  */
 async function dispatchNotificationWithIdempotency(
+  supabase: any,
+  notification: any,
   channel: string,
   payload: any,
   idempotencyKey: string
 ): Promise<{ success: boolean; providerMessageId?: string; error?: string }> {
-  await new Promise((resolve) => setTimeout(resolve, 200)); // Simulate minor network latency
-
   if (!channel || typeof channel !== "string") {
     return { success: false, error: "Invalid communication channel" };
   }
 
-  // Generate unique provider tracking ID
+  if (notification?.recipient_type === "visitor" && channel === "push") {
+    const oneSignalAppId = Deno.env.get("ONESIGNAL_APP_ID")?.trim();
+    const oneSignalApiKey = Deno.env.get("ONESIGNAL_REST_API_KEY")?.trim();
+
+    if (!oneSignalAppId || !oneSignalApiKey) {
+      return {
+        success: false,
+        error: "MISSING_ONESIGNAL_CONFIG: ONESIGNAL_APP_ID and ONESIGNAL_REST_API_KEY must be configured in backend secrets."
+      };
+    }
+
+    const inquiryId = payload?.inquiry_id || notification?.recipient_id;
+    if (!inquiryId) {
+      return { success: false, error: "MISSING_INQUIRY_ID: Cannot resolve visitor push context without inquiry_id." };
+    }
+
+    const { data: dispatchCtx, error: ctxErr } = await supabase.rpc(
+      "get_visitor_push_dispatch_context",
+      { p_inquiry_id: inquiryId }
+    );
+
+    if (ctxErr || !dispatchCtx?.found) {
+      return {
+        success: false,
+        error: `DISPATCH_CONTEXT_ERROR: ${ctxErr?.message || dispatchCtx?.error || "Inquiry not found"}`
+      };
+    }
+
+    const visitorExternalId =
+      typeof dispatchCtx.visitor_external_id === "string" && dispatchCtx.visitor_external_id.trim() !== ""
+        ? dispatchCtx.visitor_external_id.trim()
+        : "";
+
+    if (!visitorExternalId) {
+      return {
+        success: false,
+        error: "MISSING_VISITOR_PUSH_IDENTITY: Inquiry has no bound OneSignal external_id."
+      };
+    }
+
+    const unreadCount = Math.max(0, Number(dispatchCtx.unread_count ?? 1));
+    const responseId = dispatchCtx.response_id || payload?.response_id || null;
+    const matchId = dispatchCtx.match_id || payload?.match_id || null;
+
+    // Strict UUID validation for OneSignal provider idempotency_key
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!responseId || typeof responseId !== "string" || !uuidRegex.test(responseId)) {
+      return {
+        success: false,
+        error: "INVALID_PROPOSAL_RESPONSE_UUID: Cannot dispatch OneSignal push without a valid proposal response UUID for idempotency_key."
+      };
+    }
+
+    const oneSignalPayload = {
+      app_id: oneSignalAppId,
+      target_channel: "push",
+      include_aliases: {
+        external_id: [visitorExternalId]
+      },
+      headings: {
+        en: "IDEMO"
+      },
+      contents: {
+        en: "You have a new partner proposal ready to review."
+      },
+      ios_badgeType: "SetTo",
+      ios_badgeCount: unreadCount,
+      idempotency_key: responseId,
+      data: {
+        inquiry_id: inquiryId,
+        match_id: matchId,
+        response_id: responseId,
+        action: "review_proposal"
+      }
+    };
+
+    const osResponse = await fetch("https://api.onesignal.com/notifications", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Authorization": `Key ${oneSignalApiKey}`
+      },
+      body: JSON.stringify(oneSignalPayload)
+    });
+
+    const osBody = await osResponse.json().catch(() => ({}));
+    if (!osResponse.ok || !osBody?.id) {
+      const errDetail = osBody?.errors ? JSON.stringify(osBody.errors) : `HTTP_${osResponse.status}`;
+      return { success: false, error: `ONESIGNAL_DISPATCH_FAILED: ${errDetail}` };
+    }
+
+    return { success: true, providerMessageId: String(osBody.id) };
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 200));
+
+  // Generate unique provider tracking ID for non-visitor channels
   const mockRandomPart = Math.floor(Math.random() * 1000000).toString().padStart(6, "0");
   const providerMessageId = `msg_${channel}_${mockRandomPart}`;
 
-  // Log simulated transmission including the stable idempotency key
   console.log(`[DISPATCH SUCCESS] [Channel: ${channel}] [Idempotency Key: ${idempotencyKey}] [Provider Message ID: ${providerMessageId}] Dispatching message: "${payload?.title || ""}" -> "${payload?.body || ""}"`);
   
   return { success: true, providerMessageId };

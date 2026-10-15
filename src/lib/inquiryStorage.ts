@@ -227,6 +227,10 @@ export function updateInquiryCachedProposalV2(
         target.cached_proposal = {
           ...target.cached_proposal,
           ...proposal,
+          visitor_read_at:
+            proposal.visitor_read_at !== undefined
+              ? proposal.visitor_read_at
+              : target.cached_proposal.visitor_read_at,
           partner_name: proposal.partner_name ?? target.cached_proposal.partner_name,
           partner_code: proposal.partner_code ?? target.cached_proposal.partner_code,
           partner_category: proposal.partner_category ?? target.cached_proposal.partner_category,
@@ -462,27 +466,51 @@ export function removeSeenProposal(inquiryId: string): void {
   }
 }
 
-export function checkHasUnreadProposals(): boolean {
+export function getUnreadProposalsCount(): number {
   try {
     const all = getAllInquiriesV2();
+    let count = 0;
     for (const inq of all) {
       const serverId = inq.server_inquiry_id || inq.local_queue_id;
       if (!serverId) continue;
 
-      if (inq.cached_proposal) {
+      if (inq.cached_proposal && !inq.confirmed_arrangement) {
         const cached = inq.cached_proposal;
         if (cached.match_id && cached.response_id) {
+          if (cached.visitor_read_at) {
+            continue;
+          }
           const sig = `${cached.match_id}_${cached.response_id || 'active'}`;
           if (!isProposalSeen(serverId, sig)) {
-            return true;
+            count++;
           }
         }
       }
     }
-    return false;
+    return count;
   } catch {
-    return false;
+    return 0;
   }
 }
 
+export function checkHasUnreadProposals(): boolean {
+  return getUnreadProposalsCount() > 0;
+}
 
+export function getAuthenticatedVisitorInquiriesPayload(): Array<{ inquiry_id: string; visitor_token: string }> {
+  try {
+    const raw = safeStorage.getItem(VISITOR_CREDENTIALS_KEY);
+    if (!raw) return [];
+    const store: Record<string, string> = JSON.parse(raw);
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const result: Array<{ inquiry_id: string; visitor_token: string }> = [];
+    for (const [inquiryId, token] of Object.entries(store)) {
+      if (uuidRegex.test(inquiryId) && typeof token === 'string' && /^idm_rc_[0-9a-f]{32}$/i.test(token)) {
+        result.push({ inquiry_id: inquiryId, visitor_token: token });
+      }
+    }
+    return result;
+  } catch {
+    return [];
+  }
+}

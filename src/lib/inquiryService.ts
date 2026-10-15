@@ -4,7 +4,7 @@
  */
 
 import { InquiryRecordV2, Recommendation, VisitorStatusResult, VisitorProposalResult, VisitorActionResult } from '../types';
-import { saveInquiryRecordV2, saveVisitorCredential, getVisitorCredential, removeVisitorCredential, getAllInquiriesV2 } from './inquiryStorage';
+import { saveInquiryRecordV2, saveVisitorCredential, getVisitorCredential, removeVisitorCredential, getAllInquiriesV2, getAuthenticatedVisitorInquiriesPayload } from './inquiryStorage';
 import { bootstrapTaxonomy, getTaxonomyCache } from './taxonomyStore';
 import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 import { safeStorage } from './safeStorage';
@@ -339,10 +339,146 @@ export async function fetchActiveProposal(inquiryId: string): Promise<VisitorPro
       proposed_start_at: resData.proposed_start_at,
       proposed_end_at: resData.proposed_end_at,
       created_at: resData.created_at,
+      visitor_read_at: resData.visitor_read_at ?? null,
+      unread_count: typeof resData.unread_count === 'number' ? resData.unread_count : undefined,
       has_countered: resData.has_countered,
     };
   } catch (err: any) {
     return { success: false, error: 'Unable to check active proposal. Please try again.' };
+  }
+}
+
+export async function markProposalReadOnBackend(
+  inquiryId: string,
+  responseId?: string
+): Promise<VisitorActionResult> {
+  const token = getVisitorCredential(inquiryId);
+  if (!token) {
+    return { success: false, error: 'NO_CREDENTIAL: Recovery token not found on this device.' };
+  }
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  try {
+    const siblingInquiries = getAuthenticatedVisitorInquiriesPayload();
+    const response = await fetch(`${supabaseUrl}/functions/v1/visitor_resolution/mark-proposal-read`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${anonKey}`,
+        apikey: anonKey,
+        'x-visitor-token': token,
+      },
+      body: JSON.stringify({
+        inquiry_id: inquiryId,
+        response_id: responseId || undefined,
+        sibling_inquiries: siblingInquiries,
+      }),
+    });
+
+    const resData = await response.json();
+    if (!response.ok || !resData.success) {
+      return { success: false, error: resData.error || 'Failed to mark proposal as read.' };
+    }
+
+    return {
+      success: true,
+      inquiry_id: resData.inquiry_id || inquiryId,
+      match_id: resData.match_id,
+      response_id: resData.response_id || responseId,
+      status: resData.status || 'marked_read',
+      visitor_read_at: resData.visitor_read_at || new Date().toISOString(),
+      unread_count: typeof resData.unread_count === 'number' ? resData.unread_count : undefined,
+    };
+  } catch (err: any) {
+    return { success: false, error: 'Unable to mark proposal as read. Please try again.' };
+  }
+}
+
+export async function bindVisitorPushIdentity(visitorExternalId: string): Promise<VisitorActionResult> {
+  const cleanExternalId = (visitorExternalId || '').trim();
+  if (!cleanExternalId) {
+    return { success: false, error: 'INVALID_EXTERNAL_ID: Non-empty visitor_external_id is required.' };
+  }
+
+  const siblingInquiries = getAuthenticatedVisitorInquiriesPayload();
+  if (siblingInquiries.length === 0) {
+    return { success: false, error: 'NO_CREDENTIAL: No authenticated visitor inquiries on this device.' };
+  }
+
+  const primary = siblingInquiries[0];
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/visitor_resolution/bind-push-identity`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${anonKey}`,
+        apikey: anonKey,
+        'x-visitor-token': primary.visitor_token,
+      },
+      body: JSON.stringify({
+        inquiry_id: primary.inquiry_id,
+        visitor_external_id: cleanExternalId,
+        sibling_inquiries: siblingInquiries,
+      }),
+    });
+
+    const resData = await response.json();
+    if (!response.ok || !resData.success) {
+      return { success: false, error: resData.error || 'Failed to bind visitor push identity.' };
+    }
+
+    return {
+      success: true,
+      status: resData.status || 'bound',
+      unread_count: typeof resData.unread_count === 'number' ? resData.unread_count : undefined,
+    };
+  } catch (err: any) {
+    return { success: false, error: 'Unable to bind visitor push identity.' };
+  }
+}
+
+export async function unbindVisitorPushIdentity(): Promise<VisitorActionResult> {
+  const siblingInquiries = getAuthenticatedVisitorInquiriesPayload();
+  if (siblingInquiries.length === 0) {
+    return { success: true, status: 'unbound', unread_count: 0 };
+  }
+
+  const primary = siblingInquiries[0];
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/visitor_resolution/unbind-push-identity`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${anonKey}`,
+        apikey: anonKey,
+        'x-visitor-token': primary.visitor_token,
+      },
+      body: JSON.stringify({
+        inquiry_id: primary.inquiry_id,
+        sibling_inquiries: siblingInquiries,
+      }),
+    });
+
+    const resData = await response.json();
+    if (!response.ok || !resData.success) {
+      return { success: false, error: resData.error || 'Failed to unbind visitor push identity.' };
+    }
+
+    return {
+      success: true,
+      status: resData.status || 'unbound',
+      unread_count: 0,
+    };
+  } catch (err: any) {
+    return { success: false, error: 'Unable to unbind visitor push identity.' };
   }
 }
 
