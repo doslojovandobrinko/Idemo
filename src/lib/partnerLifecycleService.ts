@@ -8,6 +8,45 @@ import { PARTNERS as STATIC_PARTNERS } from '../data/partners';
 import { safeStorage } from './safeStorage';
 
 const PARTNER_OVERRIDES_STORAGE_KEY = 'idemo_partner_overrides_v1';
+const REMOVED_DEMO_PARTNERS_KEY = 'idemo_removed_demo_partner_ids';
+
+export function isRemovedDemoPartnerId(partnerId: string | null | undefined): boolean {
+  if (!partnerId) return false;
+  const norm = partnerId.trim().toLowerCase();
+  if (
+    norm === '00000000-0000-0000-0000-000000000000' ||
+    norm === 'p-onboarding-template-000'
+  ) {
+    return true;
+  }
+  try {
+    const raw = safeStorage.getItem(REMOVED_DEMO_PARTNERS_KEY);
+    if (raw) {
+      const ids: string[] = JSON.parse(raw);
+      if (Array.isArray(ids) && ids.some(id => String(id).trim().toLowerCase() === norm)) {
+        return true;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
+export function markDemoPartnerAsRemoved(partnerId: string): void {
+  if (!partnerId) return;
+  try {
+    const norm = partnerId.trim().toLowerCase();
+    const raw = safeStorage.getItem(REMOVED_DEMO_PARTNERS_KEY);
+    const ids: string[] = raw ? JSON.parse(raw) : [];
+    if (!ids.some(id => String(id).trim().toLowerCase() === norm)) {
+      ids.push(partnerId);
+      safeStorage.setItem(REMOVED_DEMO_PARTNERS_KEY, JSON.stringify(ids));
+    }
+  } catch {
+    // ignore
+  }
+}
 
 export interface PartnerLifecycleState {
   stage: 'Candidate' | 'Verification' | 'Approved' | 'Active' | 'Suspended' | 'Archived';
@@ -156,9 +195,29 @@ export function getPartnerLifecycleState(partner: Partial<Partner> | null | unde
 
 export function getPersistedPartnerOverrides(): Record<string, Partner> {
   try {
-    const raw = safeStorage.getItem(PARTNER_OVERRIDES_STORAGE_KEY);
+    let raw = safeStorage.getItem(PARTNER_OVERRIDES_STORAGE_KEY);
+    if (!raw) {
+      // Check legacy alternate storage key
+      const legacyRaw = safeStorage.getItem('idemo_partner_lifecycle_overrides');
+      if (legacyRaw) {
+        raw = legacyRaw;
+        safeStorage.setItem(PARTNER_OVERRIDES_STORAGE_KEY, legacyRaw);
+      }
+    }
     if (!raw) return {};
-    return JSON.parse(raw) as Record<string, Partner>;
+    const parsed = JSON.parse(raw) as Record<string, Partner>;
+    const sanitized: Record<string, Partner> = {};
+    const legacyIds = new Set([
+      'p-001', 'p-002', 'p-003', 'p-004', 'p-005', 'p-006', 'p-007', 'p-008', 'p-009',
+      'p-010', 'p-011', 'p-012', 'p-013', 'p-014', 'p-015', 'p-016', 'p-017', 'p-018',
+      'p-019', 'p-020', 'p-021', 'p-022', 'p-023', 'p-024', 'p-025', 'p-026', 'p-027', 'p-028'
+    ]);
+    for (const [key, val] of Object.entries(parsed)) {
+      if (!legacyIds.has(key.toLowerCase()) && !legacyIds.has((val.id || '').toLowerCase())) {
+        sanitized[key] = val;
+      }
+    }
+    return sanitized;
   } catch {
     return {};
   }
@@ -311,6 +370,91 @@ export function syncApprovedPassportsToDirectory(): void {
   } catch (err) {
     console.warn('[IDEMO Partner Directory Sync] Failed syncing approved passports:', err);
   }
+}
+
+export async function fetchPublicApprovedPartnersDirectory(): Promise<PublicDirectoryFetchResult> {
+  const { getSupabaseClient, isSupabaseConfigured } = await import("./supabaseClient");
+  const ONBOARDING_TEMPLATE_ID = "a0000000-0000-0000-0000-000000000099";
+
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.rpc("fetch_public_approved_partner_directory_secure");
+
+      if (error) {
+        console.error("[IDEMO Partner Directory] Supabase directory fetch RPC error:", error.message);
+        return { success: false, partners: [], error: error.message };
+      }
+
+      if (data?.success && Array.isArray(data.partners)) {
+        if (data.partners.length === 0) {
+          // Empty response clears stale cached overrides
+          safeStorage.removeItem(PARTNER_OVERRIDES_STORAGE_KEY);
+          return { success: true, partners: [] };
+        }
+
+        const LEGACY_PARTNER_IDS = new Set([
+          'p-001', 'p-002', 'p-003', 'p-004', 'p-005', 'p-006', 'p-007', 'p-008', 'p-009',
+          'p-010', 'p-011', 'p-012', 'p-013', 'p-014', 'p-015', 'p-016', 'p-017', 'p-018',
+          'p-019', 'p-020', 'p-021', 'p-022', 'p-023', 'p-024', 'p-025', 'p-026', 'p-027', 'p-028'
+        ]);
+
+        const partners = data.partners
+          .filter(
+            (p: any) =>
+              p.id &&
+              p.id.toLowerCase() !== ONBOARDING_TEMPLATE_ID &&
+              p.public_code?.toLowerCase() !== "p-onboarding-template-000" &&
+              !LEGACY_PARTNER_IDS.has(String(p.id).toLowerCase()) &&
+              !LEGACY_PARTNER_IDS.has(String(p.public_code || '').toLowerCase())
+          )
+          .map((p: any) => ({
+            id: p.id,
+            pinHash: "", // Excluded for public security
+            nameEn: p.name,
+            nameSr: p.name,
+            nameZh: p.name,
+            category: p.category,
+            partnerType: p.partner_type || "Individual",
+            descriptionEn: p.description,
+            descriptionSr: p.description,
+            descriptionZh: p.description,
+            website: p.website || "",
+            languages: p.languages || [],
+            transportCapacity: p.transport_capacity || "none",
+            noticeWindow: p.notice_window || "24h",
+            phone: p.published_contact_phone,
+            email: p.published_contact_email,
+            directBookingPhone: p.published_contact_phone,
+            directBookingEmail: p.published_contact_email,
+            locationEn: p.location,
+            locationSr: p.location,
+            locationZh: p.location,
+            stage: p.review_status === "approved" ? "Approved" : "Candidate",
+            verificationStatus: p.review_status === "approved" ? "verified" : "unverified",
+            status: p.status || "inactive"
+          }));
+
+        return { success: true, partners };
+      }
+    } catch (err: any) {
+      console.error("[IDEMO Partner Directory] Exception fetching directory:", err);
+      return { success: false, partners: [], error: err.message || "Directory fetch failed" };
+    }
+  }
+
+  // Fallback to local memory when Supabase is unconfigured
+  const local = getAllPartners().filter(
+    (p) =>
+      p.id !== ONBOARDING_TEMPLATE_ID &&
+      p.publicCode !== "p-onboarding-template-000" &&
+      !isRemovedDemoPartnerId(p.id)
+  );
+
+  return {
+    success: true,
+    partners: local
+  };
 }
 
 export function getAllPartners(): Partner[] {

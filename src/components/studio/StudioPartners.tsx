@@ -25,7 +25,7 @@ import { Partner } from '../../types';
 import { PARTNERS as INITIAL_PARTNERS } from '../../data/partners';
 import { PartnerEditorModal, PartnerLifecycleStage } from './PartnerEditorModal';
 import { calculatePartnerReadiness } from './utils/scoring';
-import { getAllPartners, getPartnerLifecycleState } from '../../lib/partnerLifecycleService';
+import { getAllPartners, getPartnerLifecycleState, fetchPublicApprovedPartnersDirectory } from '../../lib/partnerLifecycleService';
 import { StudioUserSession } from './types';
 import { StudioPassportReviewView } from './StudioPassportReviewView';
 import { StudioPartnerCarousel } from './StudioPartnerCarousel';
@@ -47,16 +47,17 @@ export function StudioPartners({ targetPartnerId, session, initialSubTab = 'dire
     }
   }, [targetPartnerId]);
 
-  // Reactive listener to ensure approved partner passports immediately reflect in directory
+  // Load full authorized partner & candidate application pool for Studio Curators
   useEffect(() => {
+    setPartnerList(getAllPartners());
     const handleUpdate = () => {
       setPartnerList(getAllPartners());
     };
-    window.addEventListener('idemo_partners_updated', handleUpdate);
-    window.addEventListener('storage', handleUpdate);
+    window.addEventListener("idemo_partners_updated", handleUpdate);
+    window.addEventListener("storage", handleUpdate);
     return () => {
-      window.removeEventListener('idemo_partners_updated', handleUpdate);
-      window.removeEventListener('storage', handleUpdate);
+      window.removeEventListener("idemo_partners_updated", handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
     };
   }, []);
 

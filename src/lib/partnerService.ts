@@ -364,6 +364,75 @@ export async function fetchPartnerOpportunities(scope: 'new' | 'active' | 'histo
   }
 }
 
+export interface PartnerAssignedRecommendationItem {
+  id?: string;
+  recommendation_id: string;
+  qualification_state?: string;
+  participation_state?: string;
+  routing_state?: string;
+  passport_state?: string;
+  priority_rank?: number;
+}
+
+export interface PartnerAssignedRecommendationsResult {
+  success: boolean;
+  partner_id?: string;
+  assignments?: PartnerAssignedRecommendationItem[];
+  error?: string;
+}
+
+export async function fetchPartnerAssignedRecommendations(): Promise<PartnerAssignedRecommendationsResult> {
+  const session = partnerSessionStorage.getPartnerSession();
+  if (!session) {
+    return { success: false, error: "UNAUTHORIZED: Partner session missing or expired." };
+  }
+
+  const supabaseUrl = getEnvVar("VITE_SUPABASE_URL");
+  if (!supabaseUrl || session.sessionToken.startsWith("mock_session_")) {
+    return {
+      success: true,
+      partner_id: session.partnerId,
+      assignments: []
+    };
+  }
+
+  const url = `${getFunctionUrl("assigned-recommendations")}`;
+  const anonKey = getAnonKey();
+
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        "apikey": anonKey,
+        "Authorization": `Bearer ${anonKey}`,
+        "x-partner-session": session.sessionToken,
+      },
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      if (res.status === 401) {
+        partnerSessionStorage.clearPartnerSession();
+      }
+      return {
+        success: false,
+        error: data.message || data.error || `HTTP ${res.status}: Failed to fetch assigned recommendations.`,
+      };
+    }
+
+    return {
+      success: true,
+      partner_id: data.partner_id,
+      assignments: data.assignments || [],
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: `NETWORK_FAILURE: ${err?.message || String(err)}`,
+    };
+  }
+}
+
 export async function viewPartnerOpportunity(matchId: string): Promise<PartnerActionResult> {
   const session = partnerSessionStorage.getPartnerSession();
   if (!session) return { success: false, error: 'UNAUTHORIZED: Partner session missing.' };
@@ -1352,60 +1421,86 @@ export interface PartnerProfileReviewQueueResponse {
 
 export async function fetchPartnerProfileReviewQueue(
   studioToken?: string | null,
-  status: PartnerProfileReviewStatusFilter = 'pending_review'
+  status: PartnerProfileReviewStatusFilter = "pending_review"
 ): Promise<PartnerProfileReviewQueueResponse> {
   let serverProfiles: PartnerProfileQueueItem[] = [];
+  let rpcErrorMessage: string | null = null;
+  let rpcErrorCode: string | null = null;
+  let serverSuccess = false;
 
   // 1. Direct Supabase RPC execution
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
-      const { data, error } = await supabase.rpc('fetch_partner_profile_review_queue_secure', {
+      const { data, error } = await supabase.rpc("fetch_partner_profile_review_queue_secure", {
         p_status: status,
       });
       if (!error && data && data.success && Array.isArray(data.profiles)) {
         serverProfiles = data.profiles;
+        serverSuccess = true;
+        rpcErrorCode = null;
+        rpcErrorMessage = null;
+      } else if (error) {
+        rpcErrorCode = error.code || "RPC_ERROR";
+        rpcErrorMessage = error.message || "Database RPC error";
+      } else if (data && !data.success) {
+        rpcErrorCode = data.error || "UNAUTHORIZED";
+        rpcErrorMessage = data.message || "Access denied";
       }
-    } catch {
-      // fallback
+    } catch (e: any) {
+      rpcErrorCode = "RPC_EXCEPTION";
+      rpcErrorMessage = e?.message || String(e);
     }
   }
 
-  // 2. Edge Function execution if token is present and RPC returned empty
-  if (serverProfiles.length === 0 && studioToken && studioToken.trim()) {
-    const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
-
-  const anonKey = getAnonKey();
-  if (!anonKey) {
-    return { success: false, error: 'CONFIGURATION_ERROR', message: 'Anon key missing.' };
-  }
-
-  const baseUrl = getFunctionUrl('admin/profile-queue');
-  const url = `${baseUrl}?status=${encodeURIComponent(status)}`;
-
-  try {
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'apikey': anonKey,
-        'Authorization': `Bearer ${studioToken.trim()}`,
-      },
-    });
-
-    const data = await res.json().catch(() => ({}));
-    if (res.ok && data.success && Array.isArray(data.profiles)) {
-      serverProfiles = data.profiles;
+  // 2. Edge Function execution if token is present and direct RPC did not succeed
+  if (!serverSuccess && studioToken && studioToken.trim()) {
+    const supabaseUrl = getEnvVar("VITE_SUPABASE_URL");
+    const anonKey = getAnonKey();
+    if (anonKey && supabaseUrl) {
+      const baseUrl = getFunctionUrl("admin/profile-queue");
+      const url = `${baseUrl}?status=${encodeURIComponent(status)}`;
+      try {
+        const res = await fetch(url, {
+          method: "GET",
+          headers: {
+            "apikey": anonKey,
+            "Authorization": `Bearer ${studioToken.trim()}`,
+          },
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success && Array.isArray(data.profiles)) {
+          serverProfiles = data.profiles;
+          serverSuccess = true;
+          rpcErrorMessage = null;
+          rpcErrorCode = null;
+        } else if (!res.ok) {
+          rpcErrorCode = data.error || `HTTP_${res.status}`;
+          rpcErrorMessage = data.message || `Edge function HTTP ${res.status}`;
+        }
+      } catch (efErr: any) {
+        rpcErrorCode = "EDGE_FUNCTION_EXCEPTION";
+        rpcErrorMessage = efErr?.message || String(efErr);
+      }
     }
-  } catch {
-    // fallback
   }
-}
+
+  // Preserve error-handling correction: Never report successful queue retrieval from local fallback records after a server authorization or fetch failure.
+  if (!serverSuccess && rpcErrorCode) {
+    return {
+      success: false,
+      error: rpcErrorCode,
+      message: rpcErrorMessage || "Failed to fetch Partner Passport review queue.",
+      profiles: [],
+      total_count: 0,
+      status_filter: status,
+    };
+  }
 
   // 3. Merge with local SafeStorage partner passport submissions (Offline-First / Demo persistence)
   const allPartners = getAllPartners();
-  const portalPartnersRaw = safeStorage.getItem('idemo_portal_partners');
+  const portalPartnersRaw = safeStorage.getItem("idemo_portal_partners");
   const portalPartners: any[] = portalPartnersRaw ? JSON.parse(portalPartnersRaw) : [];
-
   const partnersMap = new Map<string, any>();
   allPartners.forEach((p) => {
     if (p.id) partnersMap.set(p.id.toLowerCase(), p);
@@ -1422,19 +1517,17 @@ export async function fetchPartnerProfileReviewQueue(
   const existingIds = new Set(serverProfiles.map((p) => p.partner_id.toLowerCase()));
   const existingCodes = new Set(serverProfiles.map((p) => p.partner_code.toLowerCase()));
 
-  const localKeys = safeStorage.getAllKeys().filter((k) => k.toLowerCase().startsWith('idemo_partner_passport_'));
+  const localKeys = safeStorage.getAllKeys().filter((k) => k.toLowerCase().startsWith("idemo_partner_passport_"));
   for (const k of localKeys) {
     try {
       const raw = safeStorage.getItem(k);
       if (!raw) continue;
       const data = JSON.parse(raw);
-      const codeOrId = k.replace(/^idemo_partner_passport_/i, '').trim();
+      const codeOrId = k.replace(/^idemo_partner_passport_/i, "").trim();
       const matched = partnersMap.get(codeOrId.toLowerCase());
-
       const pId = matched?.id || (codeOrId.length > 20 ? codeOrId : `local-${codeOrId}`);
       const pCode = String(data.partner_code || (matched as any)?.public_code || (matched as any)?.publicCode || (matched as any)?.pin || matched?.id || codeOrId).toUpperCase();
       const pName = String(data.partner_name || (matched as any)?.name || (matched as any)?.nameEn || pCode);
-
       const resolvedPhotoUrl = data.photo_url || data.photo_preview_url || data.draft_photo_path || null;
 
       if (existingIds.has(pId.toLowerCase()) || existingCodes.has(pCode.toLowerCase())) {
@@ -1446,10 +1539,10 @@ export async function fetchPartnerProfileReviewQueue(
             mergedProfiles[idx].photo_url = resolvedPhotoUrl;
             mergedProfiles[idx].photo_available = true;
           }
-          if (pName && (!mergedProfiles[idx].partner_name || mergedProfiles[idx].partner_name.includes('-'))) {
+          if (pName && (!mergedProfiles[idx].partner_name || mergedProfiles[idx].partner_name.includes("-"))) {
             mergedProfiles[idx].partner_name = pName;
           }
-          if (pCode && (!mergedProfiles[idx].partner_code || mergedProfiles[idx].partner_code.includes('-'))) {
+          if (pCode && (!mergedProfiles[idx].partner_code || mergedProfiles[idx].partner_code.includes("-"))) {
             mergedProfiles[idx].partner_code = pCode;
           }
           if (!mergedProfiles[idx].draft_contact_phone && data.draft_contact_phone) {
@@ -1467,23 +1560,21 @@ export async function fetchPartnerProfileReviewQueue(
           if (!mergedProfiles[idx].canonical_region && data.canonical_region) {
             mergedProfiles[idx].canonical_region = data.canonical_region;
           }
-          // Proposal 2 fields on remote records are authoritative (including null and []);
-          // never refill cleared Proposal 2 values from local SafeStorage cache.
         }
         continue;
       }
 
-      const pStatus = data.review_status || 'pending_review';
-      if (status !== 'all' && pStatus !== status) continue;
+      const pStatus = data.review_status || "pending_review";
+      if (status !== "all" && pStatus !== status) continue;
 
-      const introText = data.intro_draft || '';
+      const introText = data.intro_draft || "";
       const wordCount = introText.trim() ? introText.trim().split(/\s+/).length : 0;
 
       mergedProfiles.push({
         partner_id: pId,
         partner_code: pCode,
         partner_name: pName,
-        partner_status: matched?.status || 'active',
+        partner_status: matched?.status || "active",
         review_status: pStatus,
         introduction_draft: data.intro_draft || null,
         introduction_published: data.intro_published || null,
@@ -1499,13 +1590,13 @@ export async function fetchPartnerProfileReviewQueue(
         applied_recs: data.applied_recs || null,
         applied_recs_note: data.applied_recs_note || null,
         canonical_region: data.canonical_region || null,
-        partner_type: data.partner_type || 'Individual',
+        partner_type: data.partner_type || "Individual",
         website: data.website || null,
         guide_licence: data.guide_licence || null,
         pib: data.pib || null,
         languages: Array.isArray(data.languages) ? data.languages : [],
-        transport_capacity: data.transport_capacity || 'none',
-        notice_window: data.notice_window || '24h',
+        transport_capacity: data.transport_capacity || "none",
+        notice_window: data.notice_window || "24h",
         submitted_at: data.submitted_at || data.updated_at || new Date().toISOString(),
         reviewed_at: data.reviewed_at || null,
         reviewer_note: data.review_note || null,
@@ -1517,6 +1608,17 @@ export async function fetchPartnerProfileReviewQueue(
     } catch {
       // ignore parse errors
     }
+  }
+
+  if (serverProfiles.length === 0 && mergedProfiles.length === 0 && rpcErrorMessage && isSupabaseConfigured()) {
+    return {
+      success: false,
+      error: rpcErrorCode || "FETCH_ERROR",
+      message: rpcErrorMessage,
+      status_filter: status,
+      count: 0,
+      profiles: [],
+    };
   }
 
   return {
@@ -1782,48 +1884,39 @@ export async function setPartnerCoveragePriorityRank(
     };
   }
 
-  // Sync immediately to local safeStorage
-  let localSwappedPartnerId: string | undefined;
-  let localOldRank = 100;
-
-  try {
-    const rawRanks = safeStorage.getItem('idemo_coverage_ranks');
-    const ranksMap: Record<string, Record<string, number>> = rawRanks ? JSON.parse(rawRanks) : {};
-    if (!ranksMap[recommendationId]) {
-      ranksMap[recommendationId] = {};
-    }
-
-    localOldRank = ranksMap[recommendationId][partnerId] || 100;
-
-    // Check if another partner on this recommendation had this rank
-    for (const [pId, rank] of Object.entries(ranksMap[recommendationId])) {
-      if (pId !== partnerId && rank === priorityRank) {
-        localSwappedPartnerId = pId;
-        break;
-      }
-    }
-
-    if (localSwappedPartnerId) {
-      ranksMap[recommendationId][localSwappedPartnerId] = localOldRank <= 10 ? localOldRank : priorityRank + 1;
-    }
-    ranksMap[recommendationId][partnerId] = priorityRank;
-    safeStorage.setItem('idemo_coverage_ranks', JSON.stringify(ranksMap));
-  } catch (storageErr) {
-    console.warn('Failed to sync coverage rank to safeStorage:', storageErr);
-  }
-
   if (!isSupabaseConfigured()) {
+    let localSwappedPartnerId: string | undefined;
+    let localOldRank = 100;
+    try {
+      const rawRanks = safeStorage.getItem('idemo_coverage_ranks');
+      const ranksMap: Record<string, Record<string, number>> = rawRanks ? JSON.parse(rawRanks) : {};
+      if (!ranksMap[recommendationId]) ranksMap[recommendationId] = {};
+      localOldRank = ranksMap[recommendationId][partnerId] || 100;
+      for (const [pId, rank] of Object.entries(ranksMap[recommendationId])) {
+        if (pId !== partnerId && rank === priorityRank) {
+          localSwappedPartnerId = pId;
+          break;
+        }
+      }
+      if (localSwappedPartnerId) {
+        ranksMap[recommendationId][localSwappedPartnerId] = localOldRank <= 10 ? localOldRank : priorityRank + 1;
+      }
+      ranksMap[recommendationId][partnerId] = priorityRank;
+      safeStorage.setItem('idemo_coverage_ranks', JSON.stringify(ranksMap));
+    } catch {
+      // ignore local storage error
+    }
     return {
       success: true,
       oldRank: localOldRank,
       newRank: priorityRank,
       swappedPartnerId: localSwappedPartnerId,
-      message: `Priority rank set to ${priorityRank} locally.`
+      message: `Priority rank set to ${priorityRank} in local offline mode.`
     };
   }
 
   const supabase = getSupabaseClient();
-  if (!supabase) return { success: false, error: 'Database unavailable' };
+  if (!supabase) return { success: false, error: 'DATABASE_UNAVAILABLE', message: 'Database client is unavailable.' };
 
   try {
     const { data, error } = await supabase.rpc('set_partner_coverage_priority_rank_secure', {
@@ -1834,14 +1927,27 @@ export async function setPartnerCoveragePriorityRank(
 
     if (error) {
       return {
-        success: true,
-        oldRank: localOldRank,
-        newRank: priorityRank,
-        swappedPartnerId: localSwappedPartnerId,
-        message: `Priority rank updated locally (Remote RPC fallback: ${error.message}).`
+        success: false,
+        error: error.code || 'RPC_ERROR',
+        message: `Failed to set priority rank: ${error.message}`
       };
     }
+
     if (data && data.success) {
+      // Mirrored client cache update ONLY after confirmed database persistence success
+      try {
+        const rawRanks = safeStorage.getItem('idemo_coverage_ranks');
+        const ranksMap: Record<string, Record<string, number>> = rawRanks ? JSON.parse(rawRanks) : {};
+        if (!ranksMap[recommendationId]) ranksMap[recommendationId] = {};
+        if (data.swapped_partner_id) {
+          ranksMap[recommendationId][data.swapped_partner_id] = data.old_rank <= 10 ? data.old_rank : priorityRank + 1;
+        }
+        ranksMap[recommendationId][partnerId] = priorityRank;
+        safeStorage.setItem('idemo_coverage_ranks', JSON.stringify(ranksMap));
+      } catch (storageErr) {
+        console.warn('Failed to mirror updated rank to local cache:', storageErr);
+      }
+
       return {
         success: true,
         oldRank: data.old_rank,
@@ -1850,20 +1956,17 @@ export async function setPartnerCoveragePriorityRank(
         message: data.message || `Priority rank updated to ${priorityRank}.`
       };
     }
+
     return {
-      success: true,
-      oldRank: localOldRank,
-      newRank: priorityRank,
-      swappedPartnerId: localSwappedPartnerId,
-      message: `Priority rank updated locally (${data?.message || 'Local fallback'}).`
+      success: false,
+      error: data?.error || 'RANK_UPDATE_FAILED',
+      message: data?.message || 'Database priority rank update was not successful.'
     };
   } catch (e: any) {
     return {
-      success: true,
-      oldRank: localOldRank,
-      newRank: priorityRank,
-      swappedPartnerId: localSwappedPartnerId,
-      message: `Priority rank updated locally (Exception fallback: ${e?.message || String(e)}).`
+      success: false,
+      error: 'NETWORK_EXCEPTION',
+      message: `Priority rank update exception: ${e?.message || String(e)}`
     };
   }
 }

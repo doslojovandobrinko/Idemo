@@ -76,13 +76,23 @@ export function resolvePartnerDisplayInfo(
   const dbName = dbRecord?.partner_name;
   const dbRank = dbRecord?.priority_rank;
 
-  // 1. Synthetic test partner mapping
-  if (normId === 'a0000000-0000-0000-0000-000000000099' || dbCode === 'UNO3') {
+  // 1. Prefer database record fields if available
+  if (dbCode || dbName) {
     return {
-      partnerCode: 'UNO3',
-      partnerName: 'UNO3 — Universal Test Partner 3',
-      priorityRank: dbRank || 1,
-      tierLabel: 'Tier 1 • Primary'
+      partnerCode: dbCode || partnerId,
+      partnerName: dbName || dbCode || partnerId,
+      priorityRank: dbRank && dbRank <= 3 ? dbRank : undefined,
+      tierLabel: dbRank && dbRank <= 3 ? `Tier ${dbRank}` : undefined
+    };
+  }
+
+  // 2. Authoritative test partner mapping adhering to SSOT
+  if (normId === 'a0000000-0000-0000-0000-000000000099' || dbCode === 'IDEMO') {
+    return {
+      partnerCode: 'IDEMO',
+      partnerName: 'IDEMO — Universal Concierge & Partner',
+      priorityRank: dbRank && dbRank <= 3 ? dbRank : undefined,
+      tierLabel: dbRank && dbRank <= 3 ? `Tier ${dbRank}` : undefined
     };
   }
   if (normId === 'a0000000-0000-0000-0000-000000000091' || dbCode === 'UNO1') {
@@ -97,6 +107,14 @@ export function resolvePartnerDisplayInfo(
     return {
       partnerCode: 'UNO2',
       partnerName: 'UNO2 — Transfer & Adventure Specialist',
+      priorityRank: dbRank || 3,
+      tierLabel: 'Tier 3 • Tertiary'
+    };
+  }
+  if (normId === 'a0000000-0000-0000-0000-000000000093' || dbCode === 'UNO3') {
+    return {
+      partnerCode: 'UNO3',
+      partnerName: 'UNO3 — Universal Test Partner 3',
       priorityRank: dbRank || 3,
       tierLabel: 'Tier 3 • Tertiary'
     };
@@ -183,6 +201,8 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
   // Primary view mode defaults to the Single Unified Correlation Matrix Table
   const [viewMode, setViewMode] = useState<PartnerCoverageViewMode>('UNIFIED_MATRIX');
   const [coverageRecords, setCoverageRecords] = useState<PartnerCoverageRecord[]>([]);
+  const [matrixFetchSuccess, setMatrixFetchSuccess] = useState<boolean | null>(null);
+  const [matrixFetchError, setMatrixFetchError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -242,8 +262,8 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
     // Mock test partners (always available for QA)
     list.push({
       id: 'a0000000-0000-0000-0000-000000000099',
-      code: 'UNO3',
-      nameEn: 'UNO3 — Universal Test Partner 3',
+      code: 'IDEMO',
+      nameEn: 'IDEMO — Universal Concierge & Partner',
       email: 'office@idemo.group',
       phone: '+381600000003',
       stage: 'Approved'
@@ -328,37 +348,15 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
   // CORE ENGINE: SINGLE UNIFIED MATRIX (CORRELATING ALL APPROVED RECS & PARTNERS)
   // ─────────────────────────────────────────────────────────────────────────────
   const unifiedMatrix = useMemo<CorrelationMatrixItem[]>(() => {
-    let localRanks: Record<string, Record<string, number>> = {};
-    try {
-      const raw = safeStorage.getItem('idemo_coverage_ranks');
-      if (raw) localRanks = JSON.parse(raw);
-    } catch {
-      // ignore
-    }
-
     return approvedRecommendations.map((rec) => {
       const recId = rec.id;
       const recTitle = rec.title || (rec as any).titleEn || recId;
-      const recRanks = localRanks[recId] || {};
 
       let p1: CorrelationMatrixItem['partner1st'] = null;
       let p2: CorrelationMatrixItem['partner2nd'] = null;
       let p3: CorrelationMatrixItem['partner3rd'] = null;
 
-      // 1. Process explicit stored ranks (from SafeStorage or Supabase RPC)
-      for (const [pId, rank] of Object.entries(recRanks)) {
-        const pObj = approvedPartners.find(p => p.id === pId || p.code === pId || p.nameEn === pId);
-        const name = pObj?.nameEn || pId;
-        const code = pObj?.code || pId;
-        const phone = pObj?.phone;
-        const statusBadge = pObj?.stage || 'Approved';
-
-        if (rank === 1) p1 = { id: pId, name, code, phone, statusBadge };
-        else if (rank === 2) p2 = { id: pId, name, code, phone, statusBadge };
-        else if (rank === 3) p3 = { id: pId, name, code, phone, statusBadge };
-      }
-
-      // 2. Process DB coverage records from Supabase if not yet assigned to slot
+      // 1. Server-First: Read authoritative DB coverage records directly from Supabase RPC
       const dbMatches = coverageRecords.filter(r => r.recommendation_id === recId || r.recommendation_id === recTitle);
       dbMatches.forEach(db => {
         const rank = db.priority_rank;
@@ -369,16 +367,39 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
         const phone = db.contact_phone || pObj?.phone;
         const statusBadge = db.routing_state === 'active' ? 'Active' : 'Approved';
 
-        if (rank === 1 && !p1) p1 = { id: pId, name, code, phone, statusBadge };
-        else if (rank === 2 && !p2) p2 = { id: pId, name, code, phone, statusBadge };
-        else if (rank === 3 && !p3) p3 = { id: pId, name, code, phone, statusBadge };
-        else if (!p1 && p2?.id !== pId && p3?.id !== pId) p1 = { id: pId, name, code, phone, statusBadge };
-        else if (!p2 && p1?.id !== pId && p3?.id !== pId) p2 = { id: pId, name, code, phone, statusBadge };
-        else if (!p3 && p1?.id !== pId && p2?.id !== pId) p3 = { id: pId, name, code, phone, statusBadge };
+        if (rank === 1) p1 = { id: pId, name, code, phone, statusBadge };
+        else if (rank === 2) p2 = { id: pId, name, code, phone, statusBadge };
+        else if (rank === 3) p3 = { id: pId, name, code, phone, statusBadge };
       });
 
-      // 3. Process static linked recommendations on Partner entity
-      PARTNERS.forEach(p => {
+      // 2. Secondary client-cache fallback ONLY when database is unconfigured (offline mode)
+      if (!p1 && !p2 && !p3 && !isSupabaseConfigured()) {
+        let localRanks: Record<string, Record<string, number>> = {};
+        try {
+          const raw = safeStorage.getItem('idemo_coverage_ranks');
+          if (raw) localRanks = JSON.parse(raw);
+        } catch {
+          // ignore
+        }
+        const recRanks = localRanks[recId] || {};
+        for (const [pId, rank] of Object.entries(recRanks)) {
+          const pObj = approvedPartners.find(p => p.id === pId || p.code === pId || p.nameEn === pId);
+          const name = pObj?.nameEn || pId;
+          const code = pObj?.code || pId;
+          const phone = pObj?.phone;
+          const statusBadge = pObj?.stage || 'Approved';
+
+          if (rank === 1 && !p1) p1 = { id: pId, name, code, phone, statusBadge };
+          else if (rank === 2 && !p2) p2 = { id: pId, name, code, phone, statusBadge };
+          else if (rank === 3 && !p3) p3 = { id: pId, name, code, phone, statusBadge };
+        }
+      }
+
+      // 3. Process static linked recommendations on Partner entity ONLY if no server data is available (offline fallback)
+      const hasServerData = coverageRecords.length > 0;
+      if (!hasServerData) {
+        PARTNERS.forEach(p => {
+
         const links = p.linkedRecommendations || [];
         if (links.includes(recId) || links.includes(recTitle)) {
           const pObj = approvedPartners.find(ap => ap.id === p.id);
@@ -396,6 +417,8 @@ export function StudioPartnerCoverage({ session }: { session?: StudioUserSession
           }
         }
       });
+
+            }
 
       const assignedCount = [p1, p2, p3].filter(Boolean).length;
       let healthStatus: CoverageHealthStatus = 'GAP';

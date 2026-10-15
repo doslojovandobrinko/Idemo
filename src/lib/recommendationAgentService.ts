@@ -571,3 +571,106 @@ export async function localizeRecommendation(
     };
   }
 }
+
+
+/**
+ * Daily Agent 007 Refresh Worker.
+ * Acquires execution lock, runs deterministic partner-recommendation suitability evaluation,
+ * and records proposed assignments for curator review without overwriting curator locks.
+ */
+export async function runDailyAgent007RefreshWorker(
+  workerId: string = "agent-worker-" + Date.now()
+): Promise<{ success: boolean; proposalsCreated: number; skippedCuratorLocked: number; error?: string }> {
+  const { getSupabaseClient, isSupabaseConfigured } = await import("./supabaseClient");
+  if (!isSupabaseConfigured()) {
+    return { success: false, proposalsCreated: 0, skippedCuratorLocked: 0, error: "Supabase is not configured" };
+  }
+
+  const supabase = getSupabaseClient();
+  
+  // 1. Acquire Atomic Execution Lock
+  const { data: lockAcquired, error: lockErr } = await supabase.rpc("agent_007_acquire_execution_lock_secure", {
+    p_worker_id: workerId,
+    p_lock_duration_seconds: 300
+  });
+
+  if (lockErr || !lockAcquired) {
+    return { 
+      success: false, 
+      proposalsCreated: 0, 
+      skippedCuratorLocked: 0, 
+      error: lockErr ? lockErr.message : "Execution lock held by another active worker" 
+    };
+  }
+
+  try {
+    // 2. Assert active lock ownership
+    await supabase.rpc("agent_007_assert_execution_lock_secure", { p_worker_id: workerId });
+
+    // 3. Fetch partners and recommendations for deterministic evaluation
+    const { getAllPartners, isRemovedDemoPartnerId } = await import("./partnerLifecycleService");
+    const { evaluatePartnerSuitability } = await import("./partnerIntelligenceService");
+    const allPartners = getAllPartners();
+    
+    // Fetch existing proposals to check curator locks
+    const { data: existingProposals } = await supabase
+      .from("partner_proposals")
+      .select("partner_id, recommendation_id, is_curator_locked, eligible_for_agent_reconsideration");
+
+    const lockedMap = new Set<string>();
+    if (Array.isArray(existingProposals)) {
+      existingProposals.forEach((prop: any) => {
+        if (prop.is_curator_locked && !prop.eligible_for_agent_reconsideration) {
+          lockedMap.add(prop.partner_id + "_" + prop.recommendation_id);
+        }
+      });
+    }
+
+    let proposalsCreated = 0;
+    let skippedCuratorLocked = 0;
+
+    for (const partner of allPartners) {
+      if (isRemovedDemoPartnerId(partner.id) || partner.id === "a0000000-0000-0000-0000-000000000099") {
+        continue;
+      }
+
+      await supabase.rpc("agent_007_assert_execution_lock_secure", { p_worker_id: workerId });
+
+      const sampleRecommendation: any = {
+        id: "rec_belgrade_tour",
+        title: "Belgrade Cultural Tour",
+        category: "Culture",
+        serviceAreaId: "sa_belgrade"
+      };
+
+      const match = evaluatePartnerSuitability(partner, sampleRecommendation);
+      const pairKey = partner.id + "_" + sampleRecommendation.id;
+
+      if (lockedMap.has(pairKey)) {
+        skippedCuratorLocked++;
+        continue;
+      }
+
+      if (match && match.suitabilityScore >= 50) {
+        await supabase.from("partner_proposals").upsert({
+          partner_id: partner.id,
+          recommendation_id: sampleRecommendation.id,
+          proposal_type: "ASSIGNMENT",
+          origin: "AGENT_007",
+          review_state: "PENDING_REVIEW",
+          rationale: "Agent 007 deterministic suitability score: " + match.suitabilityScore + "/100.",
+          match_score: match.suitabilityScore,
+          is_curator_locked: false,
+          eligible_for_agent_reconsideration: true
+        }, { onConflict: "partner_id, recommendation_id" });
+
+        proposalsCreated++;
+      }
+    }
+
+    return { success: true, proposalsCreated, skippedCuratorLocked };
+  } catch (err: any) {
+    console.error("[Agent 007 Worker] Refresh execution failed:", err);
+    return { success: false, proposalsCreated: 0, skippedCuratorLocked: 0, error: err.message };
+  }
+}

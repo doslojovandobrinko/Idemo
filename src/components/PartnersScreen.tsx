@@ -25,6 +25,7 @@ import {
   ProposalType 
 } from '../lib/partnerProposalService';
 import { PARTNERS } from '../data/partners';
+import { fetchPublicApprovedPartnersDirectory } from '../lib/partnerLifecycleService';
 import { Partner } from '../types';
 import { safeStorage } from '../lib/safeStorage';
 import IdemoLogo from './IdemoLogo';
@@ -35,6 +36,7 @@ import {
   fetchAuthenticatedPartnerProfile,
   AuthenticatedPartnerProfile,
   fetchPartnerOpportunities, 
+  fetchPartnerAssignedRecommendations,
   acceptPartnerOpportunity, 
   declinePartnerOpportunity, 
   proposePartnerAlternative,
@@ -76,9 +78,10 @@ import {
 } from '../lib/partnerBadgeStorage';
 import { badgingService } from '../lib/badgingService';
 import { loadRecommendations } from '../lib/recommendationsLoader';
+import { INITIAL_RECOMMENDATIONS } from '../data/recommendations/serbia';
 
 // Static Lookup for IDEMO Recommendations
-const RECOMMENDATIONS_LOOKUP = [
+const RECOMMENDATIONS_LOOKUP: Array<{ id: string; title: string; category: string; titleSr?: string; location?: string }> = [
   { id: '1', title: 'Uvac Meanders', category: 'Nature' },
   { id: '2', title: 'Manasija Monastery', category: 'History' },
   { id: '3', title: 'Belgrade Splavovi', category: 'Clubbing' },
@@ -1109,7 +1112,45 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       fetchAuthenticatedPartnerProfile(),
       fetchPartnerOpportunities('new'),
       fetchPartnerOpportunities('active'),
-    ]).then(([profileRes, newOppsRes, activeOppsRes]) => {
+      fetchPartnerAssignedRecommendations(),
+    ]).then(([profileRes, newOppsRes, activeOppsRes, assignedRes]) => {
+      const profileId = profileRes.profile?.id;
+      if (assignedRes && assignedRes.success && Array.isArray(assignedRes.assignments)) {
+        if (assignedRes.partner_id && profileId && assignedRes.partner_id !== profileId) {
+          setAssignedRecsFetchError(`Security mismatch: Assigned recommendations belong to partner ${assignedRes.partner_id}, but logged in profile is ${profileId}.`);
+          setServerAssignedRecs([]);
+        } else {
+          const recItems = assignedRes.assignments.map(a => ({
+            recId: String(a.recommendation_id),
+            priorityRank: a.priority_rank && a.priority_rank <= 3 ? (a.priority_rank as 1 | 2 | 3) : undefined,
+            qualificationState: a.qualification_state,
+            participationState: a.participation_state,
+            routingState: a.routing_state
+          }));
+          setServerAssignedRecs(recItems);
+          setAssignedRecsFetchError(null);
+          if (profileId) {
+            safeStorage.setItem(`idemo_partner_assigned_recs_${profileId}`, JSON.stringify(recItems));
+          }
+        }
+      } else if (assignedRes && !assignedRes.success) {
+        let cachedItems: any[] | null = null;
+        if (profileId) {
+          try {
+            const cached = safeStorage.getItem(`idemo_partner_assigned_recs_${profileId}`);
+            if (cached) cachedItems = JSON.parse(cached);
+          } catch {
+            // ignore
+          }
+        }
+        if (cachedItems) {
+          setServerAssignedRecs(cachedItems);
+          setAssignedRecsFetchError(`Failed to refresh server assignments (${assignedRes.error || 'Network error'}). Displaying cached data.`);
+        } else {
+          setServerAssignedRecs([]);
+          setAssignedRecsFetchError(assignedRes.error || 'Failed to fetch assigned recommendations.');
+        }
+      }
       if (profileRes.success && profileRes.profile) {
         setAuthenticatedPartnerProfile(profileRes.profile);
         setActivePartnerId(profileRes.profile.id);
@@ -1185,6 +1226,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
   // Selection state for logged-in Partner
   const [activePartnerId, setActivePartnerId] = useState<string | null>(null);
+  const [serverAssignedRecs, setServerAssignedRecs] = useState<Array<{ recId: string; priorityRank?: number; qualificationState?: string; participationState?: string; routingState?: string }>>([]);
+  const [assignedRecsFetchError, setAssignedRecsFetchError] = useState<string | null>(null);
 
   // Active Partner tabs: 'new' | 'mine' | 'history' | 'profile'
   const [partnerActiveTab, setPartnerActiveTab] = useState<'new' | 'mine' | 'history' | 'profile'>('new');
@@ -1356,19 +1399,38 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   // Derived approved assignments with their 1st, 2nd, 3rd priority ranks for display in passport
   const approvedAssignments = useMemo(() => {
     if (!activePartnerId) return [];
-    const quota = getPartnerCoverageQuota(activePartnerId);
-    return quota.assignedRecsWithPriority.map(item => {
-      const matched = (dynamicCatalogRecs.length > 0 ? dynamicCatalogRecs : RECOMMENDATIONS_LOOKUP).find(r => r.id === item.recId);
-      const title = matched ? (isSr ? (matched.titleSr || matched.title) : matched.title) : `Spot #${item.recId}`;
+
+    let items = serverAssignedRecs;
+    if (items.length === 0 && !assignedRecsFetchError) {
+      try {
+        const cached = safeStorage.getItem(`idemo_partner_assigned_recs_${activePartnerId}`);
+        if (cached) items = JSON.parse(cached);
+      } catch {
+        // ignore
+      }
+    }
+
+    const allRecsList = dynamicCatalogRecs.length > 0 ? dynamicCatalogRecs : INITIAL_RECOMMENDATIONS;
+
+    return items.map(item => {
+      const recIdStr = String(item.recId);
+      const matched = allRecsList.find(
+        r => String(r.id) === recIdStr || (r as any).title === recIdStr
+      ) || RECOMMENDATIONS_LOOKUP.find(
+        r => String(r.id) === recIdStr || (r as any).title === recIdStr
+      );
+      const title = matched ? (isSr ? (matched.titleSr || matched.title) : matched.title) : `Spot #${recIdStr}`;
+      const rank = item.priorityRank && item.priorityRank <= 3 ? item.priorityRank : undefined;
+
       return {
-        recId: item.recId,
+        recId: recIdStr,
         title,
         category: matched?.category || 'Curated Spot',
-        location: matched?.location,
-        priorityRank: item.priorityRank
+        location: (matched as any)?.location || (matched as any)?.region,
+        priorityRank: rank
       };
     });
-  }, [activePartnerId, passportReviewStatus, dynamicCatalogRecs, isSr]);
+  }, [activePartnerId, serverAssignedRecs, assignedRecsFetchError, dynamicCatalogRecs, isSr]);
 
   // Handle click outside & escape key to dismiss recommendations dropdown
   useEffect(() => {
@@ -2090,6 +2152,43 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     setPartnersList(loadedPartners);
     safeStorage.setItem('idemo_portal_partners', JSON.stringify(loadedPartners));
 
+    fetchPublicApprovedPartnersDirectory().then((res) => {
+      if (res.success && Array.isArray(res.partners) && res.partners.length > 0) {
+        setPartnersList((prev) => {
+          const existingIds = new Set(prev.map((p: any) => p.id));
+          const dbPartners: any[] = res.partners.map((p: any) => ({
+            id: p.id,
+            publicCode: p.publicCode || p.id,
+            nameEn: p.nameEn || p.name || 'Partner',
+            nameSr: p.nameSr || p.name || 'Partner',
+            nameZh: p.nameZh || p.name || 'Partner',
+            category: p.category || 'General',
+            partnerType: p.partnerType || p.type || 'Individual',
+            descriptionEn: p.descriptionEn || p.description || '',
+            descriptionSr: p.descriptionSr || p.description || '',
+            descriptionZh: p.descriptionZh || p.description || '',
+            website: p.website || '',
+            languages: p.languages || [],
+            transportCapacity: p.transportCapacity || 'none',
+            noticeWindow: p.noticeWindow || '24h',
+            phone: p.phone || '',
+            email: p.email || '',
+            locationEn: p.locationEn || p.city || 'Serbia',
+            locationSr: p.locationSr || p.city || 'Serbia',
+            locationZh: p.locationZh || p.city || 'Serbia',
+            status: 'Active',
+            eligibility: true,
+            assignedRecs: []
+          }));
+          const newEntries = dbPartners.filter((p) => !existingIds.has(p.id));
+          if (newEntries.length > 0) {
+            return [...prev, ...newEntries];
+          }
+          return prev;
+        });
+      }
+    });
+
     const hasCleanSlateV4 = safeStorage.getItem('idemo_portal_inquiries_v4_clean_all');
     if (!hasCleanSlateV4) {
       // Definitive clean slate: completely erase past test inquiries across all partner cards (UNO1, UNO2, and all partners)
@@ -2326,10 +2425,45 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           setActivePartnerId(profileRes.profile.id);
 
           // Step 3: Fetch both 'new' and 'active' assigned opportunities for authenticated partner (includes confirmed arrangements)
-          const [newOppsRes, activeOppsRes] = await Promise.all([
+          const [newOppsRes, activeOppsRes, assignedRes] = await Promise.all([
             fetchPartnerOpportunities('new'),
             fetchPartnerOpportunities('active'),
+            fetchPartnerAssignedRecommendations(),
           ]);
+
+          const profileId = profileRes.profile.id;
+          if (assignedRes && assignedRes.success && Array.isArray(assignedRes.assignments)) {
+            if (assignedRes.partner_id && assignedRes.partner_id !== profileId) {
+              setAssignedRecsFetchError(`Security mismatch: Assigned recommendations belong to partner ${assignedRes.partner_id}, but logged in profile is ${profileId}.`);
+              setServerAssignedRecs([]);
+            } else {
+              const recItems = assignedRes.assignments.map(a => ({
+                recId: String(a.recommendation_id),
+                priorityRank: a.priority_rank && a.priority_rank <= 3 ? (a.priority_rank as 1 | 2 | 3) : undefined,
+                qualificationState: a.qualification_state,
+                participationState: a.participation_state,
+                routingState: a.routing_state
+              }));
+              setServerAssignedRecs(recItems);
+              setAssignedRecsFetchError(null);
+              safeStorage.setItem(`idemo_partner_assigned_recs_${profileId}`, JSON.stringify(recItems));
+            }
+          } else if (assignedRes && !assignedRes.success) {
+            let cachedItems: any[] | null = null;
+            try {
+              const cached = safeStorage.getItem(`idemo_partner_assigned_recs_${profileId}`);
+              if (cached) cachedItems = JSON.parse(cached);
+            } catch {
+              // ignore
+            }
+            if (cachedItems) {
+              setServerAssignedRecs(cachedItems);
+              setAssignedRecsFetchError(`Failed to refresh server assignments (${assignedRes.error || 'Network error'}). Displaying cached data.`);
+            } else {
+              setServerAssignedRecs([]);
+              setAssignedRecsFetchError(assignedRes.error || 'Failed to fetch assigned recommendations.');
+            }
+          }
           const combinedOpps: OpportunityItem[] = [];
           const seenKeys = new Set<string>();
           if (newOppsRes.success && newOppsRes.opportunities) {
@@ -4604,7 +4738,16 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                       </div>
 
                       {/* List of approved spots with priorities */}
-                      {approvedAssignments.length === 0 ? (
+                      {assignedRecsFetchError ? (
+                        <div className="p-3 bg-amber-50 rounded-xl border border-amber-300 text-xs text-amber-900 flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 text-amber-700 shrink-0" />
+                          <span>
+                            {isSr
+                              ? `Greška pri osvežavanju dodeljenih preporuka: ${assignedRecsFetchError}`
+                              : `Error refreshing assigned recommendations: ${assignedRecsFetchError}`}
+                          </span>
+                        </div>
+                      ) : approvedAssignments.length === 0 ? (
                         <div className="p-3 bg-white/80 rounded-xl border border-emerald-200 text-xs text-emerald-900 leading-relaxed">
                           {isSr
                             ? 'Pasoš je odobren! Urednički tim u IDEMO Studiju raspoređuje vaše preporuke u dispečerskoj matrici (do 4 na 1. mestu, 4 na 2. mestu, 4 na 3. mestu).'
@@ -4625,9 +4768,13 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                               <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold shrink-0 ${
                                 item.priorityRank === 1 ? 'bg-amber-100 text-amber-900 border border-amber-300' :
                                 item.priorityRank === 2 ? 'bg-blue-100 text-blue-900 border border-blue-300' :
-                                'bg-stone-200 text-stone-800'
+                                item.priorityRank === 3 ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' :
+                                'bg-stone-100 text-stone-700 border border-stone-200'
                               }`}>
-                                {item.priorityRank === 1 ? '⭐ 1st Priority (0m)' : item.priorityRank === 2 ? '2nd Priority (+30m)' : '3rd Priority (+60m)'}
+                                {item.priorityRank === 1 ? '⭐ 1st Priority (0m)' :
+                                 item.priorityRank === 2 ? '2nd Priority (+30m)' :
+                                 item.priorityRank === 3 ? '3rd Priority (+60m)' :
+                                 (isSr ? 'Dodeljeno · Prioritet u obradi' : 'Assigned · Priority Pending')}
                               </span>
                             </div>
                           ))}

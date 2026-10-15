@@ -5,6 +5,18 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.8";
 
+// Shared by both Studio routes; inspect every trusted app-metadata role.
+const allowedStudioRoles = new Set(["editoriallead", "superadmin", "curator", "partnermanager"]);
+
+function hasAllowedStudioRole(user: any): boolean {
+  const rawRoles = user.app_metadata?.role || user.role || "";
+  const roles = Array.isArray(rawRoles) ? rawRoles : [rawRoles];
+  return roles.some((role: unknown) =>
+    typeof role === "string" &&
+    allowedStudioRoles.has(role.toLowerCase().replace(/[\s_-]+/g, ""))
+  );
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-partner-session",
@@ -181,14 +193,13 @@ serve(async (req: Request) => {
       }
 
       const reviewerId = user.id;
-      const userRole = String(user.app_metadata?.role || user.role || "").toLowerCase().replace(/[\s_-]+/g, "");
-      const isAllowedRole = userRole === "editoriallead" || userRole === "superadmin";
+      const isAllowedRole1 = hasAllowedStudioRole(user);
 
-      if (!isAllowedRole) {
+      if (!isAllowedRole1) {
         return jsonResponse({
           success: false,
           error: "FORBIDDEN",
-          message: "Insufficient permissions. Only editorial_lead or super_admin roles can review partner profiles.",
+          message: "Insufficient permissions. Only authorized Studio roles can review partner profiles.",
         }, 403);
       }
 
@@ -228,10 +239,9 @@ serve(async (req: Request) => {
         return jsonResponse({ success: false, error: "UNAUTHORIZED", message: "Valid Studio authentication is required." }, 401);
       }
 
-      const userRole = String(user.app_metadata?.role || user.role || "").toLowerCase().replace(/[\s_-]+/g, "");
-      const isAllowedRole = userRole === "editoriallead" || userRole === "superadmin";
+      const isAllowedRole2 = hasAllowedStudioRole(user);
 
-      if (!isAllowedRole) {
+      if (!isAllowedRole2) {
         return jsonResponse({ success: false, error: "FORBIDDEN", message: "Editorial review access is restricted." }, 403);
       }
 
@@ -390,6 +400,32 @@ serve(async (req: Request) => {
     }
 
     const partnerId = sessionData.partner_id;
+
+    // ENDPOINT: /assigned-recommendations (GET)
+    // partnerId comes exclusively from validate_partner_session above.
+    if (pathname.endsWith("/assigned-recommendations") && req.method === "GET") {
+      if (typeof partnerId !== "string" || !partnerId.trim()) {
+        return jsonResponse({ success: false, error: "UNAUTHORIZED", message: "Invalid partner session identity." }, 401);
+      }
+
+      const { data: assignments, error: assignErr } = await supabase
+        .from("recommendation_partner_eligibility")
+        .select("id, recommendation_id, qualification_state, participation_state, routing_state, passport_state, updated_at")
+        .eq("partner_id", partnerId)
+        .eq("qualification_state", "idemo_selected")
+        .eq("routing_state", "active")
+        .in("participation_state", ["introduction_ready", "introduced", "confirmed"]);
+
+      if (assignErr) {
+        return jsonResponse({ success: false, error: "DATABASE_ERROR", message: assignErr.message }, 500);
+      }
+
+      return jsonResponse({
+        success: true,
+        partner_id: partnerId,
+        assignments: assignments || [],
+      });
+    }
 
     // ENDPOINT: /logout
     if (pathname.endsWith("/logout") && req.method === "POST") {

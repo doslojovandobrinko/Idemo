@@ -1,0 +1,1354 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  FileCheck, 
+  RefreshCw, 
+  CheckCircle2, 
+  AlertTriangle, 
+  UserCheck, 
+  XCircle, 
+  Image as ImageIcon, 
+  MessageSquare, 
+  ShieldAlert, 
+  Clock,
+  Sparkles,
+  Lock,
+  Building2,
+  Check,
+  AlertCircle,
+  PlusCircle,
+  Award,
+  Compass,
+  MapPin,
+  Globe,
+  User,
+  ShieldCheck
+} from 'lucide-react';
+import { StudioUserSession } from './types';
+import { 
+  fetchPartnerProfileReviewQueue, 
+  adminReviewPartnerProfile, 
+  PartnerProfileQueueItem, 
+  PartnerProfileReviewStatusFilter,
+  setPartnerCoveragePriorityRank,
+  getPartnerCoveragePriorityRank,
+  getPartnerCoverageQuota,
+  getPartnerFitAnalysis,
+  CANONICAL_REGIONS
+} from '../../lib/partnerService';
+import { 
+  getPartnerRecommendationProposals, 
+  curatorApproveProposal, 
+  curatorRejectProposal,
+  PartnerRecommendationProposal 
+} from '../../lib/partnerProposalService';
+import { getSupabaseClient } from '../../lib/supabaseClient';
+import { safeStorage } from '../../lib/safeStorage';
+import { loadRecommendations } from '../../lib/recommendationsLoader';
+
+interface StudioPassportReviewViewProps {
+  session?: StudioUserSession;
+}
+
+export function StudioPassportReviewView({ session }: StudioPassportReviewViewProps) {
+  const [activeTab, setActiveTab] = useState<'passports' | 'proposals'>('passports');
+  const [statusFilter, setStatusFilter] = useState<PartnerProfileReviewStatusFilter>('pending_review');
+  const [queue, setQueue] = useState<PartnerProfileQueueItem[]>([]);
+  const [proposals, setProposals] = useState<PartnerRecommendationProposal[]>([]);
+  const [proposalFeedback, setProposalFeedback] = useState<{ id: string; msg: string } | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [error, setError] = useState<{ code: string; message: string } | null>(null);
+  const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
+  const [selectedImageOverride, setSelectedImageOverride] = useState<Record<string, string>>({});
+  const [availableRecs, setAvailableRecs] = useState<Array<{ id: string; title: string; category: string }>>([]);
+  const [recAssignFeedback, setRecAssignFeedback] = useState<string | null>(null);
+  const [selectedRecIds, setSelectedRecIds] = useState<Set<string>>(new Set());
+  const [coverageRanks, setCoverageRanks] = useState<Record<string, number>>({});
+  const [updatingRankRecId, setUpdatingRankRecId] = useState<string | null>(null);
+  
+  // Review Action Form State
+  const [reviewNote, setReviewNote] = useState<string>('');
+  const [actionLoading, setActionLoading] = useState<boolean>(false);
+  const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const roleStr = String(session?.role || '').toLowerCase().replace(/[\s_-]+/g, '');
+  const isAuthorized = roleStr === 'editor' || roleStr === 'editoriallead' || roleStr === 'superadmin';
+
+  const loadProposals = () => {
+    const list = getPartnerRecommendationProposals();
+    setProposals(list);
+  };
+
+  useEffect(() => {
+    loadProposals();
+    loadRecommendations().then(res => {
+      if (res && res.data) {
+        setAvailableRecs(res.data.map(r => ({
+          id: r.id,
+          title: r.title,
+          category: typeof r.category === 'string' ? r.category : (r.category as any)?.name || 'General'
+        })));
+      }
+    }).catch(() => {});
+  }, []);
+
+  const getStudioAccessToken = async (): Promise<string | null> => {
+    const supabase = getSupabaseClient();
+    if (!supabase) return null;
+    try {
+      const { data } = await supabase.auth.getSession();
+      return data.session?.access_token || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const loadQueue = async (filter: PartnerProfileReviewStatusFilter, isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    setError(null);
+    setActionFeedback(null);
+
+    const token = await getStudioAccessToken();
+    const res = await fetchPartnerProfileReviewQueue(token || undefined, filter);
+
+    setLoading(false);
+    setRefreshing(false);
+
+    if (!res.success) {
+      setError({
+        code: res.error || 'FETCH_ERROR',
+        message: res.message || 'Failed to fetch Partner Passport review queue.'
+      });
+      setQueue([]);
+      setSelectedPartnerId(null);
+    } else {
+      const profiles = res.profiles || [];
+      setQueue(profiles);
+      setError(null);
+      
+      // Retain previous selection if still in list, else pick first
+      setSelectedPartnerId((prevId) => {
+        if (prevId && profiles.some((p) => p.partner_id === prevId)) {
+          return prevId;
+        }
+        return profiles.length > 0 ? profiles[0].partner_id : null;
+      });
+    }
+  };
+
+  useEffect(() => {
+    loadQueue(statusFilter);
+  }, [statusFilter]);
+
+  const selectedProfile = useMemo(() => {
+    return queue.find((p) => p.partner_id === selectedPartnerId) || null;
+  }, [queue, selectedPartnerId]);
+
+  // Reset review note and sync applied recs selection when selected profile changes
+  useEffect(() => {
+    setReviewNote('');
+    setActionFeedback(null);
+    if (selectedProfile && Array.isArray(selectedProfile.applied_recs)) {
+      setSelectedRecIds(new Set(selectedProfile.applied_recs));
+      const initialRanks: Record<string, number> = {};
+      selectedProfile.applied_recs.forEach((recId) => {
+        const r = getPartnerCoveragePriorityRank(recId, selectedProfile.partner_id);
+        if (r !== null) initialRanks[recId] = r;
+      });
+      setCoverageRanks(initialRanks);
+    } else {
+      setSelectedRecIds(new Set());
+      setCoverageRanks({});
+    }
+  }, [selectedPartnerId, selectedProfile?.applied_recs]);
+
+  // Handler: 1-Action change of inquiry priority rank (1st = 1, 2nd = 2, 3rd = 3)
+  const handleUpdateRank = async (recId: string, newRank: number, recTitle: string) => {
+    if (!selectedProfile) return;
+    setUpdatingRankRecId(recId);
+    try {
+      const res = await setPartnerCoveragePriorityRank(recId, selectedProfile.partner_id, newRank);
+      if (res.success) {
+        setCoverageRanks(prev => ({ ...prev, [recId]: newRank }));
+        const rankLabel = newRank === 1 ? '1st Place (0m Instant Concierge)' : newRank === 2 ? '2nd Place (+30m Escalation)' : '3rd Place (+60m Fallback)';
+        const swapNotice = res.swappedPartnerId ? ` (Swapped with partner ${res.swappedPartnerId})` : '';
+        setRecAssignFeedback(`Position set to ${rankLabel} for "${recTitle}"${swapNotice} — Persisted to Supabase!`);
+        setTimeout(() => setRecAssignFeedback(null), 5000);
+      } else {
+        setActionFeedback({
+          type: 'error',
+          message: res.message || res.error || 'Failed to update priority rank.'
+        });
+      }
+    } catch (err: any) {
+      console.warn('Priority rank update exception:', err);
+    } finally {
+      setUpdatingRankRecId(null);
+    }
+  };
+
+  const handleApplyAgentPrioritization = async () => {
+    if (!selectedProfile || !selectedProfile.applied_recs || selectedProfile.applied_recs.length === 0) return;
+    setUpdatingRankRecId('ALL');
+    try {
+      const candidateRecs = selectedProfile.applied_recs.slice(0, 12);
+      const fits = candidateRecs.map(recId => {
+        const matched = availableRecs.find(r => r.id === recId);
+        return {
+          recId,
+          title: matched?.title || recId,
+          fit: getPartnerFitAnalysis(selectedProfile.partner_id, recId, matched, selectedProfile.canonical_region)
+        };
+      }).sort((a, b) => b.fit.fitScore - a.fit.fitScore);
+
+      let r1Assigned = 0;
+      let r2Assigned = 0;
+      let r3Assigned = 0;
+      const newRanks: Record<string, number> = {};
+
+      for (const item of fits) {
+        let assignedRank = 3;
+        if (r1Assigned < 4 && item.fit.fitScore >= 70) {
+          assignedRank = 1;
+          r1Assigned++;
+        } else if (r2Assigned < 4 && item.fit.fitScore >= 50) {
+          assignedRank = 2;
+          r2Assigned++;
+        } else if (r3Assigned < 4) {
+          assignedRank = 3;
+          r3Assigned++;
+        } else if (r2Assigned < 4) {
+          assignedRank = 2;
+          r2Assigned++;
+        } else if (r1Assigned < 4) {
+          assignedRank = 1;
+          r1Assigned++;
+        }
+        newRanks[item.recId] = assignedRank;
+        await setPartnerCoveragePriorityRank(item.recId, selectedProfile.partner_id, assignedRank);
+      }
+
+      setCoverageRanks(prev => ({ ...prev, ...newRanks }));
+      setRecAssignFeedback(`Agent fit prioritization applied: ${r1Assigned} assigned as 1st, ${r2Assigned} as 2nd, and ${r3Assigned} as 3rd priority!`);
+      setTimeout(() => setRecAssignFeedback(null), 6000);
+    } catch (err: any) {
+      console.warn('Agent prioritization failed:', err);
+    } finally {
+      setUpdatingRankRecId(null);
+    }
+  };
+
+  const handleAssignAppliedRecs = async (partnerId: string, partnerCode: string, recIds: string[], partnerName?: string) => {
+    if (!recIds || recIds.length === 0) return;
+    if (recIds.length > 12) {
+      setActionFeedback({
+        type: 'error',
+        message: 'Quota limit exceeded: Each partner can be assigned to no more than 12 recommendations maximum (4 as 1st, 4 as 2nd, and 4 as 3rd priority).'
+      });
+      return;
+    }
+    try {
+      // 1. Authoritative assignment of priority ranks in idemo_coverage_ranks
+      for (const rid of recIds) {
+        const explicitRank = coverageRanks[rid] || getPartnerCoveragePriorityRank(rid, partnerId);
+        if (!explicitRank) {
+          const quota = getPartnerCoverageQuota(partnerId);
+          const rankToSet = quota.rank1Count < 4 ? 1 : quota.rank2Count < 4 ? 2 : 3;
+          await setPartnerCoveragePriorityRank(rid, partnerId, rankToSet);
+        } else {
+          await setPartnerCoveragePriorityRank(rid, partnerId, explicitRank);
+        }
+      }
+
+      // 2. Local SafeStorage snapshot update for portal partners
+      const portalPartnersRaw = safeStorage.getItem('idemo_portal_partners');
+      const list = portalPartnersRaw ? JSON.parse(portalPartnersRaw) : [];
+      let found = false;
+      const updated = list.map((p: any) => {
+        if (p.id === partnerId || (p.publicCode && p.publicCode.toUpperCase() === partnerCode.toUpperCase()) || (p.pin && p.pin === partnerCode)) {
+          found = true;
+          const currentRecs = Array.isArray(p.assignedRecs) ? p.assignedRecs : [];
+          const combined = Array.from(new Set([...currentRecs, ...recIds])).slice(0, 12);
+          return { ...p, status: 'Active', eligibility: true, assignedRecs: combined };
+        }
+        return p;
+      });
+      if (!found) {
+        updated.push({
+          id: partnerId,
+          name: partnerName || partnerCode,
+          publicCode: partnerCode,
+          pin: '1611',
+          category: 'Tourist Guide',
+          status: 'Active',
+          capabilities: ['Local Guide', 'Cultural Tours'],
+          languages: ['Serbian', 'English'],
+          geography: 'Belgrade Metro & Serbia',
+          channels: ['WhatsApp'],
+          contactPhone: selectedProfile?.published_contact_phone || selectedProfile?.draft_contact_phone || '',
+          instagram: `@${partnerCode.toLowerCase()}`,
+          assignedRecs: recIds.slice(0, 12),
+          contributions: Math.min(recIds.length, 12),
+          reliability: 100,
+          eligibility: true
+        });
+      }
+      safeStorage.setItem('idemo_portal_partners', JSON.stringify(updated));
+
+      // 3. Update passport snapshot with approved_recs
+      try {
+        const passKey = `idemo_partner_passport_${partnerId.toUpperCase()}`;
+        const existingPass = safeStorage.getItem(passKey);
+        if (existingPass) {
+          const parsedPass = JSON.parse(existingPass);
+          safeStorage.setItem(passKey, JSON.stringify({
+            ...parsedPass,
+            review_status: 'approved',
+            approved_recs: recIds.slice(0, 12),
+            updated_at: new Date().toISOString()
+          }));
+        }
+      } catch {
+        // ignore
+      }
+
+      const displayName = partnerName || partnerCode;
+      setRecAssignFeedback(`Successfully assigned ${recIds.length} recommendation(s) with priority ranks to ${displayName}!`);
+      setTimeout(() => setRecAssignFeedback(null), 5000);
+    } catch (err: any) {
+      console.warn('Failed assigning recommendations in studio:', err);
+    }
+  };
+
+  const handleReviewAction = async (action: 'approve' | 'request_changes') => {
+    if (!selectedProfile) return;
+
+    if (!isAuthorized) {
+      setActionFeedback({
+        type: 'error',
+        message: 'Administrative authorization required. Only Editorial Lead or Super Admin roles may review Partner Passports.'
+      });
+      return;
+    }
+
+    setActionLoading(true);
+    setActionFeedback(null);
+
+    const token = await getStudioAccessToken();
+
+    const trimmedNote = reviewNote.trim();
+    if (action === 'request_changes' && !trimmedNote) {
+      setActionLoading(false);
+      setActionFeedback({
+        type: 'error',
+        message: 'A review note explaining requested changes is required when requesting changes.'
+      });
+      return;
+    }
+
+    const res = await adminReviewPartnerProfile(
+      selectedProfile.partner_id,
+      action,
+      trimmedNote || undefined,
+      token || undefined
+    );
+
+    setActionLoading(false);
+
+    if (!res.success) {
+      setActionFeedback({
+        type: 'error',
+        message: res.message || res.error || `Failed to perform ${action} on partner profile.`
+      });
+    } else {
+      if (action === 'approve') {
+        const recsToAssign = selectedRecIds.size > 0 ? Array.from(selectedRecIds) : (selectedProfile.applied_recs || []);
+        if (recsToAssign.length > 0) {
+          handleAssignAppliedRecs(selectedProfile.partner_id, selectedProfile.partner_code, recsToAssign, selectedProfile.partner_name);
+        }
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('idemo_partners_updated'));
+        }
+      }
+      setActionFeedback({
+        type: 'success',
+        message: action === 'approve'
+          ? `Partner Passport for ${selectedProfile.partner_name} (${selectedProfile.partner_code}) successfully approved, published, and migrated to Partner Directory as Approved!`
+          : `Partner Passport submission for ${selectedProfile.partner_name} (${selectedProfile.partner_code}) successfully returned for changes.`
+      });
+      setReviewNote('');
+      // Refresh queue after action
+      await loadQueue(statusFilter, true);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Top Subnav Tabs */}
+      <div className="flex items-center gap-2 border-b border-[#E5E3DB] pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveTab('passports')}
+          className={`px-4 py-2 rounded-xl font-serif text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'passports'
+              ? 'bg-[#1E2E20] text-white shadow-xs'
+              : 'bg-white border border-[#E5E3DB] text-[#8C8A7D] hover:text-[#1E2E20]'
+          }`}
+        >
+          <FileCheck size={14} className={activeTab === 'passports' ? 'text-[#C5A059]' : ''} />
+          <span>Partner Passports</span>
+          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${activeTab === 'passports' ? 'bg-[#C5A059] text-[#1E2E20]' : 'bg-[#FAF9F5] text-[#8C8A7D]'}`}>
+            {queue.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('proposals');
+            loadProposals();
+          }}
+          className={`px-4 py-2 rounded-xl font-serif text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'proposals'
+              ? 'bg-[#1E2E20] text-white shadow-xs'
+              : 'bg-white border border-[#E5E3DB] text-[#8C8A7D] hover:text-[#1E2E20]'
+          }`}
+        >
+          <Sparkles size={14} className={activeTab === 'proposals' ? 'text-[#C5A059]' : ''} />
+          <span>New Recommendation Proposals</span>
+          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${activeTab === 'proposals' ? 'bg-[#C5A059] text-[#1E2E20]' : 'bg-[#FAF9F5] text-[#8C8A7D]'}`}>
+            {proposals.length}
+          </span>
+        </button>
+      </div>
+
+      {activeTab === 'proposals' ? (
+        /* PROPOSALS DESK */
+        <div className="space-y-4">
+          <div className="bg-white border border-[#E5E3DB] rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="font-serif text-base font-bold text-[#1E2E20] flex items-center gap-2">
+                <Compass size={18} className="text-[#C5A059]" />
+                <span>Partner Proposed Recommendation Candidates</span>
+              </h3>
+              <p className="text-xs font-sans text-[#8C8A7D] mt-0.5">
+                Proposals submitted by partners for new spots, hidden gems, or underrepresented areas in Serbia, pre-evaluated by Agent 007.
+              </p>
+            </div>
+            <button
+              onClick={loadProposals}
+              className="p-2 rounded-xl bg-[#FAF9F5] border border-[#E5E3DB] text-[#1E2E20] hover:bg-[#E5E3DB]/30 transition-all cursor-pointer self-start sm:self-auto"
+              title="Refresh Proposals"
+            >
+              <RefreshCw size={15} />
+            </button>
+          </div>
+
+          {proposalFeedback && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs font-mono flex items-center gap-2">
+              <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+              <span>{proposalFeedback.msg}</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {proposals.map((prop) => {
+              const isApproved = prop.status === 'CURATOR_APPROVED';
+              const isPackage = prop.proposalType === 'PACKAGE';
+              return (
+                <div key={prop.id} className="p-5 bg-white border border-[#E5E3DB] rounded-2xl shadow-xs space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                          isPackage ? 'bg-[#1E2E20] text-[#C5A059]' : 'bg-[#FAF9F5] border border-[#E5E3DB] text-[#C5A059]'
+                        }`}>
+                          {isPackage ? 'Option B: Package' : 'Option A: Spot'}
+                        </span>
+                        <span className="px-2 py-0.5 bg-[#FAF9F5] border border-[#E5E3DB] rounded text-[10px] font-mono font-bold text-stone-700">
+                          {prop.category}
+                        </span>
+                        <span className="text-[10px] font-mono text-[#8C8A7D]">
+                          By {prop.partnerCode} ({prop.partnerName})
+                        </span>
+                      </div>
+                      <h4 className="font-serif text-base font-bold text-[#1E2E20] mt-1">
+                        {prop.title}
+                      </h4>
+                      <p className="text-xs font-mono text-[#8C8A7D] mt-0.5">
+                        📍 {prop.location}
+                      </p>
+                    </div>
+
+                    <span className={`px-2.5 py-1 rounded-full text-[9.5px] font-mono font-bold uppercase shrink-0 ${
+                      isApproved ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
+                    }`}>
+                      {isApproved ? '✓ Approved' : 'Pending Curator'}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-[#57534E] leading-relaxed">
+                    {prop.description}
+                  </p>
+
+                  {/* Option B Package Specific Details */}
+                  {isPackage && (
+                    <div className="p-2.5 bg-neutral-50 border border-neutral-200 rounded-xl space-y-1.5 text-[11px] font-mono">
+                      <div className="flex items-center justify-between text-neutral-800 font-bold">
+                        <span>⏱ Duration: {prop.durationBucket || 'Half-Day'}</span>
+                        {prop.targetVibe && <span className="text-neutral-500">Vibe: {prop.targetVibe}</span>}
+                      </div>
+                      {prop.routeStops && prop.routeStops.length > 0 && (
+                        <p className="text-neutral-700">
+                          <strong className="text-neutral-900">Route Stops:</strong> {prop.routeStops.join(' → ')}
+                        </p>
+                      )}
+                      {prop.includedServices && prop.includedServices.length > 0 && (
+                        <p className="text-neutral-700">
+                          <strong className="text-neutral-900">Included Services:</strong> {prop.includedServices.join(', ')}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* CURATOR PHOTO INSPECTION & FINAL APPROVAL AUTHORITY (PRINCIPLE 40) */}
+                  {(prop.collageImageUrl || (prop.images && prop.images.length > 0) || prop.imageUrl) && (() => {
+                    const candidateImages: { label: string; url: string; isCollage: boolean }[] = [];
+                    if (prop.collageImageUrl) {
+                      candidateImages.push({ label: 'Agent 007 Collage', url: prop.collageImageUrl, isCollage: true });
+                    }
+                    if (prop.images && prop.images.length > 0) {
+                      prop.images.forEach((img, idx) => {
+                        candidateImages.push({ label: `Photo #${idx + 1}`, url: img, isCollage: false });
+                      });
+                    } else if (prop.imageUrl && !candidateImages.some(c => c.url === prop.imageUrl)) {
+                      candidateImages.push({ label: 'Attached Photo', url: prop.imageUrl, isCollage: false });
+                    }
+
+                    const activeApprovedUrl = selectedImageOverride[prop.id] ||
+                      (candidateImages[0] ? candidateImages[0].url : (prop.collageImageUrl || prop.imageUrl || ''));
+
+                    return (
+                      <div className="p-3 bg-[#FAF9F5] border border-[#E5E3DB] rounded-xl space-y-2">
+                        <div className="flex items-center justify-between text-[10.5px] font-mono">
+                          <span className="font-bold text-[#1E2E20] flex items-center gap-1.5">
+                            <ImageIcon size={13} className="text-[#C5A059]" />
+                            <span>Curator Media Inspection & Approval Authority</span>
+                          </span>
+                          <span className="text-[#8C8A7D]">
+                            {candidateImages.length} image{candidateImages.length > 1 ? 's' : ''} available
+                          </span>
+                        </div>
+
+                        {/* Active Selected Image Preview */}
+                        <div className="relative rounded-lg overflow-hidden border border-[#E5E3DB] aspect-3/2 max-h-48 bg-neutral-900 flex items-center justify-center">
+                          <img
+                            src={activeApprovedUrl}
+                            alt={prop.title}
+                            className="w-full h-full object-cover"
+                          />
+                          <span className="absolute bottom-2 left-2 bg-black/75 text-[#C5A059] px-2 py-0.5 rounded text-[9px] font-mono font-bold">
+                            ✓ Curator Approved Selection
+                          </span>
+                        </div>
+
+                        {/* Thumbnail selector if > 1 candidate */}
+                        {candidateImages.length > 1 && (
+                          <div className="space-y-1">
+                            <span className="text-[9px] font-mono text-[#8C8A7D] uppercase font-bold block">
+                              Click to select canonical approved image:
+                            </span>
+                            <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
+                              {candidateImages.map((c, i) => {
+                                const isSelected = activeApprovedUrl === c.url;
+                                return (
+                                  <div
+                                    key={i}
+                                    onClick={() => setSelectedImageOverride(prev => ({ ...prev, [prop.id]: c.url }))}
+                                    className={`relative cursor-pointer rounded-md overflow-hidden aspect-4/3 border-2 transition-all ${
+                                      isSelected ? 'border-[#C5A059] ring-2 ring-[#C5A059]/40' : 'border-transparent opacity-70 hover:opacity-100'
+                                    }`}
+                                    title={c.label}
+                                  >
+                                    <img src={c.url} alt={c.label} className="w-full h-full object-cover" />
+                                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[7.5px] font-mono text-center truncate px-0.5">
+                                      {c.isCollage ? 'Collage' : `#${i}`}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Agent 007 Evaluation Card */}
+                  {prop.agent007Evaluation && (
+                    <div className="p-3 bg-[#FAF9F5] border border-[#E5E3DB] rounded-xl space-y-1.5 font-mono text-[11px]">
+                      <div className="flex items-center justify-between text-[#1E2E20] font-bold">
+                        <span className="flex items-center gap-1.5">
+                          <Award size={13} className="text-[#C5A059]" />
+                          Agent 007 Evaluation Score
+                        </span>
+                        <span className="px-2 py-0.5 bg-[#1E2E20] text-[#C5A059] rounded text-[10px]">
+                          {prop.agent007Evaluation.suitabilityScore} / 100
+                        </span>
+                      </div>
+                      <p className="text-[#8C8A7D] text-[10px] leading-tight">
+                        {prop.agent007Evaluation.regionalImpact}
+                      </p>
+                      <p className="text-[#1E2E20] text-[10.5px] font-medium">
+                        "{prop.agent007Evaluation.curatorRecommendation}"
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-[#E5E3DB]/50">
+                    <span className="text-[10px] font-mono text-[#8C8A7D]">
+                      Motivation: {prop.proposalReason.replace(/_/g, ' ')}
+                    </span>
+
+                    {!isApproved ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const res = curatorRejectProposal(prop.id);
+                            if (res.success) {
+                              setProposalFeedback({ id: prop.id, msg: res.message });
+                              loadProposals();
+                            }
+                          }}
+                          className="px-2.5 py-1 text-[11px] font-mono text-stone-500 hover:text-red-700 transition-colors cursor-pointer"
+                        >
+                          Archive
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const activeApprovedUrl = selectedImageOverride[prop.id] || prop.collageImageUrl || prop.imageUrl || (prop.images && prop.images[0]);
+                            const res = curatorApproveProposal(prop.id, activeApprovedUrl);
+                            if (res.success) {
+                              setProposalFeedback({ id: prop.id, msg: res.message });
+                              loadProposals();
+                            }
+                          }}
+                          className="px-3.5 py-1.5 bg-[#1E2E20] text-[#C5A059] hover:bg-[#2A3E2D] font-mono text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+                          title="Approve candidate, create recommendation with approved media, and co-assign partner"
+                        >
+                          <PlusCircle size={14} />
+                          <span>Approve & Co-Assign Partner</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-xs font-mono font-bold text-emerald-700 flex items-center gap-1">
+                        <CheckCircle2 size={14} /> Published & Partner Co-Assigned
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        /* PASSPORTS DESK */
+        <>
+          {/* Header & Filter Controls */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-[#E5E3DB] rounded-2xl p-4 shadow-xs">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="font-serif text-lg font-bold text-[#1E2E20] tracking-tight">
+                  Partner Passport Submissions
+                </h2>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#FAF9F5] border border-[#E5E3DB] text-[#8C8A7D] font-bold">
+                  Queue: {queue.length}
+                </span>
+              </div>
+              <p className="text-xs font-sans text-[#8C8A7D] mt-0.5">
+                Editorial review desk for partner biography introductions, professional photography, and photo consent.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Status Filter Tabs */}
+          <div className="flex items-center gap-1 font-mono text-xs bg-[#FAF9F5] p-1 rounded-xl border border-[#E5E3DB]">
+            {(
+              [
+                { id: 'pending_review', label: 'Pending' },
+                { id: 'changes_requested', label: 'Changes Req.' },
+                { id: 'approved', label: 'Approved' },
+                { id: 'all', label: 'All' },
+              ] as const
+            ).map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setStatusFilter(f.id)}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                  statusFilter === f.id
+                    ? 'bg-[#23251E] text-white shadow-xs'
+                    : 'text-[#8C8A7D] hover:text-[#1E2E20]'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={() => loadQueue(statusFilter, true)}
+            disabled={refreshing || loading}
+            className="p-2 rounded-xl bg-[#FAF9F5] border border-[#E5E3DB] text-[#1E2E20] hover:bg-[#E5E3DB]/30 transition-all cursor-pointer disabled:opacity-50"
+            title="Refresh Queue"
+          >
+            <RefreshCw size={15} className={refreshing ? 'animate-spin text-[#C5A059]' : ''} />
+          </button>
+        </div>
+      </div>
+
+      {/* Authorization Warning Banner if not authorized */}
+      {!isAuthorized && session && (
+        <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-center gap-2.5">
+          <ShieldAlert size={16} className="text-amber-600 shrink-0" />
+          <span>
+            <strong>Read-Only Access:</strong> Your role ({session.role}) can view Passport submissions but cannot approve or request changes. Only <strong>editorial_lead</strong> or <strong>super_admin</strong> may perform review actions.
+          </span>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-900 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={16} className="text-red-600 shrink-0" />
+            <span><strong>{error.code}:</strong> {error.message}</span>
+          </div>
+          <button
+            onClick={() => loadQueue(statusFilter, true)}
+            className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-800 rounded-lg font-mono font-bold text-[11px] cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Main Split Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column: Queue List */}
+        <div className="space-y-3 max-h-[680px] overflow-y-auto pr-1">
+          {loading ? (
+            <div className="p-8 text-center bg-white rounded-2xl border border-[#E5E3DB] text-xs font-mono text-[#8C8A7D]">
+              <RefreshCw size={18} className="animate-spin mx-auto mb-2 text-[#C5A059]" />
+              Loading Partner Passport review queue...
+            </div>
+          ) : queue.length === 0 ? (
+            <div className="p-8 text-center bg-white rounded-2xl border border-[#E5E3DB] text-xs font-mono text-[#8C8A7D]">
+              No Partner Passport submissions found for status <span className="font-bold text-[#1E2E20]">"{statusFilter}"</span>.
+            </div>
+          ) : (
+            queue.map((item) => {
+              const isSelected = item.partner_id === selectedPartnerId;
+              const isPending = item.review_status === 'pending_review';
+              const isApprovedStatus = item.review_status === 'approved';
+
+              return (
+                <div
+                  key={item.partner_id}
+                  onClick={() => setSelectedPartnerId(item.partner_id)}
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-white border-[#23251E] shadow-sm ring-1 ring-[#23251E]/10'
+                      : 'bg-[#FAF9F5] border-[#E5E3DB] hover:border-[#23251E]/30'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-serif font-bold text-[#1E2E20] text-sm truncate max-w-[170px]">
+                        {item.partner_name}
+                      </span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#23251E]/5 font-bold text-[#23251E] shrink-0">
+                        {item.partner_code}
+                      </span>
+                    </div>
+
+                    <span
+                      className={`text-[9px] font-mono px-2 py-0.5 rounded-full uppercase font-bold tracking-wider border shrink-0 ${
+                        isApprovedStatus
+                          ? 'bg-[#E8F5E9] text-[#2E7D32] border-[#C8E6C9]'
+                          : isPending
+                          ? 'bg-amber-50 text-amber-800 border-amber-200'
+                          : 'bg-purple-50 text-purple-800 border-purple-200'
+                      }`}
+                    >
+                      {item.review_status.replace('_', ' ')}
+                    </span>
+                  </div>
+
+                  {/* Intro Snippet */}
+                  <p className="mt-2 text-xs font-sans text-[#8C8A7D] line-clamp-2 italic">
+                    "{item.introduction_draft || 'No introduction draft provided.'}"
+                  </p>
+
+                  <div className="mt-3 pt-2 border-t border-[#E5E3DB]/60 flex items-center justify-between text-[10px] font-mono text-[#8C8A7D]">
+                    <span className="flex items-center gap-1">
+                      <Clock size={11} />
+                      {item.submitted_at ? new Date(item.submitted_at).toLocaleDateString() : 'N/A'}
+                    </span>
+
+                    <div className="flex items-center gap-2">
+                      {/* Photo indicator */}
+                      <span className={`flex items-center gap-1 font-bold ${item.photo_available ? 'text-emerald-700' : 'text-[#8C8A7D]'}`}>
+                        <ImageIcon size={11} />
+                        {item.photo_available ? 'Photo Available' : 'No Photo'}
+                      </span>
+
+                      {/* Consent badge */}
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                        item.photo_consent_given && !item.photo_consent_withdrawn
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {item.photo_consent_given && !item.photo_consent_withdrawn ? 'Consent' : 'No Consent'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Right Column: Detailed Review Panel */}
+        <div className="lg:col-span-2">
+          {!selectedProfile ? (
+            <div className="bg-white border border-[#E5E3DB] rounded-3xl p-12 text-center text-xs font-mono text-[#8C8A7D] h-full flex flex-col items-center justify-center">
+              <FileCheck size={32} className="text-[#8C8A7D]/40 mb-3" />
+              Select a partner passport submission from the queue to review.
+            </div>
+          ) : (
+            <div className="bg-white border border-[#E5E3DB] rounded-3xl p-6 shadow-xs space-y-6">
+              {/* Header Info */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#E5E3DB] pb-4 gap-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-[#8C8A7D] font-bold">
+                      Partner Code: {selectedProfile.partner_code}
+                    </span>
+                    <span className="text-[10px] font-mono text-[#8C8A7D]">
+                      ID: {selectedProfile.partner_id}
+                    </span>
+                  </div>
+                  <h3 className="font-serif text-xl font-bold text-[#1E2E20] mt-0.5">
+                    {selectedProfile.partner_name}
+                  </h3>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#FAF9F5] border border-[#E5E3DB] font-bold text-[#1E2E20]">
+                    v{selectedProfile.content_version}
+                  </span>
+                  <span className={`text-[10px] font-mono px-2.5 py-1 rounded-full font-bold uppercase tracking-wider border ${
+                    selectedProfile.review_status === 'approved'
+                      ? 'bg-[#E8F5E9] text-[#2E7D32] border-[#C8E6C9]'
+                      : selectedProfile.review_status === 'pending_review'
+                      ? 'bg-amber-50 text-amber-800 border-amber-200'
+                      : 'bg-purple-50 text-purple-800 border-purple-200'
+                  }`}>
+                    {selectedProfile.review_status.replace('_', ' ')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Submission Metadata */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#FAF9F5] p-3.5 rounded-2xl border border-[#E5E3DB] text-xs font-mono">
+                <div>
+                  <span className="text-[#8C8A7D] block text-[10px] uppercase font-bold">Submitted</span>
+                  <span className="text-[#1E2E20] font-semibold">
+                    {selectedProfile.submitted_at ? new Date(selectedProfile.submitted_at).toLocaleString() : 'N/A'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[#8C8A7D] block text-[10px] uppercase font-bold">Canonical Region</span>
+                  <span className="text-[#1E2E20] font-semibold flex items-center gap-1 truncate" title={CANONICAL_REGIONS[selectedProfile.canonical_region || '']?.nameEn || selectedProfile.canonical_region || 'Belgrade Metropolitan Area'}>
+                    <MapPin size={12} className="text-[#8A1F1F] shrink-0" />
+                    <span className="truncate">{CANONICAL_REGIONS[selectedProfile.canonical_region || '']?.nameEn || selectedProfile.canonical_region || 'Belgrade Metropolitan Area'}</span>
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[#8C8A7D] block text-[10px] uppercase font-bold">Photo Consent</span>
+                  <span className={`font-bold ${selectedProfile.photo_consent_given && !selectedProfile.photo_consent_withdrawn ? 'text-emerald-700' : 'text-red-700'}`}>
+                    {selectedProfile.photo_consent_given ? (selectedProfile.photo_consent_withdrawn ? 'Consent Withdrawn' : 'Granted') : 'Not Granted'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[#8C8A7D] block text-[10px] uppercase font-bold">Word Count</span>
+                  <span className="text-[#1E2E20] font-semibold">
+                    {selectedProfile.introduction_word_count} words
+                  </span>
+                </div>
+              </div>
+
+              {/* Proposal 2: Credential & Operational Matching Profile Card */}
+              <div className="p-4 bg-[#FAF9F5] rounded-2xl border border-[#E5E3DB] space-y-3">
+                <div className="flex items-center justify-between border-b border-[#E5E3DB] pb-2">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck size={16} className="text-[#8A1F1F]" />
+                    <span className="font-serif text-sm font-bold text-[#1E2E20]">
+                      Credential & Operational Profile
+                    </span>
+                  </div>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase border ${
+                    selectedProfile.partner_type === 'Organisation'
+                      ? 'bg-blue-50 text-blue-900 border-blue-200'
+                      : 'bg-amber-50 text-amber-900 border-amber-200'
+                  }`}>
+                    {selectedProfile.partner_type === 'Organisation' ? '🏢 Agency / Organisation' : '👤 Individual Specialist'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs font-mono">
+                  {/* Contact details */}
+                  <div>
+                    <span className="text-[#8C8A7D] block text-[10px] uppercase font-bold">Contact Channel</span>
+                    <span className="text-[#1E2E20] font-semibold block truncate">
+                      📞 {selectedProfile.draft_contact_phone || selectedProfile.published_contact_phone || 'None'}
+                    </span>
+                    <span className="text-[#1E2E20] font-semibold block truncate">
+                      ✉️ {selectedProfile.draft_contact_email || selectedProfile.published_contact_email || 'None'}
+                    </span>
+                  </div>
+
+                  {/* Entity specific credentials */}
+                  {selectedProfile.partner_type === 'Organisation' ? (
+                    <>
+                      <div>
+                        <span className="text-[#8C8A7D] block text-[10px] uppercase font-bold">Agency Website</span>
+                        {selectedProfile.website ? (
+                          <a
+                            href={selectedProfile.website.startsWith('http') ? selectedProfile.website : `https://${selectedProfile.website}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[#8A1F1F] font-semibold hover:underline flex items-center gap-1 truncate"
+                          >
+                            <span>{selectedProfile.website}</span>
+                            <Globe size={11} />
+                          </a>
+                        ) : (
+                          <span className="text-[#8C8A7D] italic">No website provided</span>
+                        )}
+                      </div>
+
+                      <div>
+                        <span className="text-[#8C8A7D] block text-[10px] uppercase font-bold">PIB (Registration Tax ID)</span>
+                        {selectedProfile.pib ? (
+                          <span className="font-semibold flex items-center gap-1 text-[#1E2E20]">
+                            <span>{selectedProfile.pib}</span>
+                            {/^\d{9}$/.test(selectedProfile.pib.trim()) && (
+                              <span className="px-1.5 py-0.2 rounded text-[9px] bg-emerald-100 text-emerald-800 font-bold">
+                                ✓ Valid PIB
+                              </span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-[#8C8A7D] italic">Unspecified</span>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div>
+                      <span className="text-[#8C8A7D] block text-[10px] uppercase font-bold">Tourist Guide Licence</span>
+                      {selectedProfile.guide_licence ? (
+                        <span className="font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block mt-0.5">
+                          🎖️ {selectedProfile.guide_licence}
+                        </span>
+                      ) : (
+                        <span className="text-[#8C8A7D] italic">Unspecified</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Transport vehicle capacity */}
+                  <div>
+                    <span className="text-[#8C8A7D] block text-[10px] uppercase font-bold">Passenger Transport</span>
+                    <span className="font-semibold text-[#1E2E20]">
+                      {selectedProfile.transport_capacity === '1-4' ? '🚗 Car (1–4 pax)' :
+                       selectedProfile.transport_capacity === '5-8' ? '🚐 Minivan (5–8 pax)' :
+                       selectedProfile.transport_capacity === '9-19' ? '🚌 Minibus (9–19 pax)' :
+                       selectedProfile.transport_capacity === '20+' ? '🚍 Coach (20+ pax)' :
+                       '🚶 No transport (Walking/On-site)'}
+                    </span>
+                  </div>
+
+                  {/* Advance booking notice */}
+                  <div>
+                    <span className="text-[#8C8A7D] block text-[10px] uppercase font-bold">Advance Booking Notice</span>
+                    <span className="font-semibold text-[#1E2E20]">
+                      {selectedProfile.notice_window === 'same_day' ? '⚡ Same Day' :
+                       selectedProfile.notice_window === '48h' ? '⏱️ 48+ Hours' :
+                       '🕒 24 Hours'}
+                    </span>
+                  </div>
+
+                  {/* Languages */}
+                  <div>
+                    <span className="text-[#8C8A7D] block text-[10px] uppercase font-bold">Languages</span>
+                    <div className="flex flex-wrap gap-1 mt-0.5">
+                      {(selectedProfile.languages && selectedProfile.languages.length > 0 ? selectedProfile.languages : ['Serbian', 'English']).map(l => (
+                        <span key={l} className="px-1.5 py-0.2 rounded bg-white border border-[#E5E3DB] text-[9.5px] font-bold text-[#1E2E20]">
+                          {l}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Photo Preview & Consent */}
+              <div className="space-y-2">
+                <h4 className="font-serif text-sm font-bold text-[#1E2E20] flex items-center gap-2">
+                  <ImageIcon size={15} className="text-[#C5A059]" />
+                  <span>Professional Portrait Photo</span>
+                </h4>
+
+                {selectedProfile.photo_available && selectedProfile.photo_url ? (
+                  <div className="flex flex-col sm:flex-row items-start gap-4 p-4 bg-[#FAF9F5] rounded-2xl border border-[#E5E3DB]">
+                    <img
+                      src={selectedProfile.photo_url}
+                      alt={selectedProfile.partner_name}
+                      referrerPolicy="no-referrer"
+                      className="w-28 h-28 object-cover rounded-xl border border-[#E5E3DB] shadow-xs shrink-0"
+                    />
+                    <div className="text-xs font-sans text-[#1E2E20] space-y-1">
+                      <p className="font-semibold text-emerald-800 flex items-center gap-1.5 font-mono text-[11px]">
+                        <CheckCircle2 size={13} />
+                        Signed image URL generated & validated
+                      </p>
+                      <p className="text-[#8C8A7D] text-[11px]">
+                        Consent verified: {selectedProfile.photo_consent_given ? 'Subject provided explicit consent for publication.' : 'Consent pending.'}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-[#FAF9F5] rounded-2xl border border-[#E5E3DB] text-xs font-mono text-[#8C8A7D] flex items-center gap-2">
+                    <ImageIcon size={16} className="text-[#8C8A7D]/60 shrink-0" />
+                    <span>
+                      {!selectedProfile.photo_available
+                        ? 'No professional photo uploaded in draft.'
+                        : selectedProfile.photo_consent_withdrawn
+                        ? 'Photo consent was explicitly withdrawn by partner.'
+                        : 'Photo provided without required consent.'}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Biography / Introduction Draft */}
+              <div className="space-y-2">
+                <h4 className="font-serif text-sm font-bold text-[#1E2E20] flex items-center gap-2">
+                  <MessageSquare size={15} className="text-[#C5A059]" />
+                  <span>Biography & Introduction Draft</span>
+                </h4>
+
+                <div className="p-4 bg-[#FAF9F5] rounded-2xl border border-[#E5E3DB] text-xs font-sans text-[#1E2E20] leading-relaxed whitespace-pre-wrap">
+                  {selectedProfile.introduction_draft ? (
+                    selectedProfile.introduction_draft
+                  ) : (
+                    <span className="text-[#8C8A7D] italic">No introduction draft submitted.</span>
+                  )}
+                </div>
+
+                {/* Published Version Comparison if available */}
+                {selectedProfile.introduction_published && (
+                  <div className="mt-3 p-3.5 bg-blue-50/60 rounded-xl border border-blue-200/60 text-xs font-sans text-blue-950 space-y-1">
+                    <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-blue-800 block">
+                      Currently Published Version:
+                    </span>
+                    <p className="italic text-blue-900 leading-relaxed text-[11.5px]">
+                      "{selectedProfile.introduction_published}"
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Applied Recommendations for Verified Expertise */}
+              {selectedProfile.applied_recs && selectedProfile.applied_recs.length > 0 && (
+                <div className="space-y-3 p-4 bg-[#FAF9F5] rounded-2xl border border-[#E5E3DB]">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#E5E3DB] pb-2 gap-2">
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={16} className="text-[#C5A059]" />
+                      <h4 className="font-serif text-sm font-bold text-[#1E2E20]">
+                        Applied Recommendations for Expertise Verification ({selectedProfile.applied_recs.length})
+                      </h4>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (selectedRecIds.size === selectedProfile.applied_recs!.length) {
+                            setSelectedRecIds(new Set());
+                          } else {
+                            setSelectedRecIds(new Set(selectedProfile.applied_recs!));
+                          }
+                        }}
+                        className="px-2 py-1 text-[10px] font-mono font-bold text-[#8C8A7D] hover:text-[#1E2E20] border border-[#E5E3DB] rounded-lg transition-colors cursor-pointer bg-white"
+                      >
+                        {selectedRecIds.size === selectedProfile.applied_recs.length ? 'Deselect All' : 'Select All'}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={selectedRecIds.size === 0}
+                        onClick={() => handleAssignAppliedRecs(selectedProfile.partner_id, selectedProfile.partner_code, Array.from(selectedRecIds), selectedProfile.partner_name)}
+                        className="px-2.5 py-1 bg-[#1E2E20] hover:bg-[#2A3E2D] disabled:opacity-50 text-[#C5A059] font-mono text-[10px] font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1 shadow-xs"
+                      >
+                        <PlusCircle size={12} />
+                        <span>Approve & Assign ({selectedRecIds.size}/{selectedProfile.applied_recs.length})</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Quota breakdown meters: max 12 total, max 4 as 1st, 4 as 2nd, 4 as 3rd */}
+                  {(() => {
+                    const q = getPartnerCoverageQuota(selectedProfile.partner_id);
+                    return (
+                      <div className="p-3 bg-white border border-[#E5E3DB] rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Award size={15} className="text-[#C5A059]" />
+                          <span className="font-bold text-[#1E2E20]">Allocation Quota (12 max):</span>
+                          <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200 font-bold">
+                            ⭐ 1st: {q.rank1Count}/4 max
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-900 border border-blue-200 font-bold">
+                            🥈 2nd: {q.rank2Count}/4 max
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-stone-100 text-stone-800 border border-stone-200 font-bold">
+                            🥉 3rd: {q.rank3Count}/4 max
+                          </span>
+                        </div>
+                        <div className="text-[11px] font-bold text-[#1E2E20]">
+                          Total: <span className={q.totalAssigned >= 12 ? 'text-[#8A1F1F]' : 'text-emerald-700'}>{q.totalAssigned} / 12</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Agent Fit Analysis & Proposition Banner */}
+                  <div className="p-3 bg-gradient-to-r from-[#FAF9F5] to-amber-50/60 border border-[#C5A059]/40 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5 font-bold text-[#1E2E20] font-mono text-[11px]">
+                        <Sparkles size={13} className="text-[#C5A059]" />
+                        <span>Agent Fit Analysis & Proposition</span>
+                      </div>
+                      <p className="text-[11px] text-[#8C8A7D] leading-relaxed">
+                        Evaluated against canonical region <strong className="text-[#1E2E20] font-mono">{CANONICAL_REGIONS[selectedProfile.canonical_region || '']?.nameEn || 'Belgrade Metropolitan Area'}</strong>. Optimal fit recommendations are proposed into available 1st, 2nd, and 3rd slots (max 4 per tier, 12 total).
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={updatingRankRecId !== null}
+                      onClick={handleApplyAgentPrioritization}
+                      className="px-3 py-1.5 bg-[#1E2E20] hover:bg-[#2A3E2D] disabled:opacity-50 text-[#C5A059] font-mono text-[10px] font-bold uppercase rounded-lg transition-colors cursor-pointer shrink-0 shadow-xs flex items-center gap-1.5"
+                    >
+                      {updatingRankRecId === 'ALL' ? <RefreshCw size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                      <span>Apply Agent Prioritization</span>
+                    </button>
+                  </div>
+
+                  {selectedProfile.applied_recs_note && (
+                    <div className="text-xs font-sans text-[#1E2E20] bg-white p-2.5 rounded-xl border border-[#E5E3DB]">
+                      <span className="font-mono text-[10px] uppercase font-bold text-[#8C8A7D] block mb-0.5">Partner Expertise Note:</span>
+                      <p className="italic">"{selectedProfile.applied_recs_note}"</p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {selectedProfile.applied_recs.map((recId) => {
+                      const matched = availableRecs.find(r => r.id === recId);
+                      const title = matched?.title || `Recommendation #${recId}`;
+                      const category = matched?.category || 'General';
+                      const isChecked = selectedRecIds.has(recId);
+                      const currentRank = coverageRanks[recId] || getPartnerCoveragePriorityRank(recId, selectedProfile.partner_id) || 1;
+                      const isUpdatingThis = updatingRankRecId === recId;
+                      const fit = getPartnerFitAnalysis(selectedProfile.partner_id, recId, matched, selectedProfile.canonical_region);
+                      return (
+                        <div
+                          key={recId}
+                          className={`p-3 bg-white border rounded-xl flex flex-col justify-between gap-2 shadow-xs transition-all ${
+                            isChecked ? 'border-[#23251E] bg-[#FAF9F5] ring-1 ring-[#23251E]/10' : 'border-[#E5E3DB] opacity-80 hover:opacity-100'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div 
+                              onClick={() => {
+                                setSelectedRecIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(recId)) next.delete(recId);
+                                  else next.add(recId);
+                                  return next;
+                                });
+                              }}
+                              className="flex items-start gap-2.5 min-w-0 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {}}
+                                className="accent-[#23251E] rounded cursor-pointer mt-0.5"
+                              />
+                              <div className="min-w-0">
+                                <span className="text-xs font-serif font-bold text-[#1E2E20] block truncate">
+                                  {title}
+                                </span>
+                                <span className="text-[10px] font-mono text-[#8C8A7D] block">
+                                  {category} • ID: {recId}
+                                </span>
+                              </div>
+                            </div>
+
+                            <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded-md border shrink-0 ${
+                              currentRank === 1
+                                ? 'bg-[#1E2E20] text-[#C5A059] border-[#C5A059]/40'
+                                : currentRank === 2
+                                ? 'bg-[#FAF9F5] text-[#1E2E20] border-[#E5E3DB]'
+                                : 'bg-white text-[#8C8A7D] border-[#E5E3DB]'
+                            }`}>
+                              {currentRank === 1 ? '1st (0m Instant)' : currentRank === 2 ? '2nd (+30m)' : '3rd (+60m)'}
+                            </span>
+                          </div>
+
+                          {/* Fit proposition badge */}
+                          <div className="flex items-center gap-1.5 text-[9.5px] font-mono py-1 px-1.5 rounded bg-[#FAF9F5] border border-[#E5E3DB]/60">
+                            <span className={`font-bold px-1 py-0.2 rounded text-[8.5px] ${fit.fitTier === 'HIGH' ? 'bg-emerald-100 text-emerald-900' : fit.fitTier === 'MEDIUM' ? 'bg-blue-100 text-blue-900' : 'bg-stone-200 text-stone-800'}`}>
+                              Fit: {fit.fitScore}%
+                            </span>
+                            <span className="text-stone-600 truncate">
+                              {fit.regionMatch ? '🎯 Regional Match' : 'Scope: Secondary'}
+                            </span>
+                            {fit.proposedRank && (
+                              <span className="text-[#8A1F1F] font-bold ml-auto shrink-0">
+                                Agent: {fit.proposedRank === 1 ? '⭐ 1st' : fit.proposedRank === 2 ? '🥈 2nd' : '🥉 3rd'}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* 1-Action Inquiry Queue Switcher */}
+                          <div className="pt-2 border-t border-[#E5E3DB] flex items-center justify-between gap-1.5">
+                            <span className="text-[9.5px] font-mono text-[#8C8A7D] uppercase font-semibold">Queue Position:</span>
+                            <div className="flex items-center gap-1">
+                              {([
+                                { rank: 1, label: '1st (0m)', title: '1st in line — Instant offer (0 min)' },
+                                { rank: 2, label: '2nd (+30m)', title: '2nd in line — Escalation offer after 30 min' },
+                                { rank: 3, label: '3rd (+60m)', title: '3rd in line — Fallback offer after 60 min' }
+                              ] as const).map((r) => (
+                                <button
+                                  key={r.rank}
+                                  type="button"
+                                  disabled={currentRank === r.rank || isUpdatingThis}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleUpdateRank(recId, r.rank, title);
+                                  }}
+                                  title={r.title}
+                                  className={`px-2 py-0.5 rounded font-mono text-[9px] font-bold uppercase transition-all ${
+                                    currentRank === r.rank
+                                      ? 'bg-[#1E2E20] text-[#C5A059] shadow-xs cursor-default'
+                                      : 'bg-white border border-[#E5E3DB] text-[#57534E] hover:bg-[#FAF9F5] hover:text-[#1E2E20] cursor-pointer'
+                                  }`}
+                                >
+                                  {r.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {recAssignFeedback && (
+                    <div className="p-2 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-mono rounded-lg flex items-center gap-1.5">
+                      <CheckCircle2 size={13} />
+                      <span>{recAssignFeedback}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Previous Review Note if exists */}
+              {selectedProfile.reviewer_note && (
+                <div className="p-3 bg-amber-50/80 rounded-xl border border-amber-200 text-xs font-mono text-amber-900 space-y-0.5">
+                  <span className="font-bold text-[10px] uppercase text-amber-800">Previous Reviewer Note:</span>
+                  <p>{selectedProfile.reviewer_note}</p>
+                </div>
+              )}
+
+              {/* Action Feedback Message */}
+              {actionFeedback && (
+                <div
+                  className={`p-3.5 rounded-xl border text-xs font-mono flex items-center gap-2 ${
+                    actionFeedback.type === 'success'
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                      : 'bg-red-50 border-red-200 text-red-900'
+                  }`}
+                >
+                  {actionFeedback.type === 'success' ? (
+                    <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle size={16} className="text-red-600 shrink-0" />
+                  )}
+                  <span>{actionFeedback.message}</span>
+                </div>
+              )}
+
+              {/* Review Actions Form */}
+              <div className="pt-4 border-t border-[#E5E3DB] space-y-4">
+                <div>
+                  <label className="block text-xs font-mono font-bold text-[#1E2E20] mb-1">
+                    Review Note / Feedback (Optional for Approval, Required for Requesting Changes):
+                  </label>
+                  <textarea
+                    value={reviewNote}
+                    onChange={(e) => setReviewNote(e.target.value)}
+                    placeholder="Enter notes or explanation for requested changes..."
+                    rows={3}
+                    disabled={actionLoading || !isAuthorized}
+                    className="w-full p-3 bg-[#FAF9F5] border border-[#E5E3DB] rounded-xl text-xs font-mono text-[#1E2E20] outline-none focus:border-[#23251E] disabled:opacity-50"
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center justify-end gap-3 font-mono text-xs">
+                  <button
+                    onClick={() => handleReviewAction('request_changes')}
+                    disabled={actionLoading || !isAuthorized}
+                    className="px-4 py-2.5 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold flex items-center gap-2 cursor-pointer transition-all disabled:opacity-50 active:scale-95"
+                  >
+                    <XCircle size={15} className="text-amber-700" />
+                    <span>Request Changes</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleReviewAction('approve')}
+                    disabled={actionLoading || !isAuthorized}
+                    className="px-5 py-2.5 rounded-xl bg-[#23251E] hover:bg-[#32352B] text-white font-bold flex items-center gap-2 cursor-pointer transition-all disabled:opacity-50 active:scale-95 shadow-xs"
+                  >
+                    <CheckCircle2 size={15} className="text-[#C5A059]" />
+                    <span>Approve & Publish Passport</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+        </>
+      )}
+    </div>
+  );
+}
