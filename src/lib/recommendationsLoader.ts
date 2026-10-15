@@ -136,7 +136,7 @@ export const loadRecommendations = async (): Promise<LoadRecommendationsResult> 
         title: row.title_en,
         category: row.category,
         shortDescription: row.short_description_en,
-        longDescription: row.long_description_en || row.short_description_en || staticMatch?.longDescription,
+        longDescription: row.long_description_en || row.short_description_en || staticMatch?.longDescription || '',
         image: approvedImage,
         duration: row.duration || staticMatch?.duration || '2-4 hours',
         travelTime: row.travel_time || staticMatch?.travelTime || '1-2 hours',

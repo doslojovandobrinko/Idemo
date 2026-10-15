@@ -15,17 +15,13 @@
   },
   {
     "draftId": "104",
-    "assetPath": "https://upload.wikimedia.org/wikipedia/commons/a/a6/Prerast_u_kanjonu_Vratne_1.jpg",
-    "status": "VERIFIED PRODUCTION IMAGE",
-    "sourcePage": "https://commons.wikimedia.org/wiki/File:Prerast_u_kanjonu_Vratne_1.jpg",
-    "imagePage": "https://upload.wikimedia.org/wikipedia/commons/a/a6/Prerast_u_kanjonu_Vratne_1.jpg",
-    "author": "Decy (Wikimedia Commons)",
+    "name": "Vratna Natural Bridges",
+    "resolvedAssetPath": "/src/assets/images/vratna_natural_bridges.jpg",
+    "image_url": "/src/assets/images/vratna_natural_bridges.jpg",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Prerast_u_kanjonu_Vratne_1.jpg",
     "license": "CC BY-SA 4.0",
-    "commercialReuseAllowed": true,
-    "modificationAllowed": true,
-    "attributionRequired": true,
-    "geographicIdentityProven": "YES",
-    "notes": "Verified geographically authentic photo from Vratna Canyon, Serbia. Depicts Mala Prerast (Small stone bridge)."
+    "status": "VERIFIED_ACCURATE",
+    "verifiedAt": "2026-10-15T05:47:13.391Z"
   },
   {
     "draftId": "105",
@@ -71,17 +67,13 @@
   },
   {
     "draftId": "108",
-    "assetPath": "https://upload.wikimedia.org/wikipedia/commons/9/9c/Valjevske_planine_-_kanjon_reke_Gradac_-_mesto_%C5%A0areno_platno_-_detalj_1.jpg",
-    "status": "VERIFIED PRODUCTION IMAGE",
-    "sourcePage": "https://commons.wikimedia.org/wiki/File:Valjevske_planine_-_kanjon_reke_Gradac_-_mesto_%C5%A0areno_platno_-_detalj_1.jpg",
-    "imagePage": "https://upload.wikimedia.org/wikipedia/commons/9/9c/Valjevske_planine_-_kanjon_reke_Gradac_-_mesto_%C5%A0areno_platno_-_detalj_1.jpg",
-    "author": "Zoran Stojanović (Zstojanovic on Wikimedia Commons)",
+    "name": "Gradac River Canyon",
+    "resolvedAssetPath": "/src/assets/images/gradac_river_canyon.jpg",
+    "image_url": "/src/assets/images/gradac_river_canyon.jpg",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Valjevske_planine_-_kanjon_reke_Gradac_-_mesto_Leli%C4%87_-_detalj_1.jpg",
     "license": "CC BY-SA 4.0",
-    "commercialReuseAllowed": true,
-    "modificationAllowed": true,
-    "attributionRequired": true,
-    "geographicIdentityProven": "YES",
-    "notes": "Verified geographically authentic photo of the Gradac River Canyon (Kanjon reke Gradac) at Šareno platno, Valjevske planine, Serbia."
+    "status": "VERIFIED_ACCURATE",
+    "verifiedAt": "2026-10-15T05:47:13.391Z"
   },
   {
     "draftId": "109",
@@ -281,17 +273,13 @@
   },
   {
     "draftId": "156",
-    "assetPath": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Fruska_Gora_Landscape.jpg/1280px-Fruska_Gora_Landscape.jpg",
-    "status": "AI-GENERATED EDITORIAL VISUAL — REFERENCE-GROUNDED",
-    "sourcePage": "https://commons.wikimedia.org/wiki/File:Fruska_Gora_Landscape.jpg",
-    "imagePage": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Fruska_Gora_Landscape.jpg/1280px-Fruska_Gora_Landscape.jpg",
-    "author": "Wikimedia Commons Contributor",
+    "name": "Perkov Salaš (Neradin)",
+    "resolvedAssetPath": "/src/assets/images/perkov_salas_neradin.jpg",
+    "image_url": "/src/assets/images/perkov_salas_neradin.jpg",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Neradin_001.jpg",
     "license": "CC BY-SA 4.0",
-    "commercialReuseAllowed": true,
-    "modificationAllowed": true,
-    "attributionRequired": true,
-    "geographicIdentityProven": "YES",
-    "notes": "AI-GENERATED EDITORIAL VISUAL — REFERENCE-GROUNDED. Based on authentic Fruška Gora vineyard and Srem landscape references."
+    "status": "VERIFIED_ACCURATE",
+    "verifiedAt": "2026-10-15T05:47:13.391Z"
   },
   {
     "draftId": "157",
@@ -309,31 +297,23 @@
   },
   {
     "draftId": "158",
-    "assetPath": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Velika_Plana_Landscape.jpg/1280px-Velika_Plana_Landscape.jpg",
-    "status": "AI-GENERATED EDITORIAL VISUAL — REFERENCE-GROUNDED",
-    "sourcePage": "https://commons.wikimedia.org/wiki/File:Velika_Plana_Landscape.jpg",
-    "imagePage": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Velika_Plana_Landscape.jpg/1280px-Velika_Plana_Landscape.jpg",
-    "author": "Wikimedia Commons Contributor",
-    "license": "CC BY-SA 4.0",
-    "commercialReuseAllowed": true,
-    "modificationAllowed": true,
-    "attributionRequired": true,
-    "geographicIdentityProven": "YES",
-    "notes": "AI-GENERATED EDITORIAL VISUAL — REFERENCE-GROUNDED. Based on authentic Great Morava valley wooden ethno village references."
+    "name": "Moravski Konaci",
+    "resolvedAssetPath": "/src/assets/images/moravski_konaci.jpg",
+    "image_url": "/src/assets/images/moravski_konaci.jpg",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Moravski_konaci.jpg",
+    "license": "CC BY-SA 3.0",
+    "status": "VERIFIED_ACCURATE",
+    "verifiedAt": "2026-10-15T05:47:13.391Z"
   },
   {
     "draftId": "159",
-    "assetPath": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Mali_Idjos_Landscape.jpg/1280px-Mali_Idjos_Landscape.jpg",
-    "status": "AI-GENERATED EDITORIAL VISUAL — REFERENCE-GROUNDED",
-    "sourcePage": "https://commons.wikimedia.org/wiki/File:Mali_Idjos_Landscape.jpg",
-    "imagePage": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Mali_Idjos_Landscape.jpg/1280px-Mali_Idjos_Landscape.jpg",
-    "author": "Wikimedia Commons Contributor",
+    "name": "Salaš Katai (Mali Iđoš)",
+    "resolvedAssetPath": "/src/assets/images/salas_katai_mali_idjos.jpg",
+    "image_url": "/src/assets/images/salas_katai_mali_idjos.jpg",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Welcome_to_the_State_of_Art,_Mali_Idjos,_Serbia.jpg",
     "license": "CC BY-SA 4.0",
-    "commercialReuseAllowed": true,
-    "modificationAllowed": true,
-    "attributionRequired": true,
-    "geographicIdentityProven": "YES",
-    "notes": "AI-GENERATED EDITORIAL VISUAL — REFERENCE-GROUNDED. Based on authentic Mali Iđoš and central Bačka farmstead references."
+    "status": "VERIFIED_ACCURATE",
+    "verifiedAt": "2026-10-15T05:47:13.391Z"
   },
   {
     "draftId": "160",
@@ -351,17 +331,13 @@
   },
   {
     "draftId": "161",
-    "assetPath": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Lazarevac_Landscape.jpg/1280px-Lazarevac_Landscape.jpg",
-    "status": "AI-GENERATED EDITORIAL VISUAL — REFERENCE-GROUNDED",
-    "sourcePage": "https://commons.wikimedia.org/wiki/File:Lazarevac_Landscape.jpg",
-    "imagePage": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Lazarevac_Landscape.jpg/1280px-Lazarevac_Landscape.jpg",
-    "author": "Wikimedia Commons Contributor",
+    "name": "Babina Reka Ethno Estate",
+    "resolvedAssetPath": "/src/assets/images/babina_reka.jpg",
+    "image_url": "/src/assets/images/babina_reka.jpg",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Wiki_%C5%A0umadija_III_Etno_selo_Babina_reka_398.jpg",
     "license": "CC BY-SA 4.0",
-    "commercialReuseAllowed": true,
-    "modificationAllowed": true,
-    "attributionRequired": true,
-    "geographicIdentityProven": "YES",
-    "notes": "AI-GENERATED EDITORIAL VISUAL — REFERENCE-GROUNDED. Based on authentic Šumadija woodland stream estate references."
+    "status": "VERIFIED_ACCURATE",
+    "verifiedAt": "2026-10-15T05:47:13.391Z"
   },
   {
     "draftId": "162",
@@ -639,5 +615,65 @@
     "attributionRequired": true,
     "geographicIdentityProven": "YES",
     "notes": "Verified authentic photo of the Veliki Povlen mountain trail and highland landscape in Western Serbia."
+  },
+  {
+    "draftId": "112",
+    "name": "Zagajička Hills",
+    "resolvedAssetPath": "/src/assets/images/zagajicka_hills.jpg",
+    "image_url": "/src/assets/images/zagajicka_hills.jpg",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:View_of_Zagaji%C4%8Dka_brda.jpg",
+    "license": "CC BY-SA 4.0",
+    "status": "VERIFIED_ACCURATE",
+    "verifiedAt": "2026-10-15T05:47:13.391Z"
+  },
+  {
+    "draftId": "131",
+    "name": "Novi Pazar Old Bazaar",
+    "resolvedAssetPath": "/src/assets/images/novi_pazar_bazaar.jpg",
+    "image_url": "/src/assets/images/novi_pazar_bazaar.jpg",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Altun_Alem_Mosque_Novi_Pazar.jpg",
+    "license": "CC BY-SA 3.0",
+    "status": "VERIFIED_ACCURATE",
+    "verifiedAt": "2026-10-15T05:47:13.391Z"
+  },
+  {
+    "draftId": "133",
+    "name": "Kragujevac Milošev Konak",
+    "resolvedAssetPath": "/src/assets/images/kragujevac_milos_konak.jpg",
+    "image_url": "/src/assets/images/kragujevac_milos_konak.jpg",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Milosev-konak--The-Milosev-.jpg",
+    "license": "CC BY-SA 4.0",
+    "status": "VERIFIED_ACCURATE",
+    "verifiedAt": "2026-10-15T05:47:13.391Z"
+  },
+  {
+    "draftId": "138",
+    "name": "Prokuplje Hisar Hill",
+    "resolvedAssetPath": "/src/assets/images/prokuplje_toplica_hisar.jpg",
+    "image_url": "/src/assets/images/prokuplje_toplica_hisar.jpg",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Hisar,_Prokuplje_06.jpg",
+    "license": "CC BY-SA 4.0",
+    "status": "VERIFIED_ACCURATE",
+    "verifiedAt": "2026-10-15T05:47:13.391Z"
+  },
+  {
+    "draftId": "139",
+    "name": "Rajačke Pimnice",
+    "resolvedAssetPath": "/src/assets/images/rajacke_pimnice.jpg",
+    "image_url": "/src/assets/images/rajacke_pimnice.jpg",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:Raja%C4%8Dke_pimnice_2.jpg",
+    "license": "CC BY-SA 4.0",
+    "status": "VERIFIED_ACCURATE",
+    "verifiedAt": "2026-10-15T05:47:13.391Z"
+  },
+  {
+    "draftId": "141",
+    "name": "Donja Lokošnica Pepper Village",
+    "resolvedAssetPath": "/src/assets/images/donja_lokosnica_peppers.jpg",
+    "image_url": "/src/assets/images/donja_lokosnica_peppers.jpg",
+    "sourceUrl": "https://commons.wikimedia.org/wiki/File:%D0%9A%D1%83%D1%9B%D0%B0_%D0%BE%D0%BA%D0%B8%D1%9B%D0%B5%D0%BD%D0%B0_%D0%BF%D0%B0%D0%BF%D1%80%D0%B8%D0%BA%D0%BE%D0%BC.jpg",
+    "license": "CC BY-SA 4.0",
+    "status": "VERIFIED_ACCURATE",
+    "verifiedAt": "2026-10-15T05:47:13.391Z"
   }
 ]
