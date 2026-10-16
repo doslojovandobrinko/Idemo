@@ -102,8 +102,29 @@ export function scoreRecommendation(rec: Recommendation, prefs: UserPreferences)
     const targetX = (prefs.orbitX - 0.5) * 10;
     const targetY = (0.5 - prefs.orbitY) * 10;
 
-    const recX = rec.coordinateX ?? 0;
-    const recY = rec.coordinateY ?? 0;
+    let recX = rec.coordinateX;
+    let recY = rec.coordinateY;
+
+    // If item lacks explicit 2D spatial coordinates, derive fallback based on primary category
+    if (recX === undefined || recY === undefined) {
+      const primaryCat = typeof rec.category === 'string'
+        ? rec.category.split(',')[0].trim()
+        : (rec.category || '');
+      
+      const catCoordsMap: Record<string, { x: number; y: number }> = {
+        [Category.HISTORY]: { x: 0.5, y: -2.5 },
+        [Category.NATURE]: { x: 3.5, y: -3.5 },
+        [Category.GASTRONOMY]: { x: -3.5, y: 2.0 },
+        [Category.CLUBBING]: { x: -2.0, y: 3.5 },
+        [Category.WELLBEING]: { x: -3.0, y: -2.5 },
+        [Category.TRAVEL]: { x: 2.5, y: -0.5 },
+        [Category.MEDICAL]: { x: -0.5, y: -0.5 },
+      };
+
+      const derived = catCoordsMap[primaryCat] || { x: 0, y: 0 };
+      recX = recX ?? derived.x;
+      recY = recY ?? derived.y;
+    }
 
     // A. Spatial Proximity (Euclidean distance)
     const euclideanDistance = Math.hypot(targetX - recX, targetY - recY);
@@ -345,6 +366,7 @@ export function scoreRecommendation(rec: Recommendation, prefs: UserPreferences)
 }
 
 export function getRankedRecommendations(recs: Recommendation[], prefs: UserPreferences): Recommendation[] {
+  if (!recs || recs.length === 0) return [];
   const priorityIds = ['1', '9', '19', '81'];
 
   // Check if profile is completely default (before user starts defining his/her profile)
@@ -352,8 +374,10 @@ export function getRankedRecommendations(recs: Recommendation[], prefs: UserPref
   const hasNoImplicitTastes = !prefs.implicitTastes || Object.keys(prefs.implicitTastes).length === 0;
   const isDefaultBudgetAndTime = prefs.budget === 100 && prefs.time === 24;
   const hasNoSelectedCategories = !prefs.selectedCategories || prefs.selectedCategories.length === 0;
-  const isDefaultOrbit = prefs.isCustomOrbit === false
-    || (prefs.isCustomOrbit !== true && (prefs.orbitX === undefined || Math.abs(prefs.orbitX - 0.5) < 0.2) && (prefs.orbitY === undefined || Math.abs(prefs.orbitY - 0.5) < 0.2));
+  // If user explicitly confirmed custom Mood Orbit (prefs.isCustomOrbit === true), it is strictly not default
+  const isDefaultOrbit = !prefs.isCustomOrbit && 
+    (prefs.orbitX === undefined || prefs.orbitY === undefined || (Math.abs(prefs.orbitX - 0.5) < 0.05 && Math.abs(prefs.orbitY - 0.5) < 0.05));
+
 
   const isDefault = hasNoRatings && hasNoImplicitTastes && isDefaultBudgetAndTime && hasNoSelectedCategories && isDefaultOrbit;
 

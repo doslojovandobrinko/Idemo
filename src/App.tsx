@@ -1724,7 +1724,7 @@ export default function App() {
           if (!serverId) continue;
 
           const cred = getVisitorCredential(serverId);
-          if (!cred || inq.status === 'failed') {
+          if (!cred || inq.status === 'failed' || inq.confirmed_arrangement || (inq as any).status === 'Arrangement Confirmed') {
             continue;
           }
 
@@ -1741,16 +1741,29 @@ export default function App() {
 
             if (result.executed && result.success && result.data) {
               const proposalRes = result.data;
+              const freshInquiry = getAllInquiriesV2().find(
+                (i) => i.server_inquiry_id === serverId || i.local_queue_id === serverId
+              );
+              const existingCache = freshInquiry?.cached_proposal || inq.cached_proposal;
+
               if (proposalRes.success && proposalRes.proposal_found && proposalRes.match_id && proposalRes.response_id) {
                 updateInquiryCachedProposalV2(serverId, {
                   schema_version: 1,
                   match_id: proposalRes.match_id,
                   response_id: proposalRes.response_id,
                   response_type: proposalRes.response_type || 'accept_as_requested',
-                  message: proposalRes.message || '',
-                  proposed_start_at: proposalRes.proposed_start_at || null,
-                  proposed_end_at: proposalRes.proposed_end_at || null,
-                  visitor_read_at: proposalRes.visitor_read_at ?? null,
+                  message: proposalRes.message || existingCache?.message || '',
+                  proposed_start_at: proposalRes.proposed_start_at || existingCache?.proposed_start_at || null,
+                  proposed_end_at: proposalRes.proposed_end_at || existingCache?.proposed_end_at || null,
+                  visitor_read_at: proposalRes.visitor_read_at ?? existingCache?.visitor_read_at ?? null,
+                  partner_name: existingCache?.partner_name,
+                  partner_code: existingCache?.partner_code,
+                  partner_category: existingCache?.partner_category,
+                  partner_photo_url: existingCache?.partner_photo_url,
+                  partner_intro: existingCache?.partner_intro,
+                  partner_languages: existingCache?.partner_languages,
+                  contact_phone: existingCache?.contact_phone,
+                  contact_email: existingCache?.contact_email,
                   cached_at: Date.now(),
                 });
                 if (proposalRes.visitor_read_at) {
@@ -1759,7 +1772,14 @@ export default function App() {
                 updateInquiryServerStatusV2(serverId, 'Waiting for confirmation');
                 stateChanged = true;
               } else if (proposalRes.success && !proposalRes.proposal_found) {
-                if (inq.cached_proposal) {
+                const isLocallyBridgedProposal = Boolean(
+                  existingCache &&
+                    (String(existingCache.match_id || '').startsWith('match_') ||
+                      String(existingCache.match_id || '').startsWith('local_match_') ||
+                      String(existingCache.response_id || '').startsWith('resp_') ||
+                      Boolean(existingCache.partner_intro || existingCache.partner_name))
+                );
+                if (existingCache && !isLocallyBridgedProposal) {
                   clearCachedProposalV2(serverId);
                   stateChanged = true;
                 }

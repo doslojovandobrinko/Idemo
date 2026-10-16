@@ -1,7 +1,13 @@
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const STATIC_CACHE = `idemo-static-${CACHE_VERSION}`;
 const IMAGE_CACHE = `idemo-images-${CACHE_VERSION}`;
 const FONT_CACHE = `idemo-fonts-${CACHE_VERSION}`;
+
+const IS_DEV_OR_PREVIEW =
+  self.location.hostname === 'localhost' ||
+  self.location.hostname === '127.0.0.1' ||
+  self.location.hostname.includes('ais-dev-') ||
+  self.location.hostname.includes('ais-pre-');
 
 // Shell assets to cache immediately upon installation
 const PRECACHE_ASSETS = [
@@ -23,11 +29,13 @@ const isFontRequest = (url, request) => {
 
 // Helper to determine if a request qualifies for the image cache
 const isImageRequest = (url, request) => {
+  if (url.searchParams.has('import') || request.destination === 'script' || url.pathname.startsWith('/src/')) {
+    return false;
+  }
   return (
     request.destination === 'image' ||
     url.pathname.includes('/assets/images/') ||
-    url.pathname.includes('/src/assets/images/') ||
-    url.pathname.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)/i)
+    url.pathname.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)$/i)
   );
 };
 
@@ -38,6 +46,10 @@ const isImmutableAsset = (url) => {
 
 // Install Event
 self.addEventListener('install', (event) => {
+  if (IS_DEV_OR_PREVIEW) {
+    self.skipWaiting();
+    return;
+  }
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) => {
       console.log('[IDEMO Service Worker] Pre-caching core application shell...');
@@ -49,6 +61,14 @@ self.addEventListener('install', (event) => {
 
 // Activate Event: Clean up old caches from older versions
 self.addEventListener('activate', (event) => {
+  if (IS_DEV_OR_PREVIEW) {
+    event.waitUntil(
+      caches.keys()
+        .then((cacheNames) => Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName))))
+        .then(() => self.registration.unregister())
+    );
+    return;
+  }
   const allowedCaches = [STATIC_CACHE, IMAGE_CACHE, FONT_CACHE];
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -66,6 +86,8 @@ self.addEventListener('activate', (event) => {
 
 // Fetch Event
 self.addEventListener('fetch', (event) => {
+  if (IS_DEV_OR_PREVIEW) return;
+
   // Only handle GET requests
   if (event.request.method !== 'GET') return;
 
@@ -73,6 +95,16 @@ self.addEventListener('fetch', (event) => {
 
   // Bypass chrome-extension or other non-http schemes
   if (!requestUrl.protocol.startsWith('http')) return;
+
+  // Bypass Vite dev paths, auth endpoints, and cross-origin API calls
+  if (
+    requestUrl.pathname.startsWith('/src/') ||
+    requestUrl.pathname.startsWith('/@') ||
+    requestUrl.pathname.startsWith('/node_modules/') ||
+    requestUrl.pathname.startsWith('/__')
+  ) {
+    return;
+  }
 
   // 1. FONTS: Cache-First Strategy (Fonts never change)
   if (isFontRequest(requestUrl, event.request)) {

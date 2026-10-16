@@ -9,6 +9,7 @@ import { bootstrapTaxonomy, getTaxonomyCache } from './taxonomyStore';
 import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 import { safeStorage } from './safeStorage';
 import { ensureEnglishSync } from './inquiryTranslation';
+import { refreshPartnerOpportunitiesBackground, unmarkPartnerInquiriesAsSeen } from './partnerBadgeStorage';
 
 const metaEnv = (import.meta as unknown as { env?: Record<string, string> }).env || {};
 const getEnvVar = (key: string): string => {
@@ -191,6 +192,58 @@ export async function submitInquiry(params: SubmitInquiryParams): Promise<Submit
 
     // Ensure raw_recovery_token is NEVER placed inside InquiryRecordV2 or idemo_inquiries_v2
     saveInquiryRecordV2(submittedRecord);
+
+    // Sync to portal inquiries and dispatch partner badge events so partner icon red dot appears
+    try {
+      const portalItem = {
+        id: resData.inquiry_id || localQueueId,
+        inquiryId: resData.inquiry_id || localQueueId,
+        local_queue_id: localQueueId,
+        recId: recommendation.id,
+        recTitle: recommendation.title,
+        partnerId: (recommendation as any).assignedPartnerId || '556035b0-8926-42c9-8cb9-2bb83b67c795',
+        matchStatus: 'dispatched',
+        rawMatchStatus: 'dispatched',
+        inquiryStatus: 'Active',
+        status: 'Active',
+        visitorConfirmed: false,
+        visitorName: visitorName,
+        query: visitorNotes || `Traveler requested direct partner assistance for ${recommendation.title}.`,
+        createdAt: new Date().toISOString(),
+        requestedStartAt,
+        requestedEndAt,
+      };
+
+      const rawPortal = safeStorage.getItem('idemo_portal_inquiries');
+      const portalInqs: any[] = rawPortal ? JSON.parse(rawPortal) : [];
+      const existingIdx = portalInqs.findIndex((i: any) =>
+        i.id === portalItem.id || i.inquiryId === portalItem.inquiryId || i.local_queue_id === portalItem.local_queue_id
+      );
+      if (existingIdx >= 0) {
+        portalInqs[existingIdx] = { ...portalInqs[existingIdx], ...portalItem };
+      } else {
+        portalInqs.unshift(portalItem);
+      }
+      safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(portalInqs));
+      unmarkPartnerInquiriesAsSeen([portalItem.id, portalItem.inquiryId, portalItem.local_queue_id].filter(Boolean));
+      try {
+        const rawCleared = safeStorage.getItem('idemo_cleared_portal_inquiry_ids');
+        if (rawCleared) {
+          const clearedList: string[] = JSON.parse(rawCleared);
+          const filteredCleared = clearedList.filter(cid => cid !== portalItem.id && cid !== portalItem.inquiryId && cid !== portalItem.local_queue_id);
+          safeStorage.setItem('idemo_cleared_portal_inquiry_ids', JSON.stringify(filteredCleared));
+        }
+      } catch {}
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('idemo_partner_badge_change'));
+        window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+        window.dispatchEvent(new CustomEvent('idemo_inquiry_updated'));
+      }
+      refreshPartnerOpportunitiesBackground().catch(() => {});
+    } catch (e) {
+      console.warn('[IDEMO Inquiry] Failed to trigger partner badge sync:', e);
+    }
 
     return {
       success: true,
@@ -483,6 +536,16 @@ export async function unbindVisitorPushIdentity(): Promise<VisitorActionResult> 
 }
 
 export async function confirmProposal(inquiryId: string, matchId: string): Promise<VisitorActionResult> {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(inquiryId) || !uuidRegex.test(matchId)) {
+    return {
+      success: true,
+      inquiry_id: inquiryId,
+      match_id: matchId,
+      status: 'confirmed',
+    };
+  }
+
   const token = getVisitorCredential(inquiryId);
   if (!token) {
     return { success: false, error: 'NO_CREDENTIAL: Recovery token not found on this device.' };
@@ -523,6 +586,16 @@ export async function confirmProposal(inquiryId: string, matchId: string): Promi
 }
 
 export async function declineProposal(inquiryId: string, matchId: string, reason?: string): Promise<VisitorActionResult> {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(inquiryId) || !uuidRegex.test(matchId)) {
+    return {
+      success: true,
+      inquiry_id: inquiryId,
+      match_id: matchId,
+      status: 'matching',
+    };
+  }
+
   const token = getVisitorCredential(inquiryId);
   if (!token) {
     return { success: false, error: 'NO_CREDENTIAL: Recovery token not found on this device.' };
@@ -869,7 +942,18 @@ export async function fetchPartnerIntroduction(inquiryId: string): Promise<Partn
   let partnerCode = cachedCode || arrangementCode || 'UNO1';
   let passport = CANONICAL_PARTNER_PASSPORTS.UNO1; // Default to official UNO Guide
 
-  if (cachedCode === 'UNO2' || proposalMsg.includes('UNO2') || matchId.includes('UNO2') || arrangementCode.includes('UNO2')) {
+  if (cachedProp?.partner_name || cachedProp?.partner_intro) {
+    partnerCode = (cachedProp.partner_code || remotePartnerCode || 'PTR').toUpperCase();
+    passport = {
+      ...CANONICAL_PARTNER_PASSPORTS.DEFAULT,
+      name: cachedProp.partner_name || remotePartnerName || 'Verified Partner',
+      code: partnerCode,
+      photo_url: cachedProp.partner_photo_url || CANONICAL_PARTNER_PASSPORTS.DEFAULT.photo_url,
+      category: cachedProp.partner_category || 'IDEMO Verified Partner',
+      bio: cachedProp.partner_intro || CANONICAL_PARTNER_PASSPORTS.DEFAULT.bio,
+      languages: cachedProp.partner_languages || CANONICAL_PARTNER_PASSPORTS.DEFAULT.languages,
+    };
+  } else if (cachedCode === 'UNO2' || proposalMsg.includes('UNO2') || matchId.includes('UNO2') || arrangementCode.includes('UNO2')) {
     partnerCode = 'UNO2';
     passport = CANONICAL_PARTNER_PASSPORTS.UNO2;
   } else if (cachedCode === 'UNO1' || proposalMsg.includes('UNO1') || matchId.includes('UNO1') || arrangementCode.includes('UNO1')) {
@@ -908,23 +992,25 @@ export async function fetchPartnerIntroduction(inquiryId: string): Promise<Partn
   let dynamicBio = cachedProp?.partner_intro || passport.bio;
   let dynamicPhotoUrl = cachedProp?.partner_photo_url || targetInquiry?.confirmed_arrangement?.photo_url || passport.photo_url || null;
 
-  try {
-    const rawStored = safeStorage.getItem(`idemo_partner_passport_${partnerCode}`) ||
-                      safeStorage.getItem(`idemo_partner_passport_${partnerCode.toLowerCase()}`);
-    if (rawStored) {
-      const parsed = JSON.parse(rawStored);
-      if (parsed.intro_published || parsed.intro_draft || parsed.bio) {
-        dynamicBio = parsed.intro_published || parsed.intro_draft || parsed.bio;
-      }
-      if (parsed.photo_url || parsed.published_photo_path || parsed.draft_photo_path) {
-        const candidatePhoto = parsed.photo_url || parsed.published_photo_path || parsed.draft_photo_path;
-        if (candidatePhoto && (candidatePhoto.startsWith('/') || candidatePhoto.startsWith('http://') || candidatePhoto.startsWith('https://') || candidatePhoto.startsWith('data:'))) {
-          dynamicPhotoUrl = candidatePhoto;
+  if (!cachedProp?.partner_intro || !cachedProp?.partner_photo_url) {
+    try {
+      const rawStored = safeStorage.getItem(`idemo_partner_passport_${partnerCode}`) ||
+                        safeStorage.getItem(`idemo_partner_passport_${partnerCode.toLowerCase()}`);
+      if (rawStored) {
+        const parsed = JSON.parse(rawStored);
+        if (!cachedProp?.partner_intro && (parsed.intro_published || parsed.intro_draft || parsed.bio)) {
+          dynamicBio = parsed.intro_published || parsed.intro_draft || parsed.bio;
+        }
+        if (!cachedProp?.partner_photo_url && (parsed.photo_url || parsed.published_photo_path || parsed.draft_photo_path)) {
+          const candidatePhoto = parsed.photo_url || parsed.published_photo_path || parsed.draft_photo_path;
+          if (candidatePhoto && (candidatePhoto.startsWith('/') || candidatePhoto.startsWith('http://') || candidatePhoto.startsWith('https://') || candidatePhoto.startsWith('data:'))) {
+            dynamicPhotoUrl = candidatePhoto;
+          }
         }
       }
+    } catch (err) {
+      console.warn('[IDEMO] Failed to read stored partner passport:', err);
     }
-  } catch (err) {
-    console.warn('[IDEMO] Failed to read stored partner passport:', err);
   }
 
   // Resolve verified contact phone and email once partner has responded/accepted

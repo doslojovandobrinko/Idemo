@@ -223,7 +223,7 @@ export function updateInquiryCachedProposalV2(
     const all = getAllInquiriesV2();
     const target = all.find((i) => i.server_inquiry_id === serverInquiryId || i.local_queue_id === serverInquiryId);
     if (target) {
-      if (proposal && target.cached_proposal && target.cached_proposal.match_id === proposal.match_id) {
+      if (proposal && target.cached_proposal) {
         target.cached_proposal = {
           ...target.cached_proposal,
           ...proposal,
@@ -290,6 +290,11 @@ export function saveConfirmedArrangementV2(
     const target = all.find((i) => i.server_inquiry_id === serverInquiryId || i.local_queue_id === serverInquiryId);
     if (target) {
       target.confirmed_arrangement = arrangement;
+      if (arrangement) {
+        (target as any).status = 'Arrangement Confirmed';
+        (target as any).visitor_status_label = 'Accepted — Confirmed with Partner';
+        target.cached_proposal = null;
+      }
       safeStorage.setItem(STORAGE_KEY_V2, JSON.stringify(all));
     }
   } catch (err) {

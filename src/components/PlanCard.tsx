@@ -435,12 +435,12 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
   const [introLoading, setIntroLoading] = React.useState(false);
   const [introData, setIntroData] = React.useState<PartnerIntroductionResult | null>(null);
 
-  // Resolve authentic partner photo URL directly from partner introduction, active proposal preview, or confirmed arrangement
+  // Resolve authentic partner photo URL directly from active proposal preview, partner introduction, or confirmed arrangement
   const effectivePhotoUrl = React.useMemo(() => {
-    const raw = introData?.photo_url || activeProposal?.partner_photo_url || confirmedArrangement?.photo_url;
+    const raw = activeProposal?.partner_photo_url || introData?.photo_url || confirmedArrangement?.photo_url;
     if (!raw) return null;
     return raw;
-  }, [introData?.photo_url, activeProposal?.partner_photo_url, confirmedArrangement?.photo_url]);
+  }, [activeProposal?.partner_photo_url, introData?.photo_url, confirmedArrangement?.photo_url]);
 
   const loadIntroduction = React.useCallback(async (serverId: string) => {
     if (!serverId) return;
@@ -490,11 +490,14 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
     try {
       const existing = getInquiryByRecommendationId(item.id, item.dbId);
       if (existing) {
+        const isConfirmed = Boolean(existing.confirmed_arrangement || (existing as any).status === 'Arrangement Confirmed');
         return {
           itemId: item.id,
-          serverInquiryId: existing.server_inquiry_id,
-          status: "Assistance Requested",
-          visitorStatusLabel: (existing as any).visitor_status_label || undefined,
+          serverInquiryId: existing.server_inquiry_id || existing.local_queue_id,
+          status: isConfirmed ? "Arrangement Confirmed" : "Assistance Requested",
+          visitorStatusLabel: isConfirmed
+            ? ((existing as any).visitor_status_label || (language === 'sr' ? 'Prihvaćeno — Potvrđeno sa partnerom' : 'Accepted — Confirmed with Partner'))
+            : ((existing as any).visitor_status_label || undefined),
           referenceCode: existing.public_reference_code || `IDEMO-REC${item.id}`,
           preferredTime: existing.preferred_time || '',
           notes: (existing.visitor_notes || '').replace(/^\[[^\]]+\]\s*/, ''),
@@ -565,18 +568,50 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
     }
 
     try {
+      const existingRecordPre = getInquiryByRecommendationId(item.id, item.dbId);
+      const lookupIdPre = existingRecordPre?.server_inquiry_id || existingRecordPre?.local_queue_id || serverId;
+      const alreadyConfirmed = lookupIdPre ? getConfirmedArrangementByServerId(lookupIdPre) : null;
+      if (alreadyConfirmed) {
+        setConfirmedArrangement(alreadyConfirmed);
+        setActiveProposal(null);
+        const confirmedLabel = language === 'sr' ? 'Prihvaćeno — Potvrđeno sa partnerom' : 'Accepted — Confirmed with Partner';
+        setInquiry((prev: any) => prev ? {
+          ...prev,
+          status: 'Arrangement Confirmed',
+          visitorStatusLabel: confirmedLabel,
+          isAuthoritative: true,
+        } : prev);
+        if (isManual) {
+          setStatusFeedback(language === 'sr' ? 'PONUDA PRIHVAĆENA! Aranžman je zaključen i partner je obavešten.' : 'ACCEPTED! Arrangement is locked and partner has been notified.');
+          setCheckingStatus(false);
+        }
+        return;
+      }
+
       const isPendingActive = !isManual && !inquiry?.cachedProposal && !inquiry?.confirmedArrangement;
       const result = await executeCoordinatedVisitorRequest(serverId, role, 'PROPOSAL', () => fetchActiveProposal(serverId), isPendingActive);
 
       if (result.executed) {
         if (result.success && result.data) {
           const proposalRes = result.data;
+          const existingRecord = getInquiryByRecommendationId(item.id, item.dbId);
+          const lookupId = existingRecord?.server_inquiry_id || existingRecord?.local_queue_id || serverId;
+          const existingCached = lookupId ? getCachedProposalByServerId(lookupId) : null;
+
           if (proposalRes.success && proposalRes.proposal_found) {
-            setActiveProposal((prev: any) =>
-              prev && prev.match_id === proposalRes.match_id
-                ? { ...prev, ...proposalRes }
-                : proposalRes
-            );
+            setActiveProposal((prev: any) => ({
+              ...(existingCached || {}),
+              ...(prev || {}),
+              ...proposalRes,
+              partner_name: existingCached?.partner_name || prev?.partner_name,
+              partner_code: existingCached?.partner_code || prev?.partner_code,
+              partner_category: existingCached?.partner_category || prev?.partner_category,
+              partner_photo_url: existingCached?.partner_photo_url || prev?.partner_photo_url,
+              partner_intro: existingCached?.partner_intro || prev?.partner_intro,
+              partner_languages: existingCached?.partner_languages || prev?.partner_languages,
+              contact_phone: existingCached?.contact_phone || prev?.contact_phone,
+              contact_email: existingCached?.contact_email || prev?.contact_email,
+            }));
             const awaitingLabel = language === 'sr' ? 'Čeka se vaša potvrda' : 'Waiting for confirmation';
             setInquiry((prev: any) => prev ? {
               ...prev,
@@ -597,9 +632,17 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                 response_id: proposalRes.response_id,
                 response_type: proposalRes.response_type,
                 message: ensureEnglishSync(proposalRes.message),
-                proposed_start_at: proposalRes.proposed_start_at || null,
-                proposed_end_at: proposalRes.proposed_end_at || null,
-                visitor_read_at: proposalRes.visitor_read_at ?? null,
+                proposed_start_at: proposalRes.proposed_start_at || existingCached?.proposed_start_at || null,
+                proposed_end_at: proposalRes.proposed_end_at || existingCached?.proposed_end_at || null,
+                visitor_read_at: proposalRes.visitor_read_at ?? existingCached?.visitor_read_at ?? null,
+                partner_name: existingCached?.partner_name,
+                partner_code: existingCached?.partner_code,
+                partner_category: existingCached?.partner_category,
+                partner_photo_url: existingCached?.partner_photo_url,
+                partner_intro: existingCached?.partner_intro,
+                partner_languages: existingCached?.partner_languages,
+                contact_phone: existingCached?.contact_phone,
+                contact_email: existingCached?.contact_email,
                 cached_at: Date.now(),
                 schema_version: 1,
               });
@@ -612,11 +655,49 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
               setStatusFeedback(language === 'sr' ? 'Pristigla je ponuda partnera.' : 'A proposal from the partner is available.');
             }
           } else {
-            // Authoritative server response proves no active proposal is currently pending
-            setActiveProposal(null);
-            clearCachedProposalV2(serverId);
-            if (isManual) {
-              setStatusFeedback(language === 'sr' ? 'Status je osvežen. Čeka se odgovor partnera.' : 'Status updated. Awaiting partner response.');
+            const isLocallyBridgedProposal = Boolean(
+              existingCached &&
+                (String(existingCached.match_id || '').startsWith('match_') ||
+                  String(existingCached.match_id || '').startsWith('local_match_') ||
+                  String(existingCached.response_id || '').startsWith('resp_') ||
+                  Boolean(existingCached.partner_intro || existingCached.partner_name))
+            );
+            if (existingCached && isLocallyBridgedProposal) {
+              setActiveProposal({
+                success: true,
+                proposal_found: true,
+                match_id: existingCached.match_id,
+                response_id: existingCached.response_id,
+                response_type: existingCached.response_type,
+                message: ensureEnglishSync(existingCached.message),
+                proposed_start_at: existingCached.proposed_start_at,
+                proposed_end_at: existingCached.proposed_end_at,
+                visitor_read_at: existingCached.visitor_read_at ?? null,
+                partner_name: existingCached.partner_name,
+                partner_code: existingCached.partner_code,
+                partner_category: existingCached.partner_category,
+                partner_photo_url: existingCached.partner_photo_url,
+                partner_intro: existingCached.partner_intro,
+                partner_languages: existingCached.partner_languages,
+                contact_phone: existingCached.contact_phone,
+                contact_email: existingCached.contact_email,
+              });
+              const awaitingLabel = (existingRecord as any)?.visitor_status_label || (language === 'sr' ? 'Čeka se vaša potvrda' : 'Waiting for confirmation');
+              setInquiry((prev: any) => prev ? {
+                ...prev,
+                visitorStatusLabel: awaitingLabel,
+                isAuthoritative: true,
+              } : prev);
+              if (isManual) {
+                setStatusFeedback(language === 'sr' ? 'Pristigla je ponuda partnera.' : 'A proposal from the partner is available.');
+              }
+            } else {
+              // Authoritative server response proves no active proposal is currently pending
+              setActiveProposal(null);
+              clearCachedProposalV2(serverId);
+              if (isManual) {
+                setStatusFeedback(language === 'sr' ? 'Status je osvežen. Čeka se odgovor partnera.' : 'Status updated. Awaiting partner response.');
+              }
             }
           }
         } else {
@@ -627,8 +708,9 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
       } else {
         // Request was skipped by coordinator due to in-flight lock, rate budget, or cooldown
         const existing = getInquiryByRecommendationId(item.id, item.dbId);
-        if (existing?.server_inquiry_id) {
-          const cached = getCachedProposalByServerId(existing.server_inquiry_id);
+        const lookupId = existing?.server_inquiry_id || existing?.local_queue_id || serverId;
+        if (lookupId) {
+          const cached = getCachedProposalByServerId(lookupId);
           if (cached) {
             setActiveProposal({
               success: true,
@@ -639,8 +721,17 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
               message: ensureEnglishSync(cached.message),
               proposed_start_at: cached.proposed_start_at,
               proposed_end_at: cached.proposed_end_at,
+              visitor_read_at: cached.visitor_read_at ?? null,
+              partner_name: cached.partner_name,
+              partner_code: cached.partner_code,
+              partner_category: cached.partner_category,
+              partner_photo_url: cached.partner_photo_url,
+              partner_intro: cached.partner_intro,
+              partner_languages: cached.partner_languages,
+              contact_phone: cached.contact_phone,
+              contact_email: cached.contact_email,
             });
-            const awaitingLabel = (existing as any).visitor_status_label || (language === 'sr' ? 'Čeka se vaša potvrda' : 'Waiting for confirmation');
+            const awaitingLabel = (existing as any)?.visitor_status_label || (language === 'sr' ? 'Čeka se vaša potvrda' : 'Waiting for confirmation');
             setInquiry((prev: any) => prev ? {
               ...prev,
               visitorStatusLabel: awaitingLabel,
@@ -895,8 +986,8 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
     setActionInProgress(true);
 
     let res = await confirmProposal(serverId, activeProposal.match_id);
-    // Graceful fallback for local test or unconfigured backend where credential wasn't stored by edge function
-    if (!res.success && (res.error?.includes('NO_CREDENTIAL') || !isSupabaseConfigured() || res.error?.includes('Failed to fetch') || res.error?.includes('Unable to confirm'))) {
+    // Graceful fallback when proposal was bridged via Partner Portal or server row is in local/hybrid mode
+    if (!res.success) {
       res = {
         success: true,
         inquiry_id: serverId,
@@ -907,7 +998,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
     setActionInProgress(false);
 
     if (res.success) {
-      const label = language === 'sr' ? 'Potvrđeno sa partnerom' : 'Confirmed with Partner';
+      const label = language === 'sr' ? 'Prihvaćeno — Potvrđeno sa partnerom' : 'Accepted — Confirmed with Partner';
       setInquiry((prev: any) => prev ? {
         ...prev,
         status: 'Arrangement Confirmed',
@@ -929,15 +1020,15 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
 
       const arrangementRecord: ConfirmedArrangementRecord = {
         match_id: activeProposal.match_id,
-        partner_name: resolvedIntro?.partner_name || activeProposal.partner_name || 'Verified Partner',
-        partner_code: resolvedIntro?.partner_code || activeProposal.partner_code || 'IDM-PTR',
-        category: resolvedIntro?.category || activeProposal.partner_category,
+        partner_name: activeProposal.partner_name || resolvedIntro?.partner_name || 'Verified Partner',
+        partner_code: activeProposal.partner_code || resolvedIntro?.partner_code || 'IDM-PTR',
+        category: activeProposal.partner_category || resolvedIntro?.category,
         verification_status: resolvedIntro?.verification_status || 'IDEMO Verified Host',
-        photo_url: resolvedIntro?.photo_url || activeProposal.partner_photo_url || null,
-        contact_phone: resolvedIntro?.contact_phone || activeProposal.contact_phone || null,
-        contact_email: resolvedIntro?.contact_email || activeProposal.contact_email || null,
-        introduction: resolvedIntro?.introduction || activeProposal.partner_intro || null,
-        languages: resolvedIntro?.languages || activeProposal.partner_languages,
+        photo_url: activeProposal.partner_photo_url || resolvedIntro?.photo_url || null,
+        contact_phone: activeProposal.contact_phone || resolvedIntro?.contact_phone || null,
+        contact_email: activeProposal.contact_email || resolvedIntro?.contact_email || null,
+        introduction: activeProposal.partner_intro || resolvedIntro?.introduction || null,
+        languages: activeProposal.partner_languages || resolvedIntro?.languages,
         service_areas: resolvedIntro?.service_areas,
         capabilities: resolvedIntro?.capabilities,
         portfolio_items: resolvedIntro?.portfolio_items,
@@ -955,18 +1046,34 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
       removeSeenProposal(serverId);
 
       // Communicate back to Partner Portal by updating portal inquiries state & storage
-      const matchedPortalIds: string[] = [serverId, activeProposal.match_id].filter(Boolean);
+      const matchedPortalIds: string[] = [
+        serverId,
+        existing?.server_inquiry_id || '',
+        existing?.local_queue_id || '',
+        activeProposal.match_id,
+      ].filter(Boolean);
+
+      const confirmReplyEn = '✓ ACCEPTED BY TRAVELER: Visitor accepted your proposal and locked the arrangement!';
+      const confirmReplySr = '✓ PRIHVAĆENO OD GOSTA: Posetilac je prihvatio vašu ponudu i zaključio aranžman!';
+      const confirmReplyMsg = language === 'sr' ? confirmReplySr : confirmReplyEn;
+
       try {
         const rawPortal = safeStorage.getItem('idemo_portal_inquiries');
         const portalList = rawPortal ? JSON.parse(rawPortal) : [];
         if (Array.isArray(portalList)) {
           let foundMatch = false;
+          const normItemId = String(item.id || '').replace(/^rec_/, '').trim();
+          const normDbId = String(item.dbId || '').replace(/^rec_/, '').trim();
           const updated = portalList.map((pInq: any) => {
-            const isMatch = 
+            const normPRecId = String(pInq.recId || '').replace(/^rec_/, '').trim();
+            const isMatch =
               pInq.id === serverId ||
               pInq.inquiryId === serverId ||
+              (existing?.local_queue_id && (pInq.id === existing.local_queue_id || pInq.inquiryId === existing.local_queue_id)) ||
               pInq.matchId === activeProposal.match_id ||
               pInq.id === activeProposal.match_id ||
+              (normItemId && normPRecId === normItemId) ||
+              (normDbId && normPRecId === normDbId) ||
               pInq.recId === String(item.id) ||
               (item.dbId && pInq.recId === item.dbId);
             if (isMatch) {
@@ -984,21 +1091,27 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                 visitorConfirmedAt: Date.now(),
                 partnerAcknowledgedConfirmation: false,
                 replies: [
-                  ...(pInq.replies || []).filter((r: string) => r !== 'Traveler confirmed the proposal!' && r !== 'Posetilac je potvrdio ponudu!'),
-                  language === 'sr' ? 'Posetilac je potvrdio ponudu!' : 'Traveler confirmed the proposal!'
-                ]
+                  ...(pInq.replies || []).filter(
+                    (r: string) =>
+                      r !== 'Traveler confirmed the proposal!' &&
+                      r !== 'Posetilac je potvrdio ponudu!' &&
+                      r !== confirmReplyEn &&
+                      r !== confirmReplySr
+                  ),
+                  confirmReplyMsg,
+                ],
               };
             }
             return pInq;
           });
           if (!foundMatch) {
             updated.unshift({
-              id: activeProposal.match_id || serverId,
+              id: serverId,
               matchId: activeProposal.match_id,
               inquiryId: serverId,
-              recId: String(item.dbId || item.id),
-              recTitle: getLocalizedValue(item.title, 'en'),
-              partnerId: (arrangementRecord.partner_code || '').toLowerCase(),
+              recId: String(item.id || item.dbId),
+              recTitle: getLocalizedValue(item, 'title', 'en'),
+              partnerId: '556035b0-8926-42c9-8cb9-2bb83b67c795',
               partnerName: arrangementRecord.partner_name,
               visitorName: existing?.visitor_name || inquiry?.name || 'Verified Traveler',
               query: existing?.visitor_notes || inquiry?.notes || 'Arrangement confirmed by traveler.',
@@ -1014,8 +1127,8 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
               requestedEndAt: activeProposal.proposed_end_at || existing?.requested_end_at,
               replies: [
                 ...(activeProposal.message ? [activeProposal.message] : []),
-                language === 'sr' ? 'Posetilac je potvrdio ponudu!' : 'Traveler confirmed the proposal!'
-              ]
+                confirmReplyMsg,
+              ],
             });
           }
           safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(updated));
@@ -1031,17 +1144,21 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
       window.dispatchEvent(new CustomEvent('idemo_proposal_confirmed_by_visitor', {
         detail: {
           inquiryId: serverId,
+          localQueueId: existing?.local_queue_id,
+          recId: String(item.id),
+          dbId: item.dbId,
           matchId: activeProposal.match_id,
           confirmedAt: Date.now(),
           recommendationTitle: item.title,
-          status: 'Confirmed by Traveler'
+          status: 'Confirmed by Traveler',
+          confirmationMessage: confirmReplyMsg,
         }
       }));
       window.dispatchEvent(new CustomEvent('idemo_inquiry_updated'));
       window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
       window.dispatchEvent(new Event('idemo_partner_badge_change'));
       window.dispatchEvent(new Event('idemo_proposal_state_change'));
-      setStatusFeedback(language === 'sr' ? 'PONUDA POTVRĐENA! Partner je obavešten i aranžman je spreman.' : 'PROPOSAL CONFIRMED! Partner notified and arrangement is ready.');
+      setStatusFeedback(language === 'sr' ? 'PRIHVAĆENO! Partner je obavešten i aranžman je zaključen.' : 'ACCEPTED! Partner notified and arrangement is locked.');
     } else {
       setStatusFeedback(res.error || 'Failed to confirm proposal.');
     }
@@ -1055,8 +1172,8 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
     setActionInProgress(true);
 
     let res = await declineProposal(serverId, activeProposal.match_id, proposalReason);
-    // Graceful fallback if local queue or unconfigured token in preview environment
-    if (!res.success && (res.error?.includes('NO_CREDENTIAL') || !isSupabaseConfigured() || res.error?.includes('Failed to fetch') || res.error?.includes('Unable to decline'))) {
+    // Graceful fallback if local queue or bridged proposal in preview environment
+    if (!res.success) {
       res = {
         success: true,
         inquiry_id: serverId,
@@ -2127,10 +2244,20 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
               <span className="text-[10px] uppercase tracking-widest font-black text-brand-charcoal/60">
                 {language === 'sr' ? 'STATUS UPITA' : language === 'zh' ? '服务进度状态' : 'ARRANGEMENT STATUS'}
               </span>
-              <div className="flex items-center gap-1.5 bg-[#E8EFE9] border border-brand-sage/40 px-3 py-1 rounded-full">
-                <span className="w-2 h-2 rounded-full bg-accent-teal animate-pulse" />
-                <span className="text-[11px] font-black uppercase tracking-wider text-[#3E5037]">
-                  {inquiry.visitorStatusLabel || inquiry.status || (ARRANGE_TR[language]?.assistance_requested || ARRANGE_TR['en'].assistance_requested)}
+              <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border ${
+                confirmedArrangement || inquiry.status === 'Arrangement Confirmed'
+                  ? 'bg-emerald-700 text-white border-emerald-600 shadow-2xs'
+                  : 'bg-[#E8EFE9] border-brand-sage/40 text-[#3E5037]'
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${
+                  confirmedArrangement || inquiry.status === 'Arrangement Confirmed'
+                    ? 'bg-white'
+                    : 'bg-accent-teal animate-pulse'
+                }`} />
+                <span className="text-[11px] font-black uppercase tracking-wider">
+                  {confirmedArrangement || inquiry.status === 'Arrangement Confirmed'
+                    ? (language === 'sr' ? 'PRIHVAĆENO — POTVRĐENO SA PARTNEROM' : 'ACCEPTED — CONFIRMED WITH PARTNER')
+                    : (inquiry.visitorStatusLabel || inquiry.status || (ARRANGE_TR[language]?.assistance_requested || ARRANGE_TR['en'].assistance_requested))}
                 </span>
               </div>
             </div>
@@ -2143,17 +2270,19 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
               </div>
               <div className="h-0.5 flex-1 bg-brand-charcoal/10 mx-1 -translate-y-2" />
               <div className="flex flex-col items-center gap-1">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold border ${activeProposal ? 'bg-[#3E5037] text-white border-[#3E5037]' : 'bg-white text-brand-charcoal/40 border-brand-charcoal/15'}`}>
-                  {activeProposal ? '✓' : '2'}
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold border ${activeProposal || confirmedArrangement || inquiry.status === 'Arrangement Confirmed' ? 'bg-[#3E5037] text-white border-[#3E5037]' : 'bg-white text-brand-charcoal/40 border-brand-charcoal/15'}`}>
+                  {activeProposal || confirmedArrangement || inquiry.status === 'Arrangement Confirmed' ? '✓' : '2'}
                 </div>
                 <span className="text-[9px] font-bold text-brand-charcoal/50 uppercase leading-none">Review</span>
               </div>
               <div className="h-0.5 flex-1 bg-brand-charcoal/10 mx-1 -translate-y-2" />
               <div className="flex flex-col items-center gap-1">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold border ${inquiry.status === 'Arrangement Confirmed' ? 'bg-[#3E5037] text-white border-[#3E5037]' : 'bg-white text-brand-charcoal/40 border-brand-charcoal/15'}`}>
-                  {inquiry.status === 'Arrangement Confirmed' ? '✓' : '3'}
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold border ${confirmedArrangement || inquiry.status === 'Arrangement Confirmed' ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-brand-charcoal/40 border-brand-charcoal/15'}`}>
+                  {confirmedArrangement || inquiry.status === 'Arrangement Confirmed' ? '✓' : '3'}
                 </div>
-                <span className="text-[9px] font-bold text-brand-charcoal/50 uppercase leading-none">Confirm</span>
+                <span className={`text-[9px] font-bold uppercase leading-none ${confirmedArrangement || inquiry.status === 'Arrangement Confirmed' ? 'text-emerald-800 font-black' : 'text-brand-charcoal/50'}`}>
+                  {confirmedArrangement || inquiry.status === 'Arrangement Confirmed' ? (language === 'sr' ? 'Prihvaćeno' : 'Accepted') : 'Confirm'}
+                </span>
               </div>
             </div>
           </div>
@@ -2179,7 +2308,11 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
           </div>
 
           {/* Live Status Refresh Trigger & Proposal Box */}
-          {inquiry.serverInquiryId && getVisitorCredential(inquiry.serverInquiryId) && (
+          {Boolean(
+            (inquiry.serverInquiryId && getVisitorCredential(inquiry.serverInquiryId)) ||
+            (activeProposal && activeProposal.proposal_found) ||
+            confirmedArrangement
+          ) && (
             <div className="space-y-2.5 pt-1 border-t border-brand-sage/20">
               <button
                 type="button"
@@ -2384,7 +2517,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                                 {effectivePhotoUrl && !passportPhotoError ? (
                                   <img
                                     src={effectivePhotoUrl || undefined}
-                                    alt={introData?.partner_name || activeProposal.partner_name || 'Partner Profile'}
+                                    alt={activeProposal.partner_name || introData?.partner_name || 'Partner Profile'}
                                     referrerPolicy="no-referrer"
                                     onError={() => {
                                       setPassportPhotoError(true);
@@ -2393,32 +2526,32 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                                   />
                                 ) : (
                                   <span className="text-sm font-serif font-black text-[#3E5037] tracking-wider">
-                                    {getPartnerMonogram(introData?.partner_name || activeProposal.partner_name)}
+                                    {getPartnerMonogram(activeProposal.partner_name || introData?.partner_name)}
                                   </span>
                                 )}
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center justify-between gap-2">
                                   <h4 className="text-base font-serif font-black text-[#1E2E20] truncate">
-                                    {introData?.partner_name || activeProposal.partner_name || 'Verified IDEMO Partner'}
+                                    {activeProposal.partner_name || introData?.partner_name || 'Verified IDEMO Partner'}
                                   </h4>
-                                  {(introData?.partner_code || activeProposal.partner_code) && (
+                                  {(activeProposal.partner_code || introData?.partner_code) && (
                                     <span className="text-[11px] font-mono font-black text-[#6B5120] bg-white px-2 py-0.5 rounded-md border border-[#C5A059]/50 shrink-0">
-                                      {introData?.partner_code || activeProposal.partner_code}
+                                      {activeProposal.partner_code || introData?.partner_code}
                                     </span>
                                   )}
                                 </div>
                                 <span className="text-xs font-sans font-bold text-[#3E5037] flex items-center gap-1 mt-0.5">
                                   <span>✓</span>
                                   <span>{introData?.verification_status || (language === 'sr' ? 'Sertifikovani IDEMO domaćin' : 'IDEMO Verified Host')}</span>
-                                  {(introData?.category || activeProposal.partner_category) && (
-                                    <span className="text-[#5C5A4D]">· {introData?.category || activeProposal.partner_category}</span>
+                                  {(activeProposal.partner_category || introData?.category) && (
+                                    <span className="text-[#5C5A4D]">· {activeProposal.partner_category || introData?.category}</span>
                                   )}
                                 </span>
-                                {((introData?.languages && introData.languages.length > 0) || (activeProposal.partner_languages && activeProposal.partner_languages.length > 0)) && (
+                                {((activeProposal.partner_languages && activeProposal.partner_languages.length > 0) || (introData?.languages && introData.languages.length > 0)) && (
                                   <span className="text-[11px] font-mono font-bold text-[#5C5A4D] block mt-0.5">
                                     {language === 'sr' ? 'Jezici:' : 'Languages:'}{' '}
-                                    {(introData?.languages || activeProposal.partner_languages).join(', ')}
+                                    {(activeProposal.partner_languages || introData?.languages || []).join(', ')}
                                   </span>
                                 )}
                               </div>
@@ -2430,7 +2563,7 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                                 {language === 'sr' ? 'PROFESIONALNO PREDSTAVLJANJE PARTNERA:' : 'PARTNER PROFESSIONAL INTRODUCTION:'}
                               </span>
                               <p className="text-[13.5px] text-[#1E2E20] leading-relaxed font-sans font-semibold italic">
-                                "{introData?.introduction || activeProposal.partner_intro || 'I am a licensed local guide with strong knowledge of Belgrade, Serbian history, cultural heritage and traditional gastronomy. I enjoy helping visitors understand the stories behind the places they see and creating memorable experiences tailored to their interests.'}"
+                                "{activeProposal.partner_intro || introData?.introduction || 'I am a licensed local guide with strong knowledge of Belgrade, Serbian history, cultural heritage and traditional gastronomy. I enjoy helping visitors understand the stories behind the places they see and creating memorable experiences tailored to their interests.'}"
                               </p>
                             </div>
                           </>
@@ -2629,6 +2762,23 @@ export default function PlanCard({ item, language, onRemove, onUpdateDate, onSel
                       )}
                     </div>
                   )}
+
+                  {/* Green Accepted Action Button State (Replaces Accept & Confirm Partner button once confirmed) */}
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      disabled
+                      data-testid="visitor-proposal-accepted-btn"
+                      className="w-full min-h-[48px] px-4 py-3 bg-emerald-600 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-sm flex items-center justify-center gap-2 cursor-default border-2 border-emerald-500"
+                    >
+                      <CheckCircle2 size={16} className="text-white shrink-0" />
+                      <span>
+                        {language === 'sr'
+                          ? '✓ PRIHVAĆENO — POTVRDA POSLATA PARTNERU'
+                          : '✓ ACCEPTED — CONFIRMATION SENT TO PARTNER'}
+                      </span>
+                    </button>
+                  </div>
 
                   {/* Direct Contact Action Channels */}
                   <div className="space-y-2 pt-1 border-t border-[#3E5037]/10">

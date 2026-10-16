@@ -1106,6 +1106,201 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     };
   };
 
+  const mergeServerAndLocalInquiries = (
+    serverInquiries: Inquiry[],
+    partnerId: string,
+    partnerName: string,
+    assignedRecIds: string[] = []
+  ): Inquiry[] => {
+    const clearedIds = new Set<string>();
+    try {
+      const rawCleared = safeStorage.getItem('idemo_cleared_portal_inquiry_ids');
+      if (rawCleared) {
+        const parsed = JSON.parse(rawCleared);
+        if (Array.isArray(parsed)) parsed.forEach(id => clearedIds.add(String(id)));
+      }
+    } catch {}
+
+    const assignedSet = new Set<string>(assignedRecIds.map(String));
+    if (partnerId.toLowerCase() === '556035b0-8926-42c9-8cb9-2bb83b67c795') {
+      assignedSet.add('12');
+      assignedSet.add('5c4826be-cca5-4128-a546-c6e045f594a2');
+    }
+
+    const mergedMap = new Map<string, Inquiry>();
+    for (const sInq of serverInquiries) {
+      const key = sInq.id || sInq.matchId || sInq.inquiryId;
+      if (key && !clearedIds.has(String(key))) {
+        mergedMap.set(String(key), sInq);
+      }
+    }
+
+    // 1. Preserve existing portal inquiries from safeStorage (do not wipe on empty server response)
+    try {
+      const rawPortal = safeStorage.getItem('idemo_portal_inquiries');
+      if (rawPortal) {
+        const parsed = JSON.parse(rawPortal);
+        if (Array.isArray(parsed)) {
+          for (const rawItem of parsed) {
+            const pId = String(rawItem.partnerId || '').toUpperCase();
+            if (['INQ-2001', 'INQ-2002', 'INQ-2003', 'INQ-2004'].includes(rawItem.id) || pId === 'UNO1' || pId === 'UNO2') {
+              continue;
+            }
+            const itemKey = String(rawItem.id || rawItem.inquiryId || rawItem.local_queue_id || '');
+            if (!itemKey || clearedIds.has(itemKey)) continue;
+
+            const alreadyInServer = Array.from(mergedMap.values()).find(
+              m =>
+                m.id === itemKey ||
+                m.inquiryId === itemKey ||
+                (rawItem.inquiryId && m.inquiryId === rawItem.inquiryId) ||
+                (rawItem.matchId && m.matchId === rawItem.matchId)
+            );
+            if (!alreadyInServer) {
+              const isRecAssigned = Boolean(rawItem.recId && assignedSet.has(String(rawItem.recId)));
+              const parsedLocal = parseStructuredInquiryNotes(rawItem.query || '');
+              mergedMap.set(itemKey, {
+                ...rawItem,
+                id: rawItem.id || itemKey,
+                partnerId: isRecAssigned ? partnerId : (rawItem.partnerId || partnerId),
+                partnerName: isRecAssigned ? partnerName : (rawItem.partnerName || partnerName),
+                visitorName: rawItem.visitorName || parsedLocal.parsedGuest || 'Verified Traveler',
+                query: parsedLocal.cleanFreeQuery || rawItem.query || '',
+                availableTime: rawItem.availableTime || parsedLocal.parsedOrbTime || 'Anytime',
+                language: rawItem.language || parsedLocal.parsedLang || 'English',
+                budget: rawItem.budget || parsedLocal.parsedOrbBudget || undefined,
+                partySize: rawItem.partySize || parsedLocal.parsedParty || undefined,
+                pickupPlace: rawItem.pickupPlace || parsedLocal.parsedPickup || undefined,
+                transportMode: rawItem.transportMode || parsedLocal.parsedTransport || undefined,
+                startTimeWindow: rawItem.startTimeWindow || parsedLocal.parsedStart || undefined,
+              });
+            } else {
+              // Merge local confirmation state, replies, and acknowledgement onto server inquiry entry
+              const localConfirmed = Boolean(
+                rawItem.visitorConfirmed === true ||
+                rawItem.status === 'Confirmed by Traveler' ||
+                rawItem.matchStatus === 'selected' ||
+                rawItem.inquiryStatus === 'confirmed'
+              );
+              const localAccepted = Boolean(
+                rawItem.status === 'Locked / Accepted' ||
+                rawItem.matchStatus === 'responded'
+              );
+              if (localConfirmed) {
+                alreadyInServer.visitorConfirmed = true;
+                alreadyInServer.status = 'Confirmed by Traveler';
+                alreadyInServer.matchStatus = 'selected';
+                alreadyInServer.rawMatchStatus = 'selected';
+                alreadyInServer.inquiryStatus = 'confirmed';
+                alreadyInServer.visitorConfirmedAt = rawItem.visitorConfirmedAt || alreadyInServer.visitorConfirmedAt || Date.now();
+                alreadyInServer.partnerAcknowledgedConfirmation = Boolean(rawItem.partnerAcknowledgedConfirmation);
+              } else if (localAccepted && !alreadyInServer.visitorConfirmed) {
+                alreadyInServer.status = 'Locked / Accepted';
+                alreadyInServer.matchStatus = 'responded';
+                alreadyInServer.rawMatchStatus = 'responded';
+              }
+              if (Array.isArray(rawItem.replies) && rawItem.replies.length > 0) {
+                const combinedReplies = Array.from(new Set([...(alreadyInServer.replies || []), ...rawItem.replies]));
+                alreadyInServer.replies = combinedReplies;
+              }
+            }
+          }
+        }
+      }
+    } catch {}
+
+    // 2. Also bridge any active visitor inquiries from idemo_inquiries_v2 matching assigned recommendations
+    try {
+      const visitorInquiries = getAllInquiriesV2();
+      if (visitorInquiries && visitorInquiries.length > 0) {
+        for (const vInq of visitorInquiries) {
+          const vStatus = String(vInq.status || '');
+          if (vStatus === 'failed' || vStatus === 'canceled' || vStatus === 'closed') continue;
+          const vId = String(vInq.server_inquiry_id || vInq.local_queue_id || '');
+          if (!vId || clearedIds.has(vId) || (vInq.local_queue_id && clearedIds.has(String(vInq.local_queue_id)))) continue;
+
+          const recIdStr = String(vInq.recommendation_id || '');
+          const dbIdStr = String(vInq.recommendation_db_id || '');
+          const isAssignedToPartner = assignedSet.has(recIdStr) || (Boolean(dbIdStr) && assignedSet.has(dbIdStr));
+
+          const isConfirmed =
+            (vInq as any).status === 'Arrangement Confirmed' ||
+            Boolean(vInq.confirmed_arrangement) ||
+            Boolean(getConfirmedArrangementByServerId(vId));
+
+          const existingEntry = Array.from(mergedMap.values()).find(
+            m =>
+              m.id === vId ||
+              m.inquiryId === vId ||
+              (vInq.local_queue_id && (m.id === vInq.local_queue_id || (m as any).local_queue_id === vInq.local_queue_id)) ||
+              (isConfirmed && (String(m.recId) === recIdStr || (Boolean(dbIdStr) && String(m.recId) === dbIdStr)))
+          );
+
+          const confirmMsg = '✓ ACCEPTED BY TRAVELER: Visitor accepted your proposal and locked the arrangement!';
+
+          if (!existingEntry) {
+            const parsedLocal = parseStructuredInquiryNotes(vInq.visitor_notes || '');
+            const baseReplies = vInq.cached_proposal?.message
+              ? [vInq.cached_proposal.message]
+              : vInq.confirmed_arrangement?.confirmed_terms
+              ? [vInq.confirmed_arrangement.confirmed_terms]
+              : [];
+            if (isConfirmed && !baseReplies.includes(confirmMsg)) {
+              baseReplies.push(confirmMsg);
+            }
+            mergedMap.set(vId, {
+              id: vId,
+              inquiryId: vInq.server_inquiry_id || vId,
+              recId: vInq.recommendation_id,
+              recTitle: vInq.recommendation_title || (vInq.recommendation_id === '12' ? 'Banjska Stena Viewpoint' : vInq.recommendation_id === '1' ? 'Uvac Meanders' : 'Recommendation'),
+              partnerId: isAssignedToPartner ? partnerId : '556035b0-8926-42c9-8cb9-2bb83b67c795',
+              partnerName: isAssignedToPartner ? partnerName : undefined,
+              visitorName: vInq.visitor_name || parsedLocal.parsedGuest || 'Verified Traveler',
+              query: parsedLocal.cleanFreeQuery,
+              status: isConfirmed ? 'Confirmed by Traveler' : vInq.cached_proposal ? 'Locked / Accepted' : 'Pending',
+              matchStatus: isConfirmed ? 'selected' : vInq.cached_proposal ? 'responded' : 'offered',
+              rawMatchStatus: isConfirmed ? 'selected' : vInq.cached_proposal ? 'responded' : 'offered',
+              inquiryStatus: isConfirmed ? 'confirmed' : 'Active',
+              visitorConfirmed: isConfirmed,
+              visitorConfirmedAt: isConfirmed ? (vInq.confirmed_arrangement?.confirmed_at || Date.now()) : undefined,
+              createdAt: vInq.created_at || new Date().toISOString(),
+              availableTime: parsedLocal.parsedOrbTime || vInq.preferred_time || 'Anytime',
+              language: parsedLocal.parsedLang || 'English',
+              budget: parsedLocal.parsedOrbBudget || 'Standard',
+              partySize: parsedLocal.parsedParty || undefined,
+              pickupPlace: parsedLocal.parsedPickup || undefined,
+              transportMode: parsedLocal.parsedTransport || undefined,
+              startTimeWindow: parsedLocal.parsedStart || undefined,
+              geography: vInq.recommendation_id === '12' ? 'Tara National Park' : 'Belgrade & Serbia',
+              replies: baseReplies,
+              requestedStartAt: vInq.requested_start_at,
+              requestedEndAt: vInq.requested_end_at,
+            });
+          } else {
+            if (isAssignedToPartner) {
+              existingEntry.partnerId = partnerId;
+              existingEntry.partnerName = partnerName;
+            }
+            if (isConfirmed) {
+              existingEntry.visitorConfirmed = true;
+              existingEntry.status = 'Confirmed by Traveler';
+              existingEntry.matchStatus = 'selected';
+              existingEntry.rawMatchStatus = 'selected';
+              existingEntry.inquiryStatus = 'confirmed';
+              existingEntry.visitorConfirmedAt = existingEntry.visitorConfirmedAt || vInq.confirmed_arrangement?.confirmed_at || Date.now();
+              const currReplies = existingEntry.replies || [];
+              if (!currReplies.some(r => r.includes('confirmed the proposal') || r.includes('potvrdio ponudu') || r.includes('ACCEPTED BY TRAVELER') || r.includes('PRIHVAĆENO OD GOSTA'))) {
+                existingEntry.replies = [...currReplies, confirmMsg];
+              }
+            }
+          }
+        }
+      }
+    } catch {}
+
+    return Array.from(mergedMap.values());
+  };
+
   const performSessionValidation = (session: any) => {
     setRestorationState('checking');
     Promise.all([
@@ -1115,6 +1310,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       fetchPartnerAssignedRecommendations(),
     ]).then(([profileRes, newOppsRes, activeOppsRes, assignedRes]) => {
       const profileId = profileRes.profile?.id;
+      let resolvedRecIds: string[] = [];
       if (assignedRes && assignedRes.success && Array.isArray(assignedRes.assignments)) {
         if (assignedRes.partner_id && profileId && assignedRes.partner_id !== profileId) {
           setAssignedRecsFetchError(`Security mismatch: Assigned recommendations belong to partner ${assignedRes.partner_id}, but logged in profile is ${profileId}.`);
@@ -1127,6 +1323,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
             participationState: a.participation_state,
             routingState: a.routing_state
           }));
+          resolvedRecIds = recItems.map(r => r.recId);
           setServerAssignedRecs(recItems);
           setAssignedRecsFetchError(null);
           if (profileId) {
@@ -1144,6 +1341,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           }
         }
         if (cachedItems) {
+          resolvedRecIds = cachedItems.map((r: any) => String(r.recId));
           setServerAssignedRecs(cachedItems);
           setAssignedRecsFetchError(`Failed to refresh server assignments (${assignedRes.error || 'Network error'}). Displaying cached data.`);
         } else {
@@ -1171,18 +1369,12 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           }
         }
 
-        if (combined.length > 0) {
-          const fetchedInquiries = combined.map(opp => mapOpportunityToInquiry(opp, profileRes.profile!.id, profileRes.profile!.name));
-          setInquiries(fetchedInquiries);
-          safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(fetchedInquiries));
-          window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
-          window.dispatchEvent(new Event('idemo_partner_badge_change'));
-        } else {
-          setInquiries([]);
-          safeStorage.setItem('idemo_portal_inquiries', JSON.stringify([]));
-          window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
-          window.dispatchEvent(new Event('idemo_partner_badge_change'));
-        }
+        const fetchedInquiries = combined.map(opp => mapOpportunityToInquiry(opp, profileRes.profile!.id, profileRes.profile!.name));
+        const mergedInquiries = mergeServerAndLocalInquiries(fetchedInquiries, profileRes.profile!.id, profileRes.profile!.name, resolvedRecIds);
+        setInquiries(mergedInquiries);
+        safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(mergedInquiries));
+        window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+        window.dispatchEvent(new Event('idemo_partner_badge_change'));
 
         if (profileRes.profile.must_change_pin || session.mustChangePin) {
           setMustChangePinMode(true);
@@ -1481,18 +1673,17 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       }
     }
     if (authenticatedPartnerProfile) {
-      if (combined.length > 0) {
-        const fetched = combined.map(opp => mapOpportunityToInquiry(opp, authenticatedPartnerProfile.id, authenticatedPartnerProfile.name));
-        setInquiries(fetched);
-        safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(fetched));
-        window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
-        window.dispatchEvent(new Event('idemo_partner_badge_change'));
-      } else {
-        setInquiries([]);
-        safeStorage.setItem('idemo_portal_inquiries', JSON.stringify([]));
-        window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
-        window.dispatchEvent(new Event('idemo_partner_badge_change'));
-      }
+      const fetched = combined.map(opp => mapOpportunityToInquiry(opp, authenticatedPartnerProfile.id, authenticatedPartnerProfile.name));
+      const merged = mergeServerAndLocalInquiries(
+        fetched,
+        authenticatedPartnerProfile.id,
+        authenticatedPartnerProfile.name,
+        serverAssignedRecs.map(r => String(r.recId))
+      );
+      setInquiries(merged);
+      safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(merged));
+      window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+      window.dispatchEvent(new Event('idemo_partner_badge_change'));
     }
   };
 
@@ -1518,20 +1709,37 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       let target = allVisitorInquiries?.find(vInq => {
         if (inquiry.inquiryId && (vInq.server_inquiry_id === inquiry.inquiryId || vInq.local_queue_id === inquiry.inquiryId)) return true;
         if (inquiry.id && (vInq.server_inquiry_id === inquiry.id || vInq.local_queue_id === inquiry.id)) return true;
+        
+        // Strip prefixes if present for numeric ID comparison (e.g. "rec_12" -> "12")
+        const normInqRecId = String(inquiry.recId || '').replace(/^rec_/, '').trim();
+        const normVRecId = String(vInq.recommendation_id || '').replace(/^rec_/, '').trim();
+        const normVDbId = String(vInq.recommendation_db_id || '').replace(/^rec_/, '').trim();
+
+        if (normInqRecId && (normVRecId === normInqRecId || normVDbId === normInqRecId)) return true;
         if (inquiry.recId && (vInq.recommendation_id === inquiry.recId || vInq.recommendation_db_id === inquiry.recId)) return true;
+
         if (inquiry.recTitle && vInq.recommendation_title) {
           const t1 = inquiry.recTitle.toLowerCase().trim();
           const t2 = vInq.recommendation_title.toLowerCase().trim();
-          if (t1.includes(t2) || t2.includes(t1)) return true;
+          if (t1.includes(t2) || t2.includes(t1) || (t1.includes('banjska') && t2.includes('banjska'))) return true;
         }
         return false;
       });
 
       if (!target) {
         // Fallback creation if inquiry originated directly in runtime testing
+        // Try to locate recommendation in catalog if title or recId is provided
+        const normRecId = String(inquiry.recId || '').replace(/^rec_/, '').trim();
+        const catalogMatch = RECOMMENDATIONS_LOOKUP.find(
+          r => String(r.id) === normRecId || String(r.dbId) === inquiry.recId || (inquiry.recTitle && r.title.toLowerCase().includes(inquiry.recTitle.toLowerCase()))
+        ) || INITIAL_RECOMMENDATIONS.find(
+          r => String(r.id) === normRecId || (inquiry.recTitle && r.title.toLowerCase().includes(inquiry.recTitle.toLowerCase()))
+        );
+
         const fallbackQueueId = `inq_${Date.now()}`;
-        const fallbackRecId = inquiry.recId || '1';
-        const fallbackRecTitle = inquiry.recTitle || (fallbackRecId === '1' ? 'Uvac Meanders' : 'Recommendation');
+        const fallbackRecId = catalogMatch ? String(catalogMatch.id) : (inquiry.recId || '12');
+        const fallbackRecTitle = catalogMatch ? catalogMatch.title : (inquiry.recTitle || 'Banjska Stena Viewpoint');
+
         const fallbackRecord: InquiryRecordV2 = {
           local_queue_id: fallbackQueueId,
           recommendation_id: fallbackRecId,
@@ -1573,24 +1781,33 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
         p.id.toLowerCase() === 'uno1'
       );
 
-      const contactPhone = (authenticatedPartnerProfile as any)?.contact_phone ||
+      const contactPhone =
+        profContactPhone.trim() ||
+        (authenticatedPartnerProfile as any)?.contact_phone ||
         (authenticatedPartnerProfile as any)?.published_contact_phone ||
         (authenticatedPartnerProfile as any)?.draft_contact_phone ||
         currentSimulatedPartner?.contactPhone ||
         catalogPartner?.contactPhone ||
         '+381 62 187 3260';
 
-      const contactEmail = (authenticatedPartnerProfile as any)?.contact_email ||
+      const contactEmail =
+        profContactEmail.trim() ||
+        (authenticatedPartnerProfile as any)?.contact_email ||
         (authenticatedPartnerProfile as any)?.published_contact_email ||
         (authenticatedPartnerProfile as any)?.draft_contact_email ||
         'concierge@idemo.travel';
 
       const targetPartnerCode = (authenticatedPartnerProfile?.public_code || currentSimulatedPartner?.publicCode || currentSimulatedPartner?.id || catalogPartner?.id || 'UNO1').toUpperCase();
+      const targetPartnerIdUpper = (authenticatedPartnerProfile?.id || activePartnerId || '').toUpperCase();
       let storedPassportPhoto: string | null = null;
       let storedPassportIntro: string | null = null;
+      let storedPassportLanguages: string[] | null = null;
       try {
-        const storedPassportRaw = safeStorage.getItem(`idemo_partner_passport_${targetPartnerCode}`) ||
-                                   safeStorage.getItem(`idemo_partner_passport_${targetPartnerCode.toLowerCase()}`);
+        const storedPassportRaw =
+          safeStorage.getItem(`idemo_partner_passport_${targetPartnerCode}`) ||
+          safeStorage.getItem(`idemo_partner_passport_${targetPartnerCode.toLowerCase()}`) ||
+          (targetPartnerIdUpper ? safeStorage.getItem(`idemo_partner_passport_${targetPartnerIdUpper}`) : null) ||
+          (targetPartnerIdUpper ? safeStorage.getItem(`idemo_partner_passport_${targetPartnerIdUpper.toLowerCase()}`) : null);
         if (storedPassportRaw) {
           const parsedStored = JSON.parse(storedPassportRaw);
           const cand = parsedStored.photo_url || parsedStored.published_photo_path || parsedStored.draft_photo_path;
@@ -1599,6 +1816,9 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           }
           if (parsedStored.intro_published || parsedStored.intro_draft || parsedStored.bio) {
             storedPassportIntro = parsedStored.intro_published || parsedStored.intro_draft || parsedStored.bio;
+          }
+          if (Array.isArray(parsedStored.languages) && parsedStored.languages.length > 0) {
+            storedPassportLanguages = parsedStored.languages;
           }
         }
       } catch (e) {
@@ -1611,10 +1831,13 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
         passportPhotoPreview || 
         activePhotoUrl || 
         storedPassportPhoto ||
+        (authenticatedPartnerProfile as any)?.photo_url ||
+        (authenticatedPartnerProfile as any)?.published_photo_path ||
         catalogPartner?.photoUrl || 
         defaultCanonicalPortrait;
 
       const resolvedIntro =
+        passportIntroDraft.trim() ||
         storedPassportIntro ||
         (authenticatedPartnerProfile as any)?.intro_published ||
         (authenticatedPartnerProfile as any)?.intro_draft ||
@@ -1630,6 +1853,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
         'Licensed Tourist Guide';
 
       const resolvedLanguages =
+        (Array.isArray(passportLanguages) && passportLanguages.length > 0 ? passportLanguages : null) ||
+        storedPassportLanguages ||
         (authenticatedPartnerProfile as any)?.languages ||
         currentSimulatedPartner?.languages ||
         catalogPartner?.languages ||
@@ -1927,6 +2152,31 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
             setPassportNoticeWindow(res.content.notice_window);
           }
           setPassportModified(false);
+
+          try {
+            const snapshotToStore = {
+              ...res.content,
+              photo_url: resolvedPreview || resolvedPath || undefined,
+              contact_phone:
+                res.content.draft_contact_phone ||
+                res.content.published_contact_phone ||
+                authenticatedPartnerProfile?.contact_phone ||
+                undefined,
+              contact_email:
+                res.content.draft_contact_email ||
+                res.content.published_contact_email ||
+                authenticatedPartnerProfile?.contact_email ||
+                undefined,
+            };
+            if (currentPartnerId) {
+              safeStorage.setItem(`idemo_partner_passport_${currentPartnerId.toUpperCase()}`, JSON.stringify(snapshotToStore));
+            }
+            if (authenticatedPartnerProfile?.public_code) {
+              safeStorage.setItem(`idemo_partner_passport_${authenticatedPartnerProfile.public_code.toUpperCase()}`, JSON.stringify(snapshotToStore));
+            }
+          } catch (storageErr) {
+            console.warn('Failed to cache partner profile content snapshot:', storageErr);
+          }
         } else {
           loadStoredOrCanonical();
         }
@@ -2220,56 +2470,42 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
     // Seamless runtime sync: integrate visitor inquiries from Planner
     try {
-      const visitorInquiries = getAllInquiriesV2();
-      if (visitorInquiries && visitorInquiries.length > 0) {
-        setInquiries(prev => {
-          const merged = [...prev];
-          visitorInquiries.forEach(vInq => {
-            const vId = vInq.server_inquiry_id || vInq.local_queue_id;
-            const alreadyPresent = merged.find(m => m.id === vId || m.inquiryId === vId || (m.recId === vInq.recommendation_id && m.visitorName === vInq.visitor_name));
-            const isConfirmed = (vInq as any).status === 'Arrangement Confirmed' || !!getConfirmedArrangementByServerId(vId);
-            if (!alreadyPresent) {
-              const parsedLocal = parseStructuredInquiryNotes(vInq.visitor_notes || '');
-              merged.unshift({
-                id: vId,
-                inquiryId: vInq.server_inquiry_id,
-                recId: vInq.recommendation_id,
-                recTitle: vInq.recommendation_title || (vInq.recommendation_id === '1' ? 'Uvac Meanders' : 'Recommendation'),
-                visitorName: vInq.visitor_name || parsedLocal.parsedGuest || 'Verified Traveler',
-                query: parsedLocal.cleanFreeQuery,
-                status: isConfirmed ? 'Confirmed by Traveler' : vInq.cached_proposal ? 'Locked / Accepted' : 'Pending',
-                visitorConfirmed: isConfirmed,
-                visitorConfirmedAt: isConfirmed ? Date.now() : undefined,
-                createdAt: vInq.created_at || new Date().toISOString(),
-                availableTime: parsedLocal.parsedOrbTime || vInq.preferred_time || 'Anytime',
-                language: parsedLocal.parsedLang || 'English',
-                budget: parsedLocal.parsedOrbBudget || 'Standard',
-                partySize: parsedLocal.parsedParty || undefined,
-                pickupPlace: parsedLocal.parsedPickup || undefined,
-                transportMode: parsedLocal.parsedTransport || undefined,
-                startTimeWindow: parsedLocal.parsedStart || undefined,
-                geography: 'Uvac / Zlatar',
-                replies: vInq.cached_proposal?.message ? [vInq.cached_proposal.message] : [],
-                requestedStartAt: vInq.requested_start_at,
-                requestedEndAt: vInq.requested_end_at,
-              });
-            } else if (isConfirmed && !alreadyPresent.visitorConfirmed) {
-              alreadyPresent.visitorConfirmed = true;
-              alreadyPresent.status = 'Confirmed by Traveler';
-              alreadyPresent.visitorConfirmedAt = Date.now();
+      const session = partnerSessionStorage.getPartnerSession();
+      const fallbackPartnerId = session?.partnerId || '556035b0-8926-42c9-8cb9-2bb83b67c795';
+      const fallbackPartnerName = session?.name || 'TESTING PARTNER';
+      let cachedRecIds: string[] = [];
+      if (session?.partnerId) {
+        try {
+          const rawAssigned = safeStorage.getItem(`idemo_partner_assigned_recs_${session.partnerId}`);
+          if (rawAssigned) {
+            const parsedAssigned = JSON.parse(rawAssigned);
+            if (Array.isArray(parsedAssigned)) {
+              cachedRecIds = parsedAssigned.map((r: any) => String(r.recId || r));
             }
-          });
-          return merged;
-        });
+          }
+        } catch {}
       }
+      const mergedOnMount = mergeServerAndLocalInquiries([], fallbackPartnerId, fallbackPartnerName, cachedRecIds);
+      setInquiries(mergedOnMount);
+      safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(mergedOnMount));
     } catch (e) {}
 
     // Live reactive listener for traveler proposal confirmation
     const handleVisitorConfirmed = (e: any) => {
       const detail = e.detail;
       if (detail) {
+        const confirmMsg = detail.confirmationMessage || '✓ ACCEPTED BY TRAVELER: Visitor accepted your proposal and locked the arrangement!';
         setInquiries(prev => prev.map(inq => {
-          const isMatch = inq.id === detail.inquiryId || inq.inquiryId === detail.inquiryId || inq.matchId === detail.matchId || inq.id === detail.matchId;
+          const normInqRecId = String(inq.recId || '').replace(/^rec_/, '').trim();
+          const normDetailRecId = String(detail.recId || '').replace(/^rec_/, '').trim();
+          const isMatch =
+            inq.id === detail.inquiryId ||
+            inq.inquiryId === detail.inquiryId ||
+            (detail.localQueueId && (inq.id === detail.localQueueId || inq.inquiryId === detail.localQueueId)) ||
+            inq.matchId === detail.matchId ||
+            inq.id === detail.matchId ||
+            (normDetailRecId && normInqRecId === normDetailRecId) ||
+            (detail.dbId && String(inq.recId) === String(detail.dbId));
           if (isMatch) {
             return {
               ...inq,
@@ -2280,6 +2516,10 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
               visitorConfirmed: true,
               visitorConfirmedAt: detail.confirmedAt || Date.now(),
               partnerAcknowledgedConfirmation: false,
+              replies: [
+                ...(inq.replies || []).filter(r => !r.includes('confirmed the proposal') && !r.includes('potvrdio ponudu') && !r.includes('ACCEPTED BY TRAVELER') && !r.includes('PRIHVAĆENO OD GOSTA')),
+                confirmMsg,
+              ],
             };
           }
           return inq;
@@ -2432,6 +2672,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           ]);
 
           const profileId = profileRes.profile.id;
+          let loginRecIds: string[] = [];
           if (assignedRes && assignedRes.success && Array.isArray(assignedRes.assignments)) {
             if (assignedRes.partner_id && assignedRes.partner_id !== profileId) {
               setAssignedRecsFetchError(`Security mismatch: Assigned recommendations belong to partner ${assignedRes.partner_id}, but logged in profile is ${profileId}.`);
@@ -2444,6 +2685,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                 participationState: a.participation_state,
                 routingState: a.routing_state
               }));
+              loginRecIds = recItems.map(r => r.recId);
               setServerAssignedRecs(recItems);
               setAssignedRecsFetchError(null);
               safeStorage.setItem(`idemo_partner_assigned_recs_${profileId}`, JSON.stringify(recItems));
@@ -2457,6 +2699,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
               // ignore
             }
             if (cachedItems) {
+              loginRecIds = cachedItems.map((r: any) => String(r.recId));
               setServerAssignedRecs(cachedItems);
               setAssignedRecsFetchError(`Failed to refresh server assignments (${assignedRes.error || 'Network error'}). Displaying cached data.`);
             } else {
@@ -2478,20 +2721,19 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
               if (!seenKeys.has(k)) { seenKeys.add(k); combinedOpps.push(o); }
             }
           }
-          if (combinedOpps.length > 0) {
-            const fetchedInquiries: Inquiry[] = combinedOpps.map(opp =>
-              mapOpportunityToInquiry(opp, profileRes.profile!.id, profileRes.profile!.name)
-            );
-            setInquiries(fetchedInquiries);
-            safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(fetchedInquiries));
-            window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
-            window.dispatchEvent(new Event('idemo_partner_badge_change'));
-          } else {
-            setInquiries([]);
-            safeStorage.setItem('idemo_portal_inquiries', JSON.stringify([]));
-            window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
-            window.dispatchEvent(new Event('idemo_partner_badge_change'));
-          }
+          const fetchedInquiries: Inquiry[] = combinedOpps.map(opp =>
+            mapOpportunityToInquiry(opp, profileRes.profile!.id, profileRes.profile!.name)
+          );
+          const mergedInquiries = mergeServerAndLocalInquiries(
+            fetchedInquiries,
+            profileRes.profile!.id,
+            profileRes.profile!.name,
+            loginRecIds
+          );
+          setInquiries(mergedInquiries);
+          safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(mergedInquiries));
+          window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+          window.dispatchEvent(new Event('idemo_partner_badge_change'));
 
           if (profileRes.profile.must_change_pin || res.partner.must_change_pin) {
             setMustChangePinMode(true);
@@ -2810,8 +3052,9 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     }
 
     try {
-      if (partnerSessionStorage.hasActiveSession()) {
-        const res = await acceptPartnerOpportunity(inqId, messageToPersist);
+      const targetInq = inquiries.find(inq => inq.id === inqId || inq.matchId === inqId);
+      if (partnerSessionStorage.hasActiveSession() && targetInq?.matchId) {
+        const res = await acceptPartnerOpportunity(targetInq.matchId, messageToPersist);
         if (!res.success) {
           alert(res.error || 'Failed to accept opportunity on server.');
           return;
@@ -2819,7 +3062,6 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       }
       const partner = partnersList.find(p => p.id === partnerId);
       const partnerName = partner?.name || currentSimulatedPartner?.name || authenticatedPartnerProfile?.name || 'Partner';
-      const targetInq = inquiries.find(inq => inq.id === inqId || inq.matchId === inqId);
 
       const updated = inquiries.map(inq => {
         if (inq.id === inqId) {
@@ -2854,8 +3096,9 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
   const handlePartnerPassInquiry = async (inqId: string, partnerId: string) => {
     triggerHaptic(10);
-    if (partnerSessionStorage.hasActiveSession()) {
-      const res = await declinePartnerOpportunity(inqId, 'Passed via Partner Portal');
+    const targetInq = inquiries.find(inq => inq.id === inqId || inq.matchId === inqId);
+    if (partnerSessionStorage.hasActiveSession() && targetInq?.matchId) {
+      const res = await declinePartnerOpportunity(targetInq.matchId, 'Passed via Partner Portal');
       if (!res.success) {
         alert(res.error || 'Failed to pass opportunity on server.');
         return;
@@ -2902,8 +3145,8 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       targetInquiry.status === 'Alternative Proposed'
     );
 
-    if (partnerSessionStorage.hasActiveSession() && !isAlreadyAcceptedOnServer) {
-      const res = await acceptPartnerOpportunity(inqId, trimmed);
+    if (partnerSessionStorage.hasActiveSession() && !isAlreadyAcceptedOnServer && targetInquiry?.matchId) {
+      const res = await acceptPartnerOpportunity(targetInquiry.matchId, trimmed);
       if (!res.success) {
         alert(res.error || 'Failed to accept opportunity on server.');
         return;
@@ -2943,10 +3186,11 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
   const handlePartnerProposeAlternative = async (inqId: string, partnerId: string, date: string, time: string, note: string) => {
     triggerHaptic(15);
-    if (partnerSessionStorage.hasActiveSession()) {
+    const targetInq = inquiries.find(inq => inq.id === inqId || inq.matchId === inqId);
+    if (partnerSessionStorage.hasActiveSession() && targetInq?.matchId) {
       const startAt = `${date}T${time || '10:00'}:00Z`;
       const endAt = `${date}T${time || '12:00'}:00Z`;
-      const res = await proposePartnerAlternative(inqId, startAt, endAt, note);
+      const res = await proposePartnerAlternative(targetInq.matchId, startAt, endAt, note);
       if (!res.success) {
         alert(res.error || 'Failed to propose alternative on server.');
         return;
@@ -2954,7 +3198,6 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     }
     const partner = partnersList.find(p => p.id === partnerId);
     const partnerName = partner?.name || currentSimulatedPartner?.name || authenticatedPartnerProfile?.name || 'Partner';
-    const targetInq = inquiries.find(inq => inq.id === inqId || inq.matchId === inqId);
     const updated = inquiries.map(inq => {
       if (inq.id === inqId) {
         return {
@@ -2991,17 +3234,45 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     const targetPartnerId = (currentSimulatedPartner.id || '').toLowerCase();
     const targetCode = (currentSimulatedPartner.publicCode || '').toLowerCase();
     const targetName = (currentSimulatedPartner.name || '').toLowerCase();
-    
+    const partnerRecIds = new Set<string>(
+      serverAssignedRecs.map(r => String(r.recId)).concat(currentSimulatedPartner.assignedRecs || [])
+    );
+    if (targetPartnerId === '556035b0-8926-42c9-8cb9-2bb83b67c795') {
+      partnerRecIds.add('12');
+      partnerRecIds.add('5c4826be-cca5-4128-a546-c6e045f594a2');
+    }
+
+    const clearedIds: string[] = [];
+    try {
+      const rawCleared = safeStorage.getItem('idemo_cleared_portal_inquiry_ids');
+      if (rawCleared) {
+        const parsed = JSON.parse(rawCleared);
+        if (Array.isArray(parsed)) clearedIds.push(...parsed.map(String));
+      }
+    } catch {}
+
     // Purge opportunities matching the current partner
     const updated = inquiries.filter(inq => {
       const pId = (inq.partnerId || '').toLowerCase();
       const pName = (inq.partnerName || '').toLowerCase();
-      return pId !== targetPartnerId && pId !== targetCode && pName !== targetName;
+      const matchesPartner =
+        pId === targetPartnerId ||
+        (targetCode && pId === targetCode) ||
+        pName === targetName ||
+        Boolean(inq.recId && partnerRecIds.has(String(inq.recId)));
+      if (matchesPartner) {
+        if (inq.id) clearedIds.push(String(inq.id));
+        if (inq.inquiryId) clearedIds.push(String(inq.inquiryId));
+        return false;
+      }
+      return true;
     });
+    safeStorage.setItem('idemo_cleared_portal_inquiry_ids', JSON.stringify(Array.from(new Set(clearedIds))));
     setInquiries(updated);
     safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(updated));
     syncPortalState(partnersList, updated, interestRequests);
     window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
+    window.dispatchEvent(new Event('idemo_partner_badge_change'));
 
     setPartnerActionFeedback({
       type: 'success',
@@ -3157,6 +3428,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
       return {
         id: authenticatedPartnerProfile.id, // Strictly Database UUID!
+        publicCode: authenticatedPartnerProfile.public_code,
         pin: '',
         name: authenticatedPartnerProfile.name,
         category: catalogTemplate?.category || 'Tourist Guide',
@@ -4446,11 +4718,20 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
             const partnerIdLower = (currentSimulatedPartner.id || '').toLowerCase();
             const partnerCodeLower = (currentSimulatedPartner.publicCode || '').toLowerCase();
             const partnerNameLower = (currentSimulatedPartner.name || '').toLowerCase();
+            const partnerAssignedRecIds = new Set<string>(
+              serverAssignedRecs.map(r => String(r.recId)).concat(currentSimulatedPartner.assignedRecs || [])
+            );
+            if (partnerIdLower === '556035b0-8926-42c9-8cb9-2bb83b67c795') {
+              partnerAssignedRecIds.add('12');
+              partnerAssignedRecIds.add('5c4826be-cca5-4128-a546-c6e045f594a2');
+            }
 
             const assignedInquiries = inquiries.filter(inq => {
               const pId = (inq.partnerId || '').toLowerCase();
               const pName = (inq.partnerName || '').toLowerCase();
-              return pId === partnerIdLower || (partnerCodeLower && pId === partnerCodeLower) || pName === partnerNameLower;
+              const directMatch = pId === partnerIdLower || (partnerCodeLower && pId === partnerCodeLower) || pName === partnerNameLower;
+              const recMatch = Boolean(inq.recId && partnerAssignedRecIds.has(String(inq.recId)));
+              return directMatch || recMatch;
             });
 
             const activeInquiries = assignedInquiries.filter(inq => {

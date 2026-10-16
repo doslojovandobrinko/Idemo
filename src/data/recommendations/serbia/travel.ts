@@ -259,7 +259,7 @@ export const travelRecommendations: Recommendation[] = [
     "category": "Travel, Wellbeing",
     "shortDescription": "A peaceful mountain-air retreat in western Serbia. Known for its restorative pine forests and understated wellness escapes.",
     "longDescription": "DivÄŤibare, a Plateau on Mount Maljen, has been an official \"Air Spa\" since 1932, recognized for its beneficial impact on the neurovegetative and respiratory systems. At 980 meters, it enjoys a unique microclimate where Mediterranean and continental air currents collide. Historically a retreat for the Belgrade intelligentsia, it maintains a quiet, understated atmosphere defined by pine forest \"Forest Bathing\" and gentle hiking trails like Crni Vrh. It is a sophisticated, low-density alternative for those seeking environmental restorative health without the noise of major ski resorts.",
-    "image": "/src/assets/images/divcibare_maljen_trail.webp",
+    "image": "/src/assets/images/divcibare_pine_forest_1778845837560.webp",
     "duration": "Weekend to 4 days",
     "travelTime": "2 hours",
     "travelTimeMinutes": 120,
