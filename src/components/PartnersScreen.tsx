@@ -45,6 +45,7 @@ import {
   declinePartnerCounterOffer,
   withdrawPartnerOpportunity,
   changePartnerPin,
+  provisionNewPartnerOnServer,
   OpportunityItem,
   getPartnerProfileContent,
   savePartnerProfileDraft,
@@ -1378,6 +1379,12 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
         if (profileRes.profile.must_change_pin || session.mustChangePin) {
           setMustChangePinMode(true);
+          if (
+            profileRes.profile.id === 'a0000000-0000-0000-0000-000000000099' ||
+            (profileRes.profile.public_code || '').toUpperCase() === 'IDEMO'
+          ) {
+            setChangePinCurrent(prev => prev || '1611');
+          }
           setPortalRole('guest');
           setRestorationState('guest');
         } else {
@@ -2664,6 +2671,12 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           setAuthenticatedPartnerProfile(profileRes.profile);
           setActivePartnerId(profileRes.profile.id);
 
+          if (profileRes.profile.must_change_pin || res.partner.must_change_pin) {
+            setMustChangePinMode(true);
+            setChangePinCurrent(pin);
+            return;
+          }
+
           // Step 3: Fetch both 'new' and 'active' assigned opportunities for authenticated partner (includes confirmed arrangements)
           const [newOppsRes, activeOppsRes, assignedRes] = await Promise.all([
             fetchPartnerOpportunities('new'),
@@ -2735,12 +2748,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
           window.dispatchEvent(new Event('idemo_partner_badge_change'));
 
-          if (profileRes.profile.must_change_pin || res.partner.must_change_pin) {
-            setMustChangePinMode(true);
-            setChangePinCurrent(pin);
-          } else {
-            setPortalRole('partner');
-          }
+          setPortalRole('partner');
         } else {
           // Step 4: Fail closed if /me fails
           triggerHaptic([60, 40]);
@@ -2766,7 +2774,18 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     setChangePinError('');
     setChangePinSuccess('');
 
-    if (changePartnerName.trim().length > 16) {
+    const isOnboardingTemplate =
+      activePartnerId === 'a0000000-0000-0000-0000-000000000099' ||
+      (authenticatedPartnerProfile?.public_code || '').toUpperCase() === 'IDEMO';
+
+    const cleanName = changePartnerName.trim().replace(/\s+/g, ' ');
+    if (isOnboardingTemplate && !cleanName) {
+      setChangePinError(isSr ? 'Molimo unesite naziv partnera.' : 'Please enter your partner name to create your login code.');
+      triggerHaptic(6);
+      return;
+    }
+
+    if (cleanName.length > 16) {
       setChangePinError(isSr ? 'Naziv partnera ne može biti duži od 16 karaktera.' : 'Partner name cannot exceed 16 characters.');
       triggerHaptic(6);
       return;
@@ -2784,17 +2803,24 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       return;
     }
 
-    const chosenPartnerName = changePartnerName.trim() || undefined;
+    const chosenPartnerName = cleanName || undefined;
     const res = await changePartnerPin(changePinCurrent, changePinNew, changePinConfirm, chosenPartnerName);
     if (res.success) {
+      const assignedCode = chosenPartnerName ? chosenPartnerName.toUpperCase() : '';
       // Update local portal partners registry with the freshly onboarded partner
       if (chosenPartnerName) {
         try {
           const savedPartners = safeStorage.getItem('idemo_portal_partners');
           const currentList: PortalPartner[] = savedPartners ? JSON.parse(savedPartners) : partnersList;
-          const assignedCode = chosenPartnerName.toUpperCase().replace(/\s+/g, '_');
-          const assignedId = activePartnerId || `partner-${Date.now()}`;
-          const existingIdx = currentList.findIndex(p => p.id === assignedId || p.name.toLowerCase() === chosenPartnerName.toLowerCase());
+          const assignedId =
+            activePartnerId && activePartnerId !== 'a0000000-0000-0000-0000-000000000099'
+              ? activePartnerId
+              : `partner-${Date.now()}`;
+          const existingIdx = currentList.findIndex(
+            p =>
+              (p.id === assignedId && assignedId !== 'a0000000-0000-0000-0000-000000000099') ||
+              p.name.toLowerCase() === chosenPartnerName.toLowerCase()
+          );
           
           if (existingIdx !== -1) {
             currentList[existingIdx].name = chosenPartnerName;
@@ -2812,7 +2838,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
               geography: 'Belgrade Metro & Serbia',
               channels: ['WhatsApp'],
               contactPhone: '',
-              instagram: `@${assignedCode.toLowerCase()}`,
+              instagram: `@${assignedCode.toLowerCase().replace(/\s+/g, '_')}`,
               assignedRecs: [],
               contributions: 0,
               reliability: 100,
@@ -2838,7 +2864,18 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
         }
       }
 
-      setChangePinSuccess(isSr ? 'Podaci uspešno promenjeni. Molimo prijavite se ponovo sa novim PIN-om.' : 'Credentials successfully updated. Please log in again with your new PIN.');
+      setChangePinSuccess(
+        assignedCode
+          ? (isSr
+              ? `Nalog kreiran! Prijavite se sa Kodom Partnera: ${assignedCode} i novim PIN-om.`
+              : `Partner created! Log in below with Partner Code: ${assignedCode} and your new PIN.`)
+          : (isSr
+              ? 'Podaci uspešno promenjeni. Molimo prijavite se ponovo sa novim PIN-om.'
+              : 'Credentials successfully updated. Please log in again with your new PIN.')
+      );
+      if (assignedCode) {
+        setPartnerCodeInput(assignedCode);
+      }
       setMustChangePinMode(false);
       setPortalRole('guest');
       setActivePartnerId(null);
@@ -2881,14 +2918,25 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   };
 
   // Admin Onboarding
-  const handleOnboardPartner = (e: React.FormEvent) => {
+  const handleOnboardPartner = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!onboardForm.name) return;
+    const cleanName = onboardForm.name.trim().replace(/\s+/g, ' ').slice(0, 16);
+    if (!cleanName) return;
     triggerHaptic(15);
+    const assignedPin =
+      onboardForm.pin && /^[0-9]{4}$/.test(onboardForm.pin.trim()) && onboardForm.pin.trim() !== '1611'
+        ? onboardForm.pin.trim()
+        : String(Math.floor(1000 + Math.random() * 8000));
+
+    const serverProvision = await provisionNewPartnerOnServer(cleanName, assignedPin);
+    const resolvedId = serverProvision.partnerId || `p-custom-${Date.now()}`;
+    const resolvedCode = (serverProvision.publicCode || cleanName).toUpperCase();
+
     const newPartner: PortalPartner = {
-      id: `p-custom-${Date.now()}`,
-      pin: onboardForm.pin || String(Math.floor(1000 + Math.random() * 8000)),
-      name: onboardForm.name,
+      id: resolvedId,
+      pin: assignedPin,
+      name: cleanName,
+      publicCode: resolvedCode,
       category: onboardForm.category as any,
       status: 'Validated',
       capabilities: onboardForm.capabilities.split(',').map(s => s.trim()).filter(Boolean),
@@ -2902,7 +2950,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
       reliability: 100,
       eligibility: false
     };
-    const updated = [...partnersList, newPartner];
+    const updated = [...partnersList.filter(p => p.name.toLowerCase() !== cleanName.toLowerCase()), newPartner];
     syncPortalState(updated, inquiries);
     setOnboardForm({ name: '', category: 'Tourist Guide', pin: '', capabilities: '', languages: '', geography: '', channels: 'WhatsApp', phone: '', instagram: '' });
   };
@@ -4061,6 +4109,12 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                         />
                       </div>
                       
+                      {changePinSuccess && (
+                        <div className="flex items-center gap-1.5 text-[10px] text-emerald-800 font-bold justify-center bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">
+                          <CheckCircle2 size={13} /> <span>{changePinSuccess}</span>
+                        </div>
+                      )}
+
                       {pinError && (
                         <div className="flex items-center gap-1.5 text-[9.5px] text-accent-red font-bold justify-center">
                           <AlertCircle size={11} /> <span>{pinError}</span>

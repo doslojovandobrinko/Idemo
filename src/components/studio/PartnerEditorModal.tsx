@@ -37,6 +37,7 @@ import {
   retirePartnerAction, 
   reactivatePartnerAction 
 } from '../../lib/partnerLifecycleService';
+import { provisionNewPartnerOnServer } from '../../lib/partnerService';
 
 export type PartnerLifecycleStage = 'Candidate' | 'Verification' | 'Approved' | 'Active' | 'Suspended' | 'Archived';
 
@@ -122,6 +123,7 @@ export function PartnerEditorModal({
   const [notificationFrequency, setNotificationFrequency] = useState<'Immediate' | 'Daily Digest'>('Immediate');
   const [expertiseInput, setExpertiseInput] = useState<string>('');
   const [linkedRecsInput, setLinkedRecsInput] = useState<string>('');
+  const [initialPinInput, setInitialPinInput] = useState<string>('1002');
   const [activeTab, setActiveTab] = useState<'info' | 'contact' | 'routing' | 'governance'>('info');
 
   useEffect(() => {
@@ -263,7 +265,7 @@ export function PartnerEditorModal({
     onSave(updated, st.stage);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.nameEn) {
       alert('Please provide a partner name.');
@@ -273,8 +275,17 @@ export function PartnerEditorModal({
     const updatedExpertise = expertiseInput.split('\n').map(s => s.trim()).filter(Boolean);
     const updatedLinkedRecs = linkedRecsInput.split('\n').map(s => s.trim()).filter(Boolean);
 
+    let resolvedId = form.id || `P-${Math.floor(100 + Math.random() * 900)}`;
+    if (!isEditing && initialPinInput && /^[0-9]{4}$/.test(initialPinInput.trim()) && initialPinInput.trim() !== '1611') {
+      const provRes = await provisionNewPartnerOnServer(form.nameEn.trim(), initialPinInput.trim());
+      if (provRes.success && provRes.partnerId) {
+        resolvedId = provRes.partnerId;
+      }
+    }
+
     const updatedPartner: Partner = {
       ...form,
+      id: resolvedId,
       nameEn: form.nameEn || 'New Partner',
       nameSr: form.nameSr || form.nameEn || 'Novi Partner',
       nameZh: form.nameZh || form.nameEn || '',
@@ -430,6 +441,22 @@ export function PartnerEditorModal({
                   </select>
                 </div>
               </div>
+
+              {!isEditing && (
+                <div>
+                  <label className="block font-mono text-[10px] uppercase font-bold text-[#8C8A7D] mb-1">
+                    Initial 4-Digit Portal Passcode (PIN)
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={4}
+                    value={initialPinInput}
+                    onChange={(e) => setInitialPinInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    placeholder="e.g. 1002"
+                    className="w-full sm:w-48 h-10 px-3 bg-[#FAF9F5] border border-[#E5E3DB] focus:border-[#23251E] rounded-xl text-xs font-mono font-bold text-[#1E2E20] outline-none tracking-widest"
+                  />
+                </div>
+              )}
 
               {/* Service Areas */}
               <div>

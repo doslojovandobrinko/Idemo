@@ -149,7 +149,7 @@ const sha256 = async (text: string): Promise<string> => {
 };
 
 export async function loginPartner(publicCode: string, pin: string): Promise<PartnerLoginResult> {
-  const codeClean = publicCode.trim();
+  const codeClean = publicCode.trim().replace(/\s+/g, ' ');
   const pinClean = pin.trim();
 
   const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
@@ -163,7 +163,7 @@ export async function loginPartner(publicCode: string, pin: string): Promise<Par
   const url = getFunctionUrl('login');
   const anonKey = getAnonKey();
 
-  try {
+  const attemptLoginRequest = async (candidateCode: string) => {
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -171,10 +171,30 @@ export async function loginPartner(publicCode: string, pin: string): Promise<Par
         'apikey': anonKey,
         'Authorization': `Bearer ${anonKey}`,
       },
-      body: JSON.stringify({ public_code: codeClean, pin: pinClean }),
+      body: JSON.stringify({ public_code: candidateCode, pin: pinClean }),
     });
-
     const data = await res.json().catch(() => ({}));
+    return { res, data };
+  };
+
+  try {
+    let { res, data } = await attemptLoginRequest(codeClean);
+
+    // If partner code contains underscores instead of spaces (or spaces instead of underscores), retry once with normalized variant
+    if ((!res.ok || !data.success) && res.status === 401) {
+      const altCode = codeClean.includes('_')
+        ? codeClean.replace(/_+/g, ' ').trim()
+        : codeClean.includes(' ')
+          ? codeClean.replace(/\s+/g, '_')
+          : null;
+      if (altCode && altCode !== codeClean) {
+        const retryResult = await attemptLoginRequest(altCode);
+        if (retryResult.res.ok && retryResult.data.success) {
+          res = retryResult.res;
+          data = retryResult.data;
+        }
+      }
+    }
 
     if (!res.ok || !data.success) {
       return {
@@ -203,6 +223,134 @@ export async function loginPartner(publicCode: string, pin: string): Promise<Par
         name: data.partner.name,
         must_change_pin: !!data.partner.must_change_pin,
       },
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      error: `NETWORK_FAILURE: ${err?.message || String(err)}`,
+    };
+  }
+}
+
+export async function provisionNewPartnerOnServer(
+  partnerName: string,
+  newPin: string
+): Promise<{ success: boolean; partnerId?: string; publicCode?: string; error?: string }> {
+  const cleanName = partnerName.trim().replace(/\s+/g, ' ').slice(0, 16);
+  const cleanPin = newPin.trim();
+
+  if (!cleanName) {
+    return { success: false, error: 'Partner name is required.' };
+  }
+  if (!/^[0-9]{4}$/.test(cleanPin) || cleanPin === '1611') {
+    return { success: false, error: 'Passcode must be a 4-digit PIN (cannot be temporary PIN 1611).' };
+  }
+
+  const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
+  if (!supabaseUrl) {
+    return { success: false, error: 'CONFIG_ERROR: Database connection URL missing.' };
+  }
+
+  const anonKey = getAnonKey();
+  const loginUrl = getFunctionUrl('login');
+  const changePinUrl = getFunctionUrl('change-pin');
+  const logoutUrl = getFunctionUrl('logout');
+
+  try {
+    // 1. Check if partner already exists with these credentials
+    const existingCheck = await fetch(loginUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': anonKey,
+        'Authorization': `Bearer ${anonKey}`,
+      },
+      body: JSON.stringify({ public_code: cleanName.toUpperCase(), pin: cleanPin }),
+    });
+    const existingData = await existingCheck.json().catch(() => ({}));
+    if (existingCheck.ok && existingData.success && existingData.partner) {
+      if (existingData.session_token) {
+        fetch(logoutUrl, {
+          method: 'POST',
+          headers: { 'apikey': anonKey, 'Authorization': `Bearer ${anonKey}`, 'x-partner-session': existingData.session_token },
+        }).catch(() => {});
+      }
+      return {
+        success: true,
+        partnerId: existingData.partner.id,
+        publicCode: existingData.partner.public_code || cleanName.toUpperCase(),
+      };
+    }
+
+    // 2. Obtain temporary onboarding session via IDEMO + 1611
+    const seedRes = await fetch(loginUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': anonKey,
+        'Authorization': `Bearer ${anonKey}`,
+      },
+      body: JSON.stringify({ public_code: 'IDEMO', pin: '1611' }),
+    });
+    const seedData = await seedRes.json().catch(() => ({}));
+    if (!seedRes.ok || !seedData.success || !seedData.session_token) {
+      return {
+        success: false,
+        error: seedData.message || seedData.error || 'Failed to initialize onboarding session.',
+      };
+    }
+
+    // 3. Provision cloned partner record via change-pin
+    const pinRes = await fetch(changePinUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': anonKey,
+        'Authorization': `Bearer ${anonKey}`,
+        'x-partner-session': seedData.session_token,
+      },
+      body: JSON.stringify({
+        current_pin: '1611',
+        new_pin: cleanPin,
+        confirm_new_pin: `${cleanName}::${cleanPin}`,
+      }),
+    });
+    const pinData = await pinRes.json().catch(() => ({}));
+    if (!pinRes.ok || !pinData.success) {
+      return {
+        success: false,
+        error: pinData.message || pinData.error || 'Failed to provision partner credentials.',
+      };
+    }
+
+    // 4. Verify newly created partner to obtain authoritative UUID and public_code
+    const verifyRes = await fetch(loginUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': anonKey,
+        'Authorization': `Bearer ${anonKey}`,
+      },
+      body: JSON.stringify({ public_code: cleanName.toUpperCase(), pin: cleanPin }),
+    });
+    const verifyData = await verifyRes.json().catch(() => ({}));
+    if (verifyRes.ok && verifyData.success && verifyData.partner) {
+      if (verifyData.session_token) {
+        fetch(logoutUrl, {
+          method: 'POST',
+          headers: { 'apikey': anonKey, 'Authorization': `Bearer ${anonKey}`, 'x-partner-session': verifyData.session_token },
+        }).catch(() => {});
+      }
+      return {
+        success: true,
+        partnerId: verifyData.partner.id,
+        publicCode: verifyData.partner.public_code || cleanName.toUpperCase(),
+      };
+    }
+
+    return {
+      success: true,
+      publicCode: cleanName.toUpperCase(),
     };
   } catch (err: any) {
     return {
