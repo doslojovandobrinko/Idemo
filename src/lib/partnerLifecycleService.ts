@@ -7,6 +7,12 @@ import { Partner } from '../types';
 import { PARTNERS as STATIC_PARTNERS } from '../data/partners';
 import { safeStorage } from './safeStorage';
 
+export interface PublicDirectoryFetchResult {
+  success: boolean;
+  partners: Partner[];
+  error?: string;
+}
+
 const PARTNER_OVERRIDES_STORAGE_KEY = 'idemo_partner_overrides_v1';
 const REMOVED_DEMO_PARTNERS_KEY = 'idemo_removed_demo_partner_ids';
 

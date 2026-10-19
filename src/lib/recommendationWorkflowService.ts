@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Recommendation } from '../types';
+import { Recommendation, Category } from '../types';
 import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 import { getCanonicalMediaReference, getApprovedPrimaryMedia } from './recommendationMediaService';
 import { safeStorage } from './safeStorage';
@@ -22,11 +22,19 @@ export function sanitizeStudioDraft<T extends Record<string, any>>(d: T): T {
   return d;
 }
 
+export type StudioRecommendationDraft = Partial<Recommendation> & {
+  imageUrl?: string;
+  curatorNotes?: string;
+  highlights?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 /**
  * Retrieves all locally persisted studio recommendation drafts from safeStorage.
  */
-export function getLocalStudioDrafts(): Partial<Recommendation>[] {
-  const draftsMap = new Map<string, Partial<Recommendation>>();
+export function getLocalStudioDrafts(): StudioRecommendationDraft[] {
+  const draftsMap = new Map<string, StudioRecommendationDraft>();
 
   // 1. Read from idemo_v9_studio_recommendation_drafts
   try {
@@ -94,7 +102,7 @@ export function getLocalStudioDrafts(): Partial<Recommendation>[] {
             if (!draftsMap.has(draftId) && !draftsMap.has(p.id)) {
               const isPkg = p.proposalType === 'PACKAGE';
               const resolvedImg = p.collageImageUrl || p.imageUrl || (p.images && p.images[0]) || 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&q=80&w=1200';
-              const candidateItem: Partial<Recommendation> = {
+              const candidateItem: StudioRecommendationDraft = {
                 id: draftId,
                 title: p.title,
                 titleEn: p.title,
@@ -143,7 +151,7 @@ export function getLocalStudioDrafts(): Partial<Recommendation>[] {
 /**
  * Saves a recommendation draft locally to safeStorage under Studio drafts key, custom recs key, and legacy studio key.
  */
-export function saveLocalStudioDraft(rec: Partial<Recommendation>): Partial<Recommendation> {
+export function saveLocalStudioDraft(rec: StudioRecommendationDraft): StudioRecommendationDraft {
   const recId = rec.id || rec.dbId || `rec-draft-${Date.now()}`;
   const draftToSave: Record<string, any> = {
     ...rec,

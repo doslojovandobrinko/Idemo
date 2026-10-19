@@ -57,6 +57,7 @@ import {
 } from '../../lib/partnerService';
 import { getAllPartners, getPartnerLifecycleState } from '../../lib/partnerLifecycleService';
 import { safeStorage } from '../../lib/safeStorage';
+import { isSupabaseConfigured } from '../../lib/supabaseClient';
 import { PartnerEditorModal } from './PartnerEditorModal';
 import { RecommendationEditorModal } from './RecommendationEditorModal';
 
