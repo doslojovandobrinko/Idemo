@@ -20,8 +20,8 @@ interface PackageReleaseRecordLike {
 
 export interface CommunityActivityEvent {
   id: string;
-  timestamp: number;
-  type: 'NEW_REC' | 'UPDATED_REC' | 'NEW_PARTNER' | 'PACKAGE_RELEASE' | 'SEASONAL_NOTICE';
+  timestamp?: number;
+  type: 'NEW_REC' | 'UPDATED_REC' | 'NEW_PARTNER' | 'PACKAGE_RELEASE' | 'SEASONAL_NOTICE' | 'PARTNER_INVITATION' | 'IDEMO_SIGNATURE' | 'PARTNER_COLLABORATION';
   badge: Record<string, string>;
   title: Record<string, string>;
   description: Record<string, string>;
@@ -41,262 +41,103 @@ export interface AuthoritativeEventRow {
   safe_category: string;
 }
 
-const buildBadgeMap = (eventType: string, safeCategory: string): Record<string, string> => {
-  if (eventType === 'NEW_REC') {
-    return {
-      sr: 'NOVA PREPORUKA',
-      ru: 'НОВАЯ РЕКОМЕНДАЦИЯ',
-      zh: '新推荐',
-      de: 'NEUE EMPFEHLUNG',
-      es: 'NUEVA RECOMENDACIÓN',
-      en: 'NEW RECOMMENDATION'
-    };
+const CANONICAL_EDITORIAL_ANNOUNCEMENTS: CommunityActivityEvent[] = [
+  {
+    id: 'editorial-herbal-tourism-invitation',
+    type: 'PARTNER_INVITATION',
+    badge: {
+      sr: 'POZIV PARTNERIMA',
+      en: 'INVITATION TO PARTNERS',
+      de: 'EINLADUNG AN PARTNER',
+      ru: 'ПРИГЛАШЕНИЕ ПАРТНЕРАМ',
+      es: 'INVITACIÓN A SOCIOS',
+      zh: '合作伙伴邀请'
+    },
+    title: {
+      sr: 'Biljni turizam: nova inspiracija za vašu ponudu',
+      en: 'Herbal tourism: fresh inspiration for your offering',
+      de: 'Kräutertourismus: neue Inspiration für Ihr Angebot',
+      ru: 'Травяной туризм: новое вдохновение для вашего предложения',
+      es: 'Turismo botánico y herbolario: nueva inspiración para su oferta',
+      zh: '草本植物旅游：为您打造特色体验的新灵感'
+    },
+    description: {
+      sr: 'Tradicija poznavanja bilja ne poznaje granice. Inspirisani nasleđem Vase Pelagića i Jove Mijatovića, pozivamo vodiče, seoska domaćinstva i poznavaoce bilja da razmotre tematske šetnje, radionice pripreme čajeva i susrete sa lokalnim proizvođačima. Povežite prirodu, lokalno znanje i gostoprimstvo u autentično iskustvo koje nosi vaš pečat.',
+      en: 'The tradition of botanical knowledge knows no borders. Inspired by the cultural heritage of Vasa Pelagić and Jovo Mijatović, we invite guides, rural households, and botanical experts to consider themed walks, tea-preparation workshops, and meetings with local producers. Connect nature, local knowledge, and hospitality into an authentic experience that bears your personal signature.',
+      de: 'Die Tradition der Pflanzenkunde kennt keine Grenzen. Inspiriert vom kulturellen Erbe von Vasa Pelagić und Jovo Mijatović laden wir Guides, ländliche Gastgeber und Pflanzenkenner ein, Themenwanderungen, Tee-Workshops und Begegnungen mit lokalen Erzeugern zu entwickeln. Verbinden Sie Natur, lokales Wissen und Gastfreundschaft zu einem authentischen Erlebnis mit Ihrer persönlichen Handschrift.',
+      ru: 'Традиция знания трав не знает границ. Вдохновляясь культурным наследием Васы Пелагича и Йово Миятовича, мы приглашаем гидов, сельские хозяйства и знатоков растений рассмотреть тематические прогулки, мастер-классы по приготовлению чая и встречи с местными производителями. Объедините природу, местные знания и гостеприимство в аутентичный опыт со своим авторским почерком.',
+      es: 'La tradición del conocimiento de las plantas no conoce fronteras. Inspirados en el legado cultural de Vasa Pelagić y Jovo Mijatović, invitamos a guías, hogares rurales y conocedores de la botánica a considerar paseos temáticos, talleres de preparación de infusiones y encuentros con productores locales. Conecte la naturaleza, el saber local y la hospitalidad en una experiencia auténtica con su sello personal.',
+      zh: '草本植物的传统知识无分国界。受 Vasa Pelagić 与 Jovo Mijatović 文化传承的启发，我们诚邀向导、乡村人家与植物行家构思主题漫步、茶饮制作工坊以及与当地生产者的交流活动。将自然、在地知识与热情好客融合成带有您个人印记的地道体验。'
+    }
+  },
+  {
+    id: 'editorial-idemo-signature-experience',
+    type: 'IDEMO_SIGNATURE',
+    badge: {
+      sr: 'IDEMO SIGNATURE',
+      en: 'IDEMO SIGNATURE',
+      de: 'IDEMO SIGNATURE',
+      ru: 'IDEMO SIGNATURE',
+      es: 'IDEMO SIGNATURE',
+      zh: 'IDEMO SIGNATURE'
+    },
+    title: {
+      sr: 'Pretvorite svoje znanje u posebno iskustvo',
+      en: 'Turn your expertise into a distinctive experience',
+      de: 'Verwandeln Sie Ihr Wissen in ein besonderes Erlebnis',
+      ru: 'Превратите свои знания в особенный опыт',
+      es: 'Convierta su conocimiento en una experiencia especial',
+      zh: '将您的专业知识转化为独特体验'
+    },
+    description: {
+      sr: 'Šta biste posetiocu pokazali za nekoliko sati, jedan dan ili vikend? Osmislite doživljaj koji spaja vašu stručnost, lokalnu priču i pažljivo odabrane detalje — od lagane šetnje i domaćeg obroka do zanatske radionice. Navedite polazište, trajanje, jezike i šta je uključeno u ponudu.',
+      en: 'What would you show a visitor in a few hours, a full day, or a weekend? Design an experience that blends your expertise, a local story, and thoughtfully chosen details — from an easygoing walk and a homemade meal to an artisan workshop. Specify the starting point, duration, languages, and what is included in the offer.',
+      de: 'Was würden Sie einem Besucher in ein paar Stunden, an einem Tag oder an einem Wochenende zeigen? Gestalten Sie ein Erlebnis, das Ihre Fachkenntnis, eine lokale Geschichte und sorgfältig ausgewählte Details verbindet — vom entspannten Spaziergang über ein hausgemachtes Essen bis hin zum Handwerks-Workshop. Geben Sie Startpunkt, Dauer, Sprachen und enthaltene Leistungen an.',
+      ru: 'Что бы вы показали гостю за несколько часов, один день или выходные? Создайте впечатление, объединяющее ваш опыт, местную историю и продуманные детали — от неспешной прогулки и домашнего обеда до ремесленной мастерской. Укажите место начала, продолжительность, языки и что включено в предложение.',
+      es: '¿Qué le mostraría a un visitante en unas horas, un día o un fin de semana? Diseñe una vivencia que combine su experiencia, una historia local y detalles cuidadosamente seleccionados — desde un paseo tranquilo y una comida casera hasta un taller artesanal. Indique el punto de partida, la duración, los idiomas y qué incluye la propuesta.',
+      zh: '如果有几个小时、一天或一个周末，您会带访客体验什么？设计一段融合您的专业特长、在地故事与精选细节的旅程——从轻松漫步、家常美食到手工技艺工坊。请注明出发地点、时长、服务语言以及包含的内容。'
+    }
+  },
+  {
+    id: 'editorial-partner-collaboration',
+    type: 'PARTNER_COLLABORATION',
+    badge: {
+      sr: 'PARTNERSKA SARADNJA',
+      en: 'PARTNER COLLABORATION',
+      de: 'PARTNERKOOPERATION',
+      ru: 'ПАРТНЕРСКОЕ СОТРУДНИЧЕСТВО',
+      es: 'COLABORACIÓN CON SOCIOS',
+      zh: '合作伙伴协作'
+    },
+    title: {
+      sr: 'Još jedan put do posetilaca',
+      en: 'Another pathway to visitors',
+      de: 'Ein weiterer Weg zu Besuchern',
+      ru: 'Еще один путь к гостям',
+      es: 'Un camino más hacia los visitantes',
+      zh: '连接访客的又一渠道'
+    },
+    description: {
+      sr: 'IDEMO dopunjuje vaše postojeće kanale i povezuje vas sa posetiocima koji traže iskustva poput vaših. Učešće je besplatno i bez obaveza. Vi kontrolišete svoju ponudu, a komercijalne uslove i plaćanje dogovarate direktno sa posetiocem. Za početne pristupne podatke pišite na office@idemo.group.',
+      en: 'IDEMO complements your existing channels and connects you with visitors looking for experiences like yours. Participation is free and without obligation. You control your offering, and you arrange commercial terms and payment directly with the visitor. For initial access credentials, write to office@idemo.group.',
+      de: 'IDEMO ergänzt Ihre bestehenden Kanäle und verbindet Sie mit Besuchern, die nach Erlebnissen wie Ihren suchen. Die Teilnahme ist kostenlos und unverbindlich. Sie behalten die volle Kontrolle über Ihr Angebot und vereinbaren Konditionen sowie Zahlung direkt mit dem Besucher. Für erste Zugangsdaten schreiben Sie an office@idemo.group.',
+      ru: 'IDEMO дополняет ваши существующие каналы и связывает вас с гостями, которые ищут именно такие впечатления. Участие бесплатное и без обязательств. Вы сами управляете своим предложением, а коммерческие условия и оплату согласовываете напрямую с гостем. Для получения начальных данных доступа напишите на office@idemo.group.',
+      es: 'IDEMO complementa sus canales actuales y le conecta con visitantes que buscan experiencias como las suyas. La participación es gratuita y sin compromiso. Usted controla su oferta y acuerda las condiciones comerciales y el pago directamente con el visitante. Para obtener las credenciales iniciales de acceso, escriba a office@idemo.group.',
+      zh: 'IDEMO 作为您现有渠道的补充，将您与寻找此类体验的访客连接起来。参与完全免费且无任何强制义务。您自主掌控服务内容，并与访客直接商定商务条款与付款方式。如需获取初始访问凭证，请致信 office@idemo.group。'
+    }
   }
-  if (eventType === 'UPDATED_REC') {
-    return {
-      sr: 'AŽURIRANA PREPORUKA',
-      ru: 'ОБНОВЛЕННАЯ РЕКОМЕНДАЦИЯ',
-      zh: '已更新推荐',
-      de: 'AKTUALISIERTE EMPFEHLUNG',
-      es: 'RECOMENDACIÓN ACTUALIZADA',
-      en: 'UPDATED RECOMMENDATION'
-    };
-  }
-  if (eventType === 'NEW_PARTNER') {
-    return {
-      sr: 'PROVERENI PARTNER',
-      ru: 'ПРОВЕРЕННЫЙ ПАРТНЕР',
-      zh: '已认证合作伙伴',
-      de: 'GEPRÜFTER PARTNER',
-      es: 'SOCIO VERIFICADO',
-      en: 'VERIFIED PARTNER'
-    };
-  }
-  if (eventType === 'PACKAGE_RELEASE') {
-    return {
-      sr: 'ODREDIŠNI PAKET',
-      ru: 'ПАКЕТ НАПРАВЛЕНИЯ',
-      zh: '目的地礼包',
-      de: 'DESTINATIONS-PAKET',
-      es: 'PAQUETE DE DESTINO',
-      en: 'DESTINATION PACKAGE'
-    };
-  }
-  if (eventType === 'SEASONAL_NOTICE') {
-    return {
-      sr: 'SEZONSKA PREPORUKA',
-      ru: 'СЕЗОННАЯ РЕКОМЕНДАЦИЯ',
-      zh: '时令推荐',
-      de: 'SAISONALE EMPFEHLUNG',
-      es: 'RECOMENDACIÓN DE TEMPORADA',
-      en: 'SEASONAL RECOMMENDATION'
-    };
-  }
-  return {
-    sr: safeCategory.toUpperCase(),
-    ru: safeCategory.toUpperCase(),
-    zh: safeCategory,
-    de: safeCategory.toUpperCase(),
-    es: safeCategory.toUpperCase(),
-    en: safeCategory.toUpperCase()
-  };
-};
+];
 
 export const getFallbackCommunityEvents = (): CommunityActivityEvent[] => {
-  const events: CommunityActivityEvent[] = [];
-
-  // 1. Load publications published from IDEMO Studio
-  try {
-    const rawHistory = safeStorage.getItem(HISTORY_STORAGE_KEY);
-    if (rawHistory) {
-      const history: PackageReleaseRecordLike[] = JSON.parse(rawHistory);
-      if (Array.isArray(history) && history.length > 0) {
-        history.slice(0, 3).forEach((pkg) => {
-          events.push({
-            id: `pkg-${pkg.id || pkg.packageVersion}`,
-            timestamp: new Date(pkg.publishedAt || Date.now()).getTime(),
-            type: 'PACKAGE_RELEASE',
-            badge: buildBadgeMap('PACKAGE_RELEASE', 'Destination Package'),
-            title: {
-              sr: `Objavljen odredišni paket: ${pkg.destinationName} v${pkg.packageVersion}`,
-              en: `Destination Package Released: ${pkg.destinationName} v${pkg.packageVersion}`,
-              ru: `Выпущен пакет направления: ${pkg.destinationName} v${pkg.packageVersion}`,
-              zh: `目的地礼包已发布：${pkg.destinationName} v${pkg.packageVersion}`,
-              de: `Destinationspaket veröffentlicht: ${pkg.destinationName} v${pkg.packageVersion}`,
-              es: `Paquete de destino publicado: ${pkg.destinationName} v${pkg.packageVersion}`
-            },
-            description: {
-              sr: pkg.releaseNotes || 'Zvanično odobren i objavljen odredišni paket u IDEMO ekosistemu.',
-              en: pkg.releaseNotes || 'Officially verified and published destination package in the IDEMO ecosystem.',
-              ru: pkg.releaseNotes || 'Официально проверенный и опубликованный пакет направления.',
-              zh: pkg.releaseNotes || 'IDEMO 生态系统中经过官方验证并发布的目的地礼包。',
-              de: pkg.releaseNotes || 'Offiziell verifiziertes und veröffentlichtes Destinationspaket.',
-              es: pkg.releaseNotes || 'Paquete de destino oficialmente verificado y publicado.'
-            }
-          });
-        });
-      }
-    }
-  } catch (err) {
-    console.warn('[communityFeed] Error reading publication history fallback:', err);
-  }
-
-  // 2. Add canonical editorial notices so the feed always provides curated updates
-  const canonicalNotices: CommunityActivityEvent[] = [
-    {
-      id: 'canon-kablar-viewpoint',
-      timestamp: Date.now() - 3600 * 1000 * 24, // 1 day ago
-      type: 'NEW_REC',
-      badge: buildBadgeMap('NEW_REC', 'Nature'),
-      title: {
-        sr: 'Nova kuracija: Vidikovac Kablar i Ovčarsko-kablarska klisura',
-        en: 'New Curation: Kablar Viewpoint & Ovčar-Kablar Gorge',
-        ru: 'Новая рекомендация: Смотровая площадка Каблар',
-        zh: '新推荐：卡布拉尔观景点与峡谷',
-        de: 'Neue Empfehlung: Kablar Aussichtspunkt & Ovčar-Kablar Schlucht',
-        es: 'Nueva recomendación: Mirador de Kablar y Desfiladero'
-      },
-      description: {
-        sr: 'Urednička preporuka sa autentičnim fotografijama vidikovca, planinarskim rutama i savetima kustosa za posetu.',
-        en: 'Editorial recommendation featuring authentic viewpoint photography, hiking trails, and curator timing advice.',
-        ru: 'Кураторская рекомендация с аутентичными фотографиями, пешеходными маршрутами и советами.',
-        zh: '包含真实观景点摄影、远足步道和策展人时间的独家推荐。',
-        de: 'Redaktionelle Empfehlung mit authentischer Fotografie, Wanderrouten und Empfehlungen des Kurators.',
-        es: 'Recomendación editorial con fotografía auténtica del mirador, senderos y consejos del curador.'
-      }
-    },
-    {
-      id: 'canon-partner-network',
-      timestamp: Date.now() - 3600 * 1000 * 48, // 2 days ago
-      type: 'NEW_PARTNER',
-      badge: buildBadgeMap('NEW_PARTNER', 'Verified Partner'),
-      title: {
-        sr: 'Aktivirana IDEMO privatna partnerska mreža',
-        en: 'IDEMO Private Partner Network Activated',
-        ru: 'Активирована сеть партнеров IDEMO',
-        zh: 'IDEMO 私人合作伙伴网络已激活',
-        de: 'IDEMO Privates Partnernetzwerk aktiviert',
-        es: 'Red privada de socios de IDEMO activada'
-      },
-      description: {
-        sr: 'Akreditovani lokalni partneri sa QR pasošima i direktnom konsijerž koordinacijom za posetioce.',
-        en: 'Accredited local partners with QR passports and direct concierge coordination for travelers.',
-        ru: 'Аккредитованные партнеры с QR-паспортами и консьерж-координацией.',
-        zh: '具有二维码通行证并为旅行者提供礼宾协调服务的认证本地合作伙伴。',
-        de: 'Akkreditierte lokale Partner mit QR-Pässen und direkter Concierge-Koordination.',
-        es: 'Socios locales acreditados con pasaportes QR y coordinación directa de conserjería.'
-      }
-    },
-    {
-      id: 'canon-baseline-pkg',
-      timestamp: Date.now() - 3600 * 1000 * 72, // 3 days ago
-      type: 'PACKAGE_RELEASE',
-      badge: buildBadgeMap('PACKAGE_RELEASE', 'Destination Package'),
-      title: {
-        sr: 'Objavljen odredišni paket: Srbija Kanonski Baseline v1.2.0',
-        en: 'Destination Package Released: Serbia Canonical Baseline v1.2.0',
-        ru: 'Выпущен пакет направления: Сербия v1.2.0',
-        zh: '目的地礼包已发布：塞尔维亚基线 v1.2.0',
-        de: 'Destinationspaket veröffentlicht: Serbien Baseline v1.2.0',
-        es: 'Paquete de destino publicado: Serbia Canonical Baseline v1.2.0'
-      },
-      description: {
-        sr: 'Zvanični paket sa 113 verifikovanih kuracija, 5 licenciranih partnera i kalibrisanim Mood Orbit koordinatama.',
-        en: 'Official package with 113 verified curations, 5 licensed partners, and calibrated Mood Orbit coordinates.',
-        ru: 'Официальный пакет со 113 проверенными рекомендациями и 5 партнерами.',
-        zh: '官方礼包，包含 113 项经过验证的精选推荐和 5 个授权合作伙伴。',
-        de: 'Offizielles Paket mit 113 geprüften Empfehlungen und 5 lizenzierten Partnern.',
-        es: 'Paquete oficial con 113 recomendaciones verificadas y 5 socios con licencia.'
-      }
-    }
-  ];
-
-  // Merge events and avoid duplicate titles
-  const existingIds = new Set(events.map((e) => e.id));
-  canonicalNotices.forEach((notice) => {
-    if (!existingIds.has(notice.id)) {
-      events.push(notice);
-    }
-  });
-
-  return events.slice(0, 6);
+  return CANONICAL_EDITORIAL_ANNOUNCEMENTS.map((item) => ({
+    ...item,
+    badge: { ...item.badge },
+    title: { ...item.title },
+    description: { ...item.description }
+  }));
 };
 
 export const loadAuthoritativeCommunityEvents = async (): Promise<CommunityActivityEvent[]> => {
-  if (!isSupabaseConfigured()) {
-    return getFallbackCommunityEvents();
-  }
-
-  const supabase = getSupabaseClient();
-  if (!supabase) {
-    return getFallbackCommunityEvents();
-  }
-
-  try {
-    const { data, error } = await supabase.rpc('get_authoritative_community_events_secure');
-
-    if (error || !data || !Array.isArray(data) || data.length === 0) {
-      // Fallback query directly against published tables if RPC function is not yet deployed or returned empty
-      const { data: recs } = await supabase
-        .from('recommendations')
-        .select('id, source_id, title_en, title_sr, short_description_en, short_description_sr, category, created_at, updated_at')
-        .eq('is_published', true)
-        .order('created_at', { ascending: false })
-        .limit(6);
-
-      if (recs && Array.isArray(recs) && recs.length > 0) {
-        return recs.map((r: any) => ({
-          id: `rec-${r.id}`,
-          timestamp: new Date(r.updated_at || r.created_at || Date.now()).getTime(),
-          type: 'NEW_REC',
-          badge: buildBadgeMap('NEW_REC', r.category || 'Nature'),
-          title: {
-            sr: r.title_sr || r.title_en,
-            en: r.title_en,
-            ru: r.title_en,
-            zh: r.title_en,
-            de: r.title_en,
-            es: r.title_en
-          },
-          description: {
-            sr: r.short_description_sr || r.short_description_en || r.title_en,
-            en: r.short_description_en || r.title_en,
-            ru: r.short_description_en || r.title_en,
-            zh: r.short_description_en || r.title_en,
-            de: r.short_description_en || r.title_en,
-            es: r.short_description_en || r.title_en
-          }
-        }));
-      }
-
-      // If database is empty or RPC returned 0 rows, fallback gracefully to Studio publication history & canonical notices
-      return getFallbackCommunityEvents();
-    }
-
-    return (data as AuthoritativeEventRow[]).map((row) => ({
-      id: row.event_id,
-      timestamp: new Date(row.occurred_at).getTime(),
-      type: (row.event_type as any) || 'UPDATED_REC',
-      badge: buildBadgeMap(row.event_type, row.safe_category || 'Editorial Notice'),
-      title: {
-        sr: row.title_sr || row.title_en,
-        en: row.title_en,
-        ru: row.title_en,
-        zh: row.title_en,
-        de: row.title_en,
-        es: row.title_en
-      },
-      description: {
-        sr: row.summary_sr || row.summary_en,
-        en: row.summary_en,
-        ru: row.summary_en,
-        zh: row.summary_en,
-        de: row.summary_en,
-        es: row.summary_en
-      }
-    }));
-  } catch (err) {
-    console.warn('Error loading authoritative community events from Supabase:', err);
-    return getFallbackCommunityEvents();
-  }
+  return getFallbackCommunityEvents();
 };
+

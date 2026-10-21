@@ -760,8 +760,8 @@ const getCardTitle = (key: string, lang: string): string => {
 
 interface CommunityActivityEvent {
   id: string;
-  timestamp: number;
-  type: 'NEW_REC' | 'UPDATED_REC' | 'NEW_PARTNER' | 'PACKAGE_RELEASE' | 'SEASONAL_NOTICE';
+  timestamp?: number;
+  type: 'PARTNER_INVITATION' | 'IDEMO_SIGNATURE' | 'PARTNER_COLLABORATION' | 'NEW_REC' | 'UPDATED_REC' | 'NEW_PARTNER' | 'PACKAGE_RELEASE' | 'SEASONAL_NOTICE' | string;
   badge: Record<string, string>;
   title: Record<string, string>;
   description: Record<string, string>;
@@ -3999,7 +3999,10 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                       <div className="space-y-3.5 divide-y divide-[#2D3025]/5">
                         {dynamicEvents.map((evt, idx) => {
                           const langKey = (portalLang || 'sr').toLowerCase();
-                          const dateLabel = formatCommunityEventDate(evt.timestamp, langKey);
+                          const dateLabel =
+                            typeof evt.timestamp === 'number' && evt.timestamp > 0
+                              ? formatCommunityEventDate(evt.timestamp, langKey)
+                              : '';
                           const badgeText = evt.badge[langKey] || evt.badge.sr || evt.badge.en;
                           const titleText = evt.title[langKey] || evt.title.sr || evt.title.en;
                           const descText = evt.description[langKey] || evt.description.sr || evt.description.en;
@@ -4010,9 +4013,11 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                                 <span className="px-2 py-0.5 rounded-md bg-[#23251E]/5 border border-[#23251E]/10 text-[8.5px] font-mono font-bold text-brand-charcoal uppercase tracking-wider">
                                   {badgeText}
                                 </span>
-                                <span className="text-[9px] font-mono text-brand-charcoal/40 font-semibold">
-                                  {dateLabel}
-                                </span>
+                                {dateLabel ? (
+                                  <span className="text-[9px] font-mono text-brand-charcoal/40 font-semibold">
+                                    {dateLabel}
+                                  </span>
+                                ) : null}
                               </div>
                               <h4 className="text-xs font-bold text-brand-charcoal leading-snug">
                                 {titleText}
