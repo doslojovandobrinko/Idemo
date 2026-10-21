@@ -63,6 +63,7 @@ import {
 } from './constants';
 import { loadRecommendations } from './lib/recommendationsLoader';
 import { getApprovedPrimaryMedia } from './lib/recommendationMediaService';
+import { getOptimizedImageUrl, resolveMediaDisplayUrl } from './utils/assetHelper';
 import PremiumCarousel from './components/PremiumCarousel';
 import PremiumBadge from './components/PremiumBadge';
 import PlanCard from './components/PlanCard';
@@ -565,21 +566,7 @@ export const CYRILLIC_DICTIONARY: Record<string, { cyrillic: string; phonetic: s
 
 export const resolveImage = (path: string): string => {
   if (!path) return '';
-  if (path.startsWith('http://') || path.startsWith('https://')) {
-    return path;
-  }
-  let cleanPath = path;
-  if (cleanPath.startsWith('/src/assets/images/')) {
-    cleanPath = cleanPath.replace('/src/assets/images/', '/assets/images/');
-  } else if (cleanPath.startsWith('src/assets/images/')) {
-    cleanPath = cleanPath.replace('src/assets/images/', '/assets/images/');
-  } else if (cleanPath.startsWith('assets/images/')) {
-    cleanPath = '/' + cleanPath;
-  }
-  if (cleanPath.endsWith('.png')) {
-    cleanPath = cleanPath.substring(0, cleanPath.length - 4) + '.webp';
-  }
-  return cleanPath;
+  return getOptimizedImageUrl(path);
 };
 
 const getNavigationUrl = (lat: number, lng: number, title: string) => {
@@ -7536,7 +7523,7 @@ function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedu
                     triggerHaptic(5);
                     onNavigate('plan');
                   }}
-                  className="text-accent-teal hover:underline uppercase text-[10px] tracking-wider font-black cursor-pointer"
+                  className="text-amber-400 hover:underline uppercase text-[10px] tracking-wider font-black cursor-pointer"
                 >
                   {language === 'sr' ? 'Planer' : language === 'zh' ? '查看计划器' : 'View Planner'}
                 </button>
@@ -7877,69 +7864,84 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
     }
   };
 
-  const urlToBase64Cover = (url: string, targetW: number, targetH: number): Promise<string | null> => {
+  const drawContainedImageToDataUrl = (img: HTMLImageElement, targetW: number, targetH: number): string | null => {
+    try {
+      const nW = img.naturalWidth || img.width;
+      const nH = img.naturalHeight || img.height;
+      if (!nW || !nH) return null;
+
+      const canvas = document.createElement('canvas');
+      const scale = 10; // 10x scale for crisp magazine printing
+      canvas.width = Math.round(targetW * scale);
+      canvas.height = Math.round(targetH * scale);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+
+      // Warm museum editorial mat background (#F4F2EB) so contained aspect ratios look intentional
+      ctx.fillStyle = '#F4F2EB';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Subtle ambient backdrop fill so portrait/landscape margins feel rich
+      ctx.save();
+      ctx.globalAlpha = 0.14;
+      const coverScale = Math.max(canvas.width / nW, canvas.height / nH);
+      const bgW = nW * coverScale;
+      const bgH = nH * coverScale;
+      ctx.drawImage(img, (canvas.width - bgW) / 2, (canvas.height - bgH) / 2, bgW, bgH);
+      ctx.restore();
+
+      // Contain-fit calculation: preserve 100% of the recommendation image without cropping or stretching
+      const pad = Math.round(scale * 1.2);
+      const availW = canvas.width - pad * 2;
+      const availH = canvas.height - pad * 2;
+      const containScale = Math.min(availW / nW, availH / nH);
+      const drawW = nW * containScale;
+      const drawH = nH * containScale;
+      const dx = (canvas.width - drawW) / 2;
+      const dy = (canvas.height - drawH) / 2;
+
+      // Crisp inner gallery frame around contained image
+      ctx.fillStyle = '#FCFBF8';
+      ctx.fillRect(dx - 2, dy - 2, drawW + 4, drawH + 4);
+      ctx.drawImage(img, 0, 0, nW, nH, dx, dy, drawW, drawH);
+
+      return canvas.toDataURL('image/png');
+    } catch {
+      return null;
+    }
+  };
+
+  const loadSingleImageContained = (srcUrl: string, targetW: number, targetH: number): Promise<string | null> => {
     return new Promise((resolve) => {
-      const resolvedPath = url.startsWith('/') ? url : '/' + url;
-      const finalSrc = resolveImage(resolvedPath);
+      if (!srcUrl) {
+        resolve(null);
+        return;
+      }
 
       const img = new Image();
-      if (!finalSrc.startsWith('data:')) {
+      if (!srcUrl.startsWith('data:') && !srcUrl.startsWith('blob:')) {
         img.crossOrigin = 'anonymous';
       }
 
       img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          const scale = 10; // 10x scale for crisp printing
-          canvas.width = targetW * scale;
-          canvas.height = targetH * scale;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            resolve(null);
-            return;
-          }
-
-          const imgRatio = img.naturalWidth / img.naturalHeight;
-          const targetRatio = targetW / targetH;
-
-          let sx = 0, sy = 0, sWidth = img.naturalWidth, sHeight = img.naturalHeight;
-
-          if (imgRatio > targetRatio) {
-            sWidth = img.naturalHeight * targetRatio;
-            sx = (img.naturalWidth - sWidth) / 2;
-          } else {
-            sHeight = img.naturalWidth / targetRatio;
-            sy = (img.naturalHeight - sHeight) / 2;
-          }
-
-          ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL('image/png'));
-        } catch {
+        const result = drawContainedImageToDataUrl(img, targetW, targetH);
+        if (result) {
+          resolve(result);
+        } else {
           resolve(null);
         }
       };
 
       img.onerror = async () => {
         try {
-          const res = await fetch(finalSrc);
+          const res = await fetch(srcUrl);
           if (res.ok) {
             const blob = await res.blob();
             const reader = new FileReader();
             reader.onloadend = () => {
               const fallbackImg = new Image();
               fallbackImg.onload = () => {
-                try {
-                  const canvas = document.createElement('canvas');
-                  const scale = 10;
-                  canvas.width = targetW * scale;
-                  canvas.height = targetH * scale;
-                  const ctx = canvas.getContext('2d');
-                  if (!ctx) return resolve(null);
-                  ctx.drawImage(fallbackImg, 0, 0, canvas.width, canvas.height);
-                  resolve(canvas.toDataURL('image/png'));
-                } catch {
-                  resolve(null);
-                }
+                resolve(drawContainedImageToDataUrl(fallbackImg, targetW, targetH));
               };
               fallbackImg.onerror = () => resolve(null);
               fallbackImg.src = reader.result as string;
@@ -7954,8 +7956,43 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
         resolve(null);
       };
 
-      img.src = finalSrc;
+      img.src = srcUrl;
     });
+  };
+
+  const urlToBase64Cover = async (url: string, targetW: number, targetH: number, fallbackUrl?: string): Promise<string | null> => {
+    const candidates: string[] = [];
+    const pushCandidate = (u?: string | null) => {
+      if (u && typeof u === 'string' && u.trim() && !candidates.includes(u.trim())) {
+        candidates.push(u.trim());
+      }
+    };
+
+    try {
+      if (url) {
+        const resolvedPrimary = await resolveMediaDisplayUrl(url);
+        pushCandidate(resolvedPrimary);
+        pushCandidate(getOptimizedImageUrl(url));
+        if (!url.startsWith('http') && !url.startsWith('data:') && !url.startsWith('blob:')) {
+          const cleanRel = url.startsWith('/') ? url : '/' + url;
+          pushCandidate(getOptimizedImageUrl(cleanRel));
+        }
+      }
+      if (fallbackUrl && fallbackUrl !== url) {
+        const resolvedFallback = await resolveMediaDisplayUrl(fallbackUrl);
+        pushCandidate(resolvedFallback);
+        pushCandidate(getOptimizedImageUrl(fallbackUrl));
+      }
+    } catch {
+      if (url) pushCandidate(getOptimizedImageUrl(url));
+      if (fallbackUrl) pushCandidate(getOptimizedImageUrl(fallbackUrl));
+    }
+
+    for (const candidate of candidates) {
+      const dataUrl = await loadSingleImageContained(candidate, targetW, targetH);
+      if (dataUrl) return dataUrl;
+    }
+    return null;
   };
 
   const drawIdemoWatermark = (pdfDoc: any, cx: number, cy: number, scale: number) => {
@@ -8493,6 +8530,237 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
     return null;
   };
 
+  const pdfLabels: Record<string, Record<string, string>> = {
+    en: {
+      title: "IDEMO — BESPOKE TRAVEL BRIEF",
+      mastheadEyebrow: "IDEMO BESPOKE TRAVEL BRIEF • PRIVATE CONCIERGE DOSSIER",
+      subtitle: "Curated Single-Destination Itinerary",
+      planItem: "Plan item",
+      curatorBrief: "CURATOR'S STORY & AMBIANCE",
+      insiderTipTitle: "INSIDER CONCIERGE TIP",
+      bestTimeToVisitTitle: "OPTIMAL TIMING",
+      nearbyTitle: "NEARBY CONSIDERATION • COMPANION STOP",
+      nearbySubtitle: "Recommended complimentary visit within reach",
+      noNearbyText: "Allow generous time to fully absorb this signature destination before onward travel.",
+      timeBudget: "TIME BUDGET & VISIT FLOW",
+      gettingThereLabel: "Getting there",
+      enjoyingVisitLabel: "On-site exploration",
+      gettingBackLabel: "Getting back",
+      totalTimeLabel: "Total time envelope",
+      approx: "Approx.",
+      allowApprox: "Allow approx.",
+      notSpecified: "Flexible",
+      moodOrbContext: "MOOD ORB PERSONALIZATION",
+      knowBeforeYouGo: "KNOW BEFORE YOU GO",
+      culturalContext: "CLIMATE & CULTURAL CONTEXT",
+      typicalConditions: "Typical conditions for this month",
+      travelEssentials: "IDEMO CONCIERGE ESSENTIALS",
+      emergencyAssistance: "EMERGENCY",
+      moneyPayment: "CURRENCY & PAYMENT",
+      usefulPhrases: "USEFUL SERBIAN",
+      gettingThere: "TRANSIT & ACCESS",
+      afterYourVisitTitle: "AFTER YOUR VISIT",
+      afterYourVisitCopy: "Update your Mood Orb if your preferred pace or ambiance evolved during your visit."
+    },
+    sr: {
+      title: "IDEMO — KUSTOSKI PLAN PUTA",
+      mastheadEyebrow: "IDEMO PRIVATNI IZVESTAJ O PUTOVANJU • KUSTOSKI DOSIJE",
+      subtitle: "Vas kustoski izvestaj o poseti",
+      planItem: "Stavka plana",
+      curatorBrief: "KUSTOSKA PRICA I AMBIJENT",
+      insiderTipTitle: "SAVET LOKALNOG KUSTOSA",
+      bestTimeToVisitTitle: "OPTIMALNO VREME",
+      nearbyTitle: "OBLIZNJA PREPORUKA • DOPUNSKA POSETA",
+      nearbySubtitle: "Preporucena dopunska poseta u blizini",
+      noNearbyText: "Uzivajte u potpunosti u ovom izabranom odredistu pre nastavka rute.",
+      timeBudget: "VREMENSKI BUDZET I TOK POSETE",
+      gettingThereLabel: "Dolazak",
+      enjoyingVisitLabel: "Boravak na lokaciji",
+      gettingBackLabel: "Povratak",
+      totalTimeLabel: "Ukupno vreme za plan",
+      approx: "Oko",
+      allowApprox: "Planirajte oko",
+      notSpecified: "Fleksibilno",
+      moodOrbContext: "MOOD ORB KALIBRACIJA",
+      knowBeforeYouGo: "SRECAN PUT: VAZNE INFORMACIJE",
+      culturalContext: "KLIMA I KULTURNI KONTEKST",
+      typicalConditions: "Tipicni uslovi za ovaj mesec",
+      travelEssentials: "KUSTOSKE INFORMACIJE ZA PUT",
+      emergencyAssistance: "HITNE SLUZBE",
+      moneyPayment: "NOVAC I PLACANJE",
+      usefulPhrases: "KORISNE FRAZE",
+      gettingThere: "PREVOZ I NAVIGACIJA",
+      afterYourVisitTitle: "NAKON VASE POSETE",
+      afterYourVisitCopy: "Azurirajte Mood Orb ako su se vas tempo ili zeljena atmosfera promenili tokom posete."
+    },
+    de: {
+      title: "IDEMO — REISEBRIEFING",
+      mastheadEyebrow: "IDEMO PRIVATES REISEBRIEFING • CONCIERGE-DOSSIER",
+      subtitle: "Ihr kuratiertes Besuchs-Briefing",
+      planItem: "Planpunkt",
+      curatorBrief: "KURATOREN-STORY & AMBIENTE",
+      insiderTipTitle: "INSIDER-CONCIERGE-TIPP",
+      bestTimeToVisitTitle: "OPTIMALE BESUCHSZEIT",
+      nearbyTitle: "NAHEGELEGENE EMPFEHLUNG • ERGAENZUNGSZIEL",
+      nearbySubtitle: "Empfohlener Ergaenzungsbesuch in der Naehe",
+      noNearbyText: "Geniessen Sie dieses Ziel in vollem Umfang vor der Weiterreise.",
+      timeBudget: "ZEITBUDGET & ABLAUF",
+      gettingThereLabel: "Anreise",
+      enjoyingVisitLabel: "Aufenthalt vor Ort",
+      gettingBackLabel: "Rueckreise",
+      totalTimeLabel: "Gesamtzeit fuer den Plan",
+      approx: "Ca.",
+      allowApprox: "Planen Sie ca.",
+      notSpecified: "Flexibel",
+      moodOrbContext: "MOOD ORB PERSONALISIERUNG",
+      knowBeforeYouGo: "WISSENSWERTES VORAB",
+      culturalContext: "KLIMA & KULTURELLER KONTEXT",
+      typicalConditions: "Typische Bedingungen fuer diesen Monat",
+      travelEssentials: "CONCIERGE-GRUNDLAGEN",
+      emergencyAssistance: "NOTFALL & HILFE",
+      moneyPayment: "GELD & BEZAHLUNG",
+      usefulPhrases: "SERBISCHE PHRASEN",
+      gettingThere: "ANREISE & NAVIGATION",
+      afterYourVisitTitle: "NACH IHREM BESUCH",
+      afterYourVisitCopy: "Passen Sie das Mood Orb an, wenn sich Ihr Tempo oder bevorzugte Atmosphaere geandert hat."
+    },
+    ru: {
+      title: "IDEMO — PLAN POEZDKI",
+      mastheadEyebrow: "IDEMO PRIVATNYJ OBZOR POEZDKI • KONSIERZH-DOS`E",
+      subtitle: "Vash kurirovannyj kratkij obzor",
+      planItem: "Punkt plana",
+      curatorBrief: "ISTORIYA KURATORA I AMBIENT",
+      insiderTipTitle: "INSAYDERSKIJ SOVET KONSIERZHA",
+      bestTimeToVisitTitle: "OPTIMAL`NOE VREMYA",
+      nearbyTitle: "BLIZHAJSHAYA REKOMENDACIYA • DOPOLNITEL`NYJ VIZIT",
+      nearbySubtitle: "Rekomendovannoe dopolnitel`noe mesto poblizosti",
+      noNearbyText: "Nasladites` etim mestom pered prodolzheniem puteshestviya.",
+      timeBudget: "VREMENSKIJ BYUDZHET I MARSHRUT",
+      gettingThereLabel: "Doroga tuda",
+      enjoyingVisitLabel: "Vremya na meste",
+      gettingBackLabel: "Obratnyj put`",
+      totalTimeLabel: "Obwee vremya",
+      approx: "Pribl.",
+      allowApprox: "Zaplanirujte pribl.",
+      notSpecified: "Gibko",
+      moodOrbContext: "PERSONALIZACIYA MOOD ORB",
+      knowBeforeYouGo: "CHTO NUZHNO ZNAT` PERED POEZDKOJ",
+      culturalContext: "KLIMAT I KUL`TURNYJ KONTEKST",
+      typicalConditions: "Tipichnye usloviya dlya etogo mesyaca",
+      travelEssentials: "OSNOVY KONSIERZHA",
+      emergencyAssistance: "AVARIJNYE SLUZHBY",
+      moneyPayment: "DEN`GI I OPLATA",
+      usefulPhrases: "SERBSKIE FRAZY",
+      gettingThere: "TRANSPORT I NAVIGACIYA",
+      afterYourVisitTitle: "POSLE VASEJ POEZDKI",
+      afterYourVisitCopy: "Skorrektirujte Mood Orb, esli vash zhelaemyj temp ili atmosfera izmenilis`."
+    },
+    es: {
+      title: "IDEMO — INFORME DE VIAJE",
+      mastheadEyebrow: "IDEMO INFORME PRIVADO DE VIAJE • DOSSIER CONCIERGE",
+      subtitle: "Su informe de visita personalizado",
+      planItem: "Elemento del plan",
+      curatorBrief: "HISTORIA DEL CURADOR Y AMBIENTE",
+      insiderTipTitle: "CONSEJO EXCLUSIVO DE CONCIERGE",
+      bestTimeToVisitTitle: "MOMENTO OPTIMO",
+      nearbyTitle: "CONSIDERACION CERCANA • VISITA COMPLEMENTARIA",
+      nearbySubtitle: "Visita complementaria recomendada en las cercanias",
+      noNearbyText: "Dedique tiempo completo a este destino exclusivo antes de continuar.",
+      timeBudget: "PRESUPUESTO DE TIEMPO Y FLUJO",
+      gettingThereLabel: "Llegada",
+      enjoyingVisitLabel: "Tiempo en el lugar",
+      gettingBackLabel: "Regreso",
+      totalTimeLabel: "Tiempo total previsto",
+      approx: "Aprox.",
+      allowApprox: "Reserve aprox.",
+      notSpecified: "Flexible",
+      moodOrbContext: "PERSONALIZACION MOOD ORB",
+      knowBeforeYouGo: "INFORMACION CLAVE",
+      culturalContext: "CLIMA Y CONTEXTO CULTURAL",
+      typicalConditions: "Condiciones tipicas para este mes",
+      travelEssentials: "ESENCIALES DEL CONCIERGE",
+      emergencyAssistance: "EMERGENCIA",
+      moneyPayment: "DINERO Y PAGO",
+      usefulPhrases: "FRASES UTILES EN SERBIO",
+      gettingThere: "TRANSPORTE Y NAVEGACION",
+      afterYourVisitTitle: "DESPUES DE SU VISITA",
+      afterYourVisitCopy: "Actualice el Mood Orb si su ritmo o la atmosfera de su preferencia evolucionaron."
+    }
+  };
+
+  const getKnowBeforeYouGoBullets = (recItem: any, lang: string) => {
+    const isSR = lang === 'sr';
+    const isDE = lang === 'de';
+    const isRU = lang === 'ru';
+    const isES = lang === 'es';
+    
+    const bulletsList: string[] = [];
+    const categoryTips = getCategoryTips(recItem.category, lang);
+    if (categoryTips && categoryTips[0]) {
+      bulletsList.push(categoryTips[0]);
+    }
+    
+    if (recItem.preferredTransport) {
+      if (isSR) {
+        bulletsList.push(`Preporuceni nacin transporta: ${recItem.preferredTransport}.`);
+      } else if (isDE) {
+        bulletsList.push(`Empfohlenes Transportmittel: ${recItem.preferredTransport}.`);
+      } else if (isRU) {
+        bulletsList.push(`Rekomenduemyj transport: ${recItem.preferredTransport}.`);
+      } else if (isES) {
+        bulletsList.push(`Transporte recomendado: ${recItem.preferredTransport}.`);
+      } else {
+        bulletsList.push(`Recommended mode of transport: ${recItem.preferredTransport}.`);
+      }
+    } else if (categoryTips && categoryTips[1]) {
+      bulletsList.push(categoryTips[1]);
+    }
+    
+    if (isSR) {
+      bulletsList.push(`Ova lokacija se nalazi u regiji ${recItem.location || 'Srbija'}. Planirajte u skladu sa tim.`);
+    } else if (isDE) {
+      bulletsList.push(`Dieser Ort befindet sich in der Region ${recItem.location || 'Serbien'}. Planen Sie entsprechend.`);
+    } else if (isRU) {
+      bulletsList.push(`Eto mesto nahoditsya v regione ${recItem.location || 'Serbiya'}. Zaplanirujte zaranee.`);
+    } else if (isES) {
+      bulletsList.push(`Este lugar se encuentra en la region de ${recItem.location || 'Serbia'}. Planifique en consecuencia.`);
+    } else {
+      bulletsList.push(`This location is situated in ${recItem.location || 'Serbia'}. Please plan accordingly.`);
+    }
+    
+    return bulletsList;
+  };
+
+  const formatDuration = (mins: number, lang: string): string => {
+    const hrs = Math.floor(mins / 60);
+    const m = mins % 60;
+    if (lang === 'sr') {
+      return hrs > 0 ? `${hrs}h ${m}m` : `${m}m`;
+    } else if (lang === 'de') {
+      return hrs > 0 ? `${hrs} Std. ${m} Min.` : `${m} Min.`;
+    } else if (lang === 'ru') {
+      return hrs > 0 ? `${hrs} ch. ${m} min.` : `${m} min.`;
+    } else if (lang === 'es') {
+      return hrs > 0 ? `${hrs}h ${m}min` : `${m}min.`;
+    } else if (lang === 'zh') {
+      return hrs > 0 ? `${hrs}h ${m}m` : `${m}m`;
+    } else {
+      return hrs > 0 ? `${hrs}h ${m}m` : `${m}m`;
+    }
+  };
+
+  const resolveCanonicalItemMedia = (recItem: any): { primaryMediaUrl: string; fallbackMediaUrl: string } => {
+    const canonicalRec = (allRecommendations || INITIAL_RECOMMENDATIONS || []).find(
+      (r: any) => String(r.id) === String(recItem.id)
+    );
+    const fallbackMediaUrl = canonicalRec?.image || recItem.image || '';
+    const primaryMediaUrl = getApprovedPrimaryMedia(String(recItem.id), recItem.image || fallbackMediaUrl);
+    return {
+      primaryMediaUrl: primaryMediaUrl || fallbackMediaUrl,
+      fallbackMediaUrl: fallbackMediaUrl || primaryMediaUrl
+    };
+  };
+
   const generatePdfDocument = async () => {
     if (scheduledItems.length === 0) return null;
 
@@ -8513,209 +8781,7 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
     // Use English fallback for Chinese Mandarin and Russian Cyrillic since jsPDF Helvetica doesn't support Chinese or Cyrillic fonts.
     const pdfLang = (language === 'zh' || language === 'ru') ? 'en' : language;
     const activeT = TRANSLATIONS[pdfLang] || TRANSLATIONS['en'];
-
-    const pdfLabels: Record<string, Record<string, string>> = {
-      en: {
-        title: "IDEMO — BESPOKE TRAVEL BRIEF",
-        mastheadEyebrow: "IDEMO BESPOKE TRAVEL BRIEF • PRIVATE CONCIERGE DOSSIER",
-        subtitle: "Curated Single-Destination Itinerary",
-        planItem: "Plan item",
-        curatorBrief: "CURATOR'S STORY & AMBIANCE",
-        insiderTipTitle: "INSIDER CONCIERGE TIP",
-        bestTimeToVisitTitle: "OPTIMAL TIMING",
-        nearbyTitle: "NEARBY CONSIDERATION • COMPANION STOP",
-        nearbySubtitle: "Recommended complimentary visit within reach",
-        noNearbyText: "Allow generous time to fully absorb this signature destination before onward travel.",
-        timeBudget: "TIME BUDGET & VISIT FLOW",
-        gettingThereLabel: "Getting there",
-        enjoyingVisitLabel: "On-site exploration",
-        gettingBackLabel: "Getting back",
-        totalTimeLabel: "Total time envelope",
-        approx: "Approx.",
-        allowApprox: "Allow approx.",
-        notSpecified: "Flexible",
-        moodOrbContext: "MOOD ORB PERSONALIZATION",
-        knowBeforeYouGo: "KNOW BEFORE YOU GO",
-        culturalContext: "CLIMATE & CULTURAL CONTEXT",
-        typicalConditions: "Typical conditions for this month",
-        travelEssentials: "IDEMO CONCIERGE ESSENTIALS",
-        emergencyAssistance: "EMERGENCY",
-        moneyPayment: "CURRENCY & PAYMENT",
-        usefulPhrases: "USEFUL SERBIAN",
-        gettingThere: "TRANSIT & ACCESS",
-        afterYourVisitTitle: "AFTER YOUR VISIT",
-        afterYourVisitCopy: "Update your Mood Orb if your preferred pace or ambiance evolved during your visit."
-      },
-      sr: {
-        title: "IDEMO — KUSTOSKI PLAN PUTA",
-        mastheadEyebrow: "IDEMO PRIVATNI IZVESTAJ O PUTOVANJU • KUSTOSKI DOSIJE",
-        subtitle: "Vas kustoski izvestaj o poseti",
-        planItem: "Stavka plana",
-        curatorBrief: "KUSTOSKA PRICA I AMBIJENT",
-        insiderTipTitle: "SAVET LOKALNOG KUSTOSA",
-        bestTimeToVisitTitle: "OPTIMALNO VREME",
-        nearbyTitle: "OBLIZNJA PREPORUKA • DOPUNSKA POSETA",
-        nearbySubtitle: "Preporucena dopunska poseta u blizini",
-        noNearbyText: "Uzivajte u potpunosti u ovom izabranom odredistu pre nastavka rute.",
-        timeBudget: "VREMENSKI BUDZET I TOK POSETE",
-        gettingThereLabel: "Dolazak",
-        enjoyingVisitLabel: "Boravak na lokaciji",
-        gettingBackLabel: "Povratak",
-        totalTimeLabel: "Ukupno vreme za plan",
-        approx: "Oko",
-        allowApprox: "Planirajte oko",
-        notSpecified: "Fleksibilno",
-        moodOrbContext: "MOOD ORB KALIBRACIJA",
-        knowBeforeYouGo: "SRECAN PUT: VAZNE INFORMACIJE",
-        culturalContext: "KLIMA I KULTURNI KONTEKST",
-        typicalConditions: "Tipicni uslovi za ovaj mesec",
-        travelEssentials: "KUSTOSKE INFORMACIJE ZA PUT",
-        emergencyAssistance: "HITNE SLUZBE",
-        moneyPayment: "NOVAC I PLACANJE",
-        usefulPhrases: "KORISNE FRAZE",
-        gettingThere: "PREVOZ I NAVIGACIJA",
-        afterYourVisitTitle: "NAKON VASE POSETE",
-        afterYourVisitCopy: "Azurirajte Mood Orb ako su se vas tempo ili zeljena atmosfera promenili tokom posete."
-      },
-      de: {
-        title: "IDEMO — REISEBRIEFING",
-        mastheadEyebrow: "IDEMO PRIVATES REISEBRIEFING • CONCIERGE-DOSSIER",
-        subtitle: "Ihr kuratiertes Besuchs-Briefing",
-        planItem: "Planpunkt",
-        curatorBrief: "KURATOREN-STORY & AMBIENTE",
-        insiderTipTitle: "INSIDER-CONCIERGE-TIPP",
-        bestTimeToVisitTitle: "OPTIMALE BESUCHSZEIT",
-        nearbyTitle: "NAHEGELEGENE EMPFEHLUNG • ERGAENZUNGSZIEL",
-        nearbySubtitle: "Empfohlener Ergaenzungsbesuch in der Naehe",
-        noNearbyText: "Geniessen Sie dieses Ziel in vollem Umfang vor der Weiterreise.",
-        timeBudget: "ZEITBUDGET & ABLAUF",
-        gettingThereLabel: "Anreise",
-        enjoyingVisitLabel: "Aufenthalt vor Ort",
-        gettingBackLabel: "Rueckreise",
-        totalTimeLabel: "Gesamtzeit fuer den Plan",
-        approx: "Ca.",
-        allowApprox: "Planen Sie ca.",
-        notSpecified: "Flexibel",
-        moodOrbContext: "MOOD ORB PERSONALISIERUNG",
-        knowBeforeYouGo: "WISSENSWERTES VORAB",
-        culturalContext: "KLIMA & KULTURELLER KONTEXT",
-        typicalConditions: "Typische Bedingungen fuer diesen Monat",
-        travelEssentials: "CONCIERGE-GRUNDLAGEN",
-        emergencyAssistance: "NOTFALL & HILFE",
-        moneyPayment: "GELD & BEZAHLUNG",
-        usefulPhrases: "SERBISCHE PHRASEN",
-        gettingThere: "ANREISE & NAVIGATION",
-        afterYourVisitTitle: "NACH IHREM BESUCH",
-        afterYourVisitCopy: "Passen Sie das Mood Orb an, wenn sich Ihr Tempo oder bevorzugte Atmosphaere geandert hat."
-      },
-      ru: {
-        title: "IDEMO — PLAN POEZDKI",
-        mastheadEyebrow: "IDEMO PRIVATNYJ OBZOR POEZDKI • KONSIERZH-DOS`E",
-        subtitle: "Vash kurirovannyj kratkij obzor",
-        planItem: "Punkt plana",
-        curatorBrief: "ISTORIYA KURATORA I AMBIENT",
-        insiderTipTitle: "INSAYDERSKIJ SOVET KONSIERZHA",
-        bestTimeToVisitTitle: "OPTIMAL`NOE VREMYA",
-        nearbyTitle: "BLIZHAJSHAYA REKOMENDACIYA • DOPOLNITEL`NYJ VIZIT",
-        nearbySubtitle: "Rekomendovannoe dopolnitel`noe mesto poblizosti",
-        noNearbyText: "Nasladites` etim mestom pered prodolzheniem puteshestviya.",
-        timeBudget: "VREMENSKIJ BYUDZHET I MARSHRUT",
-        gettingThereLabel: "Doroga tuda",
-        enjoyingVisitLabel: "Vremya na meste",
-        gettingBackLabel: "Obratnyj put`",
-        totalTimeLabel: "Obwee vremya",
-        approx: "Pribl.",
-        allowApprox: "Zaplanirujte pribl.",
-        notSpecified: "Gibko",
-        moodOrbContext: "PERSONALIZACIYA MOOD ORB",
-        knowBeforeYouGo: "CHTO NUZHNO ZNAT` PERED POEZDKOJ",
-        culturalContext: "KLIMAT I KUL`TURNYJ KONTEKST",
-        typicalConditions: "Tipichnye usloviya dlya etogo mesyaca",
-        travelEssentials: "OSNOVY KONSIERZHA",
-        emergencyAssistance: "AVARIJNYE SLUZHBY",
-        moneyPayment: "DEN`GI I OPLATA",
-        usefulPhrases: "SERBSKIE FRAZY",
-        gettingThere: "TRANSPORT I NAVIGACIYA",
-        afterYourVisitTitle: "POSLE VASEJ POEZDKI",
-        afterYourVisitCopy: "Skorrektirujte Mood Orb, esli vash zhelaemyj temp ili atmosfera izmenilis`."
-      },
-      es: {
-        title: "IDEMO — INFORME DE VIAJE",
-        mastheadEyebrow: "IDEMO INFORME PRIVADO DE VIAJE • DOSSIER CONCIERGE",
-        subtitle: "Su informe de visita personalizado",
-        planItem: "Elemento del plan",
-        curatorBrief: "HISTORIA DEL CURADOR Y AMBIENTE",
-        insiderTipTitle: "CONSEJO EXCLUSIVO DE CONCIERGE",
-        bestTimeToVisitTitle: "MOMENTO OPTIMO",
-        nearbyTitle: "CONSIDERACION CERCANA • VISITA COMPLEMENTARIA",
-        nearbySubtitle: "Visita complementaria recomendada en las cercanias",
-        noNearbyText: "Dedique tiempo completo a este destino exclusivo antes de continuar.",
-        timeBudget: "PRESUPUESTO DE TIEMPO Y FLUJO",
-        gettingThereLabel: "Llegada",
-        enjoyingVisitLabel: "Tiempo en el lugar",
-        gettingBackLabel: "Regreso",
-        totalTimeLabel: "Tiempo total previsto",
-        approx: "Aprox.",
-        allowApprox: "Reserve aprox.",
-        notSpecified: "Flexible",
-        moodOrbContext: "PERSONALIZACION MOOD ORB",
-        knowBeforeYouGo: "INFORMACION CLAVE",
-        culturalContext: "CLIMA Y CONTEXTO CULTURAL",
-        typicalConditions: "Condiciones tipicas para este mes",
-        travelEssentials: "ESENCIALES DEL CONCIERGE",
-        emergencyAssistance: "EMERGENCIA",
-        moneyPayment: "DINERO Y PAGO",
-        usefulPhrases: "FRASES UTILES EN SERBIO",
-        gettingThere: "TRANSPORTE Y NAVEGACION",
-        afterYourVisitTitle: "DESPUES DE SU VISITA",
-        afterYourVisitCopy: "Actualice el Mood Orb si su ritmo o la atmosfera de su preferencia evolucionaron."
-      }
-    };
-
     const pL = pdfLabels[pdfLang] || pdfLabels['en'];
-
-    const getKnowBeforeYouGoBullets = (recItem: any, lang: string) => {
-      const isSR = lang === 'sr';
-      const isDE = lang === 'de';
-      const isRU = lang === 'ru';
-      const isES = lang === 'es';
-      
-      const bulletsList: string[] = [];
-      const categoryTips = getCategoryTips(recItem.category, lang);
-      if (categoryTips && categoryTips[0]) {
-        bulletsList.push(categoryTips[0]);
-      }
-      
-      if (recItem.preferredTransport) {
-        if (isSR) {
-          bulletsList.push(`Preporuceni nacin transporta: ${recItem.preferredTransport}.`);
-        } else if (isDE) {
-          bulletsList.push(`Empfohlenes Transportmittel: ${recItem.preferredTransport}.`);
-        } else if (isRU) {
-          bulletsList.push(`Rekomenduemyj transport: ${recItem.preferredTransport}.`);
-        } else if (isES) {
-          bulletsList.push(`Transporte recomendado: ${recItem.preferredTransport}.`);
-        } else {
-          bulletsList.push(`Recommended mode of transport: ${recItem.preferredTransport}.`);
-        }
-      } else if (categoryTips && categoryTips[1]) {
-        bulletsList.push(categoryTips[1]);
-      }
-      
-      if (isSR) {
-        bulletsList.push(`Ova lokacija se nalazi u regiji ${recItem.location || 'Srbija'}. Planirajte u skladu sa tim.`);
-      } else if (isDE) {
-        bulletsList.push(`Dieser Ort befindet sich in der Region ${recItem.location || 'Serbien'}. Planen Sie entsprechend.`);
-      } else if (isRU) {
-        bulletsList.push(`Eto mesto nahoditsya v regione ${recItem.location || 'Serbiya'}. Zaplanirujte zaranee.`);
-      } else if (isES) {
-        bulletsList.push(`Este lugar se encuentra en la region de ${recItem.location || 'Serbia'}. Planifique en consecuencia.`);
-      } else {
-        bulletsList.push(`This location is situated in ${recItem.location || 'Serbia'}. Please plan accordingly.`);
-      }
-      
-      return bulletsList;
-    };
 
     const drawMoodField = (x: number, y: number, w: number, plotX: number, plotY: number, dotColor: number[], caption: string, lang: string, isUserMoodField: boolean = false) => {
       // 1. Draw outer border
@@ -8834,24 +8900,6 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
       }
     };
 
-    const formatDuration = (mins: number, lang: string): string => {
-      const hrs = Math.floor(mins / 60);
-      const m = mins % 60;
-      if (lang === 'sr') {
-        return hrs > 0 ? `${hrs}h ${m}m` : `${m}m`;
-      } else if (lang === 'de') {
-        return hrs > 0 ? `${hrs} Std. ${m} Min.` : `${m} Min.`;
-      } else if (lang === 'ru') {
-        return hrs > 0 ? `${hrs} ch. ${m} min.` : `${m} min.`;
-      } else if (lang === 'es') {
-        return hrs > 0 ? `${hrs}h ${m}min` : `${m}min`;
-      } else if (lang === 'zh') {
-        return hrs > 0 ? `${hrs}h ${m}m` : `${m}m`;
-      } else {
-        return hrs > 0 ? `${hrs}h ${m}m` : `${m}m`;
-      }
-    };
-
     for (let idx = 0; idx < scheduledItems.length; idx++) {
       if (idx > 0) {
         doc.addPage();
@@ -8928,9 +8976,10 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
       doc.setLineWidth(0.3);
       doc.rect(15, 31.5, 88, 52, 'FD');
 
+      const { primaryMediaUrl, fallbackMediaUrl } = resolveCanonicalItemMedia(item);
       let imgBase64: string | null = null;
-      if (item.image) {
-        imgBase64 = await urlToBase64Cover(item.image, 87, 51);
+      if (primaryMediaUrl || fallbackMediaUrl) {
+        imgBase64 = await urlToBase64Cover(primaryMediaUrl || fallbackMediaUrl, 87, 51, fallbackMediaUrl);
       }
 
       if (imgBase64) {
@@ -9699,7 +9748,7 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
                     initial={{ scale: 0.95, y: 15 }}
                     animate={{ scale: 1, y: 0 }}
                     exit={{ scale: 0.95, y: 15 }}
-                    className="bg-[#FAF9F5] w-full max-w-[400px] h-[85vh] max-h-[calc(100dvh-24px)] md:max-h-[85vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col relative border border-[#E5E3DB]"
+                    className="bg-[#FAF9F5] w-full max-w-[430px] sm:max-w-[680px] md:max-w-[780px] h-[88vh] max-h-[calc(100dvh-24px)] md:max-h-[88vh] rounded-3xl overflow-hidden shadow-2xl flex flex-col relative border border-[#E5E3DB]"
                   >
                     {/* Animated premium feedback alert */}
                     <AnimatePresence>
@@ -9717,13 +9766,13 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
                     </AnimatePresence>
 
                     {/* Sticky preview header with control close */}
-                    <div className="bg-white border-b border-[#E5E3DB] px-5 py-3.5 flex justify-between items-center z-10">
+                    <div className="bg-white border-b border-[#E5E3DB] px-5 py-3.5 flex justify-between items-center z-10 no-print">
                       <div className="flex flex-col">
                         <span className="text-[7px] uppercase tracking-[0.3em] text-[#8F8B73] font-bold">
                           IDEMO • CONCIERGE BRIEF
                         </span>
                         <span className="text-[11px] font-black text-[#1E2E20] uppercase font-serif tracking-tight">
-                          {language === 'sr' ? 'PREGLED PRE PREUZIMANJA' : 'LIVE PORTFOLIO PREVIEW'}
+                          {language === 'sr' ? 'PREGLED MAGAZINSKOG DOSIJEA' : 'MAGAZINE DOSSIER PREVIEW'}
                         </span>
                       </div>
                       <button 
@@ -9734,14 +9783,17 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
                       </button>
                     </div>
 
-                    {/* Embedded custom CSS printing styles to isolate the printable itinerary sheet without extra packages */}
+                    {/* Embedded custom CSS printing styles preserving full Magazine Premium Layout colors, borders, and contained images */}
                     <style>{`
                       @media print {
-                        body, html, #root, main, div, header, footer, nav, button {
-                          background: white !important;
-                          color: black !important;
-                          box-shadow: none !important;
-                          border: none !important;
+                        @page {
+                          size: A4 portrait;
+                          margin: 8mm;
+                        }
+                        * {
+                          -webkit-print-color-adjust: exact !important;
+                          print-color-adjust: exact !important;
+                          color-adjust: exact !important;
                         }
                         body * {
                           visibility: hidden !important;
@@ -9757,9 +9809,18 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
                           max-width: 100% !important;
                           height: auto !important;
                           overflow: visible !important;
-                          padding: 1.5cm !important;
-                          background: white !important;
-                          color: #1E2E20 !important;
+                          padding: 0 !important;
+                          background: #FAF9F5 !important;
+                        }
+                        .magazine-dossier-sheet {
+                          page-break-after: always !important;
+                          break-after: page !important;
+                          box-shadow: none !important;
+                          margin-bottom: 0 !important;
+                        }
+                        .magazine-dossier-sheet:last-child {
+                          page-break-after: auto !important;
+                          break-after: auto !important;
                         }
                         .no-print {
                           display: none !important;
@@ -9767,261 +9828,453 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
                       }
                     `}</style>
 
-                    {/* Document Body scrollable */}
-                    <div id="print-preview-document" className="flex-1 overflow-y-auto p-5 pb-24 relative select-text no-scrollbar scroll-smooth">
-                      
-                      {/* Absolute Svg Artistic Watermarks */}
-                      <div className="absolute top-[12%] left-[4%] opacity-[0.035] pointer-events-none z-0 w-[120px]">
-                        <svg viewBox="0 0 100 150" fill="none" stroke="#2D3025" strokeWidth="0.5" className="w-full h-auto">
-                          <polygon points="50,15 25,45 75,45" />
-                          <line x1="38" y1="33" x2="45" y2="35" />
-                          <line x1="62" y1="33" x2="55" y2="35" />
-                          <line x1="50" y1="15" x2="50" y2="45" />
-                          <polygon points="35,45 65,45 75,100 25,100" />
-                          <line x1="30" y1="60" x2="20" y2="75" />
-                          <line x1="70" y1="60" x2="80" y2="75" />
-                          <line x1="35" y1="65" x2="65" y2="65" />
-                          <line x1="33" y1="75" x2="67" y2="75" />
-                          <line x1="30" y1="85" x2="70" y2="85" />
-                          <path d="M45,110 L50,115 L55,110 M40,120 L50,127 L60,120 M35,130 L50,140 L65,130" strokeWidth="0.4"/>
-                        </svg>
-                      </div>
-                      
-                      <div className="absolute top-[42%] right-[4%] opacity-[0.035] pointer-events-none z-0 w-[140px]">
-                        <svg viewBox="0 0 200 200" fill="none" stroke="#2D3025" strokeWidth="0.4" className="w-full h-auto">
-                          <circle cx="100" cy="100" r="15" strokeDasharray="2,2" />
-                          <circle cx="100" cy="100" r="30" />
-                          <circle cx="100" cy="100" r="45" strokeDasharray="4,2" />
-                          <circle cx="100" cy="100" r="60" />
-                          <circle cx="100" cy="100" r="75" strokeDasharray="6,3" />
-                          <circle cx="100" cy="100" r="90" />
-                          <path d="M100,25 L100,175" />
-                          <path d="M25,100 L175,100" />
-                          <path d="M47,47 L153,153" strokeDasharray="3,3" />
-                          <path d="M47,153 L153,47" strokeDasharray="3,3" />
-                          <circle cx="100" cy="100" r="5" fill="#2D3025" />
-                          <rect x="94" y="25" width="12" height="150" rx="4" strokeDasharray="1,1" />
-                          <path d="M10,100 Q 32.5,130 55,100 T 100,100 T 145,100 T 190,100" />
-                          <path d="M10,100 Q 32.5,70 55,100 T 100,100 T 145,100 T 190,100" strokeDasharray="2,2" />
-                        </svg>
-                      </div>
+                    {/* Document Body scrollable — renders Magazine Premium Layout for each scheduled item */}
+                    <div id="print-preview-document" className="flex-1 overflow-y-auto p-3 sm:p-5 pb-20 relative select-text no-scrollbar scroll-smooth space-y-6 bg-[#EFECE4]">
+                      {(() => {
+                        const previewLang = (language === 'zh' || language === 'ru') ? 'en' : language;
+                        const pL = pdfLabels[previewLang] || pdfLabels['en'];
+                        const activeT = TRANSLATIONS[language] || TRANSLATIONS['en'];
+                        const previewOrbitX = orbitX !== undefined ? orbitX : 0.5;
+                        const previewOrbitY = orbitY !== undefined ? orbitY : 0.5;
+                        const monthsEN = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+                        const monthsSR = ['JANUAR', 'FEBRUAR', 'MART', 'APRIL', 'MAJ', 'JUN', 'JUL', 'AVGUST', 'SEPTEMBAR', 'OKTOBAR', 'NOVEMBAR', 'DECEMBAR'];
+                        const labelCalm = language === 'sr' ? 'Mirno' : language === 'de' ? 'Ruhig' : language === 'ru' ? 'Спокойно' : language === 'es' ? 'Calma' : 'Calm';
+                        const labelEnergetic = language === 'sr' ? 'Aktivno' : language === 'de' ? 'Energisch' : language === 'ru' ? 'Активно' : language === 'es' ? 'Energía' : 'Energetic';
+                        const labelUrban = language === 'sr' ? 'Urbano' : language === 'de' ? 'Urban' : language === 'ru' ? 'Урбано' : language === 'es' ? 'Urbano' : 'Urban';
+                        const labelNature = language === 'sr' ? 'Priroda' : language === 'de' ? 'Natur' : language === 'ru' ? 'Природа' : language === 'es' ? 'Naturaleza' : 'Nature';
+                        const caption1 = language === 'sr' ? 'Vaš Mood Orb' : language === 'de' ? 'Ihr Mood Orb' : language === 'ru' ? 'Ваш Mood Orb' : language === 'es' ? 'Su Mood Orb' : 'Your Mood Orb';
+                        const caption2 = language === 'sr' ? 'Odredište' : language === 'de' ? 'Reiseziel' : language === 'ru' ? 'Цель' : language === 'es' ? 'Destino' : 'Destination';
 
-                      <div className="absolute bottom-[10%] left-[8%] opacity-[0.035] pointer-events-none z-0 w-[130px]">
-                        <svg viewBox="0 0 120 120" fill="none" stroke="#2D3025" strokeWidth="0.5" className="w-full h-auto">
-                          <circle cx="60" cy="60" r="52" strokeDasharray="3,1" />
-                          <circle cx="60" cy="60" r="48" />
-                          <path d="M 45,85 C 45,75 50,70 50,65 C 50,60 42,58 40,50 C 38,42 45,35 55,33 C 65,31 75,37 77,48 C 78,54 75,56 73,59 C 71,62 76,65 74,72 C 72,78 68,82 65,85 Z" />
-                          <path d="M 40,50 L 37,53 L 41,55 L 39,58 L 43,60 M 42,65 C 44,70 48,72 50,72" />
-                          <path d="M 52,32 Q 55,27 60,30 Q 56,33 53,35" />
-                          <path d="M 58,30 Q 62,25 66,29 Q 62,32 59,34" />
-                          <path d="M 64,29 Q 69,26 71,31 Q 67,33 65,35" />
-                          <path d="M 69,32 Q 74,31 74,36 Q 70,37 69,37" />
-                          <path d="M 76,48 Q 83,46 81,54 Q 75,52 76,48 Z" />
-                          <path d="M 77,53 Q 86,55 83,62 Q 78,58 77,53 Z" />
-                          <path id="roman_txt_preview" d="M 18,60 A 42,42 0 1,1 102,60" fill="none" stroke="none" />
-                          <text fontSize="5.5" fontFamily="serif" letterSpacing="1">
-                            <textPath href="#roman_txt_preview" startOffset="5%">IMP CONSTANTINVS P F AVG</textPath>
-                          </text>
-                        </svg>
-                      </div>
+                        return scheduledItems.map((item: any, idx: number) => {
+                          const testDate = item.scheduledDate ? new Date(item.scheduledDate) : new Date(2027, 5, 15);
+                          const year = testDate.getFullYear();
+                          const month = testDate.getMonth();
+                          const day = testDate.getDate();
+                          const monthLabel = language === 'sr' ? monthsSR[month] : monthsEN[month];
 
-                      {/* Side Cyrylic Ribbon */}
-                      <div 
-                        className="absolute top-[2cm] right-[0.2cm] h-[85%] text-[7px] uppercase font-bold text-[#2D3025] opacity-[0.035] pointer-events-none z-0"
-                        style={{
-                          writingMode: 'vertical-rl',
-                          textOrientation: 'mixed',
-                          letterSpacing: '0.8em',
-                          fontFamily: '"Playfair Display", serif'
-                        }}
-                      >
-                        {(ITINERARY_LOCALIZATIONS[language] || ITINERARY_LOCALIZATIONS['en']).watermark}
-                      </div>
+                          let titleVal = getLocalizedValue(item, 'title', language) || item.title || '';
+                          if (item.isAvailable === false) {
+                            const unavailableTag = language === 'sr' ? '[Arhivirano]' : '[Archived]';
+                            titleVal = `${unavailableTag} ${titleVal}`;
+                          }
+                          const locationVal = getLocalizedValue(item, 'location', language) || item.location || '';
+                          const categoryVal = formatCategory(item.category, activeT) || item.category || '';
+                          const { primaryMediaUrl, fallbackMediaUrl } = resolveCanonicalItemMedia(item);
 
-                      <div className="relative z-10 space-y-5">
-                        {/* Double ruled header block */}
-                        <div className="bg-white border border-[#E0DDD5] border-b-[3px] border-b-[#1E2E20] p-4 rounded-lg">
-                          <span className="text-[7px] uppercase tracking-[0.3em] font-bold text-[#8F8B73]">
-                            {(ITINERARY_LOCALIZATIONS[language] || ITINERARY_LOCALIZATIONS['en']).recommended}
-                          </span>
-                          <h4 className="font-serif text-lg font-bold text-[#1E2E20] leading-tight mt-1 mb-1.5">
-                            {(ITINERARY_LOCALIZATIONS[language] || ITINERARY_LOCALIZATIONS['en']).title}
-                          </h4>
-                          <p className="text-[9px] text-[#5C5E54] italic leading-relaxed">
-                            {(ITINERARY_LOCALIZATIONS[language] || ITINERARY_LOCALIZATIONS['en']).desc}
-                          </p>
-                        </div>
+                          const gpsString = item.coordinates
+                            ? `${item.coordinates.lat.toFixed(2)}°N, ${item.coordinates.lng.toFixed(2)}°E`
+                            : 'Geolocated';
 
-                        {/* Calibrated Profile */}
-                        <div className="bg-white border-2 border-[#D5D3C8] rounded-[20px] p-5 space-y-3.5 shadow-xs">
-                          <span className="text-[11px] text-[#5C5A4D] uppercase font-black tracking-[0.18em] block border-b-2 border-[#FAF9F5] pb-1.5">
-                            {(ITINERARY_LOCALIZATIONS[language] || ITINERARY_LOCALIZATIONS['en']).visitor_profile}
-                          </span>
-                          <h5 className="font-serif text-[17px] font-black text-[#1B5E20] leading-snug pt-0.5">
-                            {dynamicStyle.styleName}
-                          </h5>
-                          <div className="space-y-2 pt-2 border-t border-[#FAF9F5]">
-                            {dynamicStyle.whyBullets.map((bullet, idx) => (
-                              <div key={idx} className="flex items-start gap-2 text-[12px] text-brand-charcoal font-semibold leading-relaxed">
-                                <span className="w-2 h-2 rounded-full bg-accent-teal flex-shrink-0 mt-1.5" />
-                                <span>{bullet}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+                          const descVal =
+                            getLocalizedValue(item, 'shortDescription', language) ||
+                            getLocalizedValue(item, 'longDescription', language) ||
+                            item.shortDescription ||
+                            item.longDescription ||
+                            '';
 
-                        {/* Scheduled Travel Calendar */}
-                        <div className="bg-white border border-[#E5E3DB] rounded-xl p-3.5 space-y-2">
-                          <span className="text-[7.5px] text-[#8C8A7D] uppercase font-bold tracking-widest block border-b border-[#F3F1ED] pb-1">
-                            {(ITINERARY_LOCALIZATIONS[language] || ITINERARY_LOCALIZATIONS['en']).calendar_title}
-                          </span>
-                          <div className="flex flex-col gap-1.5">
-                            {sortedMonths.slice(0, 1).map((m) => (
-                              <CalendarMonthView 
-                                key={`${m.year}-${m.month}`}
-                                year={m.year}
-                                month={m.month}
-                                highlightedDays={m.days}
-                                language={language}
-                              />
-                            ))}
-                            {sortedMonths.length > 1 && (
-                              <p className="text-[7px] text-[#8C8A7D] text-center italic mt-0.5">
-                                {(ITINERARY_LOCALIZATIONS[language] || ITINERARY_LOCALIZATIONS['en']).additional_months}
-                              </p>
-                            )}
-                          </div>
-                        </div>
+                          const insiderTipVal =
+                            (language === 'sr' ? (item.insiderTipSr || item.insiderTip) : (item.insiderTipEn || item.insiderTip)) ||
+                            item.insiderTip ||
+                            (item.translations?.[language]?.insiderTip) ||
+                            (item.translations?.en?.insiderTip) ||
+                            (item.category === 'Gastronomy'
+                              ? (language === 'sr' ? 'Rezervišite sto unapred i tražite preporuku šefa za lokalna vina.' : 'Book in advance and ask the host for seasonal pairing selections.')
+                              : (language === 'sr' ? 'Dođite u prepodnevnim časovima za najprijatniju atmosferu i fotografisanje.' : 'Morning arrival offers optimal natural lighting and tranquil ambience.'));
 
-                        {/* Essential Protocol inside Preview */}
-                        <div className="bg-white border border-[#E5E3DB] rounded-xl p-3.5 space-y-1">
-                          <span className="text-[7.5px] text-[#8C8A7D] uppercase font-bold tracking-widest block border-b border-[#F3F1ED] pb-1">
-                            {(ITINERARY_LOCALIZATIONS[language] || ITINERARY_LOCALIZATIONS['en']).essential_protocol}
-                          </span>
-                          <table className="w-full text-[9px] mt-1.5">
-                            <tbody>
-                              <tr className="border-b border-[#F3F1ED]">
-                                <td className="py-1 font-black text-[#8C8A7D] uppercase text-[7.5px] tracking-wider w-[40%]">
-                                  {(ITINERARY_LOCALIZATIONS[language] || ITINERARY_LOCALIZATIONS['en']).currency}
-                                </td>
-                                <td className="py-1 text-[#2F3126]">RSD (Srpski dinar)</td>
-                              </tr>
-                              <tr className="border-b border-[#F3F1ED]">
-                                <td className="py-1 font-black text-[#8C8A7D] uppercase text-[7.5px] tracking-wider">
-                                  {(ITINERARY_LOCALIZATIONS[language] || ITINERARY_LOCALIZATIONS['en']).timezone}
-                                </td>
-                                <td className="py-1 text-[#2F3126]">CET/CEST (Belgrade)</td>
-                              </tr>
-                              <tr className="border-b border-[#F3F1ED]">
-                                <td className="py-1 font-black text-[#8C8A7D] uppercase text-[7.5px] tracking-wider">
-                                  {(ITINERARY_LOCALIZATIONS[language] || ITINERARY_LOCALIZATIONS['en']).emergency}
-                                </td>
-                                <td className="py-1 text-[#2F3126]">
-                                  {(ITINERARY_LOCALIZATIONS[language] || ITINERARY_LOCALIZATIONS['en']).emergency_val}
-                                </td>
-                              </tr>
-                              <tr className="border-b border-[#F3F1ED]">
-                                <td className="py-1 font-black text-[#8C8A7D] uppercase text-[7.5px] tracking-wider">
-                                  {(ITINERARY_LOCALIZATIONS[language] || ITINERARY_LOCALIZATIONS['en']).alphabet}
-                                </td>
-                                <td className="py-1 text-[#2F3126]">{(ITINERARY_LOCALIZATIONS[language] || ITINERARY_LOCALIZATIONS['en']).alphabet_val}</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
+                          const bestTimeVal =
+                            (language === 'sr' ? (item.bestTimeToVisitSr || item.bestTimeToVisit) : (item.bestTimeToVisitEn || item.bestTimeToVisit)) ||
+                            item.bestTimeToVisit ||
+                            (item.translations?.[language]?.bestTimeToVisit) ||
+                            (item.translations?.en?.bestTimeToVisit) ||
+                            (language === 'sr' ? 'Kasno popodne pred zalazak sunca' : 'Late afternoon before golden hour');
 
-                        {/* Schedule cards */}
-                        <div className="space-y-3">
-                          <span className="text-[7.5px] text-[#8C8A7D] uppercase font-bold tracking-widest block border-b border-[#E0DDD5] pb-1">
-                            {(ITINERARY_LOCALIZATIONS[language] || ITINERARY_LOCALIZATIONS['en']).chronological}
-                          </span>
+                          const companionData = findCompanionRecommendation(item);
+                          const companionItem = companionData?.item;
+                          const companionDistance = companionData?.distance;
 
-                          {[...scheduledItems]
-                            .sort((a: any, b: any) => {
-                              if (!a.scheduledDate) return 1;
-                              if (!b.scheduledDate) return -1;
-                              return new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime();
-                            })
-                            .map((item: any, idx: number) => {
-                              const localeMap: Record<string, string> = {
-                                sr: 'sr-RS',
-                                ru: 'ru-RU',
-                                es: 'es-ES',
-                                de: 'de-DE',
-                                zh: 'zh-CN',
-                                en: 'en-US'
-                              };
-                              const currentLocale = localeMap[language] || 'en-US';
-                              const dateFormatted = item.scheduledDate 
-                                ? new Date(item.scheduledDate.split('T')[0].replace(/-/g, '/')).toLocaleDateString(currentLocale, { weekday: 'long', month: 'short', day: 'numeric' })
-                                : (ITINERARY_LOCALIZATIONS[language] || ITINERARY_LOCALIZATIONS['en']).flexible;
-                              
-                              return (
-                                <div key={item.id} className="bg-white border border-[#E5E3DB] rounded-xl overflow-hidden shadow-xs">
-                                  <div className="bg-[#F8F7F4] border-b border-[#E5E3DB] px-3 py-1.5 flex justify-between items-center">
-                                    <span className="font-mono text-[9px] font-bold text-[#2E7D32]">#{idx + 1}</span>
-                                    <span className="text-[8.5px] text-[#1E2E20] font-bold uppercase tracking-wide">{dateFormatted}</span>
-                                  </div>
-                                  <div className="p-3 space-y-2">
-                                    <div>
-                                      <h6 className="font-serif text-[12px] font-bold text-[#1E2E20] leading-snug">
-                                        {getLocalizedValue(item, 'title', language)}
-                                      </h6>
-                                      <div className="text-[7.5px] uppercase font-black text-[#2E7D32] tracking-wider mt-0.5">
-                                        {formatCategory(item.category, t)}
-                                      </div>
-                                      <p className="text-[8px] text-[#8C8A7D] mt-1">📍 {getLocalizedValue(item, 'location', language)}</p>
-                                    </div>
+                          const hasTravelTime = !!item.travelTime && item.travelTime.trim().length > 0;
+                          const travelTimeText = hasTravelTime ? item.travelTime : pL.notSpecified;
+                          const visitDurationText = (typeof item.recommendedVisitDuration === 'number' && item.recommendedVisitDuration > 0)
+                            ? formatDuration(item.recommendedVisitDuration, previewLang)
+                            : (item.duration || '2-3 hours');
+                          const hasNumericDurations = typeof item.travelTimeMinutes === 'number' && typeof item.recommendedVisitDuration === 'number' && item.travelTimeMinutes > 0 && item.recommendedVisitDuration > 0;
+                          const totalDurationText = hasNumericDurations
+                            ? formatDuration(item.travelTimeMinutes * 2 + item.recommendedVisitDuration, previewLang)
+                            : null;
 
-                                    <p className="text-[8.5px] text-[#5C5E54] leading-relaxed border-t border-[#F3F1ED] pt-2">
-                                      {getLocalizedValue(item, 'shortDescription', language) || getLocalizedValue(item, 'longDescription', language)}
+                          const hasRecCoords =
+                            typeof item.coordinateX === 'number' &&
+                            typeof item.coordinateY === 'number' &&
+                            !isNaN(item.coordinateX) &&
+                            !isNaN(item.coordinateY) &&
+                            isFinite(item.coordinateX) &&
+                            isFinite(item.coordinateY);
+                          const normRecX = hasRecCoords ? Math.max(0.05, Math.min(0.95, (item.coordinateX + 5) / 10)) : 0.5;
+                          const normRecY = hasRecCoords ? Math.max(0.05, Math.min(0.95, (5 - item.coordinateY) / 10)) : 0.5;
+
+                          const knowBullets = getKnowBeforeYouGoBullets(item, previewLang);
+                          const wx = getWeatherForecast(month, previewLang);
+                          const hasVerifiedFact = !!(
+                            item.fact &&
+                            typeof item.fact === 'string' &&
+                            item.fact.trim() !== '' &&
+                            !item.fact.includes('[fact]') &&
+                            !item.fact.includes('[') &&
+                            item.whyItMatters &&
+                            typeof item.whyItMatters === 'string' &&
+                            item.whyItMatters.trim() !== ''
+                          );
+                          const factText = hasVerifiedFact ? (getLocalizedValue(item, 'fact', language) || item.fact || '') : '';
+
+                          const badgeType = item.badge ? String(item.badge).toLowerCase() : '';
+                          const badgeLabel = badgeType === 'gold'
+                            ? 'GOLD SELECTION'
+                            : badgeType === 'platinum'
+                              ? 'PLATINUM EXCLUSIVE'
+                              : badgeType
+                                ? 'SILVER CURATION'
+                                : '';
+
+                          return (
+                            <div
+                              key={`${item.id}-${idx}`}
+                              className="magazine-dossier-sheet bg-[#FAF9F5] border border-[#DCDAD0] rounded-2xl p-3.5 sm:p-5 shadow-md space-y-3.5 relative overflow-hidden"
+                            >
+                              {/* 1. MASTHEAD & MAGAZINE HEADER */}
+                              <div className="bg-[#1E2E20] rounded-lg overflow-hidden border-b-[3px] border-b-[#8A1F1F]">
+                                <div className="h-1 bg-[#C5A059] w-full" />
+                                <div className="px-3.5 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+                                  <div>
+                                    <p className="text-[7px] font-bold uppercase tracking-[0.18em] text-[#C5A059]">
+                                      {pL.mastheadEyebrow || 'IDEMO BESPOKE TRAVEL BRIEF • PRIVATE CONCIERGE DOSSIER'}
                                     </p>
+                                    <h4 className="font-serif text-[14px] sm:text-[16px] font-bold text-[#FAF9F5] leading-tight mt-0.5">
+                                      {pL.title}
+                                    </h4>
+                                    <p className="text-[7.5px] uppercase tracking-[0.14em] text-[#AEBBAF]">
+                                      {pL.subtitle}
+                                    </p>
+                                  </div>
+                                  <div className="sm:text-right flex sm:flex-col justify-between items-center sm:items-end border-t sm:border-t-0 border-white/10 pt-1.5 sm:pt-0">
+                                    <span className="text-[8.5px] font-bold text-[#FAF9F5] tracking-wider">
+                                      {day} {monthLabel} {year}
+                                    </span>
+                                    <span className="text-[7.5px] font-bold uppercase tracking-widest text-[#C5A059]">
+                                      {pL.planItem.toUpperCase()} {idx + 1} / {scheduledItems.length}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
 
-                                    <div className="flex flex-wrap gap-1 border-t border-[#F3F1ED] pt-2">
-                                      {item.duration && (
-                                        <span className="bg-[#F3F1ED] border border-[#E5E3DB] rounded px-1.5 py-0.5 text-[7.5px] font-medium text-[#505249]">
-                                          🕒 {item.duration}
-                                        </span>
-                                      )}
-                                      {item.travelTime && (
-                                        <span className="bg-[#F3F1ED] border border-[#E5E3DB] rounded px-1.5 py-0.5 text-[7.5px] font-medium text-[#505249]">
-                                          ⚡ {item.travelTime}
-                                        </span>
-                                      )}
-                                      {item.preferredTransport && (
-                                        <span className="bg-[#F3F1ED] border border-[#E5E3DB] rounded px-1.5 py-0.5 text-[7.5px] font-medium text-[#505249]">
-                                          🚗 {item.preferredTransport}
-                                        </span>
-                                      )}
-                                      {item.estimatedCost && (
-                                        <span className="bg-[#F3F1ED] border border-[#E5E3DB] rounded px-1.5 py-0.5 text-[7.5px] font-medium text-[#505249]">
-                                          💶 {item.estimatedCost}
-                                        </span>
-                                      )}
+                              {/* 2. HERO FEATURE ROW (Left: Contained Recommendation Image, Right: Destination Briefing Card) */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {/* LEFT: Hero Photo Frame with Contained Recommendation Image */}
+                                <div className="bg-[#FCFBF8] border border-[#DCDAD0] p-1.5 rounded-lg relative">
+                                  <div className="relative w-full aspect-[87/51] bg-[#F4F2EB] border border-[#F5F3ED] overflow-hidden flex items-center justify-center rounded-xs">
+                                    <LazyImage
+                                      src={primaryMediaUrl}
+                                      fallbackSrc={fallbackMediaUrl}
+                                      alt={titleVal}
+                                      containerClassName="w-full h-full flex items-center justify-center bg-[#F4F2EB]"
+                                      className="w-full h-full object-contain"
+                                    />
+                                    {/* Category Pill bottom-left */}
+                                    <div className="absolute bottom-2 left-2 bg-[#1E2E20] border border-[#C5A059] text-[#FAF9F5] px-2 py-0.5 text-[7px] font-bold uppercase tracking-wider">
+                                      {categoryVal}
                                     </div>
-
-                                    {(item.website || item.phone) && (
-                                      <div className="text-[8px] text-[#5C5E54] space-y-0.5 border-t border-dashed border-[#E5E3DB] pt-2">
-                                        {item.website && (
-                                          <p className="truncate">🌐 <span className="font-bold">{language === 'sr' ? 'Вебсајт' : 'Website'}:</span> {item.website}</p>
-                                        )}
-                                        {item.phone && (
-                                          <p className="truncate">📞 <span className="font-bold">{language === 'sr' ? 'Телефон' : 'Phone'}:</span> {item.phone}</p>
-                                        )}
+                                    {/* Distinction Badge top-right */}
+                                    {badgeLabel && (
+                                      <div
+                                        className={`absolute top-2 right-2 px-2 py-0.5 rounded text-[6.5px] font-bold uppercase tracking-wider border ${
+                                          badgeType === 'gold'
+                                            ? 'bg-[#FEF3C7] border-[#D97706] text-[#78350F]'
+                                            : badgeType === 'platinum'
+                                              ? 'bg-[#E0E7FF] border-[#4338CA] text-[#1E1B4B]'
+                                              : 'bg-[#F1F5F9] border-[#94A3B8] text-[#0F172A]'
+                                        }`}
+                                      >
+                                        {badgeLabel}
                                       </div>
                                     )}
                                   </div>
                                 </div>
-                              );
-                            })}
-                        </div>
 
-                        {/* Briefing Footer */}
-                        <div className="border-t border-dashed border-[#E0DDD5] pt-3 text-[7.5px] text-[#8C8A7D] uppercase tracking-wider flex justify-between items-center">
-                          <span>IDEMO • CONCIERGE BRIEF</span>
-                          <span>EXPO 2027 • SERBIA</span>
-                        </div>
-                      </div>
+                                {/* RIGHT: Destination Briefing Card */}
+                                <div className="bg-[#FCFBF8] border border-[#DCDAD0] border-l-[4px] border-l-[#C5A059] rounded-lg p-3 flex flex-col justify-between">
+                                  <div>
+                                    <span className="text-[7px] font-bold uppercase tracking-[0.16em] text-[#8C8A7D] block">
+                                      IDEMO CURATED DESTINATION
+                                    </span>
+                                    <h5 className="font-serif text-[13px] sm:text-[14px] font-bold text-[#1E2E20] leading-snug mt-0.5">
+                                      {titleVal}
+                                    </h5>
+                                    <p className="text-[8.5px] text-[#5C5E54] mt-0.5">
+                                      📍 {locationVal}
+                                    </p>
+
+                                    {/* 2x2 Key Metrics Grid */}
+                                    <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 mt-2.5 pt-2 border-t border-[#ECEAE2] text-[8px]">
+                                      <div>
+                                        <span className="font-bold text-[#1E2E20] block">Transit Mode:</span>
+                                        <span className="text-[#5C5E54]">{item.preferredTransport || 'Car / Regional Transit'}</span>
+                                      </div>
+                                      <div>
+                                        <span className="font-bold text-[#1E2E20] block">Journey Time:</span>
+                                        <span className="text-[#5C5E54]">{item.travelTime || 'Flexible'}</span>
+                                      </div>
+                                      <div>
+                                        <span className="font-bold text-[#1E2E20] block">Investment:</span>
+                                        <span className="text-[#5C5E54]">{item.estimatedCost || 'Curated Experience'}</span>
+                                      </div>
+                                      <div>
+                                        <span className="font-bold text-[#1E2E20] block">GPS Location:</span>
+                                        <span className="text-[#5C5E54]">{gpsString}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-2.5 pt-1.5 border-t border-[#ECEAE2] text-[7.5px] font-bold text-[#8A1F1F]">
+                                    📅 {day} {monthLabel} {year} • Serbia Concierge
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Editorial Dividing Line */}
+                              <div className="border-t border-[#DCDAD0]" />
+
+                              {/* 3. DUAL-COLUMN MAGAZINE SPREAD */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                {/* LEFT COLUMN */}
+                                <div className="space-y-3">
+                                  {/* 1. Curator's Story & Ambiance */}
+                                  <div>
+                                    <h6 className="font-serif text-[9.5px] font-bold text-[#1E2E20] uppercase tracking-wider border-b border-[#DCDAD0] pb-1">
+                                      {pL.curatorBrief}
+                                    </h6>
+                                    <p className="font-serif italic text-[8.5px] text-[#3C3E36] leading-relaxed mt-1.5">
+                                      {descVal}
+                                    </p>
+                                  </div>
+
+                                  {/* 2. Insider Concierge Tip Callout */}
+                                  <div className="bg-[#FAF8F2] border border-[#E1DCCD] border-l-[4px] border-l-[#C5A059] rounded-md p-2.5 space-y-1.5">
+                                    <div className="text-[7.5px] font-bold uppercase tracking-wider text-[#8A1F1F]">
+                                      ★ {pL.insiderTipTitle}
+                                    </div>
+                                    <p className="text-[8px] text-[#23251E] leading-relaxed">
+                                      {insiderTipVal}
+                                    </p>
+                                    <div className="border-t border-[#E6E1D7] pt-1 text-[7.5px] font-bold text-[#5C5E54]">
+                                      {pL.bestTimeToVisitTitle}: {bestTimeVal}
+                                    </div>
+                                  </div>
+
+                                  {/* 3. Time Budget & Visit Flow */}
+                                  <div>
+                                    <h6 className="font-serif text-[9.5px] font-bold text-[#1E2E20] uppercase tracking-wider border-b border-[#DCDAD0] pb-1">
+                                      {pL.timeBudget}
+                                    </h6>
+                                    <div className="mt-1.5 space-y-1 text-[8px] text-[#5C5E54]">
+                                      <div className="flex justify-between">
+                                        <span className="font-bold">{pL.gettingThereLabel}:</span>
+                                        <span>{pL.approx} {travelTimeText}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="font-bold">{pL.enjoyingVisitLabel}:</span>
+                                        <span>{pL.approx} {visitDurationText}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="font-bold">{pL.gettingBackLabel}:</span>
+                                        <span>{pL.allowApprox} {travelTimeText}</span>
+                                      </div>
+                                      {totalDurationText && (
+                                        <div className="flex justify-between text-[#1E2E20] font-bold pt-0.5 border-t border-[#ECEAE2]">
+                                          <span>{pL.totalTimeLabel}:</span>
+                                          <span>{pL.approx} {totalDurationText}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* 4. Mood Orb Personalization */}
+                                  <div>
+                                    <h6 className="font-serif text-[9.5px] font-bold text-[#1E2E20] uppercase tracking-wider border-b border-[#DCDAD0] pb-1">
+                                      {pL.moodOrbContext}
+                                    </h6>
+                                    <p className="italic text-[7.5px] text-[#5C5E54] mt-1">
+                                      {language === 'sr'
+                                        ? 'Kalibrisano prema vašem profilu putovanja i koordinatama ambijenta.'
+                                        : 'Personalized spatial resonance matching your travel pace and ambiance.'}
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-2 mt-2">
+                                      {/* User Mood Orb Mini-Grid */}
+                                      <div className="bg-[#FCFBF7] border border-[#DCDAD0] rounded p-2 flex flex-col items-center">
+                                        <span className="text-[6.5px] font-bold uppercase text-[#1E2E20] mb-1">{caption1}</span>
+                                        <div className="text-[6px] text-[#8C8A7D] mb-0.5">{labelUrban}</div>
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-[6px] text-[#8C8A7D]">{labelCalm}</span>
+                                          <div className="w-11 h-11 border border-[#DCDAD0] bg-[#FAF9F5] relative">
+                                            <div className="absolute inset-x-0 top-1/2 border-t border-[#EBE9E0]" />
+                                            <div className="absolute inset-y-0 left-1/2 border-l border-[#EBE9E0]" />
+                                            <div
+                                              className="w-2.5 h-2.5 rounded-full bg-[#1E2E20] border border-[#C5A059] absolute -translate-x-1/2 -translate-y-1/2"
+                                              style={{ left: `${Math.round(previewOrbitX * 100)}%`, top: `${Math.round(previewOrbitY * 100)}%` }}
+                                            />
+                                          </div>
+                                          <span className="text-[6px] text-[#8C8A7D]">{labelEnergetic}</span>
+                                        </div>
+                                        <div className="text-[6px] text-[#8C8A7D] mt-0.5">{labelNature}</div>
+                                      </div>
+
+                                      {/* Destination Mood Mini-Grid */}
+                                      <div className="bg-[#FCFBF7] border border-[#DCDAD0] rounded p-2 flex flex-col items-center">
+                                        <span className="text-[6.5px] font-bold uppercase text-[#1E2E20] mb-1">{caption2}</span>
+                                        <div className="text-[6px] text-[#8C8A7D] mb-0.5">{labelUrban}</div>
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-[6px] text-[#8C8A7D]">{labelCalm}</span>
+                                          <div className="w-11 h-11 border border-[#DCDAD0] bg-[#FAF9F5] relative">
+                                            <div className="absolute inset-x-0 top-1/2 border-t border-[#EBE9E0]" />
+                                            <div className="absolute inset-y-0 left-1/2 border-l border-[#EBE9E0]" />
+                                            <div
+                                              className="w-2.5 h-2.5 rounded-full bg-[#8A1F1F] border border-white absolute -translate-x-1/2 -translate-y-1/2"
+                                              style={{ left: `${Math.round(normRecX * 100)}%`, top: `${Math.round(normRecY * 100)}%` }}
+                                            />
+                                          </div>
+                                          <span className="text-[6px] text-[#8C8A7D]">{labelEnergetic}</span>
+                                        </div>
+                                        <div className="text-[6px] text-[#8C8A7D] mt-0.5">{labelNature}</div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* RIGHT COLUMN */}
+                                <div className="space-y-3">
+                                  {/* 1. Nearby Consideration • Companion Stop */}
+                                  <div className="bg-[#FCFBF7] border border-[#DCDAD0] border-t-[3px] border-t-[#8A1F1F] rounded-md p-2.5 space-y-1">
+                                    <div className="text-[7px] font-bold uppercase tracking-wider text-[#8A1F1F]">
+                                      {pL.nearbyTitle}
+                                    </div>
+                                    {companionItem && typeof companionDistance === 'number' ? (
+                                      <>
+                                        <div className="font-serif text-[10.5px] font-bold text-[#1E2E20]">
+                                          {getLocalizedValue(companionItem, 'title', language) || companionItem.title}
+                                        </div>
+                                        <div className="text-[7px] font-bold uppercase text-[#C5A059]">
+                                          {(formatCategory(companionItem.category, activeT) || companionItem.category || '').toUpperCase()} • {companionDistance.toFixed(1)} KM {language === 'sr' ? 'UDALJENO' : 'AWAY'} (~{Math.max(5, Math.round(companionDistance * 2))} MIN)
+                                        </div>
+                                        <p className="text-[7.5px] text-[#5C5E54] leading-relaxed">
+                                          {getLocalizedValue(companionItem, 'shortDescription', language) || companionItem.shortDescription}
+                                        </p>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <div className="font-serif text-[10px] font-bold text-[#1E2E20]">
+                                          {language === 'sr' ? 'Regionalni ambijent i priroda' : 'Regional Surroundings & Ambiance'}
+                                        </div>
+                                        <p className="text-[7.5px] text-[#5C5E54] leading-relaxed">
+                                          {pL.noNearbyText}
+                                        </p>
+                                      </>
+                                    )}
+                                  </div>
+
+                                  {/* 2. Know Before You Go */}
+                                  <div>
+                                    <h6 className="font-serif text-[9.5px] font-bold text-[#1E2E20] uppercase tracking-wider border-b border-[#DCDAD0] pb-1">
+                                      {pL.knowBeforeYouGo}
+                                    </h6>
+                                    <ul className="mt-1.5 space-y-1 text-[7.5px] text-[#5C5E54] leading-relaxed">
+                                      {knowBullets.slice(0, 3).map((b, bIdx) => (
+                                        <li key={bIdx}>• {b}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+
+                                  {/* 3. Climate & Cultural Context */}
+                                  <div>
+                                    <h6 className="font-serif text-[9.5px] font-bold text-[#1E2E20] uppercase tracking-wider border-b border-[#DCDAD0] pb-1">
+                                      {pL.culturalContext}
+                                    </h6>
+                                    <p className="text-[8px] font-bold text-[#1E2E20] mt-1">
+                                      Average monthly temperature: {wx.tempRange}
+                                    </p>
+                                    <p className="italic text-[7.5px] text-[#5C5E54] leading-relaxed mt-0.5">
+                                      {wx.advise}
+                                    </p>
+                                    {hasVerifiedFact && (
+                                      <div className="mt-2 bg-[#FCFBF7] border border-[#DCDAD0] rounded p-2">
+                                        <span className="text-[6.5px] font-bold uppercase tracking-wider text-[#8A1F1F] block">
+                                          HERITAGE INSIGHT
+                                        </span>
+                                        <p className="text-[7.5px] text-[#5C5E54] leading-relaxed mt-0.5">
+                                          {factText}
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* 4. After Your Visit */}
+                                  <div>
+                                    <h6 className="font-serif text-[9px] font-bold text-[#1E2E20] uppercase tracking-wider border-b border-[#DCDAD0] pb-1">
+                                      {pL.afterYourVisitTitle}
+                                    </h6>
+                                    <p className="text-[7.5px] text-[#5C5E54] leading-relaxed mt-1">
+                                      {pL.afterYourVisitCopy}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* 4. CONCIERGE ESSENTIALS TRAY (4-Card Grid) */}
+                              <div className="pt-1">
+                                <h6 className="font-serif text-[9.5px] font-bold text-[#1E2E20] uppercase tracking-wider border-b border-[#DCDAD0] pb-1 mb-2">
+                                  {pL.travelEssentials}
+                                </h6>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[7.5px]">
+                                  <div className="bg-[#FCFBF8] border border-[#DCDAD0] rounded p-2">
+                                    <span className="font-bold text-[#8A1F1F] uppercase block">{pL.emergencyAssistance}</span>
+                                    <span className="text-[11px] font-black text-[#1E2E20] block my-0.5">112</span>
+                                    <span className="text-[#5C5E54] leading-tight block">
+                                      {language === 'sr' ? 'Univerzalni broj za hitne slučajeve u Srbiji.' : 'Universal emergency dispatch throughout Serbia.'}
+                                    </span>
+                                  </div>
+                                  <div className="bg-[#FCFBF8] border border-[#DCDAD0] rounded p-2">
+                                    <span className="font-bold text-[#1E2E20] uppercase block">{pL.moneyPayment}</span>
+                                    <span className="text-[10px] font-black text-[#1E2E20] block my-0.5">RSD</span>
+                                    <span className="text-[#5C5E54] leading-tight block">
+                                      {language === 'sr' ? 'Srpski dinar. Kartice se prihvataju, ponesite keš za pijace.' : 'Serbian Dinar. Cards widely accepted; carry cash for artisan markets.'}
+                                    </span>
+                                  </div>
+                                  <div className="bg-[#FCFBF8] border border-[#DCDAD0] rounded p-2 space-y-0.5">
+                                    <span className="font-bold text-[#1E2E20] uppercase block">{pL.usefulPhrases}</span>
+                                    <div><span className="font-bold text-[#1E2E20]">Dobar dan</span> <span className="text-[#5C5E54]">— Good day</span></div>
+                                    <div><span className="font-bold text-[#1E2E20]">Hvala</span> <span className="text-[#5C5E54]">— Thank you</span></div>
+                                    <div><span className="font-bold text-[#1E2E20]">Račun, molim</span> <span className="text-[#5C5E54]">— Bill, please</span></div>
+                                  </div>
+                                  <div className="bg-[#FCFBF8] border border-[#DCDAD0] rounded p-2 space-y-0.5">
+                                    <span className="font-bold text-[#1E2E20] uppercase block">{pL.gettingThere}</span>
+                                    <div className="text-[#5C5E54]"><span className="font-bold text-[#1E2E20]">Transport:</span> {item.preferredTransport || 'Car / Transit'}</div>
+                                    <div className="text-[#5C5E54]"><span className="font-bold text-[#1E2E20]">Travel Time:</span> {item.travelTime || 'Flexible'}</div>
+                                    <div className="text-[#5C5E54]"><span className="font-bold text-[#1E2E20]">GPS:</span> {gpsString}</div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* 5. RUNNING FOOTER & LEGAL DISCLAIMER */}
+                              <div className="border-t border-[#DCDAD0] pt-2 space-y-1 text-[6.5px] text-[#8C8A7D]">
+                                <p className="leading-snug">
+                                  {activeT.legal_disclaimer}: {activeT.disclaimer_1} {activeT.disclaimer_2}
+                                </p>
+                                <div className="border-t border-[#EBE9E0] pt-1.5 flex justify-between items-center font-bold uppercase tracking-wider">
+                                  <span>IDEMO BESPOKE TRAVEL DOSSIER • SERBIA PRIVATE CONCIERGE</span>
+                                  <span>{pL.planItem.toUpperCase()} {idx + 1} OF {scheduledItems.length}</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
 
                     {/* Integrated sharing, printing, and jspdf download triggers inside preview */}
