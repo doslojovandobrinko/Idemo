@@ -237,11 +237,17 @@ export function savePartnerOverridesToStorage(overrides: Record<string, Partner>
   }
 }
 
+let isSyncingApprovedPassports = false;
+
 /**
  * Migrates a single approved passport record into the authoritative Partner Directory.
  * Ensures the partner has stage: 'Approved' and verificationStatus: 'verified'.
  */
-export function migrateApprovedPassportToDirectory(passportData: any, rawPartnerKeyOrCode: string): Partner {
+export function migrateApprovedPassportToDirectory(
+  passportData: any,
+  rawPartnerKeyOrCode: string,
+  options?: { suppressEvent?: boolean }
+): Partner {
   const overrides = getPersistedPartnerOverrides();
   const existingMap = new Map<string, Partner>();
   STATIC_PARTNERS.forEach((p) => existingMap.set(p.id.toLowerCase(), p));
@@ -306,7 +312,7 @@ export function migrateApprovedPassportToDirectory(passportData: any, rawPartner
       ? passportData.applied_recs
       : matchedExisting?.linkedRecommendations || matchedPortal?.assignedRecs || [];
 
-  const reviewedAtIso = passportData.reviewed_at || new Date().toISOString();
+  const reviewedAtIso = passportData.reviewed_at || matchedExisting?.lastVerified || new Date().toISOString();
   const lastVerifiedDate = reviewedAtIso.includes('T') ? reviewedAtIso.split('T')[0] : reviewedAtIso;
 
   const migratedPartner: Partner = {
@@ -342,11 +348,23 @@ export function migrateApprovedPassportToDirectory(passportData: any, rawPartner
     locationZh: matchedExisting?.locationZh || matchedPortal?.geography || '贝尔格莱德及塞尔维亚',
   };
 
-  overrides[partnerId] = migratedPartner;
-  savePartnerOverridesToStorage(overrides);
+  const prevOverride = overrides[partnerId];
+  const hasChanged =
+    !prevOverride ||
+    prevOverride.stage !== migratedPartner.stage ||
+    prevOverride.verificationStatus !== migratedPartner.verificationStatus ||
+    prevOverride.nameEn !== migratedPartner.nameEn ||
+    prevOverride.descriptionEn !== migratedPartner.descriptionEn ||
+    prevOverride.phone !== migratedPartner.phone ||
+    prevOverride.email !== migratedPartner.email;
 
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('idemo_partners_updated'));
+  if (hasChanged) {
+    overrides[partnerId] = migratedPartner;
+    savePartnerOverridesToStorage(overrides);
+
+    if (!options?.suppressEvent && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('idemo_partners_updated'));
+    }
   }
 
   return migratedPartner;
@@ -357,6 +375,8 @@ export function migrateApprovedPassportToDirectory(passportData: any, rawPartner
  * into the authoritative Partner Directory (overrides).
  */
 export function syncApprovedPassportsToDirectory(): void {
+  if (isSyncingApprovedPassports) return;
+  isSyncingApprovedPassports = true;
   try {
     const passportKeys = safeStorage.getAllKeys().filter((k) => k.toLowerCase().startsWith('idemo_partner_passport_'));
     for (const key of passportKeys) {
@@ -370,11 +390,13 @@ export function syncApprovedPassportsToDirectory(): void {
       }
 
       if (passportData.review_status === 'approved') {
-        migrateApprovedPassportToDirectory(passportData, key);
+        migrateApprovedPassportToDirectory(passportData, key, { suppressEvent: true });
       }
     }
   } catch (err) {
     console.warn('[IDEMO Partner Directory Sync] Failed syncing approved passports:', err);
+  } finally {
+    isSyncingApprovedPassports = false;
   }
 }
 

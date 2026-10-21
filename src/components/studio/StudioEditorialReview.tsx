@@ -158,6 +158,7 @@ export function StudioEditorialReview({
   const [reviewerNoteInput, setReviewerNoteInput] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [passportPhotoRenderState, setPassportPhotoRenderState] = useState<'loading' | 'loaded' | 'error'>('loading');
 
   const getStudioAccessToken = async (): Promise<string | null> => {
     const supabase = getSupabaseClient();
@@ -215,6 +216,10 @@ export function StudioEditorialReview({
     return passportQueue.find(p => p.partner_id === selectedPassportPartnerId) || null;
   }, [passportQueue, selectedPassportPartnerId]);
 
+  useEffect(() => {
+    setPassportPhotoRenderState('loading');
+  }, [selectedPassportPartnerId, selectedPassportProfile?.photo_url]);
+
   const handlePassportAction = async (action: 'approve' | 'request_changes' | 'unpublish') => {
     if (!selectedPassportProfile) return;
     setActionFeedback(null);
@@ -263,9 +268,14 @@ export function StudioEditorialReview({
 
   useEffect(() => {
     if (targetRecId) {
-      setSelectedRecId(targetRecId);
+      if (allRecs.some(r => r.id === targetRecId)) {
+        setSelectedRecId(targetRecId);
+      } else {
+        setSelectedPassportPartnerId(targetRecId);
+        setActiveSubTab('partners');
+      }
     }
-  }, [targetRecId]);
+  }, [targetRecId, allRecs]);
 
   const activeRec = useMemo(() => {
     return allRecs.find(r => r.id === selectedRecId) || allRecs[0];
@@ -301,7 +311,7 @@ export function StudioEditorialReview({
       if (allRecs.some(r => r.id === itemId)) {
         setSelectedRecId(itemId);
         setActiveSubTab('overview');
-      } else if (passportQueue.some(p => p.partner_id === itemId)) {
+      } else {
         setSelectedPassportPartnerId(itemId);
         setActiveSubTab('partners');
       }
@@ -1476,13 +1486,37 @@ export function StudioEditorialReview({
                                 {selectedPassportProfile.photo_available && selectedPassportProfile.photo_url ? (
                                   <div className="mt-2 text-center">
                                     <img
+                                      key={`${selectedPassportProfile.partner_id}:${selectedPassportProfile.photo_url}`}
+                                      ref={(el) => {
+                                        if (el && el.complete) {
+                                          if (el.naturalWidth > 0 && passportPhotoRenderState === 'loading') {
+                                            setPassportPhotoRenderState('loaded');
+                                          } else if (el.naturalWidth === 0 && passportPhotoRenderState === 'loading') {
+                                            setPassportPhotoRenderState('error');
+                                          }
+                                        }
+                                      }}
                                       src={selectedPassportProfile.photo_url || undefined}
                                       alt={selectedPassportProfile.partner_name}
                                       referrerPolicy="no-referrer"
+                                      onLoad={() => setPassportPhotoRenderState('loaded')}
+                                      onError={() => setPassportPhotoRenderState('error')}
                                       className="max-h-48 rounded-xl object-cover border border-[#E5E3DB] mx-auto shadow-sm"
                                     />
-                                    <div className="text-[9px] font-mono text-[#8C8A7D] mt-1">
-                                      Secure Signed Photo Preview
+                                    <div className="text-[10px] font-mono mt-1.5">
+                                      {passportPhotoRenderState === 'loaded' ? (
+                                        <span className="text-emerald-800 font-semibold">
+                                          ✓ Signed image URL generated &amp; image loaded
+                                        </span>
+                                      ) : passportPhotoRenderState === 'error' ? (
+                                        <span className="text-amber-800 font-semibold">
+                                          ⚠ Signed URL generated, but image failed to render (refresh queue to renew signed URL)
+                                        </span>
+                                      ) : (
+                                        <span className="text-[#8C8A7D]">
+                                          Signed image URL generated — loading image...
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
                                 ) : (

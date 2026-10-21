@@ -5,6 +5,7 @@ import { StudioUserSession } from './studio/types';
 import { Recommendation } from '../types';
 import { safeStorage } from '../lib/safeStorage';
 import { getSupabaseClient, isSupabaseConfigured } from '../lib/supabaseClient';
+import { ensureStudioSupabaseSession } from '../lib/partnerService';
 
 interface IdemoStudioProps {
   onReturnToApp?: () => void;
@@ -41,6 +42,9 @@ export function IdemoStudio({
             parsed.email.toLowerCase() === 'office@idemo.group' &&
             parsed.role
           ) {
+            if (isSupabaseConfigured()) {
+              await ensureStudioSupabaseSession();
+            }
             if (mounted) {
               setSession(parsed);
               setIsInitializing(false);
@@ -114,18 +118,25 @@ export function IdemoStudio({
           if (newSbSession?.user) {
             const derivedRole = parseAndValidateStudioRole(newSbSession.user.app_metadata?.role);
             if (derivedRole) {
-              const updatedSession: StudioUserSession = {
-                email: newSbSession.user.email || '',
-                name: newSbSession.user.user_metadata?.name || newSbSession.user.user_metadata?.full_name || (newSbSession.user.email ? newSbSession.user.email.split('@')[0] : derivedRole),
-                role: derivedRole,
-                authenticatedAt: new Date().toISOString()
-              };
-              setSession(updatedSession);
-              try {
-                safeStorage.setItem(STUDIO_SESSION_KEY, JSON.stringify(updatedSession));
-              } catch (e) {
-                console.warn('Failed to persist Studio session on auth state change:', e);
-              }
+              const nextEmail = newSbSession.user.email || '';
+              const nextName = newSbSession.user.user_metadata?.name || newSbSession.user.user_metadata?.full_name || (nextEmail ? nextEmail.split('@')[0] : derivedRole);
+              setSession((prev) => {
+                if (prev && prev.email === nextEmail && prev.role === derivedRole && prev.name === nextName) {
+                  return prev;
+                }
+                const updatedSession: StudioUserSession = {
+                  email: nextEmail,
+                  name: nextName,
+                  role: derivedRole,
+                  authenticatedAt: prev?.authenticatedAt || new Date().toISOString()
+                };
+                try {
+                  safeStorage.setItem(STUDIO_SESSION_KEY, JSON.stringify(updatedSession));
+                } catch (e) {
+                  console.warn('Failed to persist Studio session on auth state change:', e);
+                }
+                return updatedSession;
+              });
             } else {
               // Only clear session if not logged in with the master operator credential
               const stored = safeStorage.getItem(STUDIO_SESSION_KEY);

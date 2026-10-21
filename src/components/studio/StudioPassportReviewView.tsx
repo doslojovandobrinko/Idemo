@@ -70,6 +70,7 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
   const [reviewNote, setReviewNote] = useState<string>('');
   const [actionLoading, setActionLoading] = useState<boolean>(false);
   const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [photoRenderState, setPhotoRenderState] = useState<'loading' | 'loaded' | 'error'>('loading');
 
   const roleStr = String(session?.role || '').toLowerCase().replace(/[\s_-]+/g, '');
   const isAuthorized = roleStr === 'editor' || roleStr === 'editoriallead' || roleStr === 'superadmin';
@@ -152,6 +153,7 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
   useEffect(() => {
     setReviewNote('');
     setActionFeedback(null);
+    setPhotoRenderState('loading');
     if (selectedProfile && Array.isArray(selectedProfile.applied_recs)) {
       setSelectedRecIds(new Set(selectedProfile.applied_recs));
       const initialRanks: Record<string, number> = {};
@@ -164,7 +166,7 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
       setSelectedRecIds(new Set());
       setCoverageRanks({});
     }
-  }, [selectedPartnerId, selectedProfile?.applied_recs]);
+  }, [selectedPartnerId, selectedProfile?.photo_url, selectedProfile?.applied_recs]);
 
   // Handler: 1-Action change of inquiry priority rank (1st = 1, 2nd = 2, 3rd = 3)
   const handleUpdateRank = async (recId: string, newRank: number, recTitle: string) => {
@@ -1019,16 +1021,40 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
                 {selectedProfile.photo_available && selectedProfile.photo_url ? (
                   <div className="flex flex-col sm:flex-row items-start gap-4 p-4 bg-[#FAF9F5] rounded-2xl border border-[#E5E3DB]">
                     <img
+                      key={`${selectedProfile.partner_id}:${selectedProfile.photo_url}`}
+                      ref={(el) => {
+                        if (el && el.complete) {
+                          if (el.naturalWidth > 0 && photoRenderState === 'loading') {
+                            setPhotoRenderState('loaded');
+                          } else if (el.naturalWidth === 0 && photoRenderState === 'loading') {
+                            setPhotoRenderState('error');
+                          }
+                        }
+                      }}
                       src={selectedProfile.photo_url}
                       alt={selectedProfile.partner_name}
                       referrerPolicy="no-referrer"
+                      onLoad={() => setPhotoRenderState('loaded')}
+                      onError={() => setPhotoRenderState('error')}
                       className="w-28 h-28 object-cover rounded-xl border border-[#E5E3DB] shadow-xs shrink-0"
                     />
                     <div className="text-xs font-sans text-[#1E2E20] space-y-1">
-                      <p className="font-semibold text-emerald-800 flex items-center gap-1.5 font-mono text-[11px]">
-                        <CheckCircle2 size={13} />
-                        Signed image URL generated & validated
-                      </p>
+                      {photoRenderState === 'loaded' ? (
+                        <p className="font-semibold text-emerald-800 flex items-center gap-1.5 font-mono text-[11px]">
+                          <CheckCircle2 size={13} />
+                          Signed image URL generated &amp; image loaded
+                        </p>
+                      ) : photoRenderState === 'error' ? (
+                        <p className="font-semibold text-amber-800 flex items-center gap-1.5 font-mono text-[11px]">
+                          <AlertTriangle size={13} />
+                          Signed URL generated, but image failed to render (refresh queue to renew signed URL)
+                        </p>
+                      ) : (
+                        <p className="font-semibold text-[#8C8A7D] flex items-center gap-1.5 font-mono text-[11px]">
+                          <RefreshCw size={13} className="animate-spin text-[#C5A059]" />
+                          Signed image URL generated — loading image...
+                        </p>
+                      )}
                       <p className="text-[#8C8A7D] text-[11px]">
                         Consent verified: {selectedProfile.photo_consent_given ? 'Subject provided explicit consent for publication.' : 'Consent pending.'}
                       </p>
