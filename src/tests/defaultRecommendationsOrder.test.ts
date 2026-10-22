@@ -3,8 +3,8 @@
  * and before applying explicit preference filters, the 3 agreed default recommendations
  * load first in exact canonical order:
  * 1. Uvac Meanders ('1')
- * 2. Wines from the Sands ('9')
- * 3. Via Ferrata Kablar ('81')
+ * 2. Banjska Stena Viewpoint ('12')
+ * 3. Wines from the Sands ('9')
  */
 
 import { getRankedRecommendations, UserPreferences } from '../lib/recommendationEngine';
@@ -42,13 +42,13 @@ function runTest() {
 
   const isOrderCorrect =
     ranked[0]?.id === '1' &&
-    ranked[1]?.id === '9' &&
-    ranked[2]?.id === '81';
+    ranked[1]?.id === '12' &&
+    ranked[2]?.id === '9';
 
   if (isOrderCorrect) {
-    console.log('✅ PASS: Top 3 loaded first in exact order (1: Uvac Meanders, 9: Wines from the Sands, 81: Via Ferrata Kablar)');
+    console.log('✅ PASS: Top 3 loaded first in exact order (1: Uvac Meanders, 12: Banjska Stena Viewpoint, 9: Wines from the Sands)');
   } else {
-    console.error('❌ FAIL: Expected top 3 [1, 9, 81] but got:', top3);
+    console.error('❌ FAIL: Expected top 3 [1, 12, 9] but got:', top3);
     process.exit(1);
   }
 

@@ -1940,6 +1940,7 @@ export default function App() {
     setTime(24);
     setDays('All');
     setCustomOrbit(null);
+    setHasRecalibratedInSession(false);
     try {
       const h = new Date().getHours();
       setTimeOfDay((h >= 9 && h < 18) ? 'Working hours' : 'Evening');
@@ -2129,6 +2130,7 @@ export default function App() {
     } catch (e) { console.warn(e); }
     return null;
   });
+  const [hasRecalibratedInSession, setHasRecalibratedInSession] = useState<boolean>(false);
   const [timeOfDay, setTimeOfDay] = useState(() => {
     try {
       const h = new Date().getHours();
@@ -2470,6 +2472,27 @@ export default function App() {
   }, [scheduledItems, userFacingRecommendations]);
 
   const rankedRecommendations = getRankedRecommendations(userFacingRecommendations, prefs);
+
+  const welcomeCarouselRecommendations = useMemo(() => {
+    if (hasRecalibratedInSession) {
+      return rankedRecommendations;
+    }
+    const firstImpressionIds = ['1', '12', '9'];
+    const pinned: Recommendation[] = [];
+    for (const id of firstImpressionIds) {
+      const match =
+        rankedRecommendations.find(r => String(r.id).trim() === id) ||
+        userFacingRecommendations.find(r => String(r.id).trim() === id) ||
+        allRecommendations.find(r => String(r.id).trim() === id);
+      if (match) {
+        pinned.push(match);
+      }
+    }
+    const remaining = rankedRecommendations.filter(
+      r => !firstImpressionIds.includes(String(r.id).trim())
+    );
+    return [...pinned, ...remaining];
+  }, [hasRecalibratedInSession, rankedRecommendations, userFacingRecommendations, allRecommendations]);
 
   const t = TRANSLATIONS[language] || TRANSLATIONS['en'];
 
@@ -2840,7 +2863,7 @@ export default function App() {
             key="home"
             likedIds={likedIds}
             language={language}
-            recommendations={rankedRecommendations}
+            recommendations={welcomeCarouselRecommendations}
             allRecommendations={allRecommendations}
             onNavigateToProfile={() => navigateToScreen('profile')}
             onBackToLanding={() => {
@@ -2962,11 +2985,11 @@ export default function App() {
           <ProfileScreen 
             key="profile"
             language={language}
-            budget={budget} setBudget={setBudget}
-            time={time} setTime={setTime}
+            budget={budget} setBudget={(b: number) => { setHasRecalibratedInSession(true); setBudget(b); }}
+            time={time} setTime={(tVal: number) => { setHasRecalibratedInSession(true); setTime(tVal); }}
             days={days} setDays={setDays}
             timeOfDay={timeOfDay} setTimeOfDay={setTimeOfDay}
-            selectedCats={selectedCats} setSelectedCats={setSelectedCats}
+            selectedCats={selectedCats} setSelectedCats={(cats: any) => { setHasRecalibratedInSession(true); setSelectedCats(cats); }}
             recommendations={rankedRecommendations}
             onSelectRec={handleSelectRec}
             ratings={ratings}
@@ -3000,6 +3023,7 @@ export default function App() {
             orbitX={orbitX}
             orbitY={orbitY}
             onOrbitChange={(x: number, y: number, b?: number, t?: number) => {
+              setHasRecalibratedInSession(true);
               setCustomOrbit({ orbitX: x, orbitY: y });
               if (typeof b === 'number') setBudget(b);
               if (typeof t === 'number') setTime(t);

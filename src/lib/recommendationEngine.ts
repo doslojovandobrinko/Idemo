@@ -357,7 +357,7 @@ export function scoreRecommendation(rec: Recommendation, prefs: UserPreferences)
   }
 
   // 6. Editorial priority / featured boost (Small support)
-  const priorityIds = ['1', '9', '19', '81'];
+  const priorityIds = ['1', '12', '9', '19', '81'];
   if (priorityIds.includes(rec.id)) {
     score += 5; // small editorial boost
   }
@@ -367,26 +367,26 @@ export function scoreRecommendation(rec: Recommendation, prefs: UserPreferences)
 
 export function getRankedRecommendations(recs: Recommendation[], prefs: UserPreferences): Recommendation[] {
   if (!recs || recs.length === 0) return [];
-  const priorityIds = ['1', '9', '19', '81'];
+  const priorityIds = ['1', '12', '9', '19', '81'];
 
-  // Check if profile is completely default (before user starts defining his/her profile)
+  // Check if profile is in default uncalibrated state (before user explicitly customizes their Mood Orbit)
   const hasNoRatings = !prefs.ratings || Object.keys(prefs.ratings).length === 0;
-  const hasNoImplicitTastes = !prefs.implicitTastes || Object.keys(prefs.implicitTastes).length === 0;
   const isDefaultBudgetAndTime = prefs.budget === 100 && prefs.time === 24;
   const hasNoSelectedCategories = !prefs.selectedCategories || prefs.selectedCategories.length === 0;
-  // If user explicitly confirmed custom Mood Orbit (prefs.isCustomOrbit === true), it is strictly not default
-  const isDefaultOrbit = !prefs.isCustomOrbit && 
-    (prefs.orbitX === undefined || prefs.orbitY === undefined || (Math.abs(prefs.orbitX - 0.5) < 0.05 && Math.abs(prefs.orbitY - 0.5) < 0.05));
+  // If prefs.isCustomOrbit is explicitly provided, use it directly (App.tsx blends default budget=100 into orbitX=0.625)
+  const isDefaultOrbit = prefs.isCustomOrbit !== undefined
+    ? !prefs.isCustomOrbit
+    : (prefs.orbitX === undefined || prefs.orbitY === undefined || (Math.abs(prefs.orbitX - 0.5) < 0.05 && Math.abs(prefs.orbitY - 0.5) < 0.05));
 
-
-  const isDefault = hasNoRatings && hasNoImplicitTastes && isDefaultBudgetAndTime && hasNoSelectedCategories && isDefaultOrbit;
+  const isDefault = hasNoRatings && isDefaultBudgetAndTime && hasNoSelectedCategories && isDefaultOrbit;
 
   if (isDefault) {
-    const targetIds = ['1', '9', '81'];
+    const targetIds = ['1', '12', '9'];
     const targetRecs: Recommendation[] = [];
     const otherRecs: Recommendation[] = [];
     
-    // Maintain the specific default order: Uvac Meanders ('1'), Wines of the Sands ('9'), Kablar Ferrata ('81')
+    // Maintain the specific default first-impression order:
+    // 1. Uvac Meanders ('1'), 2. Banjska Stena Viewpoint ('12'), 3. Wines from the Sands ('9')
     for (const id of targetIds) {
       const found = recs.find(r => r.id === id);
       if (found) {
