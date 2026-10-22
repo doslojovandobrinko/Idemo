@@ -15,6 +15,7 @@ export type TaskAgingTier = 'TIER_1_FRESH' | 'TIER_2_AGING' | 'TIER_3_BOTTLENECK
 export type TaskIssueType = 
   | 'GATE_BLOCKER' 
   | 'PARTNER_VERIFICATION' 
+  | 'PARTNER_PROPOSAL'
   | 'AMBIGUITY' 
   | 'COVERAGE_GAP' 
   | 'TRANSLATION_GAP';
@@ -135,13 +136,21 @@ export function aggregateCuratorTasks(params: {
 
   // 2. Recommendations requiring Curator Gate Attention
   for (const rec of recommendations) {
+    // Avoid duplicating a Partner Proposal that is already tracked in the proposals queue
+    if (
+      (rec as any).source === 'partner_proposal' &&
+      proposals.some(p => p.recDraftId === rec.id || p.id === rec.id)
+    ) {
+      continue;
+    }
+
     const status = editorialStatuses[rec.id] || 'CANDIDATE';
 
     // If candidate or needs research, inspect publication gate blockers
     if (status === 'CANDIDATE' || status === 'NEEDS RESEARCH') {
       // Validate with deterministic canonical gate
       const validation = validateCanonicalRecommendationForPublication(rec as CanonicalRecommendation);
-      const aging = calculateTaskAging(rec.curatorNote ? undefined : undefined); // defaults gracefully
+      const aging = calculateTaskAging((rec as any).createdAt || (rec as any).updatedAt); // defaults gracefully
 
       if (!validation.isPublishable) {
         const topReason = validation.blockingReasons[0] || 'MISSING_REQUIRED_EDITORIAL_CONTENT';
@@ -182,24 +191,34 @@ export function aggregateCuratorTasks(params: {
 
   // 3. Partner Recommendation Proposals
   for (const prop of proposals) {
-    if (prop.curatorReviewStatus === 'PENDING') {
-      const aging = calculateTaskAging(prop.submittedAt);
+    const isPendingStatus =
+      prop.status === 'AGENT_007_PENDING' ||
+      prop.status === 'AGENT_007_RECOMMENDED' ||
+      (prop as any).curatorReviewStatus === 'PENDING';
+    const linkedRecStatus = prop.recDraftId ? editorialStatuses[prop.recDraftId] : undefined;
+    const isAlreadyResolved = linkedRecStatus === 'APPROVED' || linkedRecStatus === 'RETIRED';
+
+    if (isPendingStatus && !isAlreadyResolved) {
+      const submittedAt = prop.submittedAt || (prop as any).createdAt;
+      const aging = calculateTaskAging(submittedAt);
+      const isPackage = prop.proposalType === 'PACKAGE' || (prop.proposalType as string) === 'PACKAGE_TOUR';
+
       tasks.push({
         id: `task-prop-${prop.id}`,
-        title: prop.proposedTitle,
+        title: prop.title || (prop as any).proposedTitle || 'Untitled Partner Proposal',
         entityType: 'proposal',
-        targetId: prop.id,
-        category: prop.category,
+        targetId: prop.recDraftId || prop.id,
+        category: prop.category || (isPackage ? 'Package Tour' : 'Editorial'),
         urgency: aging.tier === 'TIER_3_BOTTLENECK' ? 'CRITICAL' : 'WARNING',
         agingHours: aging.hours,
         agingTier: aging.tier,
         agingLabel: aging.label,
-        issueType: 'AMBIGUITY',
-        issueTypeLabel: 'Proposal Staged',
-        issueSummary: `Submitted by ${prop.partnerName}: Curation team review required before staging.`,
-        recommendedAction: 'Approve / Reject',
-        actionTab: 'editorial-review',
-        createdAt: prop.submittedAt
+        issueType: 'PARTNER_PROPOSAL',
+        issueTypeLabel: isPackage ? 'Partner Package Proposal' : 'Partner Spot Proposal',
+        issueSummary: `Submitted by ${prop.partnerName || prop.partnerCode || prop.partnerId}: Curation team review required in Destinations (Curated spots).`,
+        recommendedAction: 'Review Proposal',
+        actionTab: 'recommendations',
+        createdAt: submittedAt || new Date().toISOString()
       });
     }
   }

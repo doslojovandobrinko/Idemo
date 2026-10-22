@@ -16,23 +16,62 @@ const imageMap = new Map<string, string>();
 
 try {
   if (typeof import.meta !== 'undefined' && typeof (import.meta as any).glob === 'function') {
-    const imageModules = (import.meta as any).glob(
-      ['/src/assets/images/*.{webp,png,jpg,jpeg}', '/public/assets/images/*.{webp,png,jpg,jpeg}'],
+    const srcImageModules = (import.meta as any).glob(
+      '/src/assets/images/*.{webp,png,jpg,jpeg}',
       { eager: true, import: 'default' }
     );
-    for (const [path, url] of Object.entries(imageModules)) {
+    for (const [path, url] of Object.entries(srcImageModules)) {
       if (typeof url === 'string') {
         const filename = path.split('/').pop()?.toLowerCase() || '';
         if (filename) {
           imageMap.set(filename, url);
           const base = filename.replace(/\.(webp|png|jpg|jpeg)$/i, '');
-          imageMap.set(base, url);
+          if (!imageMap.has(base) || filename.endsWith('.webp')) {
+            imageMap.set(base, url);
+          }
         }
       }
     }
   }
 } catch {
   // Fallback for non-Vite environments
+}
+
+/**
+ * Returns the unhashed canonical public static URL (/assets/images/<filename>)
+ * used as a deterministic fallback if a Vite-hashed bundle URL is stale or unreachable
+ * in a cached WebView/wrapper shell.
+ */
+export function getDirectStaticImageUrl(src: string): string {
+  if (!src) return '';
+  if (src.startsWith('blob:') || src.startsWith('data:') || src.startsWith('http://') || src.startsWith('https://')) {
+    return src;
+  }
+
+  const parts = src.split('/');
+  const rawFilename = (parts[parts.length - 1] || '').trim();
+  if (!rawFilename) return '';
+
+  const lowerFilename = rawFilename.toLowerCase();
+  const baseName = lowerFilename.replace(/\.(webp|png|jpg|jpeg)$/i, '');
+
+  if (lowerFilename.endsWith('.png') && imageMap.has(`${baseName}.webp`)) {
+    return `/assets/images/${rawFilename.slice(0, -4)}.webp`;
+  }
+
+  if (
+    src.startsWith('/src/assets/images/') ||
+    src.startsWith('src/assets/images/') ||
+    src.startsWith('/assets/images/') ||
+    src.startsWith('assets/images/')
+  ) {
+    const normalizedFile = rawFilename.endsWith('.png')
+      ? `${rawFilename.slice(0, -4)}.webp`
+      : rawFilename;
+    return `/assets/images/${normalizedFile}`;
+  }
+
+  return '';
 }
 
 /**
@@ -62,14 +101,14 @@ export function getOptimizedImageUrl(src: string): string {
     }
   }
   
-  // 3. Fallback: clean relative path without leading root slashes that break iframe origins
+  // 3. Fallback: root-relative public static path (/assets/images/...)
   let cleaned = src;
   if (cleaned.startsWith('/src/assets/images/')) {
-    cleaned = cleaned.replace('/src/assets/images/', 'assets/images/');
+    cleaned = cleaned.replace('/src/assets/images/', '/assets/images/');
   } else if (cleaned.startsWith('src/assets/images/')) {
-    cleaned = cleaned.replace('src/assets/images/', 'assets/images/');
-  } else if (cleaned.startsWith('/assets/images/')) {
-    cleaned = cleaned.replace('/assets/images/', 'assets/images/');
+    cleaned = cleaned.replace('src/assets/images/', '/assets/images/');
+  } else if (cleaned.startsWith('assets/images/')) {
+    cleaned = '/' + cleaned;
   }
   
   if (cleaned.endsWith('.png')) {

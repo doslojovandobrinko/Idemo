@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const STATIC_CACHE = `idemo-static-${CACHE_VERSION}`;
 const IMAGE_CACHE = `idemo-images-${CACHE_VERSION}`;
 const FONT_CACHE = `idemo-fonts-${CACHE_VERSION}`;
@@ -39,9 +39,16 @@ const isImageRequest = (url, request) => {
   );
 };
 
-// Helper to check if asset name contains a build hash (immutable assets)
+// Verify that a response actually contains image bytes and not an SPA HTML fallback
+const isValidImageResponse = (response) => {
+  if (!response || response.status !== 200) return false;
+  const contentType = (response.headers.get('content-type') || '').toLowerCase();
+  return contentType.startsWith('image/');
+};
+
+// Helper to check if asset name contains a build hash (Vite base64url / alphanumeric hashes)
 const isImmutableAsset = (url) => {
-  return url.pathname.match(/-[a-f0-9]{8,}\.(js|css|woff2|png|jpg|jpeg|webp)$/i);
+  return url.pathname.match(/-[a-zA-Z0-9_-]{8,}\.(js|css|woff2|png|jpg|jpeg|webp)$/i);
 };
 
 // Install Event
@@ -128,16 +135,16 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. IMAGES: Cache-First with Stale-while-revalidate for local assets/images and external covers
+  // 2. IMAGES: Cache-First with Content-Type guard and Stale-while-revalidate
   if (isImageRequest(requestUrl, event.request)) {
     event.respondWith(
       caches.open(IMAGE_CACHE).then((cache) => {
         return cache.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) {
+          if (cachedResponse && isValidImageResponse(cachedResponse)) {
             // Asynchronously fetch fresh copy in background to keep cache healthy
             fetch(event.request)
               .then((networkResponse) => {
-                if (networkResponse && networkResponse.status === 200) {
+                if (isValidImageResponse(networkResponse)) {
                   cache.put(event.request, networkResponse);
                 }
               })
@@ -145,9 +152,14 @@ self.addEventListener('fetch', (event) => {
             return cachedResponse;
           }
 
-          // Fetch from network and cache
+          if (cachedResponse) {
+            // Evict poisoned non-image response (e.g. cached SPA index.html fallback)
+            cache.delete(event.request).catch(() => {});
+          }
+
+          // Fetch from network and cache only verified image responses
           return fetch(event.request).then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
+            if (isValidImageResponse(networkResponse)) {
               cache.put(event.request, networkResponse.clone());
             }
             return networkResponse;

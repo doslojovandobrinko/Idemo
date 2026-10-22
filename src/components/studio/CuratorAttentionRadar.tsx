@@ -36,7 +36,7 @@ export function CuratorAttentionRadar({
   className = '',
   compactDefault = true
 }: CuratorAttentionRadarProps) {
-  const [filterType, setFilterType] = useState<'ALL' | 'CRITICAL' | 'GATE_BLOCKER' | 'PARTNER_VERIFICATION' | 'AMBIGUITY'>('ALL');
+  const [filterType, setFilterType] = useState<'ALL' | 'CRITICAL' | 'GATE_BLOCKER' | 'PARTNER_VERIFICATION' | 'PARTNER_PROPOSAL' | 'AMBIGUITY'>('ALL');
   const [isExpanded, setIsExpanded] = useState(!compactDefault);
 
   // Fast counts for 3-second comprehension
@@ -44,16 +44,18 @@ export function CuratorAttentionRadar({
     let critical = 0;
     let gate = 0;
     let partner = 0;
+    let proposals = 0;
     let ambiguity = 0;
 
     for (const t of tasks) {
       if (t.agingTier === 'TIER_3_BOTTLENECK' || t.urgency === 'CRITICAL') critical++;
       if (t.issueType === 'GATE_BLOCKER') gate++;
       if (t.issueType === 'PARTNER_VERIFICATION') partner++;
+      if (t.issueType === 'PARTNER_PROPOSAL') proposals++;
       if (t.issueType === 'AMBIGUITY') ambiguity++;
     }
 
-    return { total: tasks.length, critical, gate, partner, ambiguity };
+    return { total: tasks.length, critical, gate, partner, proposals, ambiguity };
   }, [tasks]);
 
   const filteredTasks = useMemo(() => {
@@ -61,6 +63,7 @@ export function CuratorAttentionRadar({
       if (filterType === 'CRITICAL') return t.agingTier === 'TIER_3_BOTTLENECK' || t.urgency === 'CRITICAL';
       if (filterType === 'GATE_BLOCKER') return t.issueType === 'GATE_BLOCKER';
       if (filterType === 'PARTNER_VERIFICATION') return t.issueType === 'PARTNER_VERIFICATION';
+      if (filterType === 'PARTNER_PROPOSAL') return t.issueType === 'PARTNER_PROPOSAL';
       if (filterType === 'AMBIGUITY') return t.issueType === 'AMBIGUITY';
       return true;
     });
@@ -105,6 +108,12 @@ export function CuratorAttentionRadar({
         return (
           <span className="px-1.5 py-0.5 rounded font-mono text-[8.5px] uppercase font-bold tracking-wider bg-[#EDE9DE] text-[#23251E] border border-[#D5D1C3]">
             Passport Queue
+          </span>
+        );
+      case 'PARTNER_PROPOSAL':
+        return (
+          <span className="px-1.5 py-0.5 rounded font-mono text-[8.5px] uppercase font-bold tracking-wider bg-[#FFF8E1] text-[#B45309] border border-[#FFE082]">
+            Partner Proposal
           </span>
         );
       case 'AMBIGUITY':
@@ -190,6 +199,19 @@ export function CuratorAttentionRadar({
             >
               <Flame size={12} className={filterType === 'CRITICAL' ? 'text-white' : 'text-[#800020]'} />
               <span>Critical SLA ({counts.critical})</span>
+            </button>
+          )}
+
+          {counts.proposals > 0 && (
+            <button
+              onClick={() => setFilterType('PARTNER_PROPOSAL')}
+              className={`px-3 py-1.5 rounded-xl font-mono text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer border ${
+                filterType === 'PARTNER_PROPOSAL'
+                  ? 'bg-[#B45309] text-white border-[#B45309]'
+                  : 'bg-[#FFF8E1] hover:bg-[#FFE082] text-[#B45309] border-[#FFE082]'
+              }`}
+            >
+              <span>Proposals ({counts.proposals})</span>
             </button>
           )}
 

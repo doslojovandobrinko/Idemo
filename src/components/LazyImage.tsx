@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { getOptimizedImageUrl, resolveMediaDisplayUrl } from '../utils/assetHelper';
+import { getDirectStaticImageUrl, getOptimizedImageUrl, resolveMediaDisplayUrl } from '../utils/assetHelper';
 
 interface LazyImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   src: string;
@@ -62,18 +62,24 @@ export const LazyImage: React.FC<LazyImageProps> = ({
   };
 
   const resolvedFallback = getResolvedFallback();
+  const directStaticFallback = getDirectStaticImageUrl(src);
   const isGovernedMedia = Boolean(src && (src.startsWith('recommendation-media/') || src.startsWith('/recommendation-media/')));
   const initialSrc = isGovernedMedia ? '' : getOptimizedImageUrl(cleanPath(src));
-  const [imgSrc, setImgSrc] = useState<string>(initialSrc || resolvedFallback);
+  const [imgSrc, setImgSrc] = useState<string>(initialSrc || directStaticFallback || resolvedFallback);
   const [isLoaded, setIsLoaded] = useState<boolean>(true);
   const [hasError, setHasError] = useState<boolean>(false);
   const imgRef = React.useRef<HTMLImageElement | null>(null);
+  const triedDirectStaticRef = React.useRef<boolean>(false);
+  const triedExplicitFallbackRef = React.useRef<boolean>(false);
 
-  // Synchronize imgSrc when src prop changes
+  // Synchronize imgSrc ONLY when src or fallbackSrc props change (never depend on imgSrc, which caused fallback resets)
   React.useEffect(() => {
     let active = true;
+    triedDirectStaticRef.current = false;
+    triedExplicitFallbackRef.current = false;
 
     if (isGovernedMedia) {
+      setHasError(false);
       resolveMediaDisplayUrl(src)
         .then((resolvedUrl) => {
           if (active && resolvedUrl) {
@@ -82,28 +88,45 @@ export const LazyImage: React.FC<LazyImageProps> = ({
         })
         .catch(() => {
           if (active) {
-            setHasError(true);
-            if (resolvedFallback) setImgSrc(resolvedFallback);
+            if (resolvedFallback) {
+              triedExplicitFallbackRef.current = true;
+              setImgSrc(resolvedFallback);
+            } else {
+              setHasError(true);
+            }
           }
         });
     } else {
-      const nextSrc = getOptimizedImageUrl(cleanPath(src));
-      if (nextSrc && nextSrc !== imgSrc) {
-        setImgSrc(nextSrc);
-        setIsLoaded(false);
-        setHasError(false);
-      }
+      const nextSrc = getOptimizedImageUrl(cleanPath(src)) || directStaticFallback || resolvedFallback;
+      setHasError(false);
+      setImgSrc((prev) => {
+        if (nextSrc && nextSrc !== prev) {
+          setIsLoaded(false);
+          return nextSrc;
+        }
+        return prev || nextSrc;
+      });
     }
 
     return () => {
       active = false;
     };
-  }, [src, fallbackSrc, isGovernedMedia, imgSrc]);
+  }, [src, fallbackSrc, isGovernedMedia, directStaticFallback, resolvedFallback]);
+
+  // Verify completion whenever imgSrc updates (handles browser/WebView cache hits synchronously)
+  React.useEffect(() => {
+    const node = imgRef.current;
+    if (node && node.complete && node.naturalWidth > 0) {
+      setIsLoaded(true);
+      setHasError(false);
+    }
+  }, [imgSrc]);
 
   // Handle image load verification
   const checkComplete = (imgNode: HTMLImageElement | null) => {
     if (imgNode && imgNode.complete && imgNode.naturalWidth > 0) {
       setIsLoaded(true);
+      setHasError(false);
     }
   };
 
@@ -112,17 +135,38 @@ export const LazyImage: React.FC<LazyImageProps> = ({
     checkComplete(node);
   };
 
-  const handleLoad = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    checkComplete(e.currentTarget);
+  const handleLoad = () => {
+    setIsLoaded(true);
+    setHasError(false);
   };
 
   const handleError = () => {
-    if (!hasError) {
-      setHasError(true);
-      if (resolvedFallback && imgSrc !== resolvedFallback) {
-        setImgSrc(resolvedFallback);
-      }
+    // 1. If Vite-hashed asset URL failed (e.g. cached WebView shell vs updated build), retry unhashed /assets/images/<file>
+    if (
+      !isGovernedMedia &&
+      !triedDirectStaticRef.current &&
+      directStaticFallback &&
+      imgSrc !== directStaticFallback
+    ) {
+      triedDirectStaticRef.current = true;
+      setHasError(false);
+      setImgSrc(directStaticFallback);
+      return;
     }
+
+    // 2. If an explicit fallbackSrc was supplied, try it next
+    if (
+      !triedExplicitFallbackRef.current &&
+      resolvedFallback &&
+      imgSrc !== resolvedFallback
+    ) {
+      triedExplicitFallbackRef.current = true;
+      setHasError(false);
+      setImgSrc(resolvedFallback);
+      return;
+    }
+
+    setHasError(true);
   };
 
   const isPending = !src || src.includes('draft_placeholder') || (hasError && !resolvedFallback);
@@ -152,6 +196,7 @@ export const LazyImage: React.FC<LazyImageProps> = ({
         src={imgSrc || undefined}
         alt={alt}
         loading={loading}
+        decoding="async"
         onLoad={handleLoad}
         onError={handleError}
         className={`${className} transition-opacity duration-300 ease-out ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
