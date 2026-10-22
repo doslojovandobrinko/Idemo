@@ -301,42 +301,6 @@ export const streamGLivingSerbiaRecommendations: Recommendation[] = [
     }
   },
   {
-    id: "G-09",
-    title: "Svrljig Frula & Gajde Instrument Carving",
-    category: Category.HISTORY,
-    publicationStatus: "RESEARCH_CANDIDATE",
-    shortDescription: "Discover how traditional wooden flutes (frula) and Svrljig bagpipes (gajde) are hand-carved, tuned, and tested in South-Eastern Serbia.",
-    longDescription: "The Svrljig area is legendary for its folk music traditions and master wind instrument makers. Craftsmen select plum, maple, and boxwood timber, seasoning the wood before hand-boring, carving fingerholes, and tuning acoustic pitch. Visits include demonstrations of wooden frula carving, hornhead bagpipe assembly, and short traditional acoustic performances.",
-    image: "/src/assets/images/g-09_svrljig_frula_gajde_instrument_carving.webp",
-    duration: "1.5–2.5 Hours",
-    travelTime: "2.5 Hours from Belgrade",
-    travelTimeMinutes: 160,
-    location: "Svrljig / Eastern Serbia",
-    estimatedCost:"€20 - €30",
-    preferredTransport: "Car",
-    seasonality: "all",
-    familySuitability: true,
-    accessibility: true,
-    premiumLevel: "standard",
-    budgetLevel: "low",
-    recommendedVisitDuration: 120,
-    coordinates: {
-      lat: 43.4136,
-      lng: 22.0864
-    },
-    equivalents: {
-      en: "Northumbrian Smallpipes Craft (UK)"
-    },
-    translations: {
-      sr: {
-        title: "Radionice izrade frula i gajdi u Svrljigu",
-        shortDescription: "Otkrijte kako se drvene frule i svrljiške gajde ručno dube, podešavaju i štimuju u tradicionalnim radionicama jugoistočne Srbije.",
-        longDescription: "Svrljiški kraj je čuven po muzičkoj tradiciji i majstorima za izradu narodnih duvačkih instrumenata. Odabirom šljivovog i javorovog drveta, majstori ručno dube frule i izrađuju gajde sa autentičnim zvučnim štimom. Poseta uključuje prikaz izrade i kratku zvučnu demonstraciju.",
-        location: "Svrljig / Eastern Serbia"
-      }
-    }
-  },
-  {
     id: "G-10",
     title: "Pešter Plateau Artisan Dairy Households",
     category: Category.GASTRONOMY,

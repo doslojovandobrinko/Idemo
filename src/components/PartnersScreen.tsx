@@ -3966,37 +3966,37 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
 
                   {/* CARD 1: DYNAMIC EDITORIAL ACTIVITY FEED (WHAT'S NEW) */}
                   <div className="bg-white border border-[#2D3025]/10 rounded-[32px] p-6 shadow-sm text-left space-y-4">
-                    <div className="flex items-center justify-between border-b border-[#2D3025]/5 pb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="p-1.5 rounded-lg bg-[#8A1F1F]/5 text-[#8A1F1F]">
-                          <CheckCircle2 size={14} />
+                    <div className="flex items-center justify-between border-b border-[#2D3025]/10 pb-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <span className="p-2 rounded-lg bg-[#8A1F1F]/10 text-[#8A1F1F]">
+                          <CheckCircle2 size={16} />
                         </span>
                         <div className="space-y-0.5">
-                          <span className="text-[8px] uppercase tracking-widest font-mono text-brand-charcoal/40 font-bold block">
+                          <span className="text-[10px] uppercase tracking-widest font-mono text-brand-charcoal/70 font-bold block">
                             {tL0('editorialNotices')}
                           </span>
-                          <h3 className="text-xs uppercase tracking-wide font-black text-brand-charcoal">
+                          <h3 className="text-sm sm:text-base uppercase tracking-wide font-black text-brand-charcoal">
                             {tL0('whatsNew')}
                           </h3>
                         </div>
                       </div>
-                      <span className="text-[9px] font-mono font-bold text-[#8A1F1F] bg-[#8A1F1F]/5 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                      <span className="text-[10.5px] font-mono font-bold text-[#8A1F1F] bg-[#8A1F1F]/10 px-3 py-1 rounded-full uppercase tracking-wider">
                         {dynamicEvents.length} {isSr ? 'OBJAVA' : 'NOTICES'}
                       </span>
                     </div>
 
                     {/* DYNAMIC EVENT FEED */}
                     {isLoadingEvents ? (
-                      <div className="p-6 text-center text-brand-charcoal/40 text-[11px] font-mono bg-[#FAF9F5] rounded-2xl border border-[#E5E3DB] flex items-center justify-center gap-2">
-                        <Loader2 size={13} className="animate-spin text-[#8A1F1F]" />
+                      <div className="p-6 text-center text-brand-charcoal/60 text-[13px] font-mono bg-[#FAF9F5] rounded-2xl border border-[#E5E3DB] flex items-center justify-center gap-2">
+                        <Loader2 size={15} className="animate-spin text-[#8A1F1F]" />
                         <span>{isSr ? 'Učitavanje objava...' : 'Loading publications...'}</span>
                       </div>
                     ) : dynamicEvents.length === 0 ? (
-                      <div className="p-6 text-center text-brand-charcoal/50 text-[11px] font-mono bg-[#FAF9F5] rounded-2xl border border-[#E5E3DB]">
+                      <div className="p-6 text-center text-brand-charcoal/70 text-[13px] font-mono bg-[#FAF9F5] rounded-2xl border border-[#E5E3DB]">
                         {tL0('emptyWhatsNew')}
                       </div>
                     ) : (
-                      <div className="space-y-3.5 divide-y divide-[#2D3025]/5">
+                      <div className="space-y-4 divide-y divide-[#2D3025]/10">
                         {dynamicEvents.map((evt, idx) => {
                           const langKey = (portalLang || 'sr').toLowerCase();
                           const dateLabel =
@@ -4008,21 +4008,21 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
                           const descText = evt.description[langKey] || evt.description.sr || evt.description.en;
 
                           return (
-                            <div key={evt.id || idx} className={`${idx > 0 ? 'pt-3.5' : ''} space-y-1.5`}>
+                            <div key={evt.id || idx} className={`${idx > 0 ? 'pt-4' : ''} space-y-2`}>
                               <div className="flex items-center justify-between gap-2">
-                                <span className="px-2 py-0.5 rounded-md bg-[#23251E]/5 border border-[#23251E]/10 text-[8.5px] font-mono font-bold text-brand-charcoal uppercase tracking-wider">
+                                <span className="px-2.5 py-1 rounded-md bg-[#23251E]/8 border border-[#23251E]/15 text-[10.5px] font-mono font-bold text-brand-charcoal uppercase tracking-wider">
                                   {badgeText}
                                 </span>
                                 {dateLabel ? (
-                                  <span className="text-[9px] font-mono text-brand-charcoal/40 font-semibold">
+                                  <span className="text-[11px] font-mono text-brand-charcoal/65 font-semibold">
                                     {dateLabel}
                                   </span>
                                 ) : null}
                               </div>
-                              <h4 className="text-xs font-bold text-brand-charcoal leading-snug">
+                              <h4 className="text-[15px] sm:text-base font-extrabold text-brand-charcoal leading-snug">
                                 {titleText}
                               </h4>
-                              <p className="text-[11px] text-brand-charcoal/70 leading-relaxed font-normal">
+                              <p className="text-[13.5px] sm:text-sm text-brand-charcoal/90 leading-relaxed font-medium">
                                 {descText}
                               </p>
                             </div>

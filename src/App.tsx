@@ -1043,8 +1043,8 @@ function determineShowOnboarding(): boolean {
       safeStorage.setItem('idemo_app_open_count_v1', openCount.toString());
     }
 
-    // Per user rule: Show 3 intro cards ONLY on the 1st and 3rd app openings
-    return openCount === 1 || openCount === 3;
+    // Per user rule: Show 3 intro cards ONLY on the 1st, 3rd, and 7th app openings
+    return openCount === 1 || openCount === 3 || openCount === 7;
   } catch {
     return true;
   }
@@ -2820,8 +2820,6 @@ export default function App() {
           <LandingScreen 
             key="landing"
             onStart={() => {
-              setShowOnboarding(true);
-              setOnboardingKey(prev => prev + 1);
               navigateToScreen('home');
             }} 
             onEmblemTap={handleStudioEmblemTap}

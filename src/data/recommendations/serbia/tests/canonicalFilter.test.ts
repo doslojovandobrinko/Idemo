@@ -10,7 +10,11 @@ export async function runCanonicalFilterValidation(): Promise<boolean> {
     console.error(`FAILED: Expected 192 unique records, got ${INITIAL_RECOMMENDATIONS.length} total, ${uniqueIds.size} unique.`);
     return false;
   }
-  console.log('✔ Proved 192 unique repository records exist');
+  if (uniqueIds.has('G-09')) {
+    console.error('FAILED: Retired recommendation G-09 must not be present in INITIAL_RECOMMENDATIONS.');
+    return false;
+  }
+  console.log('✔ Proved 192 unique repository records exist (and G-09 is removed)');
 
   // 2. Verify all mapped recommendations enter package generation
   const canonicalPackageRecs = getCanonicalRecommendations(INITIAL_RECOMMENDATIONS);

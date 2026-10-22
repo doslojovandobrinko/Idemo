@@ -123,6 +123,9 @@ export const loadRecommendations = async (): Promise<LoadRecommendationsResult> 
       }
 
       const recId = row.source_id;
+      if (recId === 'G-09') {
+        continue;
+      }
       const staticMatch = staticRecsMap.get(recId);
       const coordX = (row as any).coordinate_x ?? (row as any).coordinateX ?? staticMatch?.coordinateX ?? 0;
       const coordY = (row as any).coordinate_y ?? (row as any).coordinateY ?? staticMatch?.coordinateY ?? 0;

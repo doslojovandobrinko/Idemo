@@ -67,7 +67,7 @@ export async function calculatePackageHash(data: { recommendations: Recommendati
  */
 export function getCanonicalRecommendations(allRecs: Recommendation[] = INITIAL_RECOMMENDATIONS): Recommendation[] {
   return allRecs
-    .filter(r => Boolean(r && r.id && r.title && r.publicationStatus !== 'RETIRED'))
+    .filter(r => Boolean(r && r.id && r.id !== 'G-09' && r.title && r.publicationStatus !== 'RETIRED'))
     .map(r => ({
       ...r,
       image: getApprovedPrimaryMedia(r.id, r.image),
@@ -176,8 +176,9 @@ export async function getActiveDestinationPackage(): Promise<DestinationPackage>
       const parsed: DestinationPackage = JSON.parse(cachedJson);
       const version = parsed?.manifest?.packageVersion || '1.0.0';
       const hasBrokenImage = parsed?.recommendations?.some(r => !r.image || r.image === '/src/assets/images/.webp' || r.image.endsWith('/.webp'));
+      const hasRemovedRec = parsed?.recommendations?.some(r => r.id === 'G-09');
       const validation = await validateDestinationPackage(parsed);
-      if (validation.valid && version >= '1.3.0' && !hasBrokenImage) {
+      if (validation.valid && version >= '1.3.0' && !hasBrokenImage && !hasRemovedRec) {
         return parsed;
       }
       console.warn('[DestinationPackageManager] Active package invalid or outdated (v' + version + '), refreshing canonical baseline package:', validation.reason || 'OUTDATED_PACKAGE_VERSION');
@@ -191,8 +192,9 @@ export async function getActiveDestinationPackage(): Promise<DestinationPackage>
   if (prevJson) {
     try {
       const parsedPrev: DestinationPackage = JSON.parse(prevJson);
+      const hasRemovedPrev = parsedPrev?.recommendations?.some(r => r.id === 'G-09');
       const prevVal = await validateDestinationPackage(parsedPrev);
-      if (prevVal.valid) {
+      if (prevVal.valid && !hasRemovedPrev) {
         console.warn('[DestinationPackageManager] Rolled back to previous valid package version:', parsedPrev.manifest.packageVersion);
         return parsedPrev;
       }
@@ -344,7 +346,9 @@ export async function checkAndSyncDestinationPackage(destinationId: string = 'se
     if (recRows && recRows.length > 0) {
       const staticRecsMap = new Map(INITIAL_RECOMMENDATIONS.map(r => [r.id, r]));
       // Map recommendations
-      const updatedRecs: Recommendation[] = recRows.map((row: any) => {
+      const updatedRecs: Recommendation[] = recRows
+        .filter((row: any) => (row.source_id || row.id) !== 'G-09')
+        .map((row: any) => {
         const recId = row.source_id || row.id;
         const staticMatch = staticRecsMap.get(recId);
         const candidateImage = row.image_url || staticMatch?.image || '/src/assets/images/uvac_meanders_1778841048759.png';
