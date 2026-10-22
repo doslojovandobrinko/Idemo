@@ -165,7 +165,7 @@ export const HERO_DAILY_COLLECTION: DailyHeroCard[] = [
     locationDe: "Nationales Netzwerk Serbien",
     locationRu: "Национальная Сеть Сербии",
     locationZh: "塞尔维亚国家网络",
-    src: "/idemo_hero_custom.png",
+    src: "/idemo_hero_custom.png?v=2",
     isCustomHeroPng: true,
   },
   {
@@ -4181,7 +4181,7 @@ function LandingScreen({ onStart, language, setLanguage, landingImage, onEmblemT
                       <img 
                         src={activeCard.src} 
                         alt="IDEMO" 
-                        className="w-full h-full object-contain select-none pointer-events-none drop-shadow-[0_8px_24px_rgba(35,37,30,0.06)]"
+                        className="w-full h-full object-contain select-none pointer-events-none drop-shadow-[0_8px_24px_rgba(35,37,30,0.06)] mix-blend-multiply"
                         style={{ imageRendering: "-webkit-optimize-contrast" }}
                         draggable={false}
                       />

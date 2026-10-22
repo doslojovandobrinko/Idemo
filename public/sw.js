@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v6';
 const STATIC_CACHE = `idemo-static-${CACHE_VERSION}`;
 const IMAGE_CACHE = `idemo-images-${CACHE_VERSION}`;
 const FONT_CACHE = `idemo-fonts-${CACHE_VERSION}`;

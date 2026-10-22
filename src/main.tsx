@@ -36,9 +36,14 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
     }
   } else {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js').catch(err => {
-        console.debug('[IDEMO PWA] Service worker registration ignored:', err);
-      });
+      navigator.serviceWorker
+        .register('/sw.js', { updateViaCache: 'none' })
+        .then(reg => {
+          reg.update().catch(() => {});
+        })
+        .catch(err => {
+          console.debug('[IDEMO PWA] Service worker registration ignored:', err);
+        });
     });
   }
 }
