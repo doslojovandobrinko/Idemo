@@ -10,6 +10,7 @@ import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 import { safeStorage } from './safeStorage';
 import { ensureEnglishSync } from './inquiryTranslation';
 import { refreshPartnerOpportunitiesBackground, unmarkPartnerInquiriesAsSeen } from './partnerBadgeStorage';
+import { partnerSessionStorage } from './partnerSessionStorage';
 
 const metaEnv = (import.meta as unknown as { env?: Record<string, string> }).env || {};
 const getEnvVar = (key: string): string => {
@@ -214,6 +215,7 @@ export async function submitInquiry(params: SubmitInquiryParams): Promise<Submit
         requestedEndAt,
       };
 
+      // Save portal item for local tracking
       const rawPortal = safeStorage.getItem('idemo_portal_inquiries');
       const portalInqs: any[] = rawPortal ? JSON.parse(rawPortal) : [];
       const existingIdx = portalInqs.findIndex((i: any) =>
@@ -225,24 +227,31 @@ export async function submitInquiry(params: SubmitInquiryParams): Promise<Submit
         portalInqs.unshift(portalItem);
       }
       safeStorage.setItem('idemo_portal_inquiries', JSON.stringify(portalInqs));
-      unmarkPartnerInquiriesAsSeen([portalItem.id, portalItem.inquiryId, portalItem.local_queue_id].filter(Boolean));
-      try {
-        const rawCleared = safeStorage.getItem('idemo_cleared_portal_inquiry_ids');
-        if (rawCleared) {
-          const clearedList: string[] = JSON.parse(rawCleared);
-          const filteredCleared = clearedList.filter(cid => cid !== portalItem.id && cid !== portalItem.inquiryId && cid !== portalItem.local_queue_id);
-          safeStorage.setItem('idemo_cleared_portal_inquiry_ids', JSON.stringify(filteredCleared));
+
+      // Dispatch partner badge events ONLY if an active partner session is logged in on this specific device
+      if (partnerSessionStorage.hasActiveSession()) {
+        unmarkPartnerInquiriesAsSeen([portalItem.id, portalItem.inquiryId, portalItem.local_queue_id].filter(Boolean));
+        try {
+          const rawCleared = safeStorage.getItem('idemo_cleared_portal_inquiry_ids');
+          if (rawCleared) {
+            const clearedList: string[] = JSON.parse(rawCleared);
+            const filteredCleared = clearedList.filter(cid => cid !== portalItem.id && cid !== portalItem.inquiryId && cid !== portalItem.local_queue_id);
+            safeStorage.setItem('idemo_cleared_portal_inquiry_ids', JSON.stringify(filteredCleared));
+          }
+        } catch {}
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('idemo_partner_badge_change'));
+          window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
         }
-      } catch {}
+        refreshPartnerOpportunitiesBackground().catch(() => {});
+      }
 
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new Event('idemo_partner_badge_change'));
-        window.dispatchEvent(new CustomEvent('idemo_partner_opportunity_change'));
         window.dispatchEvent(new CustomEvent('idemo_inquiry_updated'));
       }
-      refreshPartnerOpportunitiesBackground().catch(() => {});
     } catch (e) {
-      console.warn('[IDEMO Inquiry] Failed to trigger partner badge sync:', e);
+      console.warn('[IDEMO Inquiry] Failed to process inquiry notification:', e);
     }
 
     return {
