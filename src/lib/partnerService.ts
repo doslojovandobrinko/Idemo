@@ -1303,11 +1303,12 @@ export async function adminReviewPartnerProfile(
   targetPartnerIdOrToken: string,
   actionOrPartnerId: string,
   reviewNoteOrAction?: string,
-  studioTokenOrNote?: string
+  studioTokenOrNote?: string,
+  profileSnapshot?: Partial<PartnerProfileQueueItem>
 ): Promise<PartnerActionResult> {
   // Normalize parameters to support both signatures:
-  // Signature A: (targetPartnerId, action, reviewNote?, studioToken?)
-  // Signature B: (studioToken, targetPartnerId, action, reviewNote?)
+  // Signature A: (targetPartnerId, action, reviewNote?, studioToken?, profileSnapshot?)
+  // Signature B: (studioToken, targetPartnerId, action, reviewNote?, profileSnapshot?)
   let targetPartnerId = targetPartnerIdOrToken;
   let action: 'approve' | 'request_changes' | 'unpublish' = 'approve';
   let reviewNote: string | undefined = undefined;
@@ -1439,19 +1440,34 @@ export async function adminReviewPartnerProfile(
     }
   }
 
+  const resolvedName =
+    profileSnapshot?.partner_name ||
+    matchedPortal?.name ||
+    matched?.nameEn ||
+    profileSnapshot?.partner_code ||
+    targetPartnerId;
+  const resolvedCode =
+    profileSnapshot?.partner_code ||
+    matchedPortal?.publicCode ||
+    matched?.publicCode ||
+    matched?.id ||
+    resolvedName;
+
   let localUpdated = false;
   for (const k of candidateKeys) {
     const raw = safeStorage.getItem(k);
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
+        if (profileSnapshot?.partner_name) parsed.partner_name = profileSnapshot.partner_name;
+        if (profileSnapshot?.partner_code) parsed.partner_code = profileSnapshot.partner_code;
         parsed.review_status = action === 'approve' ? 'approved' : action === 'unpublish' ? 'withdrawn' : 'changes_requested';
         if (action === 'approve') {
-          parsed.intro_published = parsed.intro_draft;
+          parsed.intro_published = parsed.intro_draft || profileSnapshot?.introduction_draft || profileSnapshot?.introduction_published || parsed.intro_published;
           parsed.published_photo_path = parsed.draft_photo_path || parsed.photo_url;
           parsed.photo_url = parsed.draft_photo_path || parsed.photo_url;
-          parsed.published_contact_phone = parsed.draft_contact_phone || parsed.contact_phone;
-          parsed.published_contact_email = parsed.draft_contact_email || parsed.contact_email;
+          parsed.published_contact_phone = parsed.draft_contact_phone || parsed.contact_phone || profileSnapshot?.draft_contact_phone || profileSnapshot?.published_contact_phone;
+          parsed.published_contact_email = parsed.draft_contact_email || parsed.contact_email || profileSnapshot?.draft_contact_email || profileSnapshot?.published_contact_email;
         }
         parsed.reviewed_at = new Date().toISOString();
         parsed.review_note = reviewNote || null;
@@ -1465,15 +1481,29 @@ export async function adminReviewPartnerProfile(
 
   // 4. Migrate approved passport into the authoritative Partner Directory
   if (action === 'approve') {
-    // If not found in candidate keys, create safeStorage snapshot so migration succeeds
+    // If not found in candidate keys, create safeStorage snapshot so migration succeeds with real partner name
     if (!localUpdated) {
       const fallbackKey = `idemo_partner_passport_${targetPartnerId.toUpperCase()}`;
       safeStorage.setItem(fallbackKey, JSON.stringify({
         partner_id: targetPartnerId,
-        partner_code: matchedPortal?.publicCode || matched?.id || targetPartnerId,
-        partner_name: matchedPortal?.name || matched?.nameEn || targetPartnerId,
+        partner_code: resolvedCode,
+        partner_name: resolvedName,
         review_status: 'approved',
-        intro_published: matched?.descriptionEn || 'Approved partner passport.',
+        intro_draft: profileSnapshot?.introduction_draft || null,
+        intro_published: profileSnapshot?.introduction_draft || profileSnapshot?.introduction_published || matched?.descriptionEn || 'Approved partner passport.',
+        draft_contact_phone: profileSnapshot?.draft_contact_phone || null,
+        draft_contact_email: profileSnapshot?.draft_contact_email || null,
+        published_contact_phone: profileSnapshot?.draft_contact_phone || profileSnapshot?.published_contact_phone || null,
+        published_contact_email: profileSnapshot?.draft_contact_email || profileSnapshot?.published_contact_email || null,
+        partner_type: profileSnapshot?.partner_type || 'Individual',
+        website: profileSnapshot?.website || null,
+        guide_licence: profileSnapshot?.guide_licence || null,
+        pib: profileSnapshot?.pib || null,
+        languages: profileSnapshot?.languages || ['English', 'Serbian'],
+        transport_capacity: profileSnapshot?.transport_capacity || 'none',
+        notice_window: profileSnapshot?.notice_window || '24h',
+        applied_recs: profileSnapshot?.applied_recs || null,
+        canonical_region: profileSnapshot?.canonical_region || null,
         reviewed_at: new Date().toISOString(),
         review_note: reviewNote || null,
       }));
@@ -1507,7 +1537,7 @@ export async function adminReviewPartnerProfile(
     return {
       success: true,
       status: action === 'approve' ? 'approved' : action,
-      message: rpcMessage || `Partner Passport submission for ${matched?.nameEn || targetPartnerId} successfully ${action === 'approve' ? 'approved and published' : 'updated'}.`,
+      message: rpcMessage || `Partner Passport submission for ${resolvedName} successfully ${action === 'approve' ? 'approved and published' : 'updated'}.`,
     };
   }
 
@@ -1775,6 +1805,52 @@ export async function fetchPartnerProfileReviewQueue(
       total_count: 0,
       status_filter: status,
     };
+  }
+
+  // 2c. Synchronize authoritative approved server profiles (including real 16-char partner_name)
+  // into SafeStorage so the Partner Directory always displays real names instead of UUIDs.
+  if (serverSuccess && serverProfiles.length > 0) {
+    let anyApprovedSynced = false;
+    for (const prof of serverProfiles) {
+      if (prof.review_status === "approved" && prof.partner_id) {
+        try {
+          const passKey = `idemo_partner_passport_${prof.partner_id.toUpperCase()}`;
+          const existingRaw = safeStorage.getItem(passKey);
+          const existingObj = existingRaw ? JSON.parse(existingRaw) : {};
+          const nextObj = {
+            ...existingObj,
+            partner_id: prof.partner_id,
+            partner_code: prof.partner_code || existingObj.partner_code || prof.partner_id,
+            partner_name: prof.partner_name || prof.partner_code || existingObj.partner_name || prof.partner_id,
+            review_status: "approved",
+            intro_draft: prof.introduction_draft || existingObj.intro_draft || null,
+            intro_published: prof.introduction_published || prof.introduction_draft || existingObj.intro_published || null,
+            draft_contact_phone: prof.draft_contact_phone || existingObj.draft_contact_phone || null,
+            draft_contact_email: prof.draft_contact_email || existingObj.draft_contact_email || null,
+            published_contact_phone: prof.published_contact_phone || prof.draft_contact_phone || existingObj.published_contact_phone || null,
+            published_contact_email: prof.published_contact_email || prof.draft_contact_email || existingObj.published_contact_email || null,
+            partner_type: prof.partner_type || existingObj.partner_type || "Individual",
+            website: prof.website ?? existingObj.website ?? null,
+            guide_licence: prof.guide_licence ?? existingObj.guide_licence ?? null,
+            pib: prof.pib ?? existingObj.pib ?? null,
+            languages: Array.isArray(prof.languages) && prof.languages.length > 0 ? prof.languages : (existingObj.languages || ["English", "Serbian"]),
+            transport_capacity: prof.transport_capacity || existingObj.transport_capacity || "none",
+            notice_window: prof.notice_window || existingObj.notice_window || "24h",
+            applied_recs: prof.applied_recs || existingObj.applied_recs || null,
+            canonical_region: prof.canonical_region || existingObj.canonical_region || null,
+            reviewed_at: prof.reviewed_at || existingObj.reviewed_at || new Date().toISOString(),
+            review_note: prof.reviewer_note ?? existingObj.review_note ?? null,
+          };
+          safeStorage.setItem(passKey, JSON.stringify(nextObj));
+          anyApprovedSynced = true;
+        } catch {
+          // ignore
+        }
+      }
+    }
+    if (anyApprovedSynced) {
+      syncApprovedPassportsToDirectory();
+    }
   }
 
   // 3. Merge with local SafeStorage partner passport submissions (Offline-First / Demo persistence)

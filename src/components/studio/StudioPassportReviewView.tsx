@@ -356,7 +356,8 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
       selectedProfile.partner_id,
       action,
       trimmedNote || undefined,
-      token || undefined
+      token || undefined,
+      selectedProfile
     );
 
     setActionLoading(false);

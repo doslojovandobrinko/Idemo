@@ -275,7 +275,20 @@ export function migrateApprovedPassportToDirectory(
     partnerId = `P-${partnerId.toUpperCase()}`;
   }
 
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const isUuidLike = (val?: string | null): boolean => Boolean(val && uuidRegex.test(val.trim()));
+
+  const nonUuidCandidates = [
+    passportData.partner_name,
+    passportData.partner_code,
+    matchedPortal?.name,
+    matchedPortal?.publicCode,
+    matchedExisting?.nameEn,
+    cleanKey,
+  ].filter((c): c is string => typeof c === 'string' && c.trim().length > 0 && !isUuidLike(c));
+
   const partnerName =
+    nonUuidCandidates[0] ||
     passportData.partner_name ||
     matchedExisting?.nameEn ||
     matchedPortal?.name ||
@@ -315,13 +328,17 @@ export function migrateApprovedPassportToDirectory(
   const reviewedAtIso = passportData.reviewed_at || matchedExisting?.lastVerified || new Date().toISOString();
   const lastVerifiedDate = reviewedAtIso.includes('T') ? reviewedAtIso.split('T')[0] : reviewedAtIso;
 
+  const existingNameSr = matchedExisting?.nameSr && !isUuidLike(matchedExisting.nameSr) ? matchedExisting.nameSr : partnerName;
+  const existingNameZh = matchedExisting?.nameZh && !isUuidLike(matchedExisting.nameZh) ? matchedExisting.nameZh : partnerName;
+
   const migratedPartner: Partner = {
     ...(matchedExisting || {}),
     id: partnerId,
+    publicCode: (!isUuidLike(passportData.partner_code) && passportData.partner_code) || matchedExisting?.publicCode || partnerName,
     pinHash: matchedExisting?.pinHash || (matchedPortal?.pin ? `hash_${matchedPortal.pin}` : 'hash_default'),
     nameEn: partnerName,
-    nameSr: matchedExisting?.nameSr || partnerName,
-    nameZh: matchedExisting?.nameZh || partnerName,
+    nameSr: existingNameSr,
+    nameZh: existingNameZh,
     category,
     partnerType: passportData.partner_type || matchedExisting?.partnerType || 'Individual',
     website: passportData.website || matchedExisting?.website,
@@ -354,6 +371,7 @@ export function migrateApprovedPassportToDirectory(
     prevOverride.stage !== migratedPartner.stage ||
     prevOverride.verificationStatus !== migratedPartner.verificationStatus ||
     prevOverride.nameEn !== migratedPartner.nameEn ||
+    prevOverride.nameSr !== migratedPartner.nameSr ||
     prevOverride.descriptionEn !== migratedPartner.descriptionEn ||
     prevOverride.phone !== migratedPartner.phone ||
     prevOverride.email !== migratedPartner.email;

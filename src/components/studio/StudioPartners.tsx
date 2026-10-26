@@ -26,6 +26,7 @@ import { PARTNERS as INITIAL_PARTNERS } from '../../data/partners';
 import { PartnerEditorModal, PartnerLifecycleStage } from './PartnerEditorModal';
 import { calculatePartnerReadiness } from './utils/scoring';
 import { getAllPartners, getPartnerLifecycleState, fetchPublicApprovedPartnersDirectory } from '../../lib/partnerLifecycleService';
+import { fetchPartnerProfileReviewQueue } from '../../lib/partnerService';
 import { StudioUserSession } from './types';
 import { StudioPassportReviewView } from './StudioPassportReviewView';
 import { StudioPartnerCarousel } from './StudioPartnerCarousel';
@@ -50,6 +51,9 @@ export function StudioPartners({ targetPartnerId, session, initialSubTab = 'dire
   // Load full authorized partner & candidate application pool for Studio Curators
   useEffect(() => {
     setPartnerList(getAllPartners());
+    fetchPartnerProfileReviewQueue(undefined, 'approved')
+      .then(() => setPartnerList(getAllPartners()))
+      .catch(() => {});
     const handleUpdate = () => {
       setPartnerList(getAllPartners());
     };
@@ -65,6 +69,9 @@ export function StudioPartners({ targetPartnerId, session, initialSubTab = 'dire
   useEffect(() => {
     if (activeSubTab === 'directory') {
       setPartnerList(getAllPartners());
+      fetchPartnerProfileReviewQueue(undefined, 'approved')
+        .then(() => setPartnerList(getAllPartners()))
+        .catch(() => {});
     }
   }, [activeSubTab]);
 

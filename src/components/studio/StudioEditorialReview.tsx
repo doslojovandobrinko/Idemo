@@ -241,7 +241,8 @@ export function StudioEditorialReview({
       selectedPassportProfile.partner_id,
       action,
       trimmedNote || undefined,
-      token || undefined
+      token || undefined,
+      selectedPassportProfile
     );
 
     setActionLoading(false);
