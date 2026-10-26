@@ -1671,15 +1671,40 @@ export async function fetchPartnerProfileReviewQueue(
   const isRenderablePhotoUrl = (url: unknown): boolean => {
     if (typeof url !== "string") return false;
     const trimmed = url.trim();
-    return (
-      trimmed.startsWith("https://") ||
-      trimmed.startsWith("http://") ||
-      trimmed.startsWith("data:image/")
-    );
+    if (
+      !trimmed.startsWith("https://") &&
+      !trimmed.startsWith("http://") &&
+      !trimmed.startsWith("data:image/")
+    ) {
+      return false;
+    }
+    // Reject expired Supabase Storage signed URLs cached in localStorage
+    if (trimmed.includes("/storage/v1/object/sign/") && trimmed.includes("token=")) {
+      try {
+        const tokenParam = new URL(trimmed).searchParams.get("token");
+        if (tokenParam) {
+          const parts = tokenParam.split(".");
+          if (parts.length === 3) {
+            const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+            const jsonStr = typeof atob === "function"
+              ? atob(b64)
+              : Buffer.from(b64, "base64").toString("utf8");
+            const payload = JSON.parse(jsonStr);
+            if (typeof payload.exp === "number" && payload.exp * 1000 <= Date.now() + 5000) {
+              return false;
+            }
+          }
+        }
+      } catch {
+        return false;
+      }
+    }
+    return true;
   };
 
   const hasUnsignedStoragePhoto = serverProfiles.some(
-    (p) => p.photo_available && Boolean(p.photo_url) && !isRenderablePhotoUrl(p.photo_url)
+    (p) => (p.photo_available && Boolean(p.photo_url) && !isRenderablePhotoUrl(p.photo_url)) ||
+           (p.review_status === "approved" && !isRenderablePhotoUrl(p.photo_url))
   );
 
   // 2. Edge Function execution if token is present and either direct RPC did not succeed
@@ -1771,6 +1796,7 @@ export async function fetchPartnerProfileReviewQueue(
   const mergedProfiles: PartnerProfileQueueItem[] = [...serverProfiles];
   const existingIds = new Set(serverProfiles.map((p) => p.partner_id.toLowerCase()));
   const existingCodes = new Set(serverProfiles.map((p) => p.partner_code.toLowerCase()));
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   const localKeys = safeStorage.getAllKeys().filter((k) => k.toLowerCase().startsWith("idemo_partner_passport_"));
   for (const k of localKeys) {
@@ -1779,11 +1805,23 @@ export async function fetchPartnerProfileReviewQueue(
       if (!raw) continue;
       const data = JSON.parse(raw);
       const codeOrId = k.replace(/^idemo_partner_passport_/i, "").trim();
-      const matched = partnersMap.get(codeOrId.toLowerCase());
-      const pId = matched?.id || (codeOrId.length > 20 ? codeOrId : `local-${codeOrId}`);
-      const pCode = String(data.partner_code || (matched as any)?.public_code || (matched as any)?.publicCode || (matched as any)?.pin || matched?.id || codeOrId).toUpperCase();
+      const matched =
+        partnersMap.get(codeOrId.toLowerCase()) ||
+        (data.partner_id ? partnersMap.get(String(data.partner_id).toLowerCase()) : undefined);
+      const rawDataPartnerId = typeof data.partner_id === "string" && data.partner_id.trim() ? data.partner_id.trim() : null;
+      const pId = rawDataPartnerId || matched?.id || (codeOrId.length > 20 ? codeOrId : `local-${codeOrId}`);
+      const pCode = String(
+        data.partner_code ||
+        (matched as any)?.public_code ||
+        (matched as any)?.publicCode ||
+        (matched as any)?.pin ||
+        (!uuidPattern.test(codeOrId) ? codeOrId : "") ||
+        matched?.id ||
+        codeOrId
+      ).toUpperCase();
       const pName = String(data.partner_name || (matched as any)?.name || (matched as any)?.nameEn || pCode);
-      const resolvedPhotoUrl = data.photo_url || data.photo_preview_url || data.draft_photo_path || null;
+      const candidatePhotoUrl = data.photo_url || data.photo_preview_url || data.draft_photo_path || null;
+      const resolvedPhotoUrl = isRenderablePhotoUrl(candidatePhotoUrl) ? candidatePhotoUrl : null;
 
       if (existingIds.has(pId.toLowerCase()) || existingCodes.has(pCode.toLowerCase())) {
         const idx = mergedProfiles.findIndex(
@@ -1819,6 +1857,16 @@ export async function fetchPartnerProfileReviewQueue(
             mergedProfiles[idx].canonical_region = data.canonical_region;
           }
         }
+        continue;
+      }
+
+      // If the live Supabase server query succeeded, do not inject stale cached snapshots
+      // of server-backed UUID partners whose server status no longer matches this filter.
+      const isServerBackedSnapshot =
+        uuidPattern.test(pId) ||
+        Boolean(data.draft_photo_signed_url) ||
+        String(candidatePhotoUrl || "").includes(".supabase.co/storage/");
+      if (serverSuccess && isServerBackedSnapshot) {
         continue;
       }
 
