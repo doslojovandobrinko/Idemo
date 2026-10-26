@@ -54,7 +54,9 @@ import {
   authorizePhotoUpload,
   uploadPhotoToSignedUrl,
   updatePartnerProfessionalContact,
-  getPartnerCoverageQuota
+  getPartnerCoverageQuota,
+  getPartnerCoveragePriorityRank,
+  resolveDeterministicPartnerPriorityRanks
 } from '../lib/partnerService';
 import { partnerSessionStorage } from '../lib/partnerSessionStorage';
 import { loadAuthoritativeCommunityEvents } from '../lib/communityFeedService';
@@ -1610,26 +1612,44 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
     }
 
     const allRecsList = dynamicCatalogRecs.length > 0 ? dynamicCatalogRecs : INITIAL_RECOMMENDATIONS;
+    const orderedRecIds =
+      appliedRecs && appliedRecs.length > 0
+        ? [
+            ...appliedRecs.filter(id => items.some(it => String(it.recId) === String(id))),
+            ...items.map(it => String(it.recId)).filter(id => !appliedRecs.includes(id)),
+          ]
+        : items.map(it => String(it.recId));
 
-    return items.map(item => {
-      const recIdStr = String(item.recId);
-      const matched = allRecsList.find(
-        r => String(r.id) === recIdStr || (r as any).title === recIdStr
-      ) || RECOMMENDATIONS_LOOKUP.find(
-        r => String(r.id) === recIdStr || (r as any).title === recIdStr
-      );
-      const title = matched ? (isSr ? (matched.titleSr || matched.title) : matched.title) : `Spot #${recIdStr}`;
-      const rank = item.priorityRank && item.priorityRank <= 3 ? item.priorityRank : undefined;
+    const fallbackRanks = resolveDeterministicPartnerPriorityRanks(
+      activePartnerId,
+      orderedRecIds,
+      allRecsList,
+      canonicalRegion
+    );
 
-      return {
-        recId: recIdStr,
-        title,
-        category: matched?.category || 'Curated Spot',
-        location: (matched as any)?.location || (matched as any)?.region,
-        priorityRank: rank
-      };
-    });
-  }, [activePartnerId, serverAssignedRecs, assignedRecsFetchError, dynamicCatalogRecs, isSr]);
+    return items
+      .map(item => {
+        const recIdStr = String(item.recId);
+        const matched =
+          allRecsList.find(r => String(r.id) === recIdStr || (r as any).title === recIdStr) ||
+          RECOMMENDATIONS_LOOKUP.find(r => String(r.id) === recIdStr || (r as any).title === recIdStr);
+        const title = matched ? (isSr ? (matched.titleSr || matched.title) : matched.title) : `Spot #${recIdStr}`;
+        const explicitRank =
+          (item.priorityRank && item.priorityRank <= 3 ? item.priorityRank : undefined) ||
+          getPartnerCoveragePriorityRank(recIdStr, activePartnerId) ||
+          fallbackRanks[recIdStr];
+        const rank = explicitRank && explicitRank <= 3 ? (explicitRank as 1 | 2 | 3) : undefined;
+
+        return {
+          recId: recIdStr,
+          title,
+          category: matched?.category || 'Curated Spot',
+          location: (matched as any)?.location || (matched as any)?.region,
+          priorityRank: rank,
+        };
+      })
+      .sort((a, b) => (a.priorityRank || 99) - (b.priorityRank || 99));
+  }, [activePartnerId, serverAssignedRecs, assignedRecsFetchError, dynamicCatalogRecs, appliedRecs, canonicalRegion, isSr]);
 
   // Handle click outside & escape key to dismiss recommendations dropdown
   useEffect(() => {
@@ -2160,6 +2180,15 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           }
           if (res.content.notice_window) {
             setPassportNoticeWindow(res.content.notice_window);
+          }
+          if (Array.isArray((res.content as any).applied_recs)) {
+            setAppliedRecs((res.content as any).applied_recs.map(String));
+          }
+          if ((res.content as any).applied_recs_note !== undefined) {
+            setAppliedRecsNote((res.content as any).applied_recs_note || '');
+          }
+          if ((res.content as any).canonical_region) {
+            setCanonicalRegion((res.content as any).canonical_region);
           }
           setPassportModified(false);
 

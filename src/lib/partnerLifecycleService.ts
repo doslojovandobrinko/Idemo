@@ -374,7 +374,8 @@ export function migrateApprovedPassportToDirectory(
     prevOverride.nameSr !== migratedPartner.nameSr ||
     prevOverride.descriptionEn !== migratedPartner.descriptionEn ||
     prevOverride.phone !== migratedPartner.phone ||
-    prevOverride.email !== migratedPartner.email;
+    prevOverride.email !== migratedPartner.email ||
+    JSON.stringify(prevOverride.linkedRecommendations || []) !== JSON.stringify(migratedPartner.linkedRecommendations || []);
 
   if (hasChanged) {
     overrides[partnerId] = migratedPartner;

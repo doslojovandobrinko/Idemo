@@ -598,15 +598,47 @@ export function StudioPartners({ targetPartnerId, session, initialSubTab = 'dire
                 </div>
               </div>
 
-              {activePartner.linkedRecommendations && activePartner.linkedRecommendations.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {activePartner.linkedRecommendations.map((recTitle, idx) => (
-                    <span key={idx} className="px-3 py-1 bg-white border border-[#E5E3DB] rounded-xl text-xs font-sans text-[#1E2E20] font-medium">
-                      {recTitle}
-                    </span>
-                  ))}
-                </div>
-              ) : (
+              {activePartner.linkedRecommendations && activePartner.linkedRecommendations.length > 0 ? (() => {
+                const fallbackRanks = resolveDeterministicPartnerPriorityRanks(
+                  activePartner.id,
+                  activePartner.linkedRecommendations,
+                  catalogRecs
+                );
+                return (
+                  <div className="flex flex-wrap gap-2">
+                    {activePartner.linkedRecommendations.map((recIdOrTitle, idx) => {
+                      const matched = catalogRecs.find(
+                        (r) => String(r.id) === String(recIdOrTitle) || r.title === recIdOrTitle
+                      );
+                      const displayLabel = matched ? `${matched.title} (#${matched.id})` : recIdOrTitle;
+                      const rank =
+                        getPartnerCoveragePriorityRank(String(recIdOrTitle), activePartner.id) ||
+                        fallbackRanks[String(recIdOrTitle)];
+                      return (
+                        <span
+                          key={idx}
+                          className="px-3 py-1.5 bg-white border border-[#E5E3DB] rounded-xl text-xs font-sans text-[#1E2E20] font-medium inline-flex items-center gap-2"
+                        >
+                          <span>{displayLabel}</span>
+                          {rank && (
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${
+                                rank === 1
+                                  ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                  : rank === 2
+                                  ? 'bg-blue-100 text-blue-900 border border-blue-300'
+                                  : 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                              }`}
+                            >
+                              {rank === 1 ? '1st' : rank === 2 ? '2nd' : '3rd'}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })}
+                  </div>
+                );
+              })() : (
                 <p className="text-xs text-[#8C8A7D] italic">No recommendations mapped to this partner yet.</p>
               )}
             </div>

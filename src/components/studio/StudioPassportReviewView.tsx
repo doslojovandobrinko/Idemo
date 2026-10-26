@@ -29,10 +29,13 @@ import {
   adminReviewPartnerProfile, 
   PartnerProfileQueueItem, 
   PartnerProfileReviewStatusFilter,
+  fetchPartnerCoverageMatrix,
+  selectAndReleasePartnerCoverage,
   setPartnerCoveragePriorityRank,
   getPartnerCoveragePriorityRank,
   getPartnerCoverageQuota,
   getPartnerFitAnalysis,
+  resolveDeterministicPartnerPriorityRanks,
   CANONICAL_REGIONS
 } from '../../lib/partnerService';
 import { 
@@ -60,7 +63,7 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
   const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
   const [selectedImageOverride, setSelectedImageOverride] = useState<Record<string, string>>({});
-  const [availableRecs, setAvailableRecs] = useState<Array<{ id: string; title: string; category: string }>>([]);
+  const [availableRecs, setAvailableRecs] = useState<Array<{ id: string; title: string; category: string; location?: string }>>([]);
   const [recAssignFeedback, setRecAssignFeedback] = useState<string | null>(null);
   const [selectedRecIds, setSelectedRecIds] = useState<Set<string>>(new Set());
   const [coverageRanks, setCoverageRanks] = useState<Record<string, number>>({});
@@ -87,7 +90,8 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
         setAvailableRecs(res.data.map(r => ({
           id: r.id,
           title: r.title,
-          category: typeof r.category === 'string' ? r.category : (r.category as any)?.name || 'General'
+          category: typeof r.category === 'string' ? r.category : (r.category as any)?.name || 'General',
+          location: r.location || ''
         })));
       }
     }).catch(() => {});
@@ -114,7 +118,10 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
     setActionFeedback(null);
 
     const token = await getStudioAccessToken();
-    const res = await fetchPartnerProfileReviewQueue(token || undefined, filter);
+    const [res] = await Promise.all([
+      fetchPartnerProfileReviewQueue(token || undefined, filter),
+      fetchPartnerCoverageMatrix().catch(() => null),
+    ]);
 
     setLoading(false);
     setRefreshing(false);
@@ -156,17 +163,23 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
     setPhotoRenderState('loading');
     if (selectedProfile && Array.isArray(selectedProfile.applied_recs)) {
       setSelectedRecIds(new Set(selectedProfile.applied_recs));
+      const resolvedRanks = resolveDeterministicPartnerPriorityRanks(
+        selectedProfile.partner_id,
+        selectedProfile.applied_recs,
+        availableRecs,
+        selectedProfile.canonical_region
+      );
       const initialRanks: Record<string, number> = {};
       selectedProfile.applied_recs.forEach((recId) => {
-        const r = getPartnerCoveragePriorityRank(recId, selectedProfile.partner_id);
-        if (r !== null) initialRanks[recId] = r;
+        const r = getPartnerCoveragePriorityRank(recId, selectedProfile.partner_id) || resolvedRanks[recId];
+        if (r) initialRanks[recId] = r;
       });
       setCoverageRanks(initialRanks);
     } else {
       setSelectedRecIds(new Set());
       setCoverageRanks({});
     }
-  }, [selectedPartnerId, selectedProfile?.photo_url, selectedProfile?.applied_recs]);
+  }, [selectedPartnerId, selectedProfile?.photo_url, selectedProfile?.applied_recs, availableRecs]);
 
   // Handler: 1-Action change of inquiry priority rank (1st = 1, 2nd = 2, 3rd = 3)
   const handleUpdateRank = async (recId: string, newRank: number, recTitle: string) => {
@@ -254,16 +267,20 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
       return;
     }
     try {
-      // 1. Authoritative assignment of priority ranks in idemo_coverage_ranks
+      const contactEmail = selectedProfile?.published_contact_email || selectedProfile?.draft_contact_email || undefined;
+      const contactPhone = selectedProfile?.published_contact_phone || selectedProfile?.draft_contact_phone || undefined;
+      const fallbackRanks = resolveDeterministicPartnerPriorityRanks(
+        partnerId,
+        recIds,
+        availableRecs,
+        selectedProfile?.canonical_region
+      );
+
+      // 1. Authoritative assignment in Supabase recommendation_partner_eligibility + priority rank persistence
       for (const rid of recIds) {
-        const explicitRank = coverageRanks[rid] || getPartnerCoveragePriorityRank(rid, partnerId);
-        if (!explicitRank) {
-          const quota = getPartnerCoverageQuota(partnerId);
-          const rankToSet = quota.rank1Count < 4 ? 1 : quota.rank2Count < 4 ? 2 : 3;
-          await setPartnerCoveragePriorityRank(rid, partnerId, rankToSet);
-        } else {
-          await setPartnerCoveragePriorityRank(rid, partnerId, explicitRank);
-        }
+        await selectAndReleasePartnerCoverage(rid, partnerId, contactEmail, contactPhone);
+        const explicitRank = coverageRanks[rid] || getPartnerCoveragePriorityRank(rid, partnerId) || fallbackRanks[rid] || 1;
+        await setPartnerCoveragePriorityRank(rid, partnerId, explicitRank);
       }
 
       // 2. Local SafeStorage snapshot update for portal partners
