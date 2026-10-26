@@ -19,14 +19,17 @@ import {
   Compass,
   Link as LinkIcon,
   Check,
-  FileCheck
+  FileCheck,
+  MessageSquare,
+  Send
 } from 'lucide-react';
 import { Partner } from '../../types';
 import { PARTNERS as INITIAL_PARTNERS } from '../../data/partners';
 import { PartnerEditorModal, PartnerLifecycleStage } from './PartnerEditorModal';
 import { calculatePartnerReadiness } from './utils/scoring';
 import { getAllPartners, getPartnerLifecycleState, fetchPublicApprovedPartnersDirectory } from '../../lib/partnerLifecycleService';
-import { fetchPartnerProfileReviewQueue } from '../../lib/partnerService';
+import { fetchPartnerProfileReviewQueue, adminReviewPartnerProfile } from '../../lib/partnerService';
+import { safeStorage } from '../../lib/safeStorage';
 import { StudioUserSession } from './types';
 import { StudioPassportReviewView } from './StudioPassportReviewView';
 import { StudioPartnerCarousel } from './StudioPartnerCarousel';
@@ -41,6 +44,11 @@ export function StudioPartners({ targetPartnerId, session, initialSubTab = 'dire
   const [partnerList, setPartnerList] = useState<Partner[]>(() => getAllPartners());
   const [selectedPartnerId, setSelectedPartnerId] = useState<string>('P-001');
   const [activeSubTab, setActiveSubTab] = useState<'directory' | 'passport-review' | 'gateway-carousel'>(initialSubTab);
+  const [messageText, setMessageText] = useState<string>('');
+  const [requestChangesWithMsg, setRequestChangesWithMsg] = useState<boolean>(false);
+  const [sendingMessage, setSendingMessage] = useState<boolean>(false);
+  const [messageFeedback, setMessageFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [copiedQr, setCopiedQr] = useState<boolean>(false);
 
   useEffect(() => {
     if (targetPartnerId) {
@@ -423,6 +431,150 @@ export function StudioPartners({ targetPartnerId, session, initialSubTab = 'dire
               </div>
             </div>
 
+            {/* Direct Message to Partner (In-App Portal + WhatsApp + Email) */}
+            <div className="p-4 rounded-2xl bg-[#FAF9F5] border border-[#E5E3DB] space-y-3 font-mono text-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <MessageSquare size={16} className="text-[#8A1F1F]" />
+                  <span className="text-xs uppercase font-bold text-[#1E2E20]">
+                    Send Message to Partner ({activePartner.nameEn})
+                  </span>
+                </div>
+
+                {/* Quick External Channels (WhatsApp / Email) */}
+                <div className="flex items-center gap-2">
+                  {(activePartner.phone || activePartner.whatsApp) && (
+                    <a
+                      href={`https://wa.me/${(activePartner.whatsApp || activePartner.phone || '').replace(/[^0-9]/g, '')}${messageText.trim() ? `?text=${encodeURIComponent(messageText.trim())}` : ''}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-xl bg-[#E8F5E9] hover:bg-[#C8E6C9] text-[#2E7D32] border border-[#C8E6C9] text-[10px] font-bold uppercase flex items-center gap-1.5 transition-all"
+                    >
+                      <Phone size={12} />
+                      <span>WhatsApp</span>
+                    </a>
+                  )}
+                  {activePartner.email && (
+                    <a
+                      href={`mailto:${activePartner.email}?subject=${encodeURIComponent(`IDEMO Studio — Message for ${activePartner.nameEn}`)}${messageText.trim() ? `&body=${encodeURIComponent(messageText.trim())}` : ''}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-xl bg-white hover:bg-[#FAF9F5] text-[#1E2E20] border border-[#E5E3DB] text-[10px] font-bold uppercase flex items-center gap-1.5 transition-all"
+                    >
+                      <Mail size={12} />
+                      <span>Email</span>
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              <textarea
+                rows={2}
+                value={messageText}
+                onChange={(e) => {
+                  setMessageText(e.target.value);
+                  if (messageFeedback) setMessageFeedback(null);
+                }}
+                placeholder={`Write an in-app message or editorial note to ${activePartner.nameEn}...`}
+                className="w-full p-3 rounded-xl bg-white border border-[#E5E3DB] text-xs font-sans text-[#1E2E20] outline-none focus:border-[#23251E]"
+              />
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <label className="flex items-center gap-2 text-[11px] font-sans text-[#8C8A7D] cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={requestChangesWithMsg}
+                    onChange={(e) => setRequestChangesWithMsg(e.target.checked)}
+                    className="rounded border-[#E5E3DB] text-[#8A1F1F] focus:ring-[#8A1F1F]"
+                  />
+                  <span>Also mark profile as "Changes Requested" (leave unchecked to keep current approval status)</span>
+                </label>
+
+                <button
+                  type="button"
+                  disabled={sendingMessage || !messageText.trim()}
+                  onClick={async () => {
+                    const trimmed = messageText.trim();
+                    if (!trimmed) return;
+                    setSendingMessage(true);
+                    setMessageFeedback(null);
+                    try {
+                      const st = getPartnerLifecycleState(activePartner);
+                      const keepApproved = !requestChangesWithMsg && (st.isVerified || st.isActive || st.stage === 'Approved');
+                      const actionToUse = keepApproved ? 'approve' : 'request_changes';
+
+                      // 1. Append to local Partner Portal Messages thread
+                      try {
+                        const rawMsgs = safeStorage.getItem('idemo_partner_portal_messages_v1');
+                        const parsedMsgs = rawMsgs ? JSON.parse(rawMsgs) : {};
+                        const existingThread = Array.isArray(parsedMsgs[activePartner.id]) ? parsedMsgs[activePartner.id] : [];
+                        const newMsg = {
+                          id: `msg-${Date.now()}`,
+                          sender: 'IDEMO' as const,
+                          text: trimmed,
+                          timestamp: new Date().toISOString(),
+                        };
+                        parsedMsgs[activePartner.id] = [...existingThread, newMsg];
+                        safeStorage.setItem('idemo_partner_portal_messages_v1', JSON.stringify(parsedMsgs));
+                        window.dispatchEvent(new Event('idemo_partner_badge_change'));
+                      } catch {}
+
+                      // 2. Sync to Supabase partner_profile_content reviewer_note so Partner sees it on mobile/other devices
+                      const res = await adminReviewPartnerProfile(
+                        activePartner.id,
+                        actionToUse,
+                        trimmed,
+                        session?.accessToken,
+                        {
+                          partner_name: activePartner.nameEn,
+                          partner_code: activePartner.id,
+                          partner_type: activePartner.partnerType,
+                          contact_email: activePartner.email || null,
+                          contact_phone: activePartner.phone || activePartner.whatsApp || null,
+                        }
+                      );
+
+                      if (res.success) {
+                        setMessageText('');
+                        setMessageFeedback({
+                          type: 'success',
+                          text: `Message sent to ${activePartner.nameEn}'s Partner Portal (Messages tab & Passport banner).`,
+                        });
+                      } else {
+                        setMessageText('');
+                        setMessageFeedback({
+                          type: 'success',
+                          text: `Message saved to ${activePartner.nameEn}'s Partner Portal locally.`,
+                        });
+                      }
+                    } catch (err: any) {
+                      setMessageFeedback({
+                        type: 'error',
+                        text: err?.message || 'Could not send message.',
+                      });
+                    } finally {
+                      setSendingMessage(false);
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl bg-[#23251E] hover:bg-[#32352B] disabled:opacity-50 text-white font-mono text-xs font-bold uppercase flex items-center justify-center gap-2 transition-all cursor-pointer shrink-0"
+                >
+                  <Send size={13} className="text-[#C5A059]" />
+                  <span>{sendingMessage ? 'Sending...' : 'Send to Partner Portal'}</span>
+                </button>
+              </div>
+
+              {messageFeedback && (
+                <div className={`p-2.5 rounded-xl text-xs font-sans flex items-center gap-2 ${
+                  messageFeedback.type === 'success'
+                    ? 'bg-[#E8F5E9] text-[#2E7D32] border border-[#C8E6C9]'
+                    : 'bg-[#FFEBEE] text-[#C62828] border border-[#FFCDD2]'
+                }`}>
+                  <CheckCircle2 size={14} className="shrink-0" />
+                  <span>{messageFeedback.text}</span>
+                </div>
+              )}
+            </div>
+
             {/* Expertise Capabilities */}
             {activePartner.expertise && activePartner.expertise.length > 0 && (
               <div className="p-4 rounded-2xl bg-[#FAF9F5] border border-[#E5E3DB] space-y-2 font-mono text-xs">
@@ -481,10 +633,15 @@ export function StudioPartners({ targetPartnerId, session, initialSubTab = 'dire
                   className="flex-1 h-10 px-3 bg-white border border-[#E5E3DB] rounded-xl text-xs font-mono text-[#1E2E20] select-all"
                 />
                 <button
-                  onClick={() => alert(`Copied QR Attribution link for ${activePartner.nameEn}`)}
+                  onClick={() => {
+                    const url = `https://idemo.travel/?src=QR_${activePartner.nameEn.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase()}_${activePartner.id}`;
+                    navigator.clipboard?.writeText(url).catch(() => {});
+                    setCopiedQr(true);
+                    setTimeout(() => setCopiedQr(false), 2500);
+                  }}
                   className="px-4 h-10 rounded-xl bg-[#23251E] hover:bg-[#32352B] text-white font-mono text-xs font-bold uppercase cursor-pointer"
                 >
-                  Copy Link
+                  {copiedQr ? 'Copied ✓' : 'Copy Link'}
                 </button>
               </div>
             </div>

@@ -2021,6 +2021,9 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           if (parsed.review_status) {
             setPassportReviewStatus(parsed.review_status);
           }
+          if (parsed.review_note || parsed.reviewer_note) {
+            setPassportReviewNote(parsed.review_note || parsed.reviewer_note);
+          }
           if (parsed.draft_contact_phone || parsed.published_contact_phone || parsed.contact_phone) {
             setProfContactPhone(parsed.draft_contact_phone || parsed.published_contact_phone || parsed.contact_phone || '');
           }
@@ -2129,7 +2132,7 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
           setPassportPhotoMime(res.content.draft_photo_mime || res.content.published_photo_mime || null);
           setPassportPhotoConsent(res.content.photo_consent_given || false);
           setPassportReviewStatus(res.content.review_status || 'draft');
-          setPassportReviewNote(res.content.review_note || null);
+          setPassportReviewNote(res.content.review_note || (res.content as any).reviewer_note || null);
 
           if (res.content.draft_contact_phone || res.content.published_contact_phone) {
             setProfContactPhone(res.content.draft_contact_phone || res.content.published_contact_phone || '');
@@ -2256,14 +2259,11 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
   });
 
   const getMessagesForPartner = (partnerId: string) => {
-    const thread = partnerMessages[partnerId];
-    if (thread) return thread;
-
     const partner = partnersList.find(p => p.id === partnerId);
     const categoryLabel = partner ? partner.category : 'Service Provider';
     const nameLabel = partner ? partner.name : 'Partner';
 
-    return [
+    const defaultMessages = [
       {
         id: 'msg-1',
         sender: 'IDEMO' as const,
@@ -2283,6 +2283,28 @@ export default function PartnersScreen({ language, triggerHaptic, onNavigateToPr
         timestamp: new Date(Date.now() - 4 * 3600 * 1000).toISOString()
       }
     ];
+
+    const baseThread = partnerMessages[partnerId] && partnerMessages[partnerId].length > 0
+      ? partnerMessages[partnerId]
+      : defaultMessages;
+
+    if (passportReviewNote && passportReviewNote.trim()) {
+      const trimmedNote = passportReviewNote.trim();
+      const alreadyExists = baseThread.some(m => m.text.trim() === trimmedNote);
+      if (!alreadyExists) {
+        return [
+          ...baseThread,
+          {
+            id: `msg-studio-${trimmedNote.slice(0, 20)}`,
+            sender: 'IDEMO' as const,
+            text: trimmedNote,
+            timestamp: new Date().toISOString()
+          }
+        ];
+      }
+    }
+
+    return baseThread;
   };
 
   const handleSendPartnerMessage = (partnerId: string, text: string) => {
