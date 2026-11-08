@@ -3,16 +3,28 @@ import React from 'react';
 interface MiniMoodGridProps {
   coordinateX?: number | null;
   coordinateY?: number | null;
+  category?: string;
   className?: string;
 }
 
-export default function MiniMoodGrid({ coordinateX, coordinateY, className = '' }: MiniMoodGridProps) {
-  // Safely parse coordinates with fallback to 0 (Center) so a dot is ALWAYS rendered
-  const numX = typeof coordinateX === 'number' && !isNaN(coordinateX) ? coordinateX : Number(coordinateX);
-  const numY = typeof coordinateY === 'number' && !isNaN(coordinateY) ? coordinateY : Number(coordinateY);
+export default function MiniMoodGrid({ coordinateX, coordinateY, category, className = '' }: MiniMoodGridProps) {
+  // Safely parse coordinates with characteristic fallback so dots never default to dead center
+  let rawX = typeof coordinateX === 'number' && !isNaN(coordinateX) ? coordinateX : Number(coordinateX);
+  let rawY = typeof coordinateY === 'number' && !isNaN(coordinateY) ? coordinateY : Number(coordinateY);
 
-  const xVal = !isNaN(numX) ? Math.max(-5, Math.min(5, numX)) : 0;
-  const yVal = !isNaN(numY) ? Math.max(-5, Math.min(5, numY)) : 0;
+  if ((isNaN(rawX) || isNaN(rawY) || (rawX === 0 && rawY === 0)) && category) {
+    const cat = category.toLowerCase();
+    if (cat.includes('nature')) { rawX = 3.5; rawY = -3.8; }
+    else if (cat.includes('history')) { rawX = -2.0; rawY = 2.5; }
+    else if (cat.includes('gastronomy')) { rawX = -2.5; rawY = 1.5; }
+    else if (cat.includes('clubbing')) { rawX = 2.0; rawY = 3.5; }
+    else if (cat.includes('wellbeing')) { rawX = -3.0; rawY = -2.5; }
+    else if (cat.includes('travel')) { rawX = 2.0; rawY = -1.5; }
+    else if (cat.includes('medical')) { rawX = -3.5; rawY = 1.0; }
+  }
+
+  const xVal = !isNaN(rawX) ? Math.max(-5, Math.min(5, rawX)) : 0;
+  const yVal = !isNaN(rawY) ? Math.max(-5, Math.min(5, rawY)) : 0;
 
   // Map coordinates [-5, +5] into SVG plot range [24, 76]
   // This ensures the prominent dot stays within the grid lines

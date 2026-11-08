@@ -372,7 +372,7 @@ const AdminAccessDialog = (typeof import.meta !== 'undefined' && import.meta?.en
   ? React.lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminAccessDialog })))
   : (() => null) as unknown as React.ComponentType<any>;
 
-const IdemoStudio = React.lazy(() => import('./components/IdemoStudio').then(m => ({ default: m.IdemoStudio })));
+const IdemoStudio = React.lazy(() => import('./components/IdemoStudio').then(m => ({ default: m.default || m.IdemoStudio })));
 import { draftExpansionPool } from './data/recommendations/serbia/draft_expansion';
 import IdemoLogo from './components/IdemoLogo';
 // Feature Flag: Set to false to instantly revert to canonical SVG plaque
@@ -2475,7 +2475,7 @@ export default function App() {
   const rankedRecommendations = getRankedRecommendations(userFacingRecommendations, prefs);
 
   const welcomeCarouselRecommendations = useMemo(() => {
-    if (hasRecalibratedInSession) {
+    if (hasRecalibratedInSession || customOrbit !== null) {
       return rankedRecommendations;
     }
     const firstImpressionIds = ['1', '12', '9'];
@@ -3596,7 +3596,7 @@ export default function App() {
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-2.5 shrink-0 z-10">
-                        <MiniMoodGrid coordinateX={item.coordinateX} coordinateY={item.coordinateY} className="shadow-md border-white/20" />
+                        <MiniMoodGrid coordinateX={item.coordinateX} coordinateY={item.coordinateY} category={item.category} className="shadow-md border-white/20" />
                         {item.badge && (
                           <div className="scale-100 origin-bottom-right">
                             <PremiumBadge type={item.badge} compact />
@@ -4832,7 +4832,7 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, allRecom
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-2.5 shrink-0 z-10">
-                    <MiniMoodGrid coordinateX={item.coordinateX} coordinateY={item.coordinateY} className="shadow-md border-white/20" />
+                    <MiniMoodGrid coordinateX={item.coordinateX} coordinateY={item.coordinateY} category={item.category} className="shadow-md border-white/20" />
                     {item.badge && (
                       <div className="scale-100 origin-bottom-right">
                         <PremiumBadge type={item.badge} compact />
@@ -11378,7 +11378,7 @@ function ExploreScreen({
                         <PremiumBadge type={item.badge} compact />
                       </div>
                     )}
-                    <MiniMoodGrid coordinateX={item.coordinateX} coordinateY={item.coordinateY} className="scale-90 origin-top-right" />
+                    <MiniMoodGrid coordinateX={item.coordinateX} coordinateY={item.coordinateY} category={item.category} className="scale-90 origin-top-right" />
                   </div>
                 </div>
                 

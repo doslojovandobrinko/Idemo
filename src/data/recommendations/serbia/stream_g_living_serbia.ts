@@ -36,6 +36,14 @@ export const streamGLivingSerbiaRecommendations: Recommendation[] = [
       lat: 43.8053,
       lng: 19.9881
     },
+    coordinateX: -2.5,
+    coordinateY: -1.5,
+    radius: 3.8,
+    energy: 4,
+    social: 5,
+    luxury: 2,
+    urbanity: 2,
+    nature: 7,
     equivalents: {
       en: "St Ives Pottery Workshops (UK)"
     },
@@ -72,6 +80,14 @@ export const streamGLivingSerbiaRecommendations: Recommendation[] = [
       lat: 43.1531,
       lng: 22.5861
     },
+    coordinateX: -2.0,
+    coordinateY: -1.0,
+    radius: 3.5,
+    energy: 4,
+    social: 5,
+    luxury: 3,
+    urbanity: 3,
+    nature: 5,
     equivalents: {
       en: "Harris Tweed Handloom Weaving (UK)"
     },
@@ -108,6 +124,14 @@ export const streamGLivingSerbiaRecommendations: Recommendation[] = [
       lat: 45.1111,
       lng: 20.8039
     },
+    coordinateX: -1.5,
+    coordinateY: 0.8,
+    radius: 3.2,
+    energy: 5,
+    social: 6,
+    luxury: 2,
+    urbanity: 3,
+    nature: 4,
     equivalents: {
       en: "St Ives Artists' Studios (UK)"
     },
@@ -144,6 +168,14 @@ export const streamGLivingSerbiaRecommendations: Recommendation[] = [
       lat: 45.7742,
       lng: 19.1122
     },
+    coordinateX: -2.2,
+    coordinateY: 1.2,
+    radius: 3.4,
+    energy: 5,
+    social: 5,
+    luxury: 3,
+    urbanity: 4,
+    nature: 2,
     equivalents: {
       en: "Violin Lutherie Workshops in Cremona (Italy)"
     },
@@ -180,6 +212,14 @@ export const streamGLivingSerbiaRecommendations: Recommendation[] = [
       lat: 44.0128,
       lng: 20.9114
     },
+    coordinateX: -1.8,
+    coordinateY: -0.5,
+    radius: 3.3,
+    energy: 4,
+    social: 5,
+    luxury: 2,
+    urbanity: 3,
+    nature: 4,
     equivalents: {
       en: "Traditional Shoemaking Workshops (UK)"
     },
@@ -216,6 +256,14 @@ export const streamGLivingSerbiaRecommendations: Recommendation[] = [
       lat: 44.2500,
       lng: 19.8833
     },
+    coordinateX: 1.5,
+    coordinateY: -3.0,
+    radius: 3.8,
+    energy: 5,
+    social: 5,
+    luxury: 2,
+    urbanity: 1,
+    nature: 9,
     equivalents: {
       en: "Historic Watermills in Dorset (UK)"
     },
@@ -252,6 +300,14 @@ export const streamGLivingSerbiaRecommendations: Recommendation[] = [
       lat: 43.3209,
       lng: 21.8958
     },
+    coordinateX: -2.8,
+    coordinateY: 2.0,
+    radius: 3.6,
+    energy: 4,
+    social: 4,
+    luxury: 4,
+    urbanity: 4,
+    nature: 1,
     equivalents: {
       en: "Goldsmiths' Hall Filigree Artisans (UK)"
     },
@@ -288,6 +344,14 @@ export const streamGLivingSerbiaRecommendations: Recommendation[] = [
       lat: 44.9764,
       lng: 19.6122
     },
+    coordinateX: -2.0,
+    coordinateY: 0.5,
+    radius: 3.4,
+    energy: 5,
+    social: 5,
+    luxury: 3,
+    urbanity: 3,
+    nature: 4,
     equivalents: {
       en: "Speyside Cooperage (Scotland)"
     },
@@ -324,6 +388,14 @@ export const streamGLivingSerbiaRecommendations: Recommendation[] = [
       lat: 43.2711,
       lng: 20.0019
     },
+    coordinateX: 1.0,
+    coordinateY: -3.5,
+    radius: 4.1,
+    energy: 5,
+    social: 5,
+    luxury: 2,
+    urbanity: 1,
+    nature: 9,
     equivalents: {
       en: "Wensleydale Creamery Artisan Cheese (UK)"
     },

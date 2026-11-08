@@ -48,6 +48,18 @@ export interface SupabaseRecommendationRow {
   is_published?: boolean;
 }
 
+export function deriveCategoryFallbackCoordinates(category?: string): { x: number; y: number } {
+  const cat = typeof category === 'string' ? category.split(',')[0].trim().toLowerCase() : '';
+  if (cat.includes('nature')) return { x: 3.5, y: -3.8 };
+  if (cat.includes('history')) return { x: -2.0, y: 2.5 };
+  if (cat.includes('gastronomy')) return { x: -2.5, y: 1.5 };
+  if (cat.includes('clubbing')) return { x: 2.0, y: 3.5 };
+  if (cat.includes('wellbeing')) return { x: -3.0, y: -2.5 };
+  if (cat.includes('travel')) return { x: 2.0, y: -1.5 };
+  if (cat.includes('medical')) return { x: -3.5, y: 1.0 };
+  return { x: 1.5, y: -1.5 };
+}
+
 export const loadRecommendations = async (): Promise<LoadRecommendationsResult> => {
   if (!isSupabaseConfigured()) {
     const pkg = await getActiveDestinationPackage();
@@ -141,8 +153,11 @@ export const loadRecommendations = async (): Promise<LoadRecommendationsResult> 
         continue;
       }
 
-      const coordX = (row as any).coordinate_x ?? (row as any).coordinateX ?? staticMatch?.coordinateX ?? 0;
-      const coordY = (row as any).coordinate_y ?? (row as any).coordinateY ?? staticMatch?.coordinateY ?? 0;
+      const fallbackCoords = deriveCategoryFallbackCoordinates(row.category);
+      const rawCoordX = (row as any).coordinate_x ?? (row as any).coordinateX ?? staticMatch?.coordinateX;
+      const rawCoordY = (row as any).coordinate_y ?? (row as any).coordinateY ?? staticMatch?.coordinateY;
+      const coordX = typeof rawCoordX === 'number' && !isNaN(rawCoordX) && rawCoordX !== 0 ? rawCoordX : (staticMatch?.coordinateX || fallbackCoords.x);
+      const coordY = typeof rawCoordY === 'number' && !isNaN(rawCoordY) && rawCoordY !== 0 ? rawCoordY : (staticMatch?.coordinateY || fallbackCoords.y);
 
       const candidateImage = row.image_url || staticMatch?.image || '/src/assets/images/uvac_meanders_1778841048759.png';
       const approvedImage = getApprovedPrimaryMedia(recId, candidateImage);

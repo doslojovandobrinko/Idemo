@@ -635,6 +635,8 @@ export const historyRecommendations: Recommendation[] = [
       "lat": 45.1118,
       "lng": 20.8039
     },
+    "coordinateX": -1.5,
+    "coordinateY": 0.8,
     "titleEn": "Kovačica Naïve Art Ateliers & Banat Craft Heritage",
     "titleSr": "Ateljei naivnog slikarstva u Kovačici i zanatsko nasleđe Banata",
     "shortDescriptionEn": "Explore the vibrant ateliers of Slovak Naïve art masters in Kovačica, observe authentic easel craftsmanship, and discover Banat's traditional textile weaving and ceramic heritage.",

@@ -36,6 +36,14 @@ export const streamFActiveSerbiaRecommendations: Recommendation[] = [
       lat: 43.7761,
       lng: 21.8903
     },
+    coordinateX: 3.5,
+    coordinateY: -4.0,
+    radius: 4.5,
+    energy: 8,
+    social: 4,
+    luxury: 2,
+    urbanity: 1,
+    nature: 9,
     equivalents: {
       en: "Mount Snowdon (UK)",
       de: "Watzmann Ridge (Germany)"
@@ -73,6 +81,14 @@ export const streamFActiveSerbiaRecommendations: Recommendation[] = [
       lat: 43.3958,
       lng: 22.6806
     },
+    coordinateX: 4.0,
+    coordinateY: -4.5,
+    radius: 4.8,
+    energy: 8,
+    social: 4,
+    luxury: 2,
+    urbanity: 1,
+    nature: 10,
     equivalents: {
       en: "Brecon Beacons High Ridge (UK)"
     },
@@ -109,6 +125,14 @@ export const streamFActiveSerbiaRecommendations: Recommendation[] = [
       lat: 43.1817,
       lng: 22.1803
     },
+    coordinateX: 4.2,
+    coordinateY: -4.2,
+    radius: 4.8,
+    energy: 9,
+    social: 3,
+    luxury: 1,
+    urbanity: 1,
+    nature: 10,
     equivalents: {
       en: "Crib Goch / Snowdonia (UK)"
     },
@@ -145,6 +169,14 @@ export const streamFActiveSerbiaRecommendations: Recommendation[] = [
       lat: 44.1378,
       lng: 20.2181
     },
+    coordinateX: 2.5,
+    coordinateY: -3.5,
+    radius: 4.0,
+    energy: 6,
+    social: 6,
+    luxury: 2,
+    urbanity: 2,
+    nature: 8,
     equivalents: {
       en: "Malvern Hills (UK)"
     },
@@ -181,6 +213,14 @@ export const streamFActiveSerbiaRecommendations: Recommendation[] = [
       lat: 44.6067,
       lng: 22.2611
     },
+    coordinateX: 3.8,
+    coordinateY: -4.2,
+    radius: 4.6,
+    energy: 8,
+    social: 4,
+    luxury: 2,
+    urbanity: 1,
+    nature: 10,
     equivalents: {
       en: "Cheddar Gorge Cliff Walk (UK)"
     },
@@ -217,6 +257,14 @@ export const streamFActiveSerbiaRecommendations: Recommendation[] = [
       lat: 43.6083,
       lng: 20.6861
     },
+    coordinateX: 3.2,
+    coordinateY: -3.8,
+    radius: 4.3,
+    energy: 7,
+    social: 5,
+    luxury: 2,
+    urbanity: 1,
+    nature: 9,
     equivalents: {
       en: "Dartmoor Wild Pony Trails (UK)"
     },
@@ -253,6 +301,14 @@ export const streamFActiveSerbiaRecommendations: Recommendation[] = [
       lat: 44.1083,
       lng: 19.9917
     },
+    coordinateX: 2.8,
+    coordinateY: -3.6,
+    radius: 4.1,
+    energy: 6,
+    social: 6,
+    luxury: 2,
+    urbanity: 2,
+    nature: 8,
     equivalents: {
       en: "Surrey Hills Woodland Walk (UK)"
     },
@@ -289,6 +345,14 @@ export const streamFActiveSerbiaRecommendations: Recommendation[] = [
       lat: 44.1139,
       lng: 21.6983
     },
+    coordinateX: 3.4,
+    coordinateY: -4.0,
+    radius: 4.4,
+    energy: 8,
+    social: 3,
+    luxury: 2,
+    urbanity: 1,
+    nature: 9,
     equivalents: {
       en: "Yorkshire Dales Karst Ascent (UK)"
     },
@@ -325,6 +389,14 @@ export const streamFActiveSerbiaRecommendations: Recommendation[] = [
       lat: 43.2858,
       lng: 20.8256
     },
+    coordinateX: 3.0,
+    coordinateY: -4.0,
+    radius: 4.2,
+    energy: 7,
+    social: 5,
+    luxury: 3,
+    urbanity: 2,
+    nature: 9,
     equivalents: {
       en: "Cairngorms High Plateau (UK)"
     },
@@ -361,6 +433,14 @@ export const streamFActiveSerbiaRecommendations: Recommendation[] = [
       lat: 44.1333,
       lng: 19.7417
     },
+    coordinateX: 3.6,
+    coordinateY: -3.9,
+    radius: 4.4,
+    energy: 8,
+    social: 4,
+    luxury: 2,
+    urbanity: 1,
+    nature: 9,
     equivalents: {
       en: "Peak District Ridge Traverse (UK)"
     },

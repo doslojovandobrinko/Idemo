@@ -2047,8 +2047,8 @@ export const wave2CanonicalRecommendations: Recommendation[] = [
     "lat": 43.805,
     "lng": 19.967
   },
-  "coordinateX": 0,
-  "coordinateY": 0,
+  "coordinateX": -2.5,
+  "coordinateY": -1.2,
   "radius": 4,
   "energy": 4,
   "social": 5,

@@ -376,8 +376,8 @@ export async function checkAndSyncDestinationPackage(destinationId: string = 'se
           location: row.location_en || 'Serbia',
           estimatedCost: row.estimated_cost || 'Moderate',
           preferredTransport: row.preferred_transport || 'Car',
-          coordinateX: row.coordinate_x ?? 50,
-          coordinateY: row.coordinate_y ?? 50,
+          coordinateX: (typeof row.coordinate_x === 'number' && row.coordinate_x !== 0) ? row.coordinate_x : (staticMatch?.coordinateX ?? 1.5),
+          coordinateY: (typeof row.coordinate_y === 'number' && row.coordinate_y !== 0) ? row.coordinate_y : (staticMatch?.coordinateY ?? -1.5),
           coordinates: row.latitude != null && row.longitude != null ? { lat: row.latitude, lng: row.longitude } : undefined,
           translations: {
             sr: {

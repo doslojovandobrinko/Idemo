@@ -9,7 +9,6 @@ import { StudioPartnerCoverage } from './StudioPartnerCoverage';
 import { StudioPublications } from './StudioPublications';
 import { StudioOperations } from './StudioOperations';
 import { StudioSettings } from './StudioSettings';
-import { StudioTabErrorBoundary } from './StudioTabErrorBoundary';
 import { StudioTab, StudioUserSession } from './types';
 import { Recommendation } from '../../types';
 import { ShieldCheck, ArrowLeft, Lock, Menu } from 'lucide-react';
@@ -223,13 +222,7 @@ export function StudioLayout({
           }`}
         >
           <div className="max-w-7xl mx-auto w-full min-w-0">
-            <StudioTabErrorBoundary
-              activeTab={activeTab}
-              onResetTab={() => handleSelectTab('dashboard')}
-              onReturnToApp={onReturnToApp}
-            >
-              {renderTabContent()}
-            </StudioTabErrorBoundary>
+            {renderTabContent()}
           </div>
         </main>
       </div>
