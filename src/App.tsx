@@ -329,8 +329,9 @@ import {
 import MoodOrbGridAnalyzer from './components/MoodOrbGridAnalyzer';
 import MiniMoodGrid from './components/MiniMoodGrid';
 import PrivacyPolicyContent from './components/PrivacyPolicyContent';
-import ProfileScreen, { ARCHETYPES, deriveArchetype } from './components/ProfileScreen';
-import PartnersScreen from './components/PartnersScreen';
+import { ARCHETYPES, deriveArchetype } from './lib/archetypeHelper';
+const PartnersScreen = React.lazy(() => import('./components/PartnersScreen'));
+const ProfileScreen = React.lazy(() => import('./components/ProfileScreen'));
 import OnboardingOverlay from './components/OnboardingOverlay';
 
 const CATEGORY_COORDS: Record<string, { x: number; y: number }> = {
@@ -2971,78 +2972,82 @@ export default function App() {
         )}
 
         {currentScreen === 'partners' && (
-          <PartnersScreen 
-            key="partners"
-            language={language}
-            triggerHaptic={triggerHaptic}
-            onNavigateToProfile={() => navigateToScreen('profile')}
-            onSelectRec={handleSelectRec}
-            onNavigate={(screen: string) => navigateToScreen(screen as AppScreen)}
-          />
+          <React.Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center font-mono text-xs text-brand-charcoal/40 animate-pulse">Loading...</div>}>
+            <PartnersScreen 
+              key="partners"
+              language={language}
+              triggerHaptic={triggerHaptic}
+              onNavigateToProfile={() => navigateToScreen('profile')}
+              onSelectRec={handleSelectRec}
+              onNavigate={(screen: string) => navigateToScreen(screen as AppScreen)}
+            />
+          </React.Suspense>
         )}
 
         {currentScreen === 'profile' && (
-          <ProfileScreen 
-            key="profile"
-            language={language}
-            budget={budget} setBudget={(b: number) => { setHasRecalibratedInSession(true); setBudget(b); }}
-            time={time} setTime={(tVal: number) => { setHasRecalibratedInSession(true); setTime(tVal); }}
-            days={days} setDays={setDays}
-            timeOfDay={timeOfDay} setTimeOfDay={setTimeOfDay}
-            selectedCats={selectedCats} setSelectedCats={(cats: any) => { setHasRecalibratedInSession(true); setSelectedCats(cats); }}
-            recommendations={rankedRecommendations}
-            onSelectRec={handleSelectRec}
-            ratings={ratings}
-            likedIds={likedIds}
-            lowSignalMode={lowSignalMode}
-            onToggleLowSignal={toggleLowSignalMode}
-            onPurgeMemories={handlePurgeMemories}
-            onResetOnboarding={handleResetOnboarding}
-            onTriggerAdmin={() => {
-              if (import.meta.env.DEV) {
-                setShowAdminLogin(true);
-              }
-            }}
-            onNavigate={(screen: string) => navigateToScreen(screen as AppScreen)}
-            onAddCustomRecommendations={(recs: Recommendation[]) => {
-              setCustomRecommendations(prev => {
-                const updated = [...prev];
-                for (const r of recs) {
-                  if (!updated.some(item => item.id === r.id)) {
-                    updated.push(r);
+          <React.Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center font-mono text-xs text-brand-charcoal/40 animate-pulse">Loading...</div>}>
+            <ProfileScreen 
+              key="profile"
+              language={language}
+              budget={budget} setBudget={(b: number) => { setHasRecalibratedInSession(true); setBudget(b); }}
+              time={time} setTime={(tVal: number) => { setHasRecalibratedInSession(true); setTime(tVal); }}
+              days={days} setDays={setDays}
+              timeOfDay={timeOfDay} setTimeOfDay={setTimeOfDay}
+              selectedCats={selectedCats} setSelectedCats={(cats: any) => { setHasRecalibratedInSession(true); setSelectedCats(cats); }}
+              recommendations={rankedRecommendations}
+              onSelectRec={handleSelectRec}
+              ratings={ratings}
+              likedIds={likedIds}
+              lowSignalMode={lowSignalMode}
+              onToggleLowSignal={toggleLowSignalMode}
+              onPurgeMemories={handlePurgeMemories}
+              onResetOnboarding={handleResetOnboarding}
+              onTriggerAdmin={() => {
+                if (import.meta.env.DEV) {
+                  setShowAdminLogin(true);
+                }
+              }}
+              onNavigate={(screen: string) => navigateToScreen(screen as AppScreen)}
+              onAddCustomRecommendations={(recs: Recommendation[]) => {
+                setCustomRecommendations(prev => {
+                  const updated = [...prev];
+                  for (const r of recs) {
+                    if (!updated.some(item => item.id === r.id)) {
+                      updated.push(r);
+                    }
                   }
-                }
-                try {
-                  safeStorage.setItem('idemo_custom_recommendations_v1', JSON.stringify(updated));
-                } catch (e) {
-                  console.warn(e);
-                }
-                return updated;
-              });
-            }}
-            orbitX={orbitX}
-            orbitY={orbitY}
-            onOrbitChange={(x: number, y: number, b?: number, t?: number) => {
-              setHasRecalibratedInSession(true);
-              setCustomOrbit({ orbitX: x, orbitY: y });
-              if (typeof b === 'number') setBudget(b);
-              if (typeof t === 'number') setTime(t);
+                  try {
+                    safeStorage.setItem('idemo_custom_recommendations_v1', JSON.stringify(updated));
+                  } catch (e) {
+                    console.warn(e);
+                  }
+                  return updated;
+                });
+              }}
+              orbitX={orbitX}
+              orbitY={orbitY}
+              onOrbitChange={(x: number, y: number, b?: number, t?: number) => {
+                setHasRecalibratedInSession(true);
+                setCustomOrbit({ orbitX: x, orbitY: y });
+                if (typeof b === 'number') setBudget(b);
+                if (typeof t === 'number') setTime(t);
 
-              try {
-                safeStorage.setItem('idemo_custom_orbit_v1', JSON.stringify({
-                  isCustom: true,
-                  orbitX: x,
-                  orbitY: y,
-                  budget: b ?? budget,
-                  time: t ?? time
-                }));
-              } catch (err) {
-                console.warn('Failed to persist custom orbit:', err);
-              }
-            }}
-            confirmedAccuracyRecs={confirmedAccuracyRecs}
-            onConfirmAccuracy={(exp: any) => handleOpenAccuracyModal(exp)}
-          />
+                try {
+                  safeStorage.setItem('idemo_custom_orbit_v1', JSON.stringify({
+                    isCustom: true,
+                    orbitX: x,
+                    orbitY: y,
+                    budget: b ?? budget,
+                    time: t ?? time
+                  }));
+                } catch (err) {
+                  console.warn('Failed to persist custom orbit:', err);
+                }
+              }}
+              confirmedAccuracyRecs={confirmedAccuracyRecs}
+              onConfirmAccuracy={(exp: any) => handleOpenAccuracyModal(exp)}
+            />
+          </React.Suspense>
         )}
       </AnimatePresence>
 
@@ -4778,6 +4783,7 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, allRecom
                 <LazyImage 
                   src={item.image} 
                   alt={getLocalizedValue(item, 'title', language)} 
+                  loading={isCenter ? 'eager' : 'lazy'}
                   className="w-full h-full object-cover" 
                 />
               )}
@@ -6352,12 +6358,10 @@ function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedu
             isAdminPreview={true}
           />
         ) : (
-          <motion.img 
-            layoutId={`img-${recommendation.id}`}
-            src={resolveImage(recommendation.image)} 
+          <LazyImage 
+            src={recommendation.image} 
             alt={getLocalizedValue(recommendation, 'title', language)} 
-            referrerPolicy="no-referrer"
-            loading="lazy"
+            loading="eager"
             className="w-full h-full object-cover" 
           />
         )}
@@ -7810,7 +7814,7 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
         URL.revokeObjectURL(url);
       }
 
-      const iosHint = isSr 
+      const iosHint = language === 'sr' 
         ? 'Kalendar pripremljen! Na iOS-u, otvorite preuzeti .ics fajl (iz Safari preuzimanja ↓ ili Files aplikacije) da ga dodate u Apple Kalendar.'
         : 'Calendar ready! On iOS, open the downloaded .ics file (from Safari Downloads ↓ or Files app) to add/update in Apple Calendar.';
 

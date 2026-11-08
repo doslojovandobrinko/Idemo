@@ -3,6 +3,7 @@ import { ShieldCheck, Lock, Mail, ArrowRight, UserCheck } from 'lucide-react';
 import { StudioRole, StudioUserSession, CANONICAL_STUDIO_ROLE_MAP } from './types';
 import IdemoLogo from '../IdemoLogo';
 import { getSupabaseClient, isSupabaseConfigured } from '../../lib/supabaseClient';
+import { getOptimizedImageUrl } from '../../utils/assetHelper';
 
 interface StudioAuthShellProps {
   onLoginSuccess: (session: StudioUserSession) => void;
@@ -225,7 +226,7 @@ export function StudioAuthShell({ onLoginSuccess, onCancel }: StudioAuthShellPro
                     {/* Panoramic Destination Hero Strip */}
                     <div className="relative w-full aspect-[16/6] overflow-hidden rounded-t-2xl bg-[#23251E]">
                       <img
-                        src={r.heroImage || undefined}
+                        src={getOptimizedImageUrl(r.heroImage) || undefined}
                         alt=""
                         loading="lazy"
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"

@@ -27,7 +27,7 @@ import { Recommendation } from '../types';
 import { INITIAL_RECOMMENDATIONS } from '../constants';
 import { getApprovedPrimaryMedia } from '../lib/recommendationMediaService';
 import { resolveImage } from '../utils/assetHelper';
-import { deriveArchetype } from './ProfileScreen';
+import { deriveArchetype } from '../lib/archetypeHelper';
 
 export const triggerHaptic = (pattern: number | number[] = 10) => {
   if (typeof window !== 'undefined' && 'navigator' in window && 'vibrate' in navigator) {
@@ -1227,7 +1227,7 @@ export function OnboardingOverlay({
                         const target = e.currentTarget;
                         if (!target.dataset.fallbackTried) {
                           target.dataset.fallbackTried = 'true';
-                          target.src = '/assets/images/uvac_meanders_1778841048759.png';
+                          target.src = '/assets/images/uvac_meanders_1778841048759.webp';
                         }
                       }}
                     />

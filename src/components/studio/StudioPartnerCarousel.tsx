@@ -33,6 +33,7 @@ import {
   resetPartnerCarouselSlides,
   getActiveSlotIndex 
 } from '../../lib/partnerCarouselStorage';
+import { getOptimizedImageUrl } from '../../utils/assetHelper';
 
 // Available Curated Image Presets from local repository assets
 const CURATED_PRESETS = [
@@ -234,7 +235,7 @@ export function StudioPartnerCarousel() {
             {/* Top Panoramic Hero Strip */}
             <div className="relative w-full h-48 sm:h-52 overflow-hidden bg-[#23251E]">
               <img 
-                src={previewSlide.imageUrl} 
+                src={getOptimizedImageUrl(previewSlide.imageUrl) || undefined} 
                 alt={previewSlide.titleEn}
                 className="w-full h-full object-cover object-center transition-all duration-500"
               />
@@ -386,7 +387,7 @@ export function StudioPartnerCarousel() {
               <div className="flex items-center gap-3">
                 <div className="w-16 h-16 rounded-xl overflow-hidden bg-neutral-100 border border-[#E5E3DB] shrink-0">
                   <img 
-                    src={slide.imageUrl} 
+                    src={getOptimizedImageUrl(slide.imageUrl) || undefined} 
                     alt={slide.titleEn} 
                     className="w-full h-full object-cover" 
                   />
@@ -584,7 +585,7 @@ export function StudioPartnerCarousel() {
               {formState.imageUrl && (
                 <div className="w-full h-24 rounded-xl overflow-hidden bg-neutral-100 border border-[#E5E3DB]">
                   <img 
-                    src={formState.imageUrl} 
+                    src={getOptimizedImageUrl(formState.imageUrl) || undefined} 
                     alt="Preview" 
                     className="w-full h-full object-cover" 
                   />

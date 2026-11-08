@@ -6,6 +6,7 @@
 import { EditorialCollection, LoadEditorialCollectionsResult, SupabaseEditorialCollectionRow } from '../types';
 import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 import { INITIAL_EDITORIAL_COLLECTIONS } from '../data/editorialCollections';
+import { isSerbiaDestinationRecord } from './destinationIsolation';
 
 const staticCollectionsMap = new Map(INITIAL_EDITORIAL_COLLECTIONS.map(c => [c.id, c]));
 
@@ -85,6 +86,24 @@ export const loadEditorialCollections = async (): Promise<LoadEditorialCollectio
       const collectionId = row.source_id || row.id;
       const staticMatch = staticCollectionsMap.get(collectionId);
 
+      // Multi-Country Destination Isolation Guard:
+      // Strictly exclude Montenegro, Croatia, North Macedonia, Bulgaria, and any other non-Serbia collections
+      if (
+        !isSerbiaDestinationRecord(row as Record<string, any>, {
+          isKnownCanonicalSerbiaRecord: Boolean(staticMatch),
+          idCandidates: [collectionId],
+          textCandidates: [
+            row.geographic_scope,
+            row.title_en,
+            row.title_sr,
+            row.subtitle_en,
+            row.subtitle_sr,
+          ],
+        })
+      ) {
+        continue;
+      }
+
       mappedCollections.push({
         id: collectionId,
         dbId: row.id,
@@ -127,6 +146,14 @@ export const loadEditorialCollections = async (): Promise<LoadEditorialCollectio
           },
         },
       });
+    }
+
+    if (mappedCollections.length === 0) {
+      return {
+        data: INITIAL_EDITORIAL_COLLECTIONS,
+        error: null,
+        isLive: true,
+      };
     }
 
     return {

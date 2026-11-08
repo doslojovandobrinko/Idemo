@@ -18,6 +18,7 @@ import { INITIAL_RECOMMENDATIONS } from '../data/recommendations/serbia';
 import { INITIAL_EDITORIAL_COLLECTIONS } from '../data/editorialCollections';
 import { PARTNERS as INITIAL_PARTNERS } from '../data/partners';
 import { validatePublicationMediaGate, getApprovedPrimaryMedia } from './recommendationMediaService';
+import { isSerbiaDestinationRecord } from './destinationIsolation';
 
 const ACTIVE_PACKAGE_STORAGE_KEY = 'idemo_active_destination_package_v1';
 const PREVIOUS_PACKAGE_STORAGE_KEY = 'idemo_previous_destination_package_v1';
@@ -345,9 +346,17 @@ export async function checkAndSyncDestinationPackage(destinationId: string = 'se
 
     if (recRows && recRows.length > 0) {
       const staticRecsMap = new Map(INITIAL_RECOMMENDATIONS.map(r => [r.id, r]));
-      // Map recommendations
+      // Map recommendations (strictly filtered to Serbia destination across all country apps)
       const updatedRecs: Recommendation[] = recRows
-        .filter((row: any) => (row.source_id || row.id) !== 'G-09')
+        .filter((row: any) => {
+          const recId = String(row.source_id || row.id || '');
+          if (!recId || recId === 'G-09') return false;
+          return isSerbiaDestinationRecord(row, {
+            isKnownCanonicalSerbiaRecord: staticRecsMap.has(recId),
+            idCandidates: [recId],
+            textCandidates: [row.location_en, row.location_sr],
+          });
+        })
         .map((row: any) => {
         const recId = row.source_id || row.id;
         const staticMatch = staticRecsMap.get(recId);
@@ -380,6 +389,15 @@ export async function checkAndSyncDestinationPackage(destinationId: string = 'se
           },
         };
       });
+
+      if (updatedRecs.length === 0) {
+        return {
+          ...initialStatus,
+          latestPackageVersion: activePkg.manifest.packageVersion,
+          syncState: 'active',
+          syncError: null,
+        };
+      }
 
       const newPkg: DestinationPackage = {
         manifest: {

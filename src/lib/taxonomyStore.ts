@@ -4,6 +4,7 @@
  */
 
 import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient';
+import { isForeignServiceAreaRow, isSerbiaServiceAreaRow } from './destinationIsolation';
 
 export interface TaxonomyCache {
   defaultLanguageId: string | null;
@@ -37,9 +38,9 @@ export async function bootstrapTaxonomy(): Promise<TaxonomyCache> {
 
   try {
     const [langRes, areaRes, capRes] = await Promise.all([
-      supabase.from('languages').select('id, code').limit(5),
-      supabase.from('service_areas').select('id').limit(5),
-      supabase.from('capabilities').select('id, code').limit(10),
+      supabase.from('languages').select('id, code').limit(10),
+      supabase.from('service_areas').select('*').limit(20),
+      supabase.from('capabilities').select('id, code').limit(20),
     ]);
 
     if (langRes.error || areaRes.error) {
@@ -47,8 +48,19 @@ export async function bootstrapTaxonomy(): Promise<TaxonomyCache> {
       return cache;
     }
 
-    const langId = langRes.data?.[0]?.id || null;
-    const areaId = areaRes.data?.[0]?.id || null;
+    const langRows = langRes.data || [];
+    const preferredLang =
+      langRows.find((l: any) => String(l.code || '').toLowerCase() === 'en') ||
+      langRows.find((l: any) => String(l.code || '').toLowerCase() === 'sr') ||
+      langRows[0];
+    const langId = preferredLang?.id || null;
+
+    const areaRows = areaRes.data || [];
+    const preferredArea =
+      areaRows.find((a: any) => isSerbiaServiceAreaRow(a)) ||
+      areaRows.find((a: any) => !isForeignServiceAreaRow(a)) ||
+      areaRows[0];
+    const areaId = preferredArea?.id || null;
     const capIds = (capRes.data || []).map((c: any) => c.id).filter(Boolean);
 
     if (!langId || !areaId) {

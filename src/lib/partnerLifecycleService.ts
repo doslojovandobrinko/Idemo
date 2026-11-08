@@ -6,6 +6,7 @@
 import { Partner } from '../types';
 import { PARTNERS as STATIC_PARTNERS } from '../data/partners';
 import { safeStorage } from './safeStorage';
+import { isSerbiaDestinationRecord } from './destinationIsolation';
 
 export interface PublicDirectoryFetchResult {
   success: boolean;
@@ -448,12 +449,27 @@ export async function fetchPublicApprovedPartnersDirectory(): Promise<PublicDire
 
         const partners = data.partners
           .filter(
-            (p: any) =>
-              p.id &&
-              p.id.toLowerCase() !== ONBOARDING_TEMPLATE_ID &&
-              p.public_code?.toLowerCase() !== "p-onboarding-template-000" &&
-              !LEGACY_PARTNER_IDS.has(String(p.id).toLowerCase()) &&
-              !LEGACY_PARTNER_IDS.has(String(p.public_code || '').toLowerCase())
+            (p: any) => {
+              if (
+                !p.id ||
+                p.id.toLowerCase() === ONBOARDING_TEMPLATE_ID ||
+                p.public_code?.toLowerCase() === "p-onboarding-template-000" ||
+                LEGACY_PARTNER_IDS.has(String(p.id).toLowerCase()) ||
+                LEGACY_PARTNER_IDS.has(String(p.public_code || '').toLowerCase())
+              ) {
+                return false;
+              }
+              return isSerbiaDestinationRecord(p, {
+                idCandidates: [p.public_code, p.id],
+                textCandidates: [
+                  p.location,
+                  p.canonical_region,
+                  p.city,
+                  p.region,
+                  p.service_area,
+                ],
+              });
+            }
           )
           .map((p: any) => ({
             id: p.id,

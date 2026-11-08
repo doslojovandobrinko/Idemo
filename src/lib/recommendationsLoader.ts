@@ -8,6 +8,7 @@ import { getSupabaseClient, isSupabaseConfigured } from './supabaseClient';
 import { INITIAL_RECOMMENDATIONS } from '../data/recommendations/serbia';
 import { getActiveDestinationPackage } from './destinationPackageManager';
 import { getApprovedPrimaryMedia } from './recommendationMediaService';
+import { isSerbiaDestinationRecord } from './destinationIsolation';
 
 const staticRecsMap = new Map(INITIAL_RECOMMENDATIONS.map(r => [r.id, r]));
 
@@ -127,6 +128,19 @@ export const loadRecommendations = async (): Promise<LoadRecommendationsResult> 
         continue;
       }
       const staticMatch = staticRecsMap.get(recId);
+
+      // Multi-Country Destination Isolation Guard:
+      // Strictly exclude Montenegro, Croatia, North Macedonia, Bulgaria, and any other non-Serbia rows
+      if (
+        !isSerbiaDestinationRecord(row as Record<string, any>, {
+          isKnownCanonicalSerbiaRecord: Boolean(staticMatch),
+          idCandidates: [recId],
+          textCandidates: [row.location_en, row.location_sr],
+        })
+      ) {
+        continue;
+      }
+
       const coordX = (row as any).coordinate_x ?? (row as any).coordinateX ?? staticMatch?.coordinateX ?? 0;
       const coordY = (row as any).coordinate_y ?? (row as any).coordinateY ?? staticMatch?.coordinateY ?? 0;
 
@@ -183,10 +197,12 @@ export const loadRecommendations = async (): Promise<LoadRecommendationsResult> 
     }
 
     if (mappedRecommendations.length === 0) {
+      const pkg = await getActiveDestinationPackage();
       return {
-        data: null,
-        error: `MAPPER_REJECTION: ${data.length} database row(s) returned, but none could be mapped due to missing essential fields (${rejectedRowCount} row(s) rejected).`,
+        data: pkg.recommendations,
+        error: `MAPPER_REJECTION: ${data.length} database row(s) returned, but none matched Serbia validation (${rejectedRowCount} row(s) rejected). Loaded package v${pkg.manifest.packageVersion}.`,
         isLive: false,
+        packageVersion: pkg.manifest.packageVersion,
       };
     }
 

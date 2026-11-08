@@ -16,6 +16,7 @@ import {
 } from '../lib/analytics';
 import { Category, Recommendation, DestinationPackage, SyncStatus } from '../types';
 import { getActiveDestinationPackage, checkAndSyncDestinationPackage, activateDestinationPackage, rollbackToPreviousPackage, buildCanonicalSerbiaPackage, calculatePackageHash } from '../lib/destinationPackageManager';
+import { getOptimizedImageUrl } from '../utils/assetHelper';
 
 
 const ADMIN_PIN = import.meta.env.DEV ? (import.meta.env.VITE_DEV_ADMIN_PIN || '') : '';
@@ -4681,12 +4682,12 @@ Schema:
                           {rec.image && (
                             <div className="relative w-full h-36 rounded-xl overflow-hidden border border-border-main/30 my-2 bg-brand-pearl shadow-sm">
                               <img 
-                                src={rec.image || undefined} 
+                                src={getOptimizedImageUrl(rec.image || '') || undefined} 
                                 alt={rec.title}
                                 referrerPolicy="no-referrer"
                                 className="w-full h-full object-cover"
                                 onError={(e) => {
-                                  (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80';
+                                  (e.target as HTMLImageElement).src = getOptimizedImageUrl('/src/assets/images/uvac_meanders_1778841048759.webp');
                                 }}
                               />
                             </div>
@@ -5456,7 +5457,7 @@ Schema:
 
                     <div className="p-3 bg-[#FAF9F5] rounded-xl border border-border-main/50 text-[9.5px] text-brand-charcoal/70 flex gap-3.5 items-center">
                       <div className="w-12 h-12 rounded-lg overflow-hidden bg-brand-pearl shrink-0 border border-border-main">
-                        <img src={target.image || undefined} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = '/src/assets/images/silosi_belgrade_industrial_night_1778842947193.png' }} alt="" />
+                        <img src={getOptimizedImageUrl(target.image || '') || undefined} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = getOptimizedImageUrl('/src/assets/images/silosi_belgrade_industrial_night_1778842947193.webp') }} alt="" />
                       </div>
                       <div className="text-left min-w-0 flex-1">
                         <p className="font-bold text-brand-charcoal truncate">{target.title} <span className="text-[8px] uppercase tracking-wider font-mono bg-accent-teal/10 text-accent-teal px-1 py-0.2 rounded">{target.scoreMatch || target.category}</span></p>
@@ -5600,8 +5601,8 @@ Schema:
                         <div className="bg-white rounded-[32px] overflow-hidden border border-border-main p-4 space-y-3.5 shadow-sm">
                           <div className="aspect-[16/9] w-full bg-[#FAF9F5] rounded-[24px] overflow-hidden relative">
                             <img 
-                              src={aiParsedRec.image || undefined}
-                              onError={(e) => { (e.target as HTMLImageElement).src = '/src/assets/images/silosi_belgrade_industrial_night_1778842947193.png' }}
+                              src={getOptimizedImageUrl(aiParsedRec.image || '') || undefined}
+                              onError={(e) => { (e.target as HTMLImageElement).src = getOptimizedImageUrl('/src/assets/images/silosi_belgrade_industrial_night_1778842947193.webp') }}
                               className="w-full h-full object-cover" 
                               alt="preview"
                             />

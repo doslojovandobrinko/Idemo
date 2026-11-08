@@ -84,6 +84,7 @@ export const LazyImage: React.FC<LazyImageProps> = ({
         .then((resolvedUrl) => {
           if (active && resolvedUrl) {
             setImgSrc(resolvedUrl);
+            setIsLoaded(true);
           }
         })
         .catch(() => {
@@ -91,6 +92,11 @@ export const LazyImage: React.FC<LazyImageProps> = ({
             if (resolvedFallback) {
               triedExplicitFallbackRef.current = true;
               setImgSrc(resolvedFallback);
+              setIsLoaded(true);
+            } else if (directStaticFallback) {
+              triedDirectStaticRef.current = true;
+              setImgSrc(directStaticFallback);
+              setIsLoaded(true);
             } else {
               setHasError(true);
             }
@@ -99,9 +105,9 @@ export const LazyImage: React.FC<LazyImageProps> = ({
     } else {
       const nextSrc = getOptimizedImageUrl(cleanPath(src)) || directStaticFallback || resolvedFallback;
       setHasError(false);
+      setIsLoaded(true);
       setImgSrc((prev) => {
         if (nextSrc && nextSrc !== prev) {
-          setIsLoaded(false);
           return nextSrc;
         }
         return prev || nextSrc;
@@ -150,6 +156,7 @@ export const LazyImage: React.FC<LazyImageProps> = ({
     ) {
       triedDirectStaticRef.current = true;
       setHasError(false);
+      setIsLoaded(true);
       setImgSrc(directStaticFallback);
       return;
     }
@@ -162,6 +169,7 @@ export const LazyImage: React.FC<LazyImageProps> = ({
     ) {
       triedExplicitFallbackRef.current = true;
       setHasError(false);
+      setIsLoaded(true);
       setImgSrc(resolvedFallback);
       return;
     }

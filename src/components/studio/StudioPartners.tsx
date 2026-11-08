@@ -28,7 +28,13 @@ import { PARTNERS as INITIAL_PARTNERS } from '../../data/partners';
 import { PartnerEditorModal, PartnerLifecycleStage } from './PartnerEditorModal';
 import { calculatePartnerReadiness } from './utils/scoring';
 import { getAllPartners, getPartnerLifecycleState, fetchPublicApprovedPartnersDirectory } from '../../lib/partnerLifecycleService';
-import { fetchPartnerProfileReviewQueue, adminReviewPartnerProfile } from '../../lib/partnerService';
+import { 
+  fetchPartnerProfileReviewQueue, 
+  adminReviewPartnerProfile,
+  resolveDeterministicPartnerPriorityRanks,
+  getPartnerCoveragePriorityRank
+} from '../../lib/partnerService';
+import { loadRecommendations } from '../../lib/recommendationsLoader';
 import { safeStorage } from '../../lib/safeStorage';
 import { StudioUserSession } from './types';
 import { StudioPassportReviewView } from './StudioPassportReviewView';
@@ -49,6 +55,7 @@ export function StudioPartners({ targetPartnerId, session, initialSubTab = 'dire
   const [sendingMessage, setSendingMessage] = useState<boolean>(false);
   const [messageFeedback, setMessageFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [copiedQr, setCopiedQr] = useState<boolean>(false);
+  const [catalogRecs, setCatalogRecs] = useState<Array<{ id: string; title: string; category?: string; location?: string }>>([]);
 
   useEffect(() => {
     if (targetPartnerId) {
@@ -61,6 +68,20 @@ export function StudioPartners({ targetPartnerId, session, initialSubTab = 'dire
     setPartnerList(getAllPartners());
     fetchPartnerProfileReviewQueue(undefined, 'approved')
       .then(() => setPartnerList(getAllPartners()))
+      .catch(() => {});
+    loadRecommendations()
+      .then(res => {
+        if (res && res.data) {
+          setCatalogRecs(
+            res.data.map(r => ({
+              id: String(r.id),
+              title: r.title,
+              category: typeof r.category === 'string' ? r.category : (r.category as any)?.name || 'General',
+              location: r.location || '',
+            }))
+          );
+        }
+      })
       .catch(() => {});
     const handleUpdate = () => {
       setPartnerList(getAllPartners());
@@ -524,13 +545,11 @@ export function StudioPartners({ targetPartnerId, session, initialSubTab = 'dire
                         activePartner.id,
                         actionToUse,
                         trimmed,
-                        session?.accessToken,
+                        (session as any)?.accessToken,
                         {
                           partner_name: activePartner.nameEn,
                           partner_code: activePartner.id,
                           partner_type: activePartner.partnerType,
-                          contact_email: activePartner.email || null,
-                          contact_phone: activePartner.phone || activePartner.whatsApp || null,
                         }
                       );
 

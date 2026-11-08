@@ -80,6 +80,21 @@ export default defineConfig({
     port: 3000,
     host: '0.0.0.0',
     allowedHosts: true,
+    warmup: {
+      clientFiles: ['./src/main.tsx', './src/App.tsx']
+    }
   },
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react/jsx-runtime',
+      'framer-motion',
+      'lucide-react',
+      '@supabase/supabase-js',
+      'clsx',
+      'tailwind-merge'
+    ]
+  }
 });
 
