@@ -4,12 +4,12 @@
   "version": "1.0.0",
   "type": "module",
   "engines": {
-    "node": ">=22.0.0"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "vite",
     "build": "vite build && esbuild server.ts --platform=node --format=esm --target=node22 --outfile=dist/server.js",
-    "start": "node server.ts",
+    "start": "node server.js",
     "lint": "tsc --noEmit",
     "preview": "vite preview"
   },
@@ -17,6 +17,7 @@
     "@google/genai": "*",
     "@supabase/supabase-js": "^2.117.2",
     "clsx": "^2.1.1",
+    "esbuild": "^0.25.0",
     "express": "^5.2.1",
     "framer-motion": "^13.4.4",
     "jspdf": "^4.2.1",
