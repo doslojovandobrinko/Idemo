@@ -66,10 +66,7 @@ import { getApprovedPrimaryMedia } from './lib/recommendationMediaService';
 import { getOptimizedImageUrl, resolveMediaDisplayUrl } from './utils/assetHelper';
 import PremiumCarousel from './components/PremiumCarousel';
 import PremiumBadge from './components/PremiumBadge';
-import PlanCard from './components/PlanCard';
-import QRScanner from './components/QRScanner';
 import { LazyImage } from './components/LazyImage';
-import CulturalQuiz from './components/CulturalQuiz';
 import uvacHeroImg from './assets/images/uvac_meanders_1778841048759.webp';
 import golubacHeroImg from './assets/images/golubac_fortress_danube_1778842880053.webp';
 import manasijaHeroImg from './assets/images/manasija_monastery_1778841065960.webp';
@@ -302,15 +299,12 @@ export const HERO_DAILY_COLLECTION: DailyHeroCard[] = [
   },
 ];
 import { ContextEnginePanel } from './components/ContextEnginePanel';
-import { PrepEtiquetteGuide } from './components/PrepEtiquetteGuide';
-import { AntiAdviceSection } from './components/AntiAdviceSection';
 import { getTruthCurationForRecommendation } from './lib/antiAdviceEngine';
 import { ConciergeSOSHub } from './components/ConciergeSOSHub';
 import { routeOutboundAction, copyToClipboardSafely } from './lib/outboundRouter';
 import { VibeSettings, DEFAULT_VIBE_SETTINGS, calculateVibeMatch, VibeCalibrationDashboard } from './components/VibeCalibration';
-import { REGIONS, LocalTransitCard, isLocationInRegion, calculateDistance, BASE_HUBS, getTaxiEstimation } from './components/AreaAndTransit';
+import { REGIONS, isLocationInRegion, calculateDistance, BASE_HUBS, getTaxiEstimation } from './lib/areaAndTransitHelper';
 import { locationService, LocationState, LocationHubId } from './lib/locationService';
-import { SlangCrypt } from './components/SlangCrypt';
 import MoodOrbit from './components/MoodOrbit';
 import { 
   CustomHomeIcon, 
@@ -330,8 +324,18 @@ import MoodOrbGridAnalyzer from './components/MoodOrbGridAnalyzer';
 import MiniMoodGrid from './components/MiniMoodGrid';
 import PrivacyPolicyContent from './components/PrivacyPolicyContent';
 import { ARCHETYPES, deriveArchetype } from './lib/archetypeHelper';
+
+// Code-split heavy secondary screens & modals to minimize initial startup bundle and eliminate blank screens on iOS
 const PartnersScreen = React.lazy(() => import('./components/PartnersScreen'));
 const ProfileScreen = React.lazy(() => import('./components/ProfileScreen'));
+const PlanCard = React.lazy(() => import('./components/PlanCard'));
+const QRScanner = React.lazy(() => import('./components/QRScanner'));
+const CulturalQuiz = React.lazy(() => import('./components/CulturalQuiz'));
+const SlangCrypt = React.lazy(() => import('./components/SlangCrypt').then(m => ({ default: m.SlangCrypt })));
+const AntiAdviceSection = React.lazy(() => import('./components/AntiAdviceSection').then(m => ({ default: m.AntiAdviceSection })));
+const PrepEtiquetteGuide = React.lazy(() => import('./components/PrepEtiquetteGuide').then(m => ({ default: m.PrepEtiquetteGuide })));
+const LocalTransitCard = React.lazy(() => import('./components/AreaAndTransit').then(m => ({ default: m.LocalTransitCard })));
+
 import OnboardingOverlay from './components/OnboardingOverlay';
 
 const CATEGORY_COORDS: Record<string, { x: number; y: number }> = {
@@ -5457,12 +5461,14 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, allRecom
               transition={{ duration: 0.2 }}
               className="pt-1"
             >
-              <CulturalQuiz
-                language={language}
-                allRecommendations={allRecommendations || recommendations || INITIAL_RECOMMENDATIONS}
-                onSelectRec={onSelectRec}
-                triggerHaptic={triggerHaptic}
-              />
+              <React.Suspense fallback={<div className="min-h-[220px] flex items-center justify-center font-mono text-xs text-brand-charcoal/40 animate-pulse">Loading Quiz...</div>}>
+                <CulturalQuiz
+                  language={language}
+                  allRecommendations={allRecommendations || recommendations || INITIAL_RECOMMENDATIONS}
+                  onSelectRec={onSelectRec}
+                  triggerHaptic={triggerHaptic}
+                />
+              </React.Suspense>
             </motion.div>
           )}
 
@@ -5525,7 +5531,9 @@ function HomeScreen({ likedIds, onSelectRec, language, recommendations, allRecom
               transition={{ duration: 0.2 }}
               className="pt-1"
             >
-              <SlangCrypt language={language} />
+              <React.Suspense fallback={<div className="min-h-[160px] flex items-center justify-center font-mono text-xs text-brand-charcoal/40 animate-pulse">Loading Slang...</div>}>
+                <SlangCrypt language={language} />
+              </React.Suspense>
             </motion.div>
           )}
         </AnimatePresence>
@@ -6882,10 +6890,12 @@ function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedu
                 </span>
               </button>
 
-              <LocalTransitCard
-                recommendation={recommendation}
-                language={language}
-              />
+              <React.Suspense fallback={<div className="h-24 bg-brand-charcoal/5 rounded-2xl animate-pulse" />}>
+                <LocalTransitCard
+                  recommendation={recommendation}
+                  language={language}
+                />
+              </React.Suspense>
             </div>
           </AccordionSection>
 
@@ -6926,10 +6936,12 @@ function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedu
             onToggle={() => setActiveAccordion(activeAccordion === 'preparation' ? null : 'preparation')}
           >
             <div className="space-y-4 py-1.5">
-              <PrepEtiquetteGuide
-                recommendation={recommendation}
-                language={language}
-              />
+              <React.Suspense fallback={<div className="h-20 bg-brand-charcoal/5 rounded-xl animate-pulse" />}>
+                <PrepEtiquetteGuide
+                  recommendation={recommendation}
+                  language={language}
+                />
+              </React.Suspense>
             </div>
           </AccordionSection>
 
@@ -6949,10 +6961,12 @@ function DetailsScreen({ recommendation, isLiked, onToggleLike, onBack, onSchedu
             onToggle={() => setActiveAccordion(activeAccordion === 'anti_advice' ? null : 'anti_advice')}
           >
             <div className="py-1">
-              <AntiAdviceSection
-                recommendation={recommendation}
-                language={language}
-              />
+              <React.Suspense fallback={<div className="h-20 bg-brand-charcoal/5 rounded-xl animate-pulse" />}>
+                <AntiAdviceSection
+                  recommendation={recommendation}
+                  language={language}
+                />
+              </React.Suspense>
             </div>
           </AccordionSection>
 
@@ -9748,15 +9762,17 @@ function PlanScreen({ scheduledItems, onSelectRec, onUpdateDate, onRemove, langu
            <AnimatePresence mode="popLayout">
              {scheduledItems.map((item: any) => (
                <div key={item.id}>
-                 <PlanCard 
-                   item={item} 
-                   language={language}
-                   onRemove={onRemove} 
-                   onUpdateDate={onUpdateDate}
-                   onSelectRec={onSelectRec}
-                   orbTime={time}
-                   orbBudget={budget}
-                 />
+                 <React.Suspense fallback={<div className="h-28 rounded-2xl bg-brand-charcoal/5 animate-pulse" />}>
+                   <PlanCard 
+                     item={item} 
+                     language={language}
+                     onRemove={onRemove} 
+                     onUpdateDate={onUpdateDate}
+                     onSelectRec={onSelectRec}
+                     orbTime={time}
+                     orbBudget={budget}
+                   />
+                 </React.Suspense>
                </div>
              ))}
            </AnimatePresence>
@@ -10747,25 +10763,27 @@ function ExploreScreen({
         className="flex-1 p-6 pt-10 space-y-8 overflow-y-auto overflow-x-hidden pb-32 no-scrollbar"
         initial={{ opacity: 0 }} animate={{ opacity: 1 }}
       >
-        <QRScanner
-          language={language}
-          translations={TRANSLATIONS}
-          recommendations={recommendations}
-          onMatch={(id: string) => {
-            setScanOpen(false);
-            const rec = recommendations.find((r: any) => r.id === id);
-            if (rec) {
-              if (recordQRScanSignal) {
-                recordQRScanSignal(rec);
-              } else {
-                trackQRScanSignal(rec);
+        <React.Suspense fallback={<div className="min-h-[300px] flex items-center justify-center font-mono text-xs text-brand-charcoal/40 animate-pulse">Loading Scanner...</div>}>
+          <QRScanner
+            language={language}
+            translations={TRANSLATIONS}
+            recommendations={recommendations}
+            onMatch={(id: string) => {
+              setScanOpen(false);
+              const rec = recommendations.find((r: any) => r.id === id);
+              if (rec) {
+                if (recordQRScanSignal) {
+                  recordQRScanSignal(rec);
+                } else {
+                  trackQRScanSignal(rec);
+                }
               }
-            }
-            onSelectRec(id);
-          }}
-          onClose={() => setScanOpen(false)}
-          triggerHaptic={triggerHaptic}
-        />
+              onSelectRec(id);
+            }}
+            onClose={() => setScanOpen(false)}
+            triggerHaptic={triggerHaptic}
+          />
+        </React.Suspense>
       </motion.div>
     );
   }

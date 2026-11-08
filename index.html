@@ -20,13 +20,36 @@
     <meta property="og:description" content="Ultra-compact, minimalistic premium concierge planner for EXPO 2027 visitors exploring the offbeat wonders of Serbia." />
     <meta property="og:type" content="website" />
     
-    <!-- Google Fonts -->
+    <!-- Google Fonts: Asynchronous Non-Blocking Loading -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;0,900;1,400;1,700&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;0,900;1,400;1,700&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" />
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;0,900;1,400;1,700&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <noscript>
+      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;0,900;1,400;1,700&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    </noscript>
   </head>
   <body class="bg-[#F5F4EE] text-brand-charcoal font-sans antialiased selection:bg-accent-red/20 selection:text-accent-red">
-    <div id="root"></div>
+    <div id="root">
+      <!-- Instant Native Startup Shell (0.05s First Paint Protection for iOS WKWebView) -->
+      <div id="idemo-initial-splash" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#F5F4EE;z-index:9999;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:24px;text-align:center;">
+        <div style="width:64px;height:64px;border-radius:18px;background:#23251E;display:flex;align-items:center;justify-content:center;box-shadow:0 12px 32px rgba(35,37,30,0.12);margin-bottom:18px;">
+          <span style="color:#F5F4EE;font-size:22px;font-weight:900;letter-spacing:1px;">ID</span>
+        </div>
+        <div style="font-size:18px;font-weight:900;letter-spacing:3px;color:#23251E;margin-bottom:6px;">IDEMO</div>
+        <div style="font-size:9.5px;font-weight:800;letter-spacing:2.5px;color:#800020;text-transform:uppercase;margin-bottom:24px;">SERBIA CONCIERGE</div>
+        <div style="width:48px;height:2.5px;background:#E2DFC2;border-radius:3px;overflow:hidden;position:relative;">
+          <div style="width:24px;height:100%;background:#800020;position:absolute;animation:idemo-pulse 1.2s infinite ease-in-out;"></div>
+        </div>
+        <style>
+          @keyframes idemo-pulse {
+            0% { left: -24px; }
+            50% { left: 48px; }
+            100% { left: -24px; }
+          }
+        </style>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
