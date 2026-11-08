@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && esbuild server.ts --platform=node --format=esm --target=node22 --outfile=dist/server.js",
+    "gcp-build": "vite build && esbuild server.ts --platform=node --format=esm --target=node22 --outfile=dist/server.js",
     "start": "node server.js",
     "lint": "tsc --noEmit",
     "preview": "vite preview"

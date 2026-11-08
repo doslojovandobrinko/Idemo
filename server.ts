@@ -1062,7 +1062,14 @@ OUTPUT FORMAT: Return raw JSON mapping each requested language code to its trans
   });
 
   // Vite development middleware vs Static Production serving
-  const distPath = path.join(process.cwd(), 'dist');
+  const distPath = fs.existsSync(path.join(process.cwd(), 'dist', 'index.html'))
+    ? path.join(process.cwd(), 'dist')
+    : fs.existsSync(path.join(__dirname, 'dist', 'index.html'))
+    ? path.join(__dirname, 'dist')
+    : fs.existsSync(path.join(__dirname, 'index.html'))
+    ? __dirname
+    : path.join(process.cwd(), 'dist');
+
   const indexHtmlExists = fs.existsSync(path.join(distPath, 'index.html'));
   const isProduction = process.env.NODE_ENV === 'production' || indexHtmlExists;
 
