@@ -3,9 +3,12 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && esbuild server.ts --platform=node --format=esm --target=node22 --outfile=dist/server.js",
     "start": "node server.ts",
     "lint": "tsc --noEmit",
     "preview": "vite preview"

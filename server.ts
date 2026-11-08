@@ -3,7 +3,6 @@ import type { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -1063,14 +1062,18 @@ OUTPUT FORMAT: Return raw JSON mapping each requested language code to its trans
   });
 
   // Vite development middleware vs Static Production serving
-  if (process.env.NODE_ENV !== 'production') {
+  const distPath = path.join(process.cwd(), 'dist');
+  const indexHtmlExists = fs.existsSync(path.join(distPath, 'index.html'));
+  const isProduction = process.env.NODE_ENV === 'production' || indexHtmlExists;
+
+  if (!isProduction) {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.use((_req: Request, res: Response) => {
       res.sendFile(path.join(distPath, 'index.html'));
@@ -1078,7 +1081,7 @@ OUTPUT FORMAT: Return raw JSON mapping each requested language code to its trans
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[IDEMO Server] Running on http://0.0.0.0:${PORT} (ENV: ${process.env.NODE_ENV || 'development'})`);
+    console.log(`[IDEMO Server] Running on http://0.0.0.0:${PORT} (ENV: ${isProduction ? 'production' : 'development'})`);
   });
 }
 
