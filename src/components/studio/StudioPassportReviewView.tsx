@@ -631,7 +631,7 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
 
                   <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-[#E5E3DB]/50">
                     <span className="text-[10px] font-mono text-[#8C8A7D]">
-                      Motivation: {prop.proposalReason.replace(/_/g, ' ')}
+                      Motivation: {String(prop.proposalReason || '').replace(/_/g, ' ')}
                     </span>
 
                     {!isApproved ? (
@@ -806,7 +806,7 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
                           : 'bg-purple-50 text-purple-800 border-purple-200'
                       }`}
                     >
-                      {item.review_status.replace('_', ' ')}
+                      {String(item.review_status || 'review').replace(/_/g, ' ')}
                     </span>
                   </div>
 
@@ -880,7 +880,7 @@ export function StudioPassportReviewView({ session }: StudioPassportReviewViewPr
                       ? 'bg-amber-50 text-amber-800 border-amber-200'
                       : 'bg-purple-50 text-purple-800 border-purple-200'
                   }`}>
-                    {selectedProfile.review_status.replace('_', ' ')}
+                    {String(selectedProfile.review_status || 'review').replace(/_/g, ' ')}
                   </span>
                 </div>
               </div>

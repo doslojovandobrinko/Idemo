@@ -535,7 +535,16 @@ export function getAllPartners(): Partner[] {
     partnersMap.set(p.id, { ...p });
   });
 
-  return Array.from(partnersMap.values());
+  return Array.from(partnersMap.values()).map(p => ({
+    ...p,
+    nameEn: p.nameEn || p.nameSr || p.nameZh || p.id || 'Partner',
+    nameSr: p.nameSr || p.nameEn || '',
+    nameZh: p.nameZh || p.nameEn || '',
+    category: p.category || 'Tourist Guide',
+    partnerType: p.partnerType || 'Individual',
+    linkedRecommendations: Array.isArray(p.linkedRecommendations) ? p.linkedRecommendations : [],
+    expertise: Array.isArray(p.expertise) ? p.expertise : [],
+  }));
 }
 
 /**

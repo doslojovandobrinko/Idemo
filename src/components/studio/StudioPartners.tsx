@@ -117,11 +117,11 @@ export function StudioPartners({ targetPartnerId, session, initialSubTab = 'dire
       const q = searchQuery.toLowerCase();
       const matchesSearch = 
         !searchQuery ||
-        p.nameEn.toLowerCase().includes(q) ||
-        (p.nameSr && p.nameSr.toLowerCase().includes(q)) ||
-        p.category.toLowerCase().includes(q) ||
-        (p.locationEn && p.locationEn.toLowerCase().includes(q)) ||
-        (p.email && p.email.toLowerCase().includes(q));
+        Boolean(p.nameEn && p.nameEn.toLowerCase().includes(q)) ||
+        Boolean(p.nameSr && p.nameSr.toLowerCase().includes(q)) ||
+        Boolean(p.category && p.category.toLowerCase().includes(q)) ||
+        Boolean(p.locationEn && p.locationEn.toLowerCase().includes(q)) ||
+        Boolean(p.email && p.email.toLowerCase().includes(q));
 
       if (!matchesSearch) return false;
 
@@ -466,7 +466,7 @@ export function StudioPartners({ targetPartnerId, session, initialSubTab = 'dire
                 <div className="flex items-center gap-2">
                   {(activePartner.phone || activePartner.whatsApp) && (
                     <a
-                      href={`https://wa.me/${(activePartner.whatsApp || activePartner.phone || '').replace(/[^0-9]/g, '')}${messageText.trim() ? `?text=${encodeURIComponent(messageText.trim())}` : ''}`}
+                      href={`https://wa.me/${String(activePartner.whatsApp || activePartner.phone || '').replace(/[^0-9]/g, '')}${messageText.trim() ? `?text=${encodeURIComponent(messageText.trim())}` : ''}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="px-3 py-1.5 rounded-xl bg-[#E8F5E9] hover:bg-[#C8E6C9] text-[#2E7D32] border border-[#C8E6C9] text-[10px] font-bold uppercase flex items-center gap-1.5 transition-all"
@@ -477,7 +477,7 @@ export function StudioPartners({ targetPartnerId, session, initialSubTab = 'dire
                   )}
                   {activePartner.email && (
                     <a
-                      href={`mailto:${activePartner.email}?subject=${encodeURIComponent(`IDEMO Studio — Message for ${activePartner.nameEn}`)}${messageText.trim() ? `&body=${encodeURIComponent(messageText.trim())}` : ''}`}
+                      href={`mailto:${activePartner.email}?subject=${encodeURIComponent(`IDEMO Studio — Message for ${activePartner.nameEn || activePartner.nameSr || activePartner.id || 'Partner'}`)}${messageText.trim() ? `&body=${encodeURIComponent(messageText.trim())}` : ''}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="px-3 py-1.5 rounded-xl bg-white hover:bg-[#FAF9F5] text-[#1E2E20] border border-[#E5E3DB] text-[10px] font-bold uppercase flex items-center gap-1.5 transition-all"
@@ -677,23 +677,32 @@ export function StudioPartners({ targetPartnerId, session, initialSubTab = 'dire
               </div>
 
               <div className="flex items-center gap-3">
-                <input
-                  type="text"
-                  readOnly
-                  value={`https://idemo.travel/?src=QR_${activePartner.nameEn.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase()}_${activePartner.id}`}
-                  className="flex-1 h-10 px-3 bg-white border border-[#E5E3DB] rounded-xl text-xs font-mono text-[#1E2E20] select-all"
-                />
-                <button
-                  onClick={() => {
-                    const url = `https://idemo.travel/?src=QR_${activePartner.nameEn.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase()}_${activePartner.id}`;
-                    navigator.clipboard?.writeText(url).catch(() => {});
-                    setCopiedQr(true);
-                    setTimeout(() => setCopiedQr(false), 2500);
-                  }}
-                  className="px-4 h-10 rounded-xl bg-[#23251E] hover:bg-[#32352B] text-white font-mono text-xs font-bold uppercase cursor-pointer"
-                >
-                  {copiedQr ? 'Copied ✓' : 'Copy Link'}
-                </button>
+                {(() => {
+                  const partnerSlug = String(activePartner.nameEn || activePartner.nameSr || activePartner.id || 'PARTNER')
+                    .replace(/[^a-zA-Z0-9]/g, '_')
+                    .toUpperCase();
+                  const qrUrl = `https://idemo.travel/?src=QR_${partnerSlug}_${activePartner.id || 'PID'}`;
+                  return (
+                    <>
+                      <input
+                        type="text"
+                        readOnly
+                        value={qrUrl}
+                        className="flex-1 h-10 px-3 bg-white border border-[#E5E3DB] rounded-xl text-xs font-mono text-[#1E2E20] select-all"
+                      />
+                      <button
+                        onClick={() => {
+                          navigator.clipboard?.writeText(qrUrl).catch(() => {});
+                          setCopiedQr(true);
+                          setTimeout(() => setCopiedQr(false), 2500);
+                        }}
+                        className="px-4 h-10 rounded-xl bg-[#23251E] hover:bg-[#32352B] text-white font-mono text-xs font-bold uppercase cursor-pointer"
+                      >
+                        {copiedQr ? 'Copied ✓' : 'Copy Link'}
+                      </button>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 
