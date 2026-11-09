@@ -147,7 +147,7 @@ export const wave2CanonicalRecommendations: Recommendation[] = [
     "lat": 44.383,
     "lng": 22.344
   },
-  "coordinateX": 6,
+  "coordinateX": 5,
   "coordinateY": -5,
   "radius": 4,
   "energy": 7,
@@ -248,7 +248,7 @@ export const wave2CanonicalRecommendations: Recommendation[] = [
     "lng": 22.784
   },
   "coordinateX": 5,
-  "coordinateY": -6,
+  "coordinateY": -5,
   "radius": 4,
   "energy": 6,
   "social": 3,
@@ -897,7 +897,7 @@ export const wave2CanonicalRecommendations: Recommendation[] = [
     "lat": 44.606,
     "lng": 22.61
   },
-  "coordinateX": 6,
+  "coordinateX": 5,
   "coordinateY": 1,
   "radius": 4,
   "energy": 5,
@@ -1448,7 +1448,7 @@ export const wave2CanonicalRecommendations: Recommendation[] = [
     "lng": 20.448
   },
   "coordinateX": 0,
-  "coordinateY": 6,
+  "coordinateY": 5,
   "radius": 4,
   "energy": 5,
   "social": 6,
@@ -2098,7 +2098,7 @@ export const wave2CanonicalRecommendations: Recommendation[] = [
     "lng": 20.457
   },
   "coordinateX": 0,
-  "coordinateY": 6,
+  "coordinateY": 5,
   "radius": 4,
   "energy": 5,
   "social": 6,

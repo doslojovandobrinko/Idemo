@@ -1,0 +1,962 @@
+Total Recommendations: 192
+
+1. **Uvac Meanders** (ID: 1)
+   - **Category:** Nature, Travel
+   - **Location:** Sjenica
+   - **Summary:** The Uvac Gorge is home to the most dramatic river meanders in Europe. This nature reserve is the last sanctuary for the Griffon Vulture, providing breathtaking views from the Molitva lookout. A true hidden gem for those seeking pristine wilderness and natural architectural wonders in western Serbia.
+
+2. **Zasavica Special Nature Reserve** (ID: 5)
+   - **Category:** Nature, Travel
+   - **Location:** Near Sremska Mitrovica
+   - **Summary:** A protected wetland ecosystem known for rare birdlife, mangalica pigs, and the world’s most expensive cheese, made from donkey milk (Pule). A quiet, rural hidden gem for eco-friendly gastronomy.
+
+3. **Banjska Stena Viewpoint** (ID: 12)
+   - **Category:** Nature, Travel
+   - **Location:** Tara National Park
+   - **Summary:** Witness Serbia’s most dramatic panorama above the emerald Drina River canyon in Tara National Park.
+
+4. **Đavolja Varoš (Devil’s Town)** (ID: 13)
+   - **Category:** Nature, Travel
+   - **Location:** Kuršumlija
+   - **Summary:** A natural wonder of over 200 stone pillars born from erosion and shrouded in eerie local legends.
+
+5. **Đerdap Gorge** (ID: 18)
+   - **Category:** Nature, Travel
+   - **Location:** Golubac–Donji Milanovac
+   - **Summary:** Europe’s longest river canyon and a landscape of geological grandeur. A frontier between empires, combining Roman history, Orthodox culture, and the dramatic "Iron Gates" of the Danube.
+
+6. **Stara Planina** (ID: 26)
+   - **Category:** Nature
+   - **Location:** Southeastern Serbia
+   - **Summary:** One of Serbia’s least urbanized mountain systems, offering remote wilderness, dramatic waterfalls, and authentic shepherd traditions.
+
+7. **Tara National Park** (ID: 32)
+   - **Category:** Nature
+   - **Location:** Western Serbia
+   - **Summary:** Serbia’s strongest mountain destination for forest immersion and clean air. Dense pine forests, glacial river canyons, and the iconic Banjska Stena viewpoint.
+
+8. **Resava Cave** (ID: 46)
+   - **Category:** Nature, Travel
+   - **Location:** Central-Eastern Serbia
+   - **Summary:** One of the Balkans’ finest accessible cave systems, featuring dramatic calcite formations and underground halls millions of years old.
+
+9. **Lazarev Canyon** (ID: 48)
+   - **Category:** Nature
+   - **Location:** Near Bor
+   - **Summary:** One of Serbia’s wildest and deepest canyons. An untamed landscape of dense forests and limestone cliffs for authentic wilderness seekers.
+
+10. **Carska Bara Wetlands** (ID: 62)
+   - **Category:** Nature, Travel
+   - **Location:** Near Zrenjanin
+   - **Summary:** One of the Balkans’ richest wetland ecosystems. A sanctuary for hundreds of bird species amidst the winding canals of the Pannonian Plain.
+
+11. **Tara Forest Reset & Banjska Stena Hike** (ID: 75)
+   - **Category:** Nature
+   - **Location:** Tara National Park
+   - **Summary:** Banjska Stena offers one of the most restorative short hikes in the Balkans. Dense pine forests suddenly open above the Drina canyon.
+
+12. **Drina River Soft Rafting & Riverside Lodges** (ID: 76)
+   - **Category:** Nature
+   - **Location:** Western Serbia / Drina
+   - **Summary:** Low-intensity rafting focused on immersion in canyon landscapes and cold mountain water.
+
+13. **Durmitor Mountain & Black Lake Extension** (ID: 77)
+   - **Category:** Nature, Travel
+   - **Location:** Northern Montenegro
+   - **Summary:** Glacial lakes, moderate hiking, and limestone peaks in a UNESCO-protected landscape.
+
+14. **Fruška Gora E-Bike Wine Routes** (ID: 78)
+   - **Category:** Nature, Gastronomy
+   - **Location:** Fruška Gora Region
+   - **Summary:** Gentle physical activity combined with gastronomy and wine culture through forest roads and vineyards.
+
+15. **Drina Regatta Private River Experience** (ID: 79)
+   - **Category:** Nature
+   - **Location:** Bajina Bašta / Drina
+   - **Summary:** Curated floating experiences through emerald canyons, cold river swimming, and floating lunches.
+
+16. **Ada Ciganlija Open-Water Lifestyle** (ID: 80)
+   - **Category:** Nature
+   - **Location:** Belgrade
+   - **Summary:** Belgrade’s outdoor movement zone: cycling, kayaking, paddleboarding, and forest walking within the city.
+
+17. **Via Ferrata Kablar — Soft Vertical Adventure** (ID: 81)
+   - **Category:** Nature, Travel
+   - **Location:** Ovčar-Kablar Gorge
+   - **Summary:** Beginner-friendly secured climbing routes offering dramatic panoramic views of the Ovčar-Kablar Gorge.
+
+18. **Horseback Riding on Zlatibor Highlands** (ID: 82)
+   - **Category:** Nature, Travel
+   - **Location:** Zlatibor Region
+   - **Summary:** Curated riding experiences across rolling mountain pastures, pine landscapes, and village trails.
+
+19. **Sunset Kayaking Beneath Belgrade Fortress** (ID: 84)
+   - **Category:** Nature
+   - **Location:** Confluence, Belgrade
+   - **Summary:** A meditative urban paddling experience observing the confluence, floating clubs, and fortress walls from the water.
+
+20. **Splavarenje Tarom — Tara River Rafting** (ID: 85)
+   - **Category:** Nature
+   - **Location:** Tara Canyon Region
+   - **Summary:** Rafting and floating experiences in Europe’s deepest canyon. A transition into silence, pine forests, and turquoise water.
+
+21. **Manasija Monastery** (ID: 2)
+   - **Category:** History, Travel
+   - **Location:** Despotovac
+   - **Summary:** Manasija, also known as Resava, is a fortified monastery complex surrounded by 11 massive towers. Built in the early 15th century, it was a center for literature and culture during the Serbian Despotate. Its frescoes are among the most beautiful examples of medieval Serbian art.
+
+22. **Nikola Tesla Museum** (ID: 7)
+   - **Category:** History
+   - **Location:** Belgrade, Vračar
+   - **Summary:** Explore the legacy of the genius who "invented the 20th century." This museum houses Tesla’s original inventions, personal archive, and ashes.
+
+23. **Felix Romuliana** (ID: 16)
+   - **Category:** History, Travel
+   - **Location:** Gamzigrad, Zaječar
+   - **Summary:** UNESCO-listed imperial palace built by Emperor Galerius, featuring exquisite Roman floor mosaics.
+
+24. **Viminacium Archaeological Park** (ID: 17)
+   - **Category:** History, Travel
+   - **Location:** Kostolac, Požarevac
+   - **Summary:** Ancient Roman provincial capital featuring preserved Roman ships and a million-year-old mammoth skeleton.
+
+25. **Golubac Fortress** (ID: 19)
+   - **Category:** History, Travel
+   - **Location:** Golubac
+   - **Summary:** One of the Balkans’ finest medieval river fortifications, standing guard at the Iron Gates. A visual masterpiece of military architecture on the Danube bank.
+
+26. **Lepenski Vir** (ID: 20)
+   - **Category:** History, Travel
+   - **Location:** Near Donji Milanovac
+   - **Summary:** Europe’s most important Mesolithic archaeological site, dating back 8,000 years. Discover enigmatic prehistoric sculptures and early river civilization patterns.
+
+27. **Kovačica Naïve Art** (ID: 36)
+   - **Category:** History
+   - **Location:** South Banat Region
+   - **Summary:** Internationally recognized folk-art movement within the Slovak minority community. Vibrant, dreamlike village scenes that have captivated global collectors.
+
+28. **Ovčar-Kablar Gorge** (ID: 38)
+   - **Category:** History
+   - **Location:** Near Čačak
+   - **Summary:** The "Serbian Mount Athos"—a concentration of ancient monasteries tucked into a dramatic river gorge. A spiritual landscape for contemplative travel.
+
+29. **Sirogojno Open-Air Museum** (ID: 44)
+   - **Category:** History, Travel
+   - **Location:** Zlatibor Region
+   - **Summary:** An authentic ethnographic village preserving 19th-century mountain life. Home to the legendary Sirogojno knitwear tradition.
+
+30. **Niš Fortress** (ID: 45)
+   - **Category:** History, Travel
+   - **Location:** Niš, Southern Serbia
+   - **Summary:** A legendary Ottoman fortress built on Roman foundations in the birthplace of Constantine the Great. A cultural crossroads of the southern Balkans.
+
+31. **Mediana Archaeological Site** (ID: 49)
+   - **Category:** History
+   - **Location:** Niš Outskirts
+   - **Summary:** The imperial estate of Constantine the Great. A window into the elite Roman life of ancient Naissus through stunning floor mosaics.
+
+32. **Temple of Saint Sava** (ID: 54)
+   - **Category:** History
+   - **Location:** Vračar, Belgrade
+   - **Summary:** One of the world’s largest Orthodox churches and a powerful symbol of modern Serbian identity. Featuring breathtaking golden mosaics.
+
+33. **Oplenac & Royal Mausoleum** (ID: 56)
+   - **Category:** History
+   - **Location:** Topola, Central Serbia
+   - **Summary:** The dynastic heart of modern Serbia. A stunning hilltop church featuring one of Europe’s most elaborate mosaic interiors reproducing medieval frescoes.
+
+34. **Pirot Kilim (Kilim) Workshop** (ID: 67)
+   - **Category:** History, Travel
+   - **Location:** Pirot, SE Serbia
+   - **Summary:** UNESCO-recognized hand-woven carpets with geometric symbolism. A geometric masterpiece of Balkan textile art.
+
+35. **Kovačica Naïve Art Ateliers & Banat Craft Heritage** (ID: PKG-028)
+   - **Category:** History
+   - **Location:** Kovačica & Padina, Banat
+   - **Summary:** Explore the vibrant ateliers of Slovak Naïve art masters in Kovačica, observe authentic easel craftsmanship, and discover Banat's traditional textile weaving and ceramic heritage.
+
+36. **Museum of Contemporary Art Belgrade** (ID: 149)
+   - **Category:** History
+   - **Location:** Ušće Park, Belgrade
+   - **Summary:** Belgrade's premiere venue for 20th and 21st-century Yugoslav and Serbian modern art, housed in a celebrated 1965 modernist landmark in Ušće Park.
+
+37. **Princess Ljubica’s Residence** (ID: 150)
+   - **Category:** History
+   - **Location:** Kosančićev Venac, Belgrade
+   - **Summary:** An authentic 19th-century royal residence blending Ottoman Balkan architectural roots with Central European interior influences, located in historic Kosančićev Venac.
+
+38. **Nebojša Tower** (ID: 151)
+   - **Category:** History
+   - **Location:** Lower Town, Belgrade Fortress
+   - **Summary:** A monumental 15th-century artillery tower at the foot of Belgrade Fortress, guarding the Danube rivergate with multimedia exhibitions on Balkan freedom struggles.
+
+39. **Gallery of Matica Srpska** (ID: 152)
+   - **Category:** History
+   - **Location:** Trg Galerija, Novi Sad
+   - **Summary:** The cultural treasure chest of Novi Sad, presenting three centuries of Serbian fine art from post-Byzantine icons to 20th-century modernism.
+
+40. **Bajrakli Mosque** (ID: 153)
+   - **Category:** History
+   - **Location:** Dorćol, Belgrade
+   - **Summary:** Belgrade's sole surviving Ottoman mosque, built around 1575 in historic Dorćol, preserving authentic stone Islamic architecture.
+
+41. **Archaeological Hall of National Museum Niš** (ID: 154)
+   - **Category:** History
+   - **Location:** Central Niš
+   - **Summary:** A concise archaeological treasure house in Niš, housing extraordinary Roman imperial artifacts from Naissus and Mediana.
+
+42. **Wines from the Sands** (ID: 9)
+   - **Category:** Gastronomy, Travel
+   - **Location:** Subotica / Palić
+   - **Summary:** Discover mineral wines from the ancient Pannonian Sea floor. Unique terroir of sand and Art Nouveau wineries near the Hungarian border.
+
+43. **Rakia Bar Belgrade** (ID: 10)
+   - **Category:** Gastronomy, Travel
+   - **Location:** Belgrade City Center
+   - **Summary:** The pioneer of modern rakia culture. Experience elevated rakia through sophisticated pairings and educational tastings.
+
+44. **Distillery Zarić** (ID: 11)
+   - **Category:** Gastronomy, Travel
+   - **Location:** Kosjerić
+   - **Summary:** One of the most awarded high-tech distilleries in the world, producing world-class spirits in the picturesque Kosjerić.
+
+45. **Rajačke Pimnice** (ID: 25)
+   - **Category:** Gastronomy, Travel
+   - **Location:** Near Negotin
+   - **Summary:** A unique wine heritage village featuring a dense complex of 18th-century stone cellars. Authentic, raw, and deeply cultural wine traditions in Eastern Serbia.
+
+46. **Homa Restaurant** (ID: 27)
+   - **Category:** Gastronomy
+   - **Location:** Dorćol, Belgrade
+   - **Summary:** Belgrade’s pioneer of modern fine dining. A minimal and sophisticated space blending local ingredients with advanced culinary techniques.
+
+47. **Kalemegdanska Terasa** (ID: 29)
+   - **Category:** Gastronomy
+   - **Location:** Kalemegdan, Belgrade
+   - **Summary:** The essential Belgrade experience. Sunset dining and jazz within the layers of the historic Belgrade Fortress, overlooking the legendary river confluence.
+
+48. **Tri Šešira (Three Hats)** (ID: 33)
+   - **Category:** Gastronomy
+   - **Location:** Skadarlija, Belgrade
+   - **Summary:** One of Belgrade’s oldest and most recognizable traditional restaurants. Located in the bohemian Skadarlija district, it preserves 19th-century urban Serbian dining rituals.
+
+49. **Ambar Restaurant** (ID: 37)
+   - **Category:** Gastronomy
+   - **Location:** Beton Hala, Belgrade
+   - **Summary:** Modern Balkan small-plate dining on the Sava riverfront. A sophisticated and international introduction to regional flavors, from kajmak to creative kebabs.
+
+50. **Salon 1905** (ID: 42)
+   - **Category:** Gastronomy
+   - **Location:** Savamala, Belgrade
+   - **Summary:** A grand fine-dining experience within the historic Geozavod building. Combining royal Yugoslav aesthetics with formal European culinary techniques.
+
+51. **Comunale Caffè e Cucina** (ID: 47)
+   - **Category:** Gastronomy
+   - **Location:** Beton Hala, Belgrade
+   - **Summary:** Belgrade’s contemporary cosmopolitan spirit on the riverfront. Mediterranean-inspired cuisine meets industrial chic design at Beton Hala.
+
+52. **Pirot Gastronomy** (ID: 52)
+   - **Category:** Gastronomy
+   - **Location:** Southeastern Serbia
+   - **Summary:** Deeply authentic mountain culinary traditions from Southeastern Serbia. Famous for aged cheeses, slow-cooked lamb, and the iconic Pirot Kilim culture.
+
+53. **Kafanas of Old Zemun** (ID: 58)
+   - **Category:** Gastronomy, Clubbing
+   - **Location:** Zemun, Belgrade
+   - **Summary:** Authentic riverside dining culture in the charm of Old Zemun. Traditional fish restaurants, Austro-Hungarian architecture, and acoustic tamburica music.
+
+54. **Boutique Rakija Distilleries** (ID: 63)
+   - **Category:** Gastronomy
+   - **Location:** Multiple Regions
+   - **Summary:** A journey through Serbia’s artisanal brandy movement. Discover family-run distilleries focusing on terroir-driven plum, quince, and apricot rakijas.
+
+55. **Guča Trumpet Festival Grounds** (ID: 70)
+   - **Category:** Gastronomy, Travel, History
+   - **Location:** Guča, SW Serbia
+   - **Summary:** The world’s largest gathering of brass bands. A raw, high-energy explosion of Balkan soul and brass virtuosity.
+
+56. **Vojvodina Salaš (Ethno-Farms)** (ID: 72)
+   - **Category:** Gastronomy
+   - **Location:** Various / Near Novi Sad
+   - **Summary:** The ultimate "Slow Food" experience in the Pannonian Plains. Multi-hour dining rituals in historic 19th-century farmsteads.
+
+57. **Nišville Jazz Festival** (ID: 101)
+   - **Category:** Gastronomy
+   - **Location:** Niš Fortress
+   - **Summary:** Sophisticated live jazz meets the finest Southern Serbian cuisine and wines inside an Ottoman-era fortress.
+
+58. **Majkin Salaš (Palić / Subotica)** (ID: 155)
+   - **Category:** Gastronomy, Travel
+   - **Location:** Palić / Subotica
+   - **Summary:** A quintessential North Bačka farmstead estate offering slow-cooked Vojvodina specialties, homemade rakija, traditional tamburica music, and sprawling orchards near Lake Palić.
+
+59. **Perkov Salaš (Neradin, Fruška Gora)** (ID: 156)
+   - **Category:** Gastronomy, Travel
+   - **Location:** Neradin, Fruška Gora
+   - **Summary:** An intimate family ethno-household tucked in the southern foothills of Fruška Gora, renowned for heirloom recipes, homemade jams, and warm Srem hospitality.
+
+60. **Sunčana Reka Ethno Complex (Drina River)** (ID: 157)
+   - **Category:** Gastronomy, Travel
+   - **Location:** Banja Koviljača / Drina River
+   - **Summary:** A riverside ethno-haven on the banks of the emerald Drina River, offering fresh river trout, roasted lamb under the bell, and traditional Podrinje hospitality.
+
+61. **Moravski Konaci (Velika Plana)** (ID: 158)
+   - **Category:** Gastronomy, Travel
+   - **Location:** Velika Plana
+   - **Summary:** A restored 19th-century Morava wooden village set around an artificial lake in Central Serbia, serving Šumadija roasts, wedding cabbage, and local wines.
+
+62. **Salaš Katai (Mali Iđoš)** (ID: 159)
+   - **Category:** Gastronomy, Travel
+   - **Location:** Mali Iđoš
+   - **Summary:** A vibrant multicultural ethno-farm in the heart of Bačka, offering Hungarian and Serbian country feast traditions, bakeries, and horse-drawn wagons.
+
+63. **Etno Selo Srna (Stara Planina)** (ID: 160)
+   - **Category:** Gastronomy, Travel
+   - **Location:** Inovo, Knjaževac / Stara Planina
+   - **Summary:** A tranquil mountain ethno-refuge at the foot of Stara Planina, celebrating East Serbian highland gastronomy, Pirot cheeses, and forest herbs.
+
+64. **Babina Reka Ethno Estate (Lazarevac)** (ID: 161)
+   - **Category:** Gastronomy, Travel
+   - **Location:** Trbušnica, Lazarevac
+   - **Summary:** A serene oasis surrounded by streams, stone bridges, and oak woods on the edge of Šumadija, offering slow-cooked country banquets and artistic relaxation.
+
+65. **Vrdnička Kula Ethno Village (Fruška Gora)** (ID: 162)
+   - **Category:** Gastronomy, Travel
+   - **Location:** Vrdnik, Fruška Gora
+   - **Summary:** A refined hilltop ethno-resort nestled in dense pine woods beneath medieval Vrdnik Tower, offering premium Srem cuisine and estate wines.
+
+66. **Zornića Kuća (Baćevac, Barajevo)** (ID: 163)
+   - **Category:** Gastronomy, Travel
+   - **Location:** Baćevac, Barajevo
+   - **Summary:** An eco-friendly Šumadija ethno-household just 35km from Belgrade, featuring a wood-fired bakery, organic farm-to-table roasts, and panoramic rolling hills.
+
+67. **Gostoljublje Rural Household (Mionica / Maljen)** (ID: 164)
+   - **Category:** Gastronomy, Travel
+   - **Location:** Mionica / Kosjerić, Maljen
+   - **Summary:** A traditional Western Serbia farmstead in the foothills of Mount Maljen, famous for clay-pot kačamak, domestic kajmak, plum orchards, and genuine mountain village hospitality.
+
+68. **Sremski Karlovci** (ID: 6)
+   - **Category:** Travel, History
+   - **Location:** Near Novi Sad
+   - **Summary:** Serbiaâ€™s most refined baroque town and the spiritual heart of its culture. Known for unique Bermet wine and stunning Austro-Hungarian architecture.
+
+69. **Zlakusa Pottery Village** (ID: 8)
+   - **Category:** Travel
+   - **Location:** Zlakusa, UĹľice
+   - **Summary:** Experience a 400-year-old pottery technique combining clay and calcite, fired in open flames. UNESCO-recognized intangible heritage.
+
+70. **FruĹˇka Gora** (ID: 21)
+   - **Category:** Travel
+   - **Location:** FruĹˇka Gora National Park
+   - **Summary:** Vojvodinaâ€™s "Holy Mountain" blends forest wellness with 16 Orthodox monasteries and premium wineries. A refined escape for forest hiking and slow rural gastronomy.
+
+71. **Mokra Gora** (ID: 22)
+   - **Category:** Travel
+   - **Location:** Zlatibor District
+   - **Summary:** Serbiaâ€™s most cinematic mountain experience, home to the legendary Ĺ argan Eight heritage railway and traditional wooden architecture.
+
+72. **Drvengrad (KĂĽstendorf)** (ID: 30)
+   - **Category:** Travel
+   - **Location:** Mokra Gora
+   - **Summary:** An artistic wooden mountain village created by filmmaker Emir Kusturica. A cinematic blend of traditional architecture, nostalgia, and mountain culture.
+
+73. **Subotica & PaliÄ‡** (ID: 34)
+   - **Category:** Travel
+   - **Location:** Northern Vojvodina
+   - **Summary:** A refined Austro-Hungarian cultural enclave featuring stunning Hungarian Secessionist architecture and a historic lakeside resort with an Olympic heritage.
+
+74. **DivÄŤibare Air Spa** (ID: 50)
+   - **Category:** Travel, Wellbeing
+   - **Location:** Western Serbia
+   - **Summary:** A peaceful mountain-air retreat in western Serbia. Known for its restorative pine forests and understated wellness escapes.
+
+75. **Wine Routes of Ĺ umadija** (ID: 55)
+   - **Category:** Travel, Gastronomy
+   - **Location:** Central Serbia
+   - **Summary:** Serbiaâ€™s most ambitious modern wine region. Rolling hills, boutique wineries, and a revival of indigenous columns heritage.
+
+76. **Kopaonik Mountain Resort** (ID: 57)
+   - **Category:** Travel
+   - **Location:** Southern Serbia
+   - **Summary:** Serbiaâ€™s premier high-altitude resort. A year-round destination for skiing, hiking, and sophisticated luxury wellness in the "Mountain of the Sun."
+
+77. **GostuĹˇa (The Stone Village)** (ID: 59)
+   - **Category:** Travel, History
+   - **Location:** Stara Planina Region
+   - **Summary:** An architectural marvel on Stara Planina. A village built entirely of stone, wood, and mud, preserving pre-industrial Balkan mountain life.
+
+78. **Avala Tower & Mountain** (ID: 64)
+   - **Category:** Travel, Nature, History
+   - **Location:** Avala, Belgrade Outskirts
+   - **Summary:** The iconic panoramic viewpoint above Belgrade. A symbol of modern resilience and a gateway to the cityâ€™s layered historical memory.
+
+79. **EXPO 2027 Belgrade Complex** (ID: 65)
+   - **Category:** Travel
+   - **Location:** SurÄŤin, Belgrade
+   - **Summary:** The futuristic heart of EXPO 2027. A multi-functional complex designed for global dialogue on "Play for Humanity."
+
+80. **Sirogojno Hand-Knitted Wool** (ID: 66)
+   - **Category:** Travel, History
+   - **Location:** Multiple / Sirogojno
+   - **Summary:** World-famous hand-knitted wool garments with regional motifs. A luxury heritage piece that once captured the Paris fashion runways.
+
+81. **Bitef Theatre & Festival** (ID: 68)
+   - **Category:** Travel
+   - **Location:** DorÄ‡ol, Belgrade
+   - **Summary:** Global epicenter of avant-garde theatre performance. Belgradeâ€™s most intellectually daring cultural tradition since 1967.
+
+82. **Serbian National Theatre (Novi Sad)** (ID: 69)
+   - **Category:** Travel
+   - **Location:** Novi Sad Square
+   - **Summary:** The oldest professional theatre among the Serbs. A grand brutalist landmark representing the "Serbian Athens."
+
+83. **The Silk Thread Craft (PanÄŤevo)** (ID: 74)
+   - **Category:** Travel
+   - **Location:** PanÄŤevo
+   - **Summary:** Preserving the rare Pannonian silk-weaving heritage. Hand-crafted textiles and accessories made with historical artisanal techniques.
+
+84. **Äerdap Danube Cycling Segments** (ID: 83)
+   - **Category:** Travel, Nature
+   - **Location:** Danube Corridor / Eastern Serbia
+   - **Summary:** Moderate cycling segments passing Roman ruins, fortresses, and river viewpoints in Europeâ€™s longest river canyon.
+
+85. **Belgrade Dance Festival** (ID: 96)
+   - **Category:** Travel
+   - **Location:** Belgrade
+   - **Summary:** Witness leading contemporary dance companies from across the globe gather in Belgrade. A premium spring artistic spectacle during the EXPO 2027 window.
+
+86. **Mikser Festival** (ID: 97)
+   - **Category:** Travel
+   - **Location:** Silosi Belgrade
+   - **Summary:** Discover the intersection of urban design, architecture, and sustainable tech. Belgradeâ€™s iconic, future-facing regional design movement.
+
+87. **Pirot Kilim Weaving & Stara Planina Wilderness** (ID: PKG-006)
+   - **Category:** Travel, Heritage
+   - **Location:** Pirot & Stara Planina
+   - **Summary:** Discover centuries-old UNESCO-candidate Pirot kilim hand-weaving traditions in the shadow of Stara Planinaâ€™s dramatic alpine peaks, waterfalls, and traditional stone villages.
+
+88. **Felix Romuliana & Negotin Stone Wine Cellars** (ID: PKG-007)
+   - **Category:** History, Travel
+   - **Location:** ZajeÄŤar & Negotin Valley
+   - **Summary:** Immerse in late Roman imperial grandeur at UNESCO-listed Felix Romuliana, paired with authentic wine tasting in the ancient stone pimnice cellars of RajaÄŤke & RogljevaÄŤke Pimnice.
+
+89. **Tara Mountain Sanctuary & Drina Canyon** (ID: PKG-008)
+   - **Category:** Nature, Travel
+   - **Location:** Tara National Park & Bajina BaĹˇta
+   - **Summary:** Surround yourself with ancient pine forests, panoramic clifftop lookouts over the emerald Drina River, and endemic Omorika spruce trees in West Serbiaâ€™s wild heart.
+
+90. **NiĹˇ Imperial Heritage & Monumental Memory** (ID: PKG-016)
+   - **Category:** History, Travel
+   - **Location:** NiĹˇ & Mediana
+   - **Summary:** Journey from the birthplace of Emperor Constantine at the Mediana villa complex through the Ottoman Stambol Gate to the poignant Skull Tower (Ä†ele Kula).
+
+91. **Äavolja VaroĹˇ & Prolom Mineral Sanctuary** (ID: PKG-017)
+   - **Category:** Nature, Wellbeing
+   - **Location:** KurĹˇumlija & Radan Mountain
+   - **Summary:** Discover around 200 remarkable earth pillars capped with stone blocks at Devil's Town, paired with thermal mineral relaxation in Prolom Spa.
+
+92. **Resava Underground Palace & Lisine Karst Cascade** (ID: PKG-018)
+   - **Category:** Nature, Travel
+   - **Location:** Despotovac & Beljanica
+   - **Summary:** Descend into Resava Cave's 80-million-year-old subterranean halls before dining beside the roaring Veliki Buk waterfall in Lisine.
+
+93. **VrnjaÄŤka Banja Mineral Springs & Thermal Wellness** (ID: PKG-024)
+   - **Category:** Wellbeing, Travel
+   - **Location:** VrnjaÄŤka Banja & GoÄŤ
+   - **Summary:** Stroll through Austria-Hungary-style promenade gardens, cross the historic Bridge of Love, and enjoy mineral springs and thermal wellness in Serbiaâ€™s royal spa town.
+
+94. **Vrnjačka Banja** (ID: 4)
+   - **Category:** Wellbeing, Travel
+   - **Location:** Central Serbia
+   - **Summary:** The "Queen of Serbian Spas" combines Austro-Hungarian spa culture with Balkan thermal traditions. It maintains a functioning medical rehabilitation ecosystem since Roman times, with seven mineral springs and lush parklands.
+
+95. **Rtanj Mountain & Sokobanja** (ID: 28)
+   - **Category:** Wellbeing
+   - **Location:** Eastern Serbia
+   - **Summary:** A blend of thermal recovery in Sokobanja and the mystical energy of the pyramid-shaped Rtanj Mountain. A hotspot for alternative wellness.
+
+96. **Zepter Hotel & Wellness** (ID: 40)
+   - **Category:** Wellbeing
+   - **Location:** Vrnjačka Banja
+   - **Summary:** A holistic wellness ecosystem in Vrnjačka Banja. Integrating luxury hospitality with preventive medicine, nutrition, and spa therapy.
+
+97. **Prolom Banja** (ID: 61)
+   - **Category:** Wellbeing
+   - **Location:** Southern Serbia
+   - **Summary:** Renowned for its unique alkaline water and southern mountain air. A destination for restorative health and metabolic wellness.
+
+98. **Herbal Pharmacies of Fruška Gora** (ID: 73)
+   - **Category:** Wellbeing
+   - **Location:** Fruška Gora Monasteries
+   - **Summary:** Monastery-grade herbalism and natural wellness. Traditional remedies based on the "Holy Mountain’s" unique botanical diversity.
+
+99. **Dr Kozarev Dermatology Clinic (ROI ★★★★★)** (ID: 14)
+   - **Category:** Medical
+   - **Location:** Belgrade, Vračar
+   - **Summary:** Serbia’s premier dermatology center specializing in laser medicine and anti-aging with clinical credibility.
+
+100. **Dental Clinic Dr Popović (ROI ★★★★★)** (ID: 15)
+   - **Category:** Medical
+   - **Location:** Belgrade, Vračar
+   - **Summary:** Advanced implantology and full-mouth rehabilitation for international patients at competitive costs.
+
+101. **Special Hospital Čigota** (ID: 24)
+   - **Category:** Medical
+   - **Location:** Zlatibor Mountain
+   - **Summary:** A medical wellness institution on Zlatibor Mountain, specializing in climate therapy, nutrition, and thyroid rehabilitation.
+
+102. **Belgrade Regenerative Clinics** (ID: 35)
+   - **Category:** Medical
+   - **Location:** Central Belgrade
+   - **Summary:** An emerging luxury sector for advanced aesthetics and Japanese-style head spa treatments. Combining high-end medical expertise with sophisticated wellness rituals.
+
+103. **Serbian Medical Rehabilitation** (ID: 43)
+   - **Category:** Medical
+   - **Location:** Multiple Spa Towns
+   - **Summary:** World-class medical recovery and therapeutic spa infrastructure. Specializing in orthopedic and respiratory rehabilitation at accessible costs.
+
+104. **Beehive Air Therapy** (ID: 53)
+   - **Category:** Medical
+   - **Location:** Multiple Rural Regions
+   - **Summary:** A holistic wellness ritual from Balkan folk medicine. Breathe in the restorative air of active beehives in peaceful rural retreats.
+
+105. **Medical Package: Vrnjačka Banja Medical Spa Recovery Circuit** (ID: 86)
+   - **Category:** Medical
+   - **Location:** Central Serbia
+   - **Summary:** Serbia’s most developed integrated wellness town, combining mineral springs, rehabilitation medicine, and thermal wellness.
+
+106. **Medical Package: Belgrade Dental Tourism + Danube Recovery Program** (ID: 87)
+   - **Category:** Medical
+   - **Location:** Belgrade & Danube Riverside
+   - **Summary:** World-class dentistry combined with riverside recovery in the tranquil Grocka and Vinča regions.
+
+107. **Medical Package: Čigota Zlatibor Metabolic Reset Program** (ID: 88)
+   - **Category:** Medical
+   - **Location:** Zlatibor Mountains
+   - **Summary:** A legendary medical program for metabolic health and weight management in the pristine Zlatibor highlands.
+
+108. **Medical Package: Japanese Head Spa & Anti-Stress Belgrade Circuit** (ID: 89)
+   - **Category:** Medical
+   - **Location:** Belgrade Center
+   - **Summary:** Intense sensory decompression through specialized Japanese head treatments and high-end stress management.
+
+109. **Medical Package: Sokobanja Respiratory & Herbal Recovery Retreat** (ID: 90)
+   - **Category:** Medical
+   - **Location:** Eastern Serbia
+   - **Summary:** Eastern Serbia’s "Air Spa" famous for respiratory health, radon air, and traditional herbal medicine.
+
+110. **Medical Package: Regenerative Aesthetic Clinics + Tara Recovery** (ID: 91)
+   - **Category:** Medical
+   - **Location:** Belgrade & Tara National Park
+   - **Summary:** Advanced regenerative aesthetic treatments in Belgrade followed by a high-altitude forest recovery phase.
+
+111. **Medical Package: Prolom Banja Alkaline Water Recovery** (ID: 92)
+   - **Category:** Medical
+   - **Location:** Southern Serbia
+   - **Summary:** A scientifically recognized destination for metabolic and renal health based on unique Prolom alkaline water.
+
+112. **Medical Package: Apitherapy & Beehive-Air Recovery Retreats** (ID: 93)
+   - **Category:** Medical
+   - **Location:** Šumadija / Fruška Gora Regions
+   - **Summary:** Traditional respiratory inhalation therapy using the antimicrobial properties of active beehives in rural estates.
+
+113. **Medical Package: Serbian Thermal Spa Grand Tour** (ID: 94)
+   - **Category:** Medical
+   - **Location:** Multi-region Serbia
+   - **Summary:** A comprehensive medical tour across Serbia’s most significant thermal springs and recovery towns.
+
+114. **Medical Package: Longevity & Slow Aging Retreat — Fruška Gora** (ID: 95)
+   - **Category:** Medical
+   - **Location:** Fruška Gora
+   - **Summary:** A science-backed retreat focusing on longevity, anti-inflammatory nutrition, and monastery-inspired silence.
+
+115. **Belgrade Waterfront Clubbing** (ID: 3)
+   - **Category:** Clubbing
+   - **Location:** Belgrade
+   - **Summary:** Experience the world-renowned energy of Belgrade’s nightlife at the confluence of the Sava and Danube rivers. From sophisticated house music boat clubs (splavovi) to underground industrial venues, Belgrade offers a pulse that doesn’t stop until sunrise, blending grit with high-end luxury.
+
+116. **Silosi Belgrade** (ID: 23)
+   - **Category:** Clubbing
+   - **Location:** Dorćol, Belgrade
+   - **Summary:** Industrial culture at its finest. Former grain silos on the Danube transformed into a hub for art installations, electronic music, and urban regeneration.
+
+117. **Drugstore Belgrade** (ID: 31)
+   - **Category:** Clubbing
+   - **Location:** Palilula, Belgrade
+   - **Summary:** A "Techno Cathedral" housed in a former industrial plant. The epicenter of Belgrade’s raw, underground electronic music reputation.
+
+118. **Hype Belgrade** (ID: 39)
+   - **Category:** Clubbing
+   - **Location:** Sava Riverfront, Belgrade
+   - **Summary:** Polished riverside splav culture at its peak. Belgrade’s signature high-end nightlife experience featuring sophisticated music and river perspectives.
+
+119. **Humska Cigar Lounge** (ID: 41)
+   - **Category:** Clubbing
+   - **Location:** Senjak / Vračar, Belgrade
+   - **Summary:** Refined urban evening culture focusing on premium whiskies and cigars. A quieter, sophisticated alternative to Belgrade’s high-energy club scene.
+
+120. **Belgrade Design Districts** (ID: 51)
+   - **Category:** Clubbing
+   - **Location:** Dorćol / Cetinjska, Belgrade
+   - **Summary:** The creative pulse of the city. Former breweries and warehouses in Cetinjska and Dorćol transformed into hubs of art, bars, and urban culture.
+
+121. **Belgrade Waterfront Rooftops** (ID: 60)
+   - **Category:** Clubbing, Gastronomy
+   - **Location:** Sava Riverfront, Belgrade
+   - **Summary:** The pinnacle of contemporary Belgrade urbanism. High-end rooftop bars and fine dining with spectacular reflections on the Sava river.
+
+122. **Belgrade Jazz Festival Venues** (ID: 71)
+   - **Category:** Clubbing, Gastronomy
+   - **Location:** City Center, Belgrade
+   - **Summary:** A sophisticated tradition since 1971. Experience world-class jazz in the city’s most elegant halls and basement clubs.
+
+123. **Arsenal Fest** (ID: 98)
+   - **Category:** Clubbing
+   - **Location:** Kragujevac, Central Serbia
+   - **Summary:** An atmospheric music festival inside a dramatic 19th-century military-industrial complex in Kragujevac.
+
+124. **EXIT Festival** (ID: 99)
+   - **Category:** Clubbing
+   - **Location:** Novi Sad / Petrovaradin
+   - **Summary:** Serbia’s world-famous music festival set inside the stone Petrovaradin Fortress over the Danube.
+
+125. **Lovefest** (ID: 100)
+   - **Category:** Clubbing
+   - **Location:** Vrnjačka Banja
+   - **Summary:** An outstanding electronic music festival floating among the thermal spa forests and lakes of Vrnjačka Banja.
+
+126. **Belgrade Beer Fest** (ID: 102)
+   - **Category:** Clubbing
+   - **Location:** Ušće Confluence, Belgrade
+   - **Summary:** Colossal open-air riverside social gathering featuring domestic brewing options, global acts, and local street-food networking.
+
+127. **The Wild Karst of Eastern Serbia (Lazarev Canyon + Zlot Caves)** (ID: 103)
+   - **Category:** Nature
+   - **Location:** Near Bor
+   - **Summary:** Explore Lazarev Canyon, the deepest and longest canyon in eastern Serbia, coupled with the magnificent caverns of Zlot. A rugged, dramatic karst ecosystem featuring spectacular natural viewpoints, rich biodiversity, and deep prehistoric cave passages.
+
+128. **Through the Stone Gates (Vratna natural bridges)** (ID: 104)
+   - **Category:** Nature
+   - **Location:** Near Negotin
+   - **Summary:** Witness the magnificent natural limestone arches of Vratna, some of the highest stone bridges in Europe. Tucked away in a pristine forested valley, this destination offers a silent, deeply spiritual encounter with raw geology.
+
+129. **The Hidden Canyon Road (Jerma Gorge)** (ID: 105)
+   - **Category:** Nature
+   - **Location:** Near Dimitrovgrad
+   - **Summary:** A spectacular driving and hiking route winding through the narrow rock passages of the Jerma River. Bordered by towering cliffs, it leads to medieval monasteries hidden in deep mountain folds.
+
+130. **Serbia’s Layered Canyon (Rosomača Canyon)** (ID: 106)
+   - **Category:** Nature
+   - **Location:** Stara Planina
+   - **Summary:** The 'Stara Planina's Colorado' features extraordinary layered limestone cliffs that resemble stacked pancakes or geological ribs. A short but visually breathtaking walk along a rushing mountain stream.
+
+131. **The Turquoise Spring Journey (Krupaj Spring + Eastern Serbia)** (ID: 107)
+   - **Category:** Nature
+   - **Location:** Homolje Region
+   - **Summary:** An ecological oasis of mystical, deep turquoise waters flowing from a karst cave in eastern Serbia. A refreshing and calming forest walk beneath a canopy of hanging trees and limestone cliffs.
+
+132. **The Clear River Escape (Gradac River Gorge)** (ID: 108)
+   - **Category:** Nature
+   - **Location:** Valjevo
+   - **Summary:** Walk along Europe's cleanest river, winding through an ecological corridor near Valjevo. Features clear water pools, traditional mills, and isolated karst caves.
+
+133. **Between Two Mountains (Ovčar-Kablar Active Day)** (ID: 109)
+   - **Category:** Nature
+   - **Location:** Near Čačak
+   - **Summary:** An immersive outdoor day in the 'Serbian Mount Athos' gorge. Combines hiking through dramatic river bends with visits to monasteries hidden in dense forest.
+
+134. **Above the Meanders (Kablar Viewpoint Experience)** (ID: 110)
+   - **Category:** Nature
+   - **Location:** Near Čačak
+   - **Summary:** Stand on the newly designed glass-deck lookout perched atop Kablar Mountain. Offers a breathtaking vertical vista of the West Morava's curved meanders and the surrounding valley.
+
+135. **The Forested Interior (Golija Mountain Retreat)** (ID: 111)
+   - **Category:** Nature
+   - **Location:** Golija Biosphere
+   - **Summary:** Journey into Serbia's most forested UNESCO Biosphere Reserve. A haven of deep fir and spruce woods, cold rivers, and traditional highland villages where life moves slowly.
+
+136. **Serbia’s Unexpected Hills (Zagajička Hills)** (ID: 112)
+   - **Category:** Nature
+   - **Location:** Deliblato Sands
+   - **Summary:** Walk among the strange, wave-like grass hills of the Deliblato Sands. This ancient dune system looks like a rolling green carpet straight out of a dream.
+
+137. **A Morning Among the Birds (Carska Bara)** (ID: 113)
+   - **Category:** Nature
+   - **Location:** Near Zrenjanin
+   - **Summary:** A spectacular wetland reserve in Vojvodina hosting hundreds of rare migratory bird species. Enjoy quiet boat rides and photography among fields of water lilies.
+
+138. **The Wetlands Near Belgrade (Obedska Bara)** (ID: 114)
+   - **Category:** Nature
+   - **Location:** Near Pećinci
+   - **Summary:** One of Europe’s oldest protected reserves, located just an hour from Belgrade. A peaceful oxbow lake rich in oak forests, birds, and water lilies.
+
+139. **The Fortress Above the Ibar (Maglič Landscape Journey)** (ID: 115)
+   - **Category:** Nature
+   - **Location:** Ibar Valley
+   - **Summary:** Witness the ruins of Maglič Castle perched spectacularly on a rocky ridge high above the winding Ibar River. A dramatic medieval landscape full of history and wild peaks.
+
+140. **Tara’s Manuscript Trail (Rača Monastery + Surrounding Landscape)** (ID: 116)
+   - **Category:** Nature
+   - **Location:** Tara National Park
+   - **Summary:** A gentle walking trail in Tara National Park linking the historical Rača Monastery to clear mountain springs. Blends dense woodlands with medieval monastic literacy lore.
+
+141. **Eastern Serbia Discovery Weekend** (ID: 117)
+   - **Category:** Nature
+   - **Location:** Eastern Serbia
+   - **Summary:** A curated multi-stop nature circuit winding through eastern Serbia's dense forests, limestone cliffs, and rushing water springs.
+
+142. **The Forgotten Fortress of Bač (Bač Fortress + Cultural Landscape)** (ID: 118)
+   - **Category:** History
+   - **Location:** Bač
+   - **Summary:** Discover the remnants of Vojvodina's most significant medieval fortress, dating back to the 14th century. Features a striking, preserved brick keep surrounded by historical plains.
+
+143. **Where Empires Met the Danube (Fetislam Fortress + Kladovo)** (ID: 119)
+   - **Category:** History
+   - **Location:** Kladovo
+   - **Summary:** A massive 16th-century Ottoman fortification on the banks of the Danube River in Kladovo. Blends military history with scenic river views at the border with Romania.
+
+144. **A Danube Afternoon Beyond Belgrade (Smederevo Fortress + River Evening)** (ID: 120)
+   - **Category:** History
+   - **Location:** Smederevo
+   - **Summary:** Explore the colossal 15th-century Smederevo Fortress, one of Europe's largest flatland fortifications. Walk atop its massive brick towers as the sun sets over the Danube.
+
+145. **The Valley of the Kings (Curated Medieval Serbia Journey)** (ID: 121)
+   - **Category:** History
+   - **Location:** Raška Region
+   - **Summary:** A deep cultural pilgrimage tracing the foundations of the medieval Serbian state through royal monasteries hidden in mountain valleys.
+
+146. **The Foundations of Serbia (Old Ras + St Peter’s Church)** (ID: 122)
+   - **Category:** History
+   - **Location:** Novi Pazar
+   - **Summary:** Stand inside the oldest intact Christian church in Serbia, surrounded by the ruins of the medieval capital fortress of Ras.
+
+147. **Where Serbia Meets the Orient (Novi Pazar Cultural Journey)** (ID: 123)
+   - **Category:** History
+   - **Location:** Novi Pazar
+   - **Summary:** Immerse yourself in a lively, historic city blending Ottoman architecture, busy bazaars, traditional hammams, and authentic culinary specialties.
+
+148. **Serbia’s Art Nouveau North (Subotica Architecture + Synagogue)** (ID: 124)
+   - **Category:** History
+   - **Location:** Subotica
+   - **Summary:** An architectural route through Subotica’s vibrant, colorful Secessionist facades and the beautifully restored Art Nouveau Synagogue.
+
+149. **Royal Serbia in Half a Day (Oplenac + Royal Heritage + Historic Winery)** (ID: 125)
+   - **Category:** History
+   - **Location:** Topola
+   - **Summary:** Visit the spectacular white-marble royal mausoleum of the Karađorđević dynasty in Topola, boasting one of the world's largest collections of mosaic art.
+
+150. **Niš Through Its People** (ID: 126)
+   - **Category:** History
+   - **Location:** Niš
+   - **Summary:** A narrative cultural route exploring the layered historical memories of southern Serbia's largest city, from Roman imperial heritage to dark modern memories.
+
+151. **The Danube’s Ancient Frontier (Roman Heritage Journey)** (ID: 127)
+   - **Category:** History
+   - **Location:** Danube Valley
+   - **Summary:** Follow the ancient northern border of the Roman Empire along the Danube. Visited sites include Viminacium's archaeological ruins and Trajan's Bridge.
+
+152. **The Monasteries of Fruška Gora** (ID: 128)
+   - **Category:** History
+   - **Location:** Fruška Gora
+   - **Summary:** A selected, non-exhaustive monastic route through Fruška Gora National Park, visiting historic orthodox sanctuaries nestled in forest folds.
+
+153. **Serbia Before the Crowds** (ID: 129)
+   - **Category:** History
+   - **Location:** Central & Southern Serbia
+   - **Summary:** A carefully curated medieval heritage route guiding you through lesser-known, isolated fortifications and architectural treasures.
+
+154. **The Architecture of Yugoslav Belgrade (Modernist Architecture Route)** (ID: 130)
+   - **Category:** History
+   - **Location:** Belgrade
+   - **Summary:** Discover the colossal, bold concrete architecture of New Belgrade and Belgrade's center, tracing socialist modernist and brutalist monuments.
+
+155. **The City that Built Modern Serbia (Kragujevac Industrial-Modernist Story)** (ID: 131)
+   - **Category:** History
+   - **Location:** Kragujevac
+   - **Summary:** Uncover Kragujevac’s fascinating historical layers, from the 19th-century industrial complexes to the monumental memorial parks of the Yugoslav era.
+
+156. **Wine Among Stone Cellars (Rajačke Pimnice at Dusk)** (ID: 132)
+   - **Category:** Gastronomy
+   - **Location:** Rajac Village
+   - **Summary:** A timeless village of 270 hand-carved stone cellars dedicated exclusively to wine. Taste local Prokupac and Tamjanika in medieval atmospheric stone vaults.
+
+157. **The Other Stone Wine Village (Rogljevo)** (ID: 133)
+   - **Category:** Gastronomy
+   - **Location:** Rogljevo Village
+   - **Summary:** Rogljevo’s authentic, preserved limestone wine cellars offer an alternative, highly intimate tasting environment less crowded than Rajac.
+
+158. **Wine Behind Monastery Walls (Bukovo Monastery Winery)** (ID: 134)
+   - **Category:** Gastronomy
+   - **Location:** Near Negotin
+   - **Summary:** Taste elegant, local wines produced by orthodox monks within the serene courtyards of the historic Bukovo Monastery.
+
+159. **The Bermet Afternoon (Sremski Karlovci)** (ID: 135)
+   - **Category:** Gastronomy
+   - **Location:** Sremski Karlovci
+   - **Summary:** Taste Bermet—the sweet, herbal wine steeped in centuries of local tradition—in the colorful, baroque wine estates of Sremski Karlovci.
+
+160. **Native Grapes of Fruška Gora (Small-Producer Wine Journey)** (ID: 136)
+   - **Category:** Gastronomy
+   - **Location:** Fruška Gora Slopes
+   - **Summary:** A curated driving and tasting tour visiting boutique, family-run vineyards specializing in native grapes like Grašac and Sila.
+
+161. **The Scent of Tamjanika (Župa Wine Country)** (ID: 137)
+   - **Category:** Gastronomy
+   - **Location:** Aleksandrovac (Župa)
+   - **Summary:** Immerse yourself in Župa, the historical home of Tamjanika. Taste floral white wines and rich Prokupac reds directly at the vineyards.
+
+162. **The Return of Prokupac (Toplica Wine Journey)** (ID: 138)
+   - **Category:** Gastronomy
+   - **Location:** Toplica Valley
+   - **Summary:** Discover Toplica, a emerging southern wine region focusing on organic, complex expressions of Serbia's flagship native red grape, Prokupac.
+
+163. **The Village that Turns Red (Donja Lokošnica)** (ID: 139)
+   - **Category:** Gastronomy
+   - **Location:** Near Leskovac
+   - **Summary:** Witness a spectacular, strictly seasonal autumn tradition where entire village houses are completely covered in hanging red pepper chains.
+
+164. **Pirot at the Table (Regional Food + Craft Journey)** (ID: 140)
+   - **Category:** Gastronomy
+   - **Location:** Pirot
+   - **Summary:** Savor the unique gastronomy of southeastern Serbia. Highlights include ironed sausage (peglana), Sabor cheese, and handmade wool kilims (Pirot carpets).
+
+165. **Breakfast on the Pešter Plateau (Sjenica Highland Food Experience)** (ID: 141)
+   - **Category:** Gastronomy
+   - **Location:** Pešter Plateau
+   - **Summary:** An authentic, hearty culinary morning on Serbia’s cold highland plateau. Savor Sjenica cheese, fresh clotted cream (kajmak), and traditional buckwheat pies.
+
+166. **Made of Earth and Fire (Zlakusa Pottery + Slow-Cooked Food)** (ID: 142)
+   - **Category:** Gastronomy
+   - **Location:** Zlakusa Village
+   - **Summary:** Discover the generation-old clay pottery village of Zlakusa. Watch potters shape pots manually, then dine on meat slow-cooked in these clay vessels.
+
+167. **Belgrade Through an Architect’s Eyes (Focused Design and Modernism Route)** (ID: 143)
+   - **Category:** Travel
+   - **Location:** Belgrade
+   - **Summary:** A curated walking tour focusing on Belgrade’s design evolution, from Art Nouveau details to brutalist housing blocks and modern galleries.
+
+168. **Subotica After Dark** (ID: 144)
+   - **Category:** History
+   - **Location:** Subotica
+   - **Summary:** Witness the illuminated Art Nouveau masterpieces of Subotica under soft evening lights, followed by a quiet, refined dinner.
+
+169. **Gorge, Water and Thermal Rest (Ovčar Banja Combined with Ovčar-Kablar)** (ID: 145)
+   - **Category:** Wellbeing
+   - **Location:** Ovčar Banja
+   - **Summary:** A slow, healing day in the green heart of Ovčar Gorge. Combine mild scenic hiking with peaceful thermal baths nestled beneath towering mountains.
+
+170. **A Weekend Above the Noise (Lukovska Banja Mountain Thermal Retreat)** (ID: 146)
+   - **Category:** Wellbeing
+   - **Location:** Kopaonik Slopes
+   - **Summary:** Relax in Serbia’s highest thermal resort, perched at 681m on the slopes of Kopaonik. Features hot spring pools surrounded by clean alpine air and snow.
+
+171. **Southern Serbia in Slow Time (Prolom Banja + Carefully Curated Regional Experience)** (ID: 147)
+   - **Category:** Wellbeing
+   - **Location:** Southern Serbia
+   - **Summary:** A quiet wellness retreat famous for its highly alkaline Prolom mineral water, coupled with peaceful walks among ancient volcanic cliffs.
+
+172. **The Silver River Sanctuary (Silver Lake & Ram Fortress)** (ID: 148)
+   - **Category:** Travel
+   - **Location:** Veliko Gradište & Ram
+   - **Summary:** A picturesque Danube lakeside escape featuring the magnificent 15th-century Ram Fortress perched atop steep river cliffs, offering unforgettable sunset views across the water.
+
+173. **Žestival Užice** (ID: rec-draft-zestival-uzice)
+   - **Category:** Gastronomy
+   - **Location:** City Square, Užice, Western Serbia
+   - **Summary:** An international gathering celebrating Western Serbia’s heritage of fruit cultivation, artisanal distillation, and regional gastronomy. Set against the historic backdrop of Užice, Žestival presents an immersive encounter with the living traditions of rakija craft, traditional coppersmithing, and authentic highland hospitality.
+
+174. **Rtanj Pyramid Summit Ascent** (ID: F1-01)
+   - **Category:** Nature
+   - **Location:** Boljevac / Rtanj
+   - **Summary:** Ascend the iconic limestone pyramid peak of Šiljak on Rtanj Mountain, featuring 360-degree views across Eastern Serbia, unique medicinal flora, and legendary local folklore.
+
+175. **Midžor High-Peak Summit Ridge** (ID: F1-02)
+   - **Category:** Nature
+   - **Location:** Stara Planina / Knjaževac
+   - **Summary:** Hike the highest peak of Central Serbia along the serene alpine border ridge of Stara Planina, offering expansive subalpine meadows and open mountain panoramas.
+
+176. **Suva Planina Ridge Traverse & Trem Peak** (ID: F1-03)
+   - **Category:** Nature
+   - **Location:** Niška Banja / Suva Planina
+   - **Summary:** Traverse the dramatic, razor-sharp limestone ridge of Suva Planina to reach Trem Peak (1,810m), experiencing South-Eastern Serbia's most impressive alpine scenery.
+
+177. **Rajac Alpine Meadow Circuit** (ID: F1-04)
+   - **Category:** Nature
+   - **Location:** Ljig / Suvobor
+   - **Summary:** Enjoy accessible high-altitude walking through rolling meadows, conifer groves, and scenic viewpoints on Rajac Mountain, just two hours from Belgrade.
+
+178. **Veliki Štrbac Danube Gorge Trail** (ID: F1-05)
+   - **Category:** Nature
+   - **Location:** Djerdap National Park / Donji Milanovac
+   - **Summary:** Ascend through Djerdap National Park to Veliki Štrbac peak (768m), taking in towering cliffside views over the narrowest gorge of the Danube River.
+
+179. **Stolovi Wild Horse Ridge Trail** (ID: F1-06)
+   - **Category:** Nature
+   - **Location:** Kraljevo / Stolovi Mountain
+   - **Summary:** Hike the scenic ridge of Stolovi Mountain above the Ibar River valley, where herds of free-roaming horses may be encountered amidst vast, grassy alpine heights.
+
+180. **Divčibare Twin Peaks Trail** (ID: F1-07)
+   - **Category:** Nature
+   - **Location:** Divčibare / Maljen
+   - **Summary:** A gentle, family-friendly mountain trek on the Maljen plateau, linking the wooded summits and open panoramas of Crni Vrh and Golubac.
+
+181. **Beljanica Plateau & Waterfall Crest Trail** (ID: F1-08)
+   - **Category:** Nature
+   - **Location:** Despotovac / Beljanica
+   - **Summary:** Experience an active ascent from the lush karst waterfall basin of Lisine up into the solitary, limestone high plateau of Beljanica Mountain (1,339m).
+
+182. **Kopaonik Celestial Ridge & Metođe Walk** (ID: F1-09)
+   - **Category:** Nature
+   - **Location:** Kopaonik National Park
+   - **Summary:** Discover Kopaonik beyond the ski slopes on a high-altitude trail uniting panoramic ridge crests, the ancient Nebeske Stolice sanctuary ruins, and the Metođe nature reserve.
+
+183. **Povlen Three Peaks Mountain Traverse** (ID: F1-10)
+   - **Category:** Nature
+   - **Location:** Valjevo Mountains / Povlen
+   - **Summary:** Explore the quiet summits of Mali, Srednji, and Veliki Povlen, traversing ancient beech groves and highland pastures in the heart of the Valjevo Mountains.
+
+184. **Zlakusa Hand-Thrown Pottery Ateliers** (ID: G-01)
+   - **Category:** History
+   - **Location:** Zlakusa / Užice
+   - **Summary:** Discover Zlakusa's ancient hand-thrown clay pottery technique, using a unique blend of clay and calcite ground on stone wheels and wood-fired in open kilns.
+
+185. **Pirot Kilim Weaving Looms** (ID: G-02)
+   - **Category:** History
+   - **Location:** Pirot
+   - **Summary:** Observe master weavers crafting world-famous Pirot kilim carpets on vertical looms using two-sided geometric ornamentation and natural wool dyes.
+
+186. **Kovačica Naïve Art Painter Ateliers** (ID: G-03)
+   - **Category:** History
+   - **Location:** Kovačica / Banat
+   - **Summary:** Immerse yourself in Kovačica's celebrated Slovak naïve art community, exploring home ateliers filled with vibrant oil canvases depicting rural Banat life.
+
+187. **Sombor Tamburica Lutherie Workshops** (ID: G-04)
+   - **Category:** History
+   - **Location:** Sombor / Bačka
+   - **Summary:** Explore master lutherie workshops in Sombor where traditional Vojvodina string instruments—from prim to bas-prim—are meticulously crafted by hand.
+
+188. **Šumadija Traditional Opanak Leather Craft** (ID: G-05)
+   - **Category:** History
+   - **Location:** Kragujevac / Šumadija
+   - **Summary:** Observe master opančari hand-weaving traditional Serbian leather footwear with distinctive upturned toes (kljun) using vegetable-tanned straps.
+
+189. **Gradac & Mionica Active River Watermills** (ID: G-06)
+   - **Category:** Nature
+   - **Location:** Valjevo / Gradac River
+   - **Summary:** Visit centuries-old wooden watermills powered by crystal-clear karst rivers, watching heavy millstones turn corn into fresh stone-ground flour.
+
+190. **Niš Silver Filigree Master Workshops** (ID: G-07)
+   - **Category:** History
+   - **Location:** Niš
+   - **Summary:** Witness master filigree artisans shape fine silver wire into delicate lace jewellery, preserving a Balkan metalworking craft originating in Byzantine times.
+
+191. **Srem Oak & Acacia Cooperage Workshops** (ID: G-08)
+   - **Category:** Gastronomy
+   - **Location:** Sremska Mitrovica / Fruška Gora
+   - **Summary:** Step into traditional Srem cooperage workshops to see master pinteri shape seasoned oak and acacia staves over open fires to craft wine and rakija barrels.
+
+192. **Pešter Plateau Artisan Dairy Households** (ID: G-10)
+   - **Category:** Gastronomy
+   - **Location:** Sjenica / Pešter Plateau
+   - **Summary:** Visit traditional high-altitude mountain households on the Pešter Plateau to taste Sjenica white cheese aged in traditional wooden vats.
+

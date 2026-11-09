@@ -156,8 +156,12 @@ export const loadRecommendations = async (): Promise<LoadRecommendationsResult> 
       const fallbackCoords = deriveCategoryFallbackCoordinates(row.category);
       const rawCoordX = (row as any).coordinate_x ?? (row as any).coordinateX ?? staticMatch?.coordinateX;
       const rawCoordY = (row as any).coordinate_y ?? (row as any).coordinateY ?? staticMatch?.coordinateY;
-      const coordX = typeof rawCoordX === 'number' && !isNaN(rawCoordX) && rawCoordX !== 0 ? rawCoordX : (staticMatch?.coordinateX || fallbackCoords.x);
-      const coordY = typeof rawCoordY === 'number' && !isNaN(rawCoordY) && rawCoordY !== 0 ? rawCoordY : (staticMatch?.coordinateY || fallbackCoords.y);
+      const coordX = typeof rawCoordX === 'number' && Number.isFinite(rawCoordX)
+        ? rawCoordX
+        : (typeof staticMatch?.coordinateX === 'number' && Number.isFinite(staticMatch.coordinateX) ? staticMatch.coordinateX : fallbackCoords.x);
+      const coordY = typeof rawCoordY === 'number' && Number.isFinite(rawCoordY)
+        ? rawCoordY
+        : (typeof staticMatch?.coordinateY === 'number' && Number.isFinite(staticMatch.coordinateY) ? staticMatch.coordinateY : fallbackCoords.y);
 
       const candidateImage = row.image_url || staticMatch?.image || '/src/assets/images/uvac_meanders_1778841048759.png';
       const approvedImage = getApprovedPrimaryMedia(recId, candidateImage);
